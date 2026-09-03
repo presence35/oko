@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Blue top half of the gear, split along the horizontal midline y=12 -->
+    <path
+        android:fillColor="#FF005BBB"
+        android:pathData="M2.5,12 A9.5,9.5 0 0 1 21.5,12 L17,12 A5,5 0 0 0 7,12 Z M21.41,10.68 L17,11.30 L17,12 L21.41,12 Z M2.59,10.68 L7,11.30 L7,12 L2.59,12 Z M10.68,2.59 L13.32,2.59 L12.70,7.05 L11.30,7.05 Z M4.41,6.28 L6.28,4.41 L8.99,8.01 L8.01,8.99 Z M17.72,4.41 L19.59,6.28 L15.99,8.99 L15.01,8.01 Z" />
+    <!-- Yellow bottom half of the gear -->
+    <path
+        android:fillColor="#FFFFD500"
+        android:pathData="M2.5,12 A9.5,9.5 0 0 0 21.5,12 L17,12 A5,5 0 0 1 7,12 Z M21.41,12 L17,12 L17,12.70 L21.41,13.32 Z M2.59,12 L7,12 L7,12.70 L2.59,13.32 Z M13.32,21.41 L10.68,21.41 L11.30,16.95 L12.70,16.95 Z M19.59,17.72 L17.72,19.59 L15.01,15.99 L15.99,15.01 Z M6.28,19.59 L4.41,17.72 L8.01,15.01 L8.99,15.99 Z" />
+</vector>

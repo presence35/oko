@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Scale bar with tick marks, like the map's alternating ruler. -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M2,6 L22,6 M2,6 L2,18 L22,18 L22,6 M4,18 L4,14 M8,18 L8,14 M12,18 L12,14 M16,18 L16,14 M20,18 L20,14"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round" />
+</vector>

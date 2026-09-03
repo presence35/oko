@@ -1,0 +1,6 @@
+- Updates: the app now checks for a new version automatically at most once per day (silently), instead of every time the app starts or the Settings screen opens. The manual "Check for updates" button in Settings still checks on demand.
+- Map footer: per-threat notification bells and OFF chips are gone — threat types are toggled only in Settings. The footer now shows just the type icon, live count, and a pulsing underline while that type is active.
+- Map: the floating red/yellow zone buttons no longer respond to long-press; tap still zooms to that zone. A new floating edit (pencil) button opens the "Edit zones" panel.
+- Alert zones: the radius sliders no longer show step dots (the value still snaps to whole km). The per-zone bell icons now gently pulse so it's clear they're tap-to-toggle.
+- Map: when both zone alerts are muted, a small floating "All alerts are off" pill appears next to the zone buttons as a reminder.
+- Settings: new "Official alerts" toggle under Alerts — controls only notifications for the official oblast air-raid signal; the Red/Yellow zone alerts are never affected.

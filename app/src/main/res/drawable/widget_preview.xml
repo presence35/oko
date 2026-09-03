@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fallback picker preview for Android < 12 (previewLayout covers 12+). Kept minimal:
+  dark card, real trident, one real threat-icon circle, a status dot and a zone chip —
+  no fake text bars, so it reads as a real widget rather than boxes.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="230dp"
+    android:height="100dp"
+    android:viewportWidth="230"
+    android:viewportHeight="100">
+
+    <!-- Card background -->
+    <path
+        android:fillColor="#121212"
+        android:pathData="M12,0 L218,0 A12,12 0 0 1 230,12 L230,88 A12,12 0 0 1 218,100 L12,100 A12,12 0 0 1 0,88 L0,12 A12,12 0 0 1 12,0 Z" />
+
+    <!-- Left accent bar (zone color: red) -->
+    <path
+        android:fillColor="#E53935"
+        android:pathData="M0,0 L6,0 L6,100 L0,100 Z" />
+
+    <!-- Header: trident (gold) -->
+    <group
+        android:scaleX="0.18"
+        android:scaleY="0.18"
+        android:translateX="6"
+        android:translateY="-34">
+        <path
+            android:fillColor="#FFD700"
+            android:pathData="M5.985561 78.82382a104.079383 104.079383 0 0 0 14.053598 56.017033 55 55 0 0 1-13.218774 70.637179A20 20 0 0 0 0 212.5a20 20 0 0 0-6.820384-7.021968 55 55 0 0 1-13.218774-70.637179A104.079383 104.079383 0 0 0-5.98556 78.82382l-1.599642-45.260519A30.103986 30.103986 0 0 1 0 12.5a30.103986 30.103986 0 0 1 7.585202 21.063301zM5 193.624749a45 45 0 0 0 6.395675-53.75496A114.079383 114.079383 0 0 1 0 112.734179a114.079383 114.079383 0 0 1-11.395675 27.13561A45 45 0 0 0-5 193.624749V162.5H5z" />
+        <path
+            android:fillColor="#FFD700"
+            android:pathData="M27.779818 75.17546A62.64982 62.64982 0 0 1 60 27.5v145H0l-5-10a22.5 22.5 0 0 1 17.560976-21.95122l14.634147-3.292683a10 10 0 1 0-4.427443-19.503751zm5.998315 34.353887a20 20 0 0 1-4.387889 37.482848l-14.634146 3.292683A12.5 12.5 0 0 0 5 162.5h45V48.265462a52.64982 52.64982 0 0 0-12.283879 28.037802zM42 122.5h10v10H42z" />
+        <group android:scaleX="-1">
+            <path
+                android:fillColor="#FFD700"
+                android:pathData="M27.779818 75.17546A62.64982 62.64982 0 0 1 60 27.5v145H0l-5-10a22.5 22.5 0 0 1 17.560976-21.95122l14.634147-3.292683a10 10 0 1 0-4.427443-19.503751zm5.998315 34.353887a20 20 0 0 1-4.387889 37.482848l-14.634146 3.292683A12.5 12.5 0 0 0 5 162.5h45V48.265462a52.64982 52.64982 0 0 0-12.283879 28.037802zM42 122.5h10v10H42z" />
+        </group>
+    </group>
+
+    <!-- Status dot (blue = backup) -->
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M210,20 A6,6 0 1 1 222,20 A6,6 0 1 1 210,20 Z" />
+
+    <!-- Threat icon circle (ballistic: magenta) -->
+    <path
+        android:fillColor="#B21E6B"
+        android:pathData="M20,62 A16,16 0 1 1 52,62 A16,16 0 1 1 20,62 Z" />
+
+    <!-- Amber zone chip -->
+    <path
+        android:fillColor="#FDD835"
+        android:pathData="M64,76 L126,76 A8,8 0 0 1 134,84 L134,88 A8,8 0 0 1 126,96 L64,96 A8,8 0 0 1 56,88 L56,84 A8,8 0 0 1 64,76 Z" />
+</vector>
