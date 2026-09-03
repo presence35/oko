@@ -170,7 +170,6 @@ class ThreatEngine(
     fun computeProximity(
         t: NormalizedThreat?,
         focus: LatLng?,
-        params: ZoneParams,
         now: Long
     ): ThreatProximity? {
         if (t == null || t.areaOnly) return null

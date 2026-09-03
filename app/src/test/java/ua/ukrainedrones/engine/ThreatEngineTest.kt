@@ -460,7 +460,7 @@ class ThreatEngineTest {
             confirmedAtMillis = null
         )
         val proximity = engine.computeProximity(
-            threat, LatLng(userLat, userLng), params, System.currentTimeMillis()
+            threat, LatLng(userLat, userLng), System.currentTimeMillis()
         )
         assertNotNull(proximity)
         assertNotNull(proximity!!.distToUserKm)
@@ -469,13 +469,13 @@ class ThreatEngineTest {
 
     @Test
     fun `computeProximity - null threat returns null`() {
-        assertNull(engine.computeProximity(null, LatLng(userLat, userLng), params, System.currentTimeMillis()))
+        assertNull(engine.computeProximity(null, LatLng(userLat, userLng), System.currentTimeMillis()))
     }
 
     @Test
     fun `computeProximity - areaOnly returns null`() {
         val threat = makeThreat(areaOnly = true)
-        assertNull(engine.computeProximity(threat, LatLng(userLat, userLng), params, System.currentTimeMillis()))
+        assertNull(engine.computeProximity(threat, LatLng(userLat, userLng), System.currentTimeMillis()))
     }
 
     private fun makeThreat(

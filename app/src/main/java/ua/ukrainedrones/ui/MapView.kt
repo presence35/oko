@@ -12,6 +12,8 @@ import ua.ukrainedrones.engine.NEPTUN_TYPES
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -70,6 +72,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.Polygon
 
 import java.io.File
@@ -317,6 +320,42 @@ private data class NewRingState(val id: String?, val activeUntilMs: Long)
 private const val NEW_RING_MS = 8_000L
 /** How long the zone-slider camera refit waits after the value stops changing. */
 private const val ZONE_REFIT_DEBOUNCE_MS = 350L
+
+/**
+ * Instant single-tap detection for threat markers. osmdroid only delivers marker taps via
+ * onSingleTapConfirmed, which waits out the ~300 ms double-tap window — a perceptible lag
+ * before the haptic tick and the popup. This overlay sits on top of the threat markers and
+ * fires on the immediate onSingleTapUp (finger-up) using the same Marker.hitTest the marker
+ * itself would use, so the tick + card feel instant. It never consumes the touch stream
+ * (pan/zoom/double-tap keep working); the markers' consume-only click listeners absorb
+ * osmdroid's late confirmed tap so it never falls through to the map-tap overlay (which would
+ * immediately close the popup).
+ */
+private class InstantThreatTapOverlay(
+    private val mapView: MapView,
+    private val markersProvider: () -> Collection<Marker>,
+    private val hapticsOn: () -> Boolean,
+    private val onThreatTap: (NormalizedThreat) -> Unit
+) : Overlay() {
+    private val detector = GestureDetector(mapView.context, object : GestureDetector.SimpleOnGestureListener() {
+        override fun onSingleTapUp(e: MotionEvent): Boolean {
+            for (marker in markersProvider()) {
+                if (marker.hitTest(e, mapView)) {
+                    val threat = marker.relatedObject as? NormalizedThreat ?: continue
+                    if (hapticsOn()) hapticTick(mapView.context)
+                    onThreatTap(threat)
+                    return true
+                }
+            }
+            return false
+        }
+    })
+
+    override fun onTouchEvent(event: MotionEvent, mapView: MapView): Boolean {
+        detector.onTouchEvent(event)
+        return false
+    }
+}
 
 private val shelterBitmapCache = mutableMapOf<String, Bitmap>()
 
@@ -857,12 +896,11 @@ fun NeptunMapView(
                             val base = IconCatalog.baseDeg(t.type.toThreatType(), iconSet)
                             (course - base + 360f) % 360f
                         }
-                                                setOnMarkerClickListener { _, _ ->
-                            // Immediate tick — the tap must feel instant; the card composes after.
-                            if (hapticsOnState) hapticTick(context)
-                            onThreatTapped(t)
-                            true
-                        }
+                        // Instant taps are handled by InstantThreatTapOverlay (onSingleTapUp,
+                        // no double-tap wait). This listener only absorbs osmdroid's late
+                        // onSingleTapConfirmed so it never falls through to the map-tap overlay.
+                        setOnMarkerClickListener { _, _ -> true }
+                        relatedObject = t
                     }
                     mapView.overlays.add(marker)
                     markerRefs.value[t.id] = marker
@@ -996,6 +1034,18 @@ fun NeptunMapView(
                     })
                 )
 
+                // Instant threat-marker taps: on top of the markers, below the long-press
+                // overlay (which is itself below only the drawing overlays). The overlay never
+                // consumes, so osmdroid's own gesture pipeline (pan/double-tap) is untouched.
+                mapView.overlays.add(
+                    InstantThreatTapOverlay(
+                        mapView = mapView,
+                        markersProvider = { markerRefs.value.values },
+                        hapticsOn = { hapticsOnState },
+                        onThreatTap = onThreatTapped
+                    )
+                )
+
                 // Death flourish on top of everything else.
                 mapView.overlays.add(deathFx.overlay)
 
@@ -1111,7 +1161,6 @@ fun NeptunMapView(
                 if (!deathAnimationEnabledState) {
                     // Permanent blocker: tell the user why nothing played.
                     showToast(
-                        context,
                         String.format(strings.flourishDisabledToastFormat, strings.deathAnimationTitle)
                     )
                     DebugLog.recordFlourish(DebugLogReason.TOGGLE_OFF, now = System.currentTimeMillis())

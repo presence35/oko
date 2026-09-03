@@ -21,9 +21,9 @@ enum class ThreatIconSet { PHOTO, ARMY, COMIC, RUSSIAN }
 
 class UserPrefs(private val context: Context) {
 
-    private val keyCache = mutableMapOf<String, Preferences.Key<*>>()
+    private val keyCache = mutableMapOf<String, Preferences.Key<Boolean>>()
     private fun cachedBooleanKey(name: String): Preferences.Key<Boolean> =
-        keyCache.getOrPut(name) { booleanPreferencesKey(name) } as Preferences.Key<Boolean>
+        keyCache.getOrPut(name) { booleanPreferencesKey(name) }
 
     private val languageKey = stringPreferencesKey("app_language")
     private val languageChosenKey = booleanPreferencesKey("language_chosen")

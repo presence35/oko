@@ -193,7 +193,7 @@ class NeptunConnectionClient(
         isManuallyStopped = true
         reconnectJob?.cancel()
         reconnectJob = null
-        val gen = connectionGeneration.incrementAndGet()
+        connectionGeneration.incrementAndGet()
         activeWebSocket?.close(1000, "client stop")
         activeWebSocket = null
         _connectionState.value = ConnectionState.Disconnected
@@ -251,7 +251,7 @@ class NeptunConnectionClient(
         if (isManuallyStopped) return
         val request = Request.Builder().url(WS_URL).build()
 
-        val ws = client.newWebSocket(request, object : WebSocketListener() {
+        client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 if (connectionGeneration.get() != gen || isManuallyStopped) {
                     webSocket.close(1000, "superseded")
@@ -339,7 +339,7 @@ class NeptunConnectionClient(
             val isNetValidated = networkMonitor.isValidated.value
             val delayMs = if (isNetValidated) calculateBackoffMs(reconnectAttempt) else NO_NETWORK_RECONNECT_MS
             val now = System.currentTimeMillis()
-            val gen = connectionGeneration.incrementAndGet()
+val gen = connectionGeneration.incrementAndGet()
 
             _connectionState.value = ConnectionState.Connecting(
                 generation = gen,
@@ -531,7 +531,7 @@ class NeptunConnectionClient(
         val lastSeen = unknownTypeLastSeen[rawType] ?: 0L
         if (now - lastSeen > UNKNOWN_TYPE_TOAST_COOLDOWN_MS) {
             unknownTypeLastSeen[rawType] = now
-            showToast(context, "New threat type reported: $rawType")
+            showToast("New threat type reported: $rawType")
             ApiMonitor.record(SystemEntry(
                 atMillis = now,
                 kind = SystemEntryKind.UNKNOWN_TYPE_DETECTED,

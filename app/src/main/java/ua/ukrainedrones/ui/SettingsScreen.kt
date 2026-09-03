@@ -2193,7 +2193,7 @@ private fun GpsCalibrationRow(
         if (result[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
             showSettingsFallback = false
             localRefreshing = true
-            showToast(context, s.calibratingGps, cardVisible = false)
+            showToast(s.calibratingGps, cardVisible = false)
             LocationTracker.forceRefresh { localRefreshing = false }
         } else if (!ActivityCompat.shouldShowRequestPermissionRationale(context as Activity, Manifest.permission.ACCESS_FINE_LOCATION)) {
             // System no longer shows the dialog — route the user to Settings.
@@ -2204,7 +2204,7 @@ private fun GpsCalibrationRow(
         showSettingsFallback = false
         if (fineGranted) {
             localRefreshing = true
-            showToast(context, s.calibratingGps, cardVisible = false)
+            showToast(s.calibratingGps, cardVisible = false)
             LocationTracker.forceRefresh { localRefreshing = false }
         } else {
             permLauncher.launch(

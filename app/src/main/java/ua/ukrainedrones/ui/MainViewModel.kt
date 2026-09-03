@@ -834,7 +834,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
                     engine.computeProximity(
                         t,
                         ui.focusLocation?.let { loc -> LatLng(loc.lat, loc.lon) },
-                        ZoneParams(ui.activeZoneParams.slowRedKm, ui.activeZoneParams.slowYellowKm, ui.activeZoneParams.fastRedMin, ui.activeZoneParams.fastYellowMin),
                         nowMs
                     )
                 }?.let { ep ->
@@ -1264,7 +1263,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val message = SpannableString(prefix + rest)
         message.setSpan(StyleSpan(Typeface.BOLD), 0, prefix.length, SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE)
         showToast(
-            getApplication(),
             message,
             cardVisible = uiState.value.mapVisible && selectionUi.value.selected != null
         )
@@ -1278,7 +1276,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             if (remaining <= 0) return@launch
             prefs.setFlourishEjectHintRemaining(remaining - 1)
             val s = Strings.get(prefs.language().first())
-            showToast(getApplication(), s.flourishEjectToast, cardVisible = false)
+            showToast(s.flourishEjectToast, cardVisible = false)
         }
     }
 
@@ -1534,14 +1532,14 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
                     latestVersionFlow.value = null
                     updateStateFlow.value = UpdateState.Idle
                     if (notify) {
-                        showToast(getApplication(), s.updateUpToDate, cardVisible = false)
+                        showToast(s.updateUpToDate, cardVisible = false)
                     }
                 }
                 is UpdateState.Failed -> {
                     updateStateFlow.value = UpdateState.Idle
                     if (notify) {
                         val message = result.message?.let { ": $it" }.orEmpty()
-                        showToast(getApplication(), s.updateCheckFailed + message, cardVisible = false)
+                        showToast(s.updateCheckFailed + message, cardVisible = false)
                     }
                 }
                 else -> Unit

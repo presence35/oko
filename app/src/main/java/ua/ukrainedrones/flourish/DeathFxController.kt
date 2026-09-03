@@ -244,7 +244,7 @@ class DeathFxController(
             mapView.invalidate()
             // Fire loop aligned to the pre-spawned schedule (drift-free vs the spawn clock):
             // shot k launches at fireBase + k*STAGGER; haptic + footer progress advance per shot.
-            group.forEachIndexed { k, rec ->
+            group.forEachIndexed { k, _ ->
                 val wait = fireBase + k * FLOURISH_STAGGER_MS - SystemClock.elapsedRealtime()
                 if (wait > 0) delay(wait)
                 index++

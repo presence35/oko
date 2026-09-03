@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import java.util.Calendar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -335,6 +336,7 @@ class AlertService : Service() {
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun startMonitoring() {
         val prefs = UserPrefs(applicationContext)
         val svcState = ServiceState(applicationContext)

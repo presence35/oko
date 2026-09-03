@@ -48,7 +48,7 @@ private val toastBus = MutableSharedFlow<ToastRequest>(
     onBufferOverflow = BufferOverflow.DROP_OLDEST
 )
 
-fun showToast(context: android.content.Context, text: CharSequence, cardVisible: Boolean = false) {
+fun showToast(text: CharSequence, cardVisible: Boolean = false) {
     toastBus.tryEmit(ToastRequest(text.toString(), cardVisible))
 }
 

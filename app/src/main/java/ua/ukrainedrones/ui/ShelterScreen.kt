@@ -196,7 +196,7 @@ private fun GpsHeaderRow(
 ) {
     val context = LocalContext.current
     val onCalibrate: () -> Unit = {
-        showToast(context, s.calibratingGps, cardVisible = false)
+        showToast(s.calibratingGps, cardVisible = false)
         onForceRefresh()
     }
     val label = if (lastPreciseFixMs != null) {

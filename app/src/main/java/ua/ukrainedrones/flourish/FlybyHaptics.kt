@@ -23,7 +23,6 @@ fun FlybyHaptics(
 
     // Throttle to ~30 Hz to avoid spamming the vibrator
     val lastFire = remember { mutableStateOf(0L) }
-    val progressRounded = (progress * 1000).roundToInt()
 
     if (!enabled || !vibrator.hasVibrator()) return
 

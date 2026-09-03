@@ -4,6 +4,7 @@ import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.distanceFlat
+import ua.ukrainedrones.connection.NeptunConnectionClient
 
 import android.Manifest
 import android.content.Intent
@@ -85,12 +86,15 @@ import androidx.compose.ui.semantics.contentDescription as semanticsContentDescr
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -322,6 +326,23 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             }
         )
         }
+        if (showConnectionInfo) {
+            SystemStatusDialog(
+                neptunDown = uiState.neptunDown,
+                degraded = uiState.degraded,
+                s = Strings.get(uiState.language),
+                onClose = { showConnectionInfo = false },
+                onOpenLogs = {
+                    showConnectionInfo = false
+                    screen = Screen.LOGS
+                },
+                onOpenAttribution = {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse(NeptunConnectionClient.NEPTUN_SITE_URL))
+                    )
+                }
+            )
+        }
         if (screen == Screen.SETTINGS) {
             // Composed after MapScreen, so its handler is checked first on Back.
             BackHandler { screen = Screen.MAP }
@@ -444,7 +465,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                     viewModel.resetAllTips()
                     // Re-arm the in-memory hint counters so the gear re-pulses immediately.
                     settingsHintRemaining = 3
-                    showToast(context, Strings.get(uiState.language).tipsResetToast, cardVisible = false)
+                    showToast(Strings.get(uiState.language).tipsResetToast, cardVisible = false)
                 },
                 onOpenGuide = {
                     guideFromSettings = true
@@ -699,7 +720,7 @@ private fun MapScreen(
                 else -> null
             }
             if (tipText != null) {
-                showToast(context, tipText, cardVisible = false)
+                showToast(tipText, cardVisible = false)
             }
             onShelterTipAdvance()
         }
@@ -714,7 +735,6 @@ private fun MapScreen(
             val fixAgeMs = lastPreciseFixMs?.let { now - it }
             if (fixAgeMs == null || fixAgeMs >= 5 * 60_000L) {
                 showToast(
-                    context,
                     s.updatingPreciseGpsToast,
                     cardVisible = selection.value.selected != null || selectedShelter != null || showZonesSheet
                 )
@@ -1105,6 +1125,112 @@ private fun MapScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * System-status dialog behind the connection pill: per-source dot, the three-tier connection
+ * legend, the NEPTUN attribution link, and a prominent Logs button.
+ */
+@Composable
+private fun SystemStatusDialog(
+    neptunDown: Boolean,
+    degraded: Boolean,
+    s: Strings.StringSet,
+    onClose: () -> Unit,
+    onOpenLogs: () -> Unit,
+    onOpenAttribution: () -> Unit
+) {
+    val connColor = when {
+        neptunDown -> Color(0xFFE57373)
+        degraded -> Color(0xFFFB8C00)
+        else -> Color(0xFF4CAF50)
+    }
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFF1E1E1E),
+            border = BorderStroke(1.dp, Color(0xFF3A3A3A))
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = s.connStatusTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(12.dp))
+                SourceStatusRow(color = connColor, name = s.connNeptunLabel, active = !neptunDown)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = when {
+                        neptunDown -> s.connOffline
+                        degraded -> s.connDegraded
+                        else -> s.connOnline
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = connColor
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = if (degraded && !neptunDown) s.connDegradedBody else s.connServerLine,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = s.logsLegend,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+                Spacer(Modifier.height(8.dp))
+                StatusLegendRow(Color(0xFF4CAF50), s.connOnline)
+                StatusLegendRow(Color(0xFFFB8C00), s.connDegraded)
+                StatusLegendRow(Color(0xFFE57373), s.connOffline)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = s.attributionText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF64B5F6),
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable(onClick = onOpenAttribution)
+                )
+                Spacer(Modifier.height(20.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onOpenLogs,
+                        modifier = Modifier.weight(1f)
+                    ) { Text(s.logsTitle) }
+                    OutlinedButton(onClick = onClose) { Text(s.closeButton) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusLegendRow(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.85f)
+        )
     }
 }
 
