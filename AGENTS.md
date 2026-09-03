@@ -54,7 +54,7 @@ evaluation contract. Read `ARCHITECTURE.md` for module map and data-flow context
   (mojibake + adds a BOM). Use .NET instead:
   `$u = New-Object System.Text.UTF8Encoding($false)`; `[System.IO.File]::ReadAllText($f, $u)` /
   `[System.IO.File]::WriteAllText($f, $text, $u)`.
-- User settings/prefs go through `ZonePrefs` (DataStore-backed); don't add a second prefs store.
+- User settings/prefs go through `UserPrefs` (`domain/UserPrefs.kt`, DataStore-backed); don't add a second prefs store.
 - Backwards compatible code, or migrating old users is not a concern -- we're in beta mode still.
 
 ### Always build/verify before finishing
@@ -78,7 +78,8 @@ Fix any failures before finishing.
 When you add a source file or change a documented invariant, update the module map /
 key-invariants section of `ARCHITECTURE.md` in the same change, so the docs never rot.
 
-### Refactor branch
+### Repository state
 
-This is the `refactor` branch. The `refactor/` subdirectory is a Gemini scaffold — ignore it.
-Work at the root of the clone. The refactor plan lives in `BEHAVIORS.md` under "Session Status".
+Single squashed history on `main` containing only the refactored app — the
+pre-refactor project and the `refactor/` scaffold are gone. The refactor plan
+lives in `BEHAVIORS.md` under "Session Status".

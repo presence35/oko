@@ -223,6 +223,14 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     val updateReminderTick: StateFlow<Int> get() = updateReminderFlow
     private val client = ConnectionHolder.getClient(app)
     private val connectionStateFlow = client.connectionState
+
+    // The plugin registry must exist before any property below reads it — property
+    // initializers run before the init{} block, so init it here (idempotent; the later
+    // init block also calls it after AlertService may have started).
+    init {
+        AppPluginHolder.init(getApplication())
+    }
+
     private val registry = AppPluginHolder.registry
     private val engine = ThreatEngine(registry.typeCatalog.value)
     private val threatsFlow = registry.allThreats.map { list ->
