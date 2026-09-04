@@ -563,7 +563,7 @@ fun NeptunMapView(
         }
     }
     val lastOverlayKey = remember { mutableStateOf<String?>(null) }
-    val lastFitUkraineTick = remember { mutableStateOf(-1) }
+    val lastFitUkraineTick = remember { mutableStateOf(fitUkraineTick) }
     val lastFollow = remember { mutableStateOf<LatLng?>(null) }
     val lastZoomTick = remember { mutableStateOf(-1) }
     val lastShelterSelectTick = remember { mutableStateOf(-1) }

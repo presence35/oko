@@ -35,8 +35,6 @@ import ua.ukrainedrones.connection.ConnectionState
 import ua.ukrainedrones.connection.isConnected
 import ua.ukrainedrones.connection.isDegraded
 import ua.ukrainedrones.connection.isOffline
-import ua.ukrainedrones.ODESA_LAT
-import ua.ukrainedrones.ODESA_LON
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
@@ -60,6 +58,7 @@ data class UiState(
     val mapThreats: List<NormalizedThreat> = emptyList(),   // all active threats across Europe
     val userLocation: LatLng? = null,
     val gpsFixAvailable: Boolean = false,         // a GPS/cell fix has arrived at least once
+    val gpsFixMissing: Boolean = false,           // followMe on, no fix ever → persistent warning
     val slowRedKm: Int = 20,      // slow threats: distance to the red (inner) zone, km
     val slowYellowKm: Int = 50,  // slow threats: distance to the yellow (outer) zone, km
     val fastRedMin: Int = 5,     // fast threats: ETA to the red (inner) zone, minutes
@@ -179,8 +178,6 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     companion object {
         private const val DAILY_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
         private const val SHELTERS_CACHE_FILE = "odesa_shelters.json"
-        /** Odesa centre — the pre-first-fix fallback focus so the first visual is complete. */
-        private val ODESA_FALLBACK_FOCUS = LatLng(ODESA_LAT, ODESA_LON)
     }
 
     private val prefs = UserPrefs(app.applicationContext)
@@ -892,15 +889,9 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
     ): UiState {
         val params = effectiveParams
         val gpsFresh = LocationTracker.isFresh(now)
-        val effectiveUserLoc = if (gpsFresh) userLocation else null
-        // Camera + zone center: GPS while following (if fresh), else the pinned city (else GPS fallback).
-        // Before the first GPS fix the map still needs a complete first visual, so it anchors on
-        // Odesa (where the shelter data lives) until a real fix recentres it.
-        val focusLocation = if (followMe) (effectiveUserLoc ?: ODESA_FALLBACK_FOCUS)
-        else pinnedCity?.let { LatLng(it.lat, it.lon) } ?: (effectiveUserLoc ?: ODESA_FALLBACK_FOCUS)
-        // Official alert state for the FOCUS point: the pinned city's oblast, else the
-        // oblast of the nearest listed city to the GPS fix while following.
-        val attribution = focusAttribution(followMe, effectiveUserLoc, pinnedCity)
+        val focus = resolveFocus(followMe, userLocation, gpsFresh, pinnedCity?.nameUa)
+        val focusLocation = focus.location
+        val attribution = focus.attribution
         val focusToken = attribution.token
         val focusOblastAlertActive = officialAlertActiveFor(
             alerts,
@@ -979,6 +970,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             followMe = followMe,
             pinnedCity = pinnedCity,
             focusLocation = focusLocation,
+            gpsFixMissing = focus.gpsFixMissing,
             redCities = redCities,
             threatLevel = evaluation.threatLevel,
             revealRequest = reveal,

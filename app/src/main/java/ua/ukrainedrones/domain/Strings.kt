@@ -388,7 +388,7 @@ object Strings {
         val gpsStatusTitle: String,
         val networkLocationOnly: String,
         val updatingPreciseGpsToast: String,
-        val gpsFallbackOdesa: String,
+        val gpsUnavailableFollowMe: String,
         val shelterLongPressTip: String,
         val shelterTapTip: String,
         val shelterViewListLabel: String,
@@ -985,7 +985,7 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val gpsPreciseBlocked: String get() = misc.gpsPreciseBlocked
         val gpsOpenSettings: String get() = misc.gpsOpenSettings
         val gpsFixFresh: String get() = misc.gpsFixFresh
-        val gpsFallbackOdesa: String get() = misc.gpsFallbackOdesa
+        val gpsUnavailableFollowMe: String get() = misc.gpsUnavailableFollowMe
         val gpsStatusTitle: String get() = misc.gpsStatusTitle
         val networkLocationOnly: String get() = misc.networkLocationOnly
         val updatingPreciseGpsToast: String get() = misc.updatingPreciseGpsToast
@@ -1490,7 +1490,7 @@ connOnline = "Онлайн",
         gpsStatusTitle = "Точний GPS",
         networkLocationOnly = "Мережева локація (вежі зв'язку)",
         updatingPreciseGpsToast = "Оновлення точного GPS…",
-        gpsFallbackOdesa = "GPS недоступний — використовуємо Одесу",
+        gpsUnavailableFollowMe = "No GPS fix — location alerts paused",
         shelterLongPressTip = "Довго натисни кнопку «Укриття», щоб відкрити повний список",
         shelterTapTip = "Торкнись кнопки «Укриття», щоб побачити укриття поруч",
         shelterViewListLabel = "Список укриттів (довідник)",
@@ -2057,7 +2057,7 @@ alertBannerFormat = "%1\$s: alert",
         gpsStatusTitle = "Precise GPS",
         networkLocationOnly = "Cell tower location only",
         updatingPreciseGpsToast = "Updating precise GPS…",
-        gpsFallbackOdesa = "GPS unavailable — using Odesa",
+        gpsUnavailableFollowMe = "No GPS fix — location alerts paused",
         shelterLongPressTip = "Long-press the shelter button to open the full list",
         shelterTapTip = "Tap the shelter button to see shelters near you",
         shelterViewListLabel = "Shelter directory (reference)",

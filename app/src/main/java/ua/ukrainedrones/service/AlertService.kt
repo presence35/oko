@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import ua.ukrainedrones.AppLanguage
+import ua.ukrainedrones.resolveFocus
 import ua.ukrainedrones.connection.ConnectionState
 import ua.ukrainedrones.engine.isFastType
 import ua.ukrainedrones.engine.NormalizedThreat
@@ -37,8 +38,6 @@ import ua.ukrainedrones.ThreatType
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.inOblast
-import ua.ukrainedrones.engine.matchOblast
-import ua.ukrainedrones.engine.canonicalToken
 import ua.ukrainedrones.engine.deriveOfficialAlertReason
 import ua.ukrainedrones.engine.isCityScopedSuppressed
 import ua.ukrainedrones.engine.threatBody
@@ -61,8 +60,6 @@ import ua.ukrainedrones.data.TelegramNotifier
 import ua.ukrainedrones.NightZones
 import ua.ukrainedrones.Strings
 import ua.ukrainedrones.engine.inOblast
-import ua.ukrainedrones.engine.matchOblast
-import ua.ukrainedrones.engine.canonicalToken
 import ua.ukrainedrones.engine.deriveOfficialAlertReason
 import ua.ukrainedrones.engine.isCityScopedSuppressed
 import ua.ukrainedrones.engine.threatBody
@@ -194,6 +191,7 @@ class AlertService : Service() {
         val fastVibrationLevel: Int,
         val slowVibrationLevel: Int,
         val focusLocation: LatLng?,
+        val gpsFixMissing: Boolean = false,
         val nightActive: Boolean,
         val enabled: Set<ThreatType>,
         val threatDataStale: Boolean = false
@@ -398,7 +396,6 @@ class AlertService : Service() {
                 }
             }
 
-            data class Quint<A, B, C, D, E>(val a: A, val b: B, val c: C, val d: D, val e: E)
             data class LiveInputs(
                 val cs: ConnectionState,
                 val rawThreats: Map<String, NormalizedThreat>,
@@ -511,44 +508,15 @@ val mappedThreats = registry.allThreats.map { list ->
                 val enabled = tail.enabled
                 val threats = rawThreats.filterValues { it.type.toThreatType() in enabled }
 
-                val (pinnedName, pinnedLoc) = tail.pinned?.let { FocusCity.lookup(it) } ?: (null to null)
-                val gpsFresh = LocationTracker.isFresh(now)
-                val gpsLoc = if (gpsFresh) gps?.let { LatLng(it.lat, it.lon) } else null
-                val (focusLoc, focusBannerCity, focusCityUa, focusRegion, focusPinned) = when {
-                    !cfg.followMe && pinnedLoc != null && pinnedName != null -> {
-                        val c = FocusCity.find(pinnedName)
-                        val name = when {
-                            tail.lang == AppLanguage.UA -> c?.nameUa ?: pinnedName
-                            else -> Cities.byUa[pinnedName]?.nameEn ?: pinnedName
-                        }
-                        val reg = c?.oblastStem ?: matchOblast(pinnedLoc.lat, pinnedLoc.lon)?.nameUa ?: ""
-                        Quint(pinnedLoc, name, c?.nameUa ?: pinnedName, reg, true)
-                    }
-                    gpsLoc != null -> {
-                        val gpsOblast = matchOblast(gpsLoc.lat, gpsLoc.lon)
-                        val name = when {
-                            gpsOblast == null -> if (tail.lang == AppLanguage.UA) "Україна" else "Ukraine"
-                            tail.lang == AppLanguage.UA -> gpsOblast.nameUa
-                            else -> gpsOblast.nameEn
-                        }
-                        Quint(gpsLoc, name, gpsOblast?.nameUa, gpsOblast?.nameUa ?: "", false)
-                    }
-                    pinnedLoc != null && pinnedName != null -> {
-                        val c = FocusCity.find(pinnedName)
-                        val name = when {
-                            tail.lang == AppLanguage.UA -> c?.nameUa ?: pinnedName
-                            else -> Cities.byUa[pinnedName]?.nameEn ?: pinnedName
-                        }
-                        val reg = c?.oblastStem ?: matchOblast(pinnedLoc.lat, pinnedLoc.lon)?.nameUa ?: ""
-                        Quint(pinnedLoc, name, c?.nameUa ?: pinnedName, reg, false)
-                    }
-                    else -> {
-                        val name = if (tail.lang == AppLanguage.UA) "Україна" else "Ukraine"
-                        Quint(null, name, null, "", false)
-                    }
-                }
-
-                val focusToken = canonicalToken(focusRegion)
+                val focus = resolveFocus(cfg.followMe, gps, LocationTracker.isFresh(now), tail.pinned)
+                val focusLoc = focus.location
+                val focusBannerCity =
+                    if (tail.lang == AppLanguage.UA) focus.attribution.bannerCityUa else focus.attribution.bannerCityEn
+                val focusCityUa = focus.attribution.bannerCityUa
+                val focusRegion = focus.attribution.bannerCityUa
+                val focusPinned = focus.pinned
+                val gpsFixMissing = focus.gpsFixMissing
+                val focusToken = focus.attribution.token
                 currentToken = focusToken
 
                 val (focusOblastAlertActive, focusOblastAlertSince) = if (focusToken != null) {
@@ -571,7 +539,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     null to null
                 }
 
-                val focusCityObj = focusCityUa?.let { FocusCity.find(it) }
+                val focusCityObj = focusCityUa.let { FocusCity.find(it) }
                 val cityScopedSuppressed = cfg.officialAlertCityScope &&
                     focusCityObj != null &&
                     activeOfficialAlert != null &&
@@ -618,6 +586,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     fastVibrationLevel = fastVib,
                     slowVibrationLevel = slowVib,
                     focusLocation = focusLoc,
+                    gpsFixMissing = gpsFixMissing,
                     nightActive = nightActive,
                     enabled = enabled,
                     threatDataStale = threatDataStale
@@ -655,6 +624,7 @@ val mappedThreats = registry.allThreats.map { list ->
 
         val monitorText = when {
             isOfflineNow -> offlineLiveBody(s, offlineMinutes)
+            state.gpsFixMissing -> s.gpsUnavailableFollowMe
             state.connectionState.isDegraded -> s.connDegradedBody
             else -> ""
         }

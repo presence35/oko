@@ -44,7 +44,7 @@ re-derive state from the same singletons, never from each other.
 ```
 ZonePrefs ────────┬──► MainViewModel        Shared logic (call, don't duplicate):
                   └──► AlertService         engine/ThreatEngine.kt (evaluate, predictPosition)
-LocationTracker ──┬──► MainViewModel        NightMode.kt / Cities.kt (focusAttribution)
+LocationTracker ──┬──► MainViewModel        NightMode.kt / Cities.kt (resolveFocus)
                   └──► AlertService
 ```
 
@@ -140,12 +140,12 @@ detail that matters when editing that file.
 | File | Responsibility |
 | --- | --- |
 | `NightMode.kt` | Shared night helpers for **both** consumers (mirror rule): `isNightActive`, `effectiveZoneParams`/`effectiveArmed`, `NightConfig`/`NightZones`/`ZoneArmed`. |
-| `Cities.kt` | ~483 places grouped by oblast in three zoom tiers (`CityTier`: 26 curated MAJOR always / MEDIUM from mid-zoom — 14 curated non-seats plus any place with `pop` ≥ 50k auto-promoted in `ALL` / rest MINOR up close; non-curated places derived from GeoNames CC BY 4.0 via `tools/gen_cities.ps1`, 2 km dedupe, same-name towns resolved by population; a few district rows carry no `pop` so inherited parent-city figures never promote them) + `CityLabelOverlay` (colors labels red for the `redCities` set — scope-aware: whole oblast by default, city-level when the City scope is on); EN names from the app's own КМУ №55 transliteration; `focusAttribution` maps focus point → oblast stem via `cityOblast` (majors only). |
+| `Cities.kt` | ~483 places grouped by oblast in three zoom tiers (`CityTier`: 26 curated MAJOR always / MEDIUM from mid-zoom — 14 curated non-seats plus any place with `pop` ≥ 50k auto-promoted in `ALL` / rest MINOR up close; non-curated places derived from GeoNames CC BY 4.0 via `tools/gen_cities.ps1`, 2 km dedupe, same-name towns resolved by population; a few district rows carry no `pop` so inherited parent-city figures never promote them) + `CityLabelOverlay` (colors labels red for the `redCities` set — scope-aware: whole oblast by default, city-level when the City scope is on); EN names from the app's own КМУ №55 transliteration; `resolveFocus` maps focus point → oblast stem via `cityOblast` (majors only). |
 | `GeoConstants.kt` | Shared geographic constants: Ukraine bounding boxes (tight for UI clamping, wide for tile coverage), Odesa city-centre fallback coordinates. Used by `DeathFxController`, `UkraineTileProvider`, `MapView`, `MainViewModel`. (Root package, not `domain/`.) |
 | `Transliteration.kt` | Official КМУ №55 Ukrainian→Latin romanization (the EN gate). |
 | `ZonePrefs.kt` | `AppLanguage`/`ThreatCardSize`/`ThreatIconSet` + DataStore store (`zone_prefs`): all toggles/thresholds/language/follow/pin/visibility, night config, and — problematically — serialized `ConnectionLog`, offline-restore state, onboarding flags. `haptics_enabled` is tri-state (absent = follow the system haptic setting). Also `threatMapFlow`/`threatAlertFlow`; the resolved-threat tally's focus-oblast default + "All of Ukraine" opt-in (`neutralized_tally_all_ukraine`), and the daily-update notify marker (`last_notified_update_code`). *Note:* god object mixing prefs with persisted state — split candidate (tradeoffs). |
 | `Strings.kt` | UA/EN `StringSet` table (never Android resource localization); `formatRelativeTime`, `formatDateTime` (app language, not device locale). |
-| `WidgetSnapshot.kt` | `WidgetSnapshot` + pure `computeWidgetSnapshot(...)` — deterministic projection of threat state for the widget, computed via the engine (`ThreatEngine(NEPTUN_TYPES).evaluate`, `engine.isStale`, `distanceFlat`, `focusAttribution`, `inOblast`). Counts + per-type `typeCounts` mirror the footer-strip semantics; `primaryThreat` = nearest live threat (id + position) so the widget can reveal it; `sourceOnline` is grace-filtered like the app pill. Takes `ConnectionState` + `Map<String, Threat>` + `List<OblastAlert>` directly (no `NeptunState`). Tested by `WidgetSnapshotTest`. |
+| `WidgetSnapshot.kt` | `WidgetSnapshot` + pure `computeWidgetSnapshot(...)` — deterministic projection of threat state for the widget, computed via the engine (`ThreatEngine(NEPTUN_TYPES).evaluate`, `engine.isStale`, `distanceFlat`, `resolveFocus`, `inOblast`). Counts + per-type `typeCounts` mirror the footer-strip semantics; `primaryThreat` = nearest live threat (id + position) so the widget can reveal it; `sourceOnline` is grace-filtered like the app pill. Takes `ConnectionState` + `Map<String, Threat>` + `List<OblastAlert>` directly (no `NeptunState`). Tested by `WidgetSnapshotTest`. |
 | `IconCatalog.kt` | Single source for threat icons: vector/photo/army/comic/russian sets, per-set facing (`baseDeg`), `ThreatIcon` composable; assets in `app/src/main/iconpacks/`. |
 | `Toasts.kt` | Shared toast helper: one function decides placement — top (below the header banner, via `ToastHost(topInset)`) normally, bottom (above the floating zone/shelter buttons) when a card/popup is visible. Dark themed pill. Callers never hardcode gravity. |
 | `Compat.kt` | *(deleted — Session 6)* engine `LatLng`/`ThreatZone`/`ZoneParams` are now imported directly (`ua.ukrainedrones.engine.*`) instead of root-package typealiases. |
@@ -222,10 +222,10 @@ Treat these as a contract. If you change one, update **every** place that relies
   compose neither map nor wizard), what defers permission requests (`MainActivity`), and what
   re-runs via "Replay first launch" (which clears only this flag). `language_chosen` remains only
   as legacy migration input.
-- **No GPS fix + no pinned city = Odesa everywhere.** The camera's Odesa fallback
-  (`ODESA_FALLBACK_FOCUS`) and the header/banner/widget attribution (`focusAttribution`'s
-  final branch → `Cities.ODESA`) must stay consistent — they intentionally resolve to the same
-  city now, including official-alert matching on the Odesa oblast token.
+- **No GPS fix + no pinned city = no claims.** The focus is `null` and the attribution is
+  country-wide (`resolveFocus`'s final branch — token `null`, banner "Ukraine"), so no oblast
+  zones or official-alert scope is asserted for an unknown position. While following GPS with no
+  fix at all, the UI and the ongoing notification show a persistent "No GPS fix" warning.
 - **Single evaluation logic.** `MainViewModel` (UI) and `AlertService` (notifications) each
   construct their own `ThreatEngine(registry.typeCatalog.value)` and call `engine.evaluate(...)`
   directly — no reimplemented zone/tier/prediction logic in either consumer. Any change to
@@ -258,7 +258,7 @@ Treat these as a contract. If you change one, update **every** place that relies
 
 - **Widgets read snapshots, never evaluate.** The home-screen widget is a passive renderer of
   `WidgetSnapshot`, computed solely by `WidgetUpdater` via `computeWidgetSnapshot` — which calls
-  the engine (`ThreatEngine.evaluate`, `isStale`, `distanceFlat`) plus `focusAttribution`/
+  the engine (`ThreatEngine.evaluate`, `isStale`, `distanceFlat`) plus `resolveFocus`/
   `inOblast`. A change to zone/tier/prediction logic must **not** be reimplemented in the widget
   layer; update `computeWidgetSnapshot` instead. Counts mirror footer-strip semantics.
 
@@ -268,12 +268,14 @@ Treat these as a contract. If you change one, update **every** place that relies
   footer strip; a type with alerts off stays fully mapped (never dimmed — dimming is
   staleness-only) but is omitted from the footer strip, with a red crossed bell on its popup.
 
-- **Focus point.** `followMe` → camera + zones + alerts centre on GPS, else the pinned city;
-  pinning disables follow-me. Attribution via `focusAttribution` → `cityOblast` stem match,
-  **major cities only** — the ~300 minors are map-context, never banner/alert. *First-launch
-  visual:* before the first GPS fix the **map's** `focusLocation` falls back to Odesa (complete
-  first screen) — this is UI-only; `AlertService`/`focusAttribution` never use the fallback, so
-  no fake region alert is ever produced.
+- **Focus point — one shared resolver.** `followMe` → camera + zones + alerts centre on the
+  last-known GPS fix (staleness is fine; the focus never falls back to a pinned city while
+  following), else the pinned city; pinning disables follow-me. Attribution via
+  `resolveFocus` → `cityOblast` stem match, **major cities only** — the ~300 minors are
+  map-context, never banner/alert. All three consumers (`MainViewModel`, `AlertService`,
+  `WidgetUpdater`) call the same `resolveFocus`, so a stale fix keeps ringing where the user
+  last was instead of drifting to a pin. With no fix at all the location is `null` — no fake
+  region alert, and `gpsFixMissing` drives the persistent "No GPS fix" warning.
 
 - **Zone tiering.** `engine.zoneTier(props, distKm, speedKmh, ZoneParams(slowRedKm,
   slowYellowKm, fastRedMin, fastYellowMin))`. Fast types (`ThreatProps.isFast`, via
@@ -468,7 +470,7 @@ The doc distinguishes **preferences** from **persisted application state**.
 | Service process interrupted | Recovery depends on Android's foreground-service lifecycle; connection log + debug log restored from DataStore when restarted. | `AlertService`, DataStore |
 | Reboot | `BootReceiver` restarts the service on `BOOT_COMPLETED`. | `BootReceiver` |
 | Package replaced | `BootReceiver` restarts the service on `MY_PACKAGE_REPLACED`. | `BootReceiver` |
-| Location unavailable | Falls back to last known / pinned city; `focusAttribution` uses the pin. | `LocationTracker`, `Cities` |
+| Location unavailable | Follow-me uses the last-known fix; no fix at all → country-wide focus + "No GPS fix" warning; pinned only when not following. | `LocationTracker`, `Cities` |
 
 ## Testing
 
@@ -480,7 +482,7 @@ both UI and service consumers rely on.
   `motionHeading`, `isStale`/`isGhost` caps, scoring, AVIATION override, null-speed fast.
 - `engine/TypeMappingTest.kt` — `ThreatType`↔String, `Threat`↔`NormalizedThreat` round trip.
 - `plugins/PluginRegistryTest.kt` — plugin merging, `typeCatalog`.
-- `CitiesTest.kt` — city-list integrity; majors-only `nearestCity`/`focusAttribution`.
+- `CitiesTest.kt` — city-list integrity; majors-only `nearestCity`/`resolveFocus`.
 - `ThreatTest.kt` — JSON parsing, type mapping, course translation.
 - `TransliterationTest.kt` — КМУ №55 romanization, no semantic translation, digraph rules.
 - `UpdateManagerTest.kt` — `versionNameGreater`.

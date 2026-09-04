@@ -54,7 +54,7 @@ data class WidgetThreat(
  * Computes the widget snapshot from the shared domain state. Mirrors the footer-strip
  * semantics of the main UI: counts non-stale, non-resolved, map-enabled threats; the nearest
  * distance and zone derive from the focus point via the threat engine; the official-alert flag
- * matches the focus oblast via [focusAttribution] (majors-only, same as the app). No decision
+ * matches the focus oblast via [resolveFocus] (majors-only, same as the app). No decision
  * logic lives in the widget layer.
  */
 fun computeWidgetSnapshot(

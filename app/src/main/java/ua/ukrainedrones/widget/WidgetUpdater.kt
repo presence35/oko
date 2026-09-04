@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.ZoneParams
-import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.NormalizedThreat
 
 /**
@@ -91,16 +90,13 @@ object WidgetUpdater {
                 val (cs, threats, alerts) = core.first as Triple<ConnectionState, Map<String, NormalizedThreat>, List<OblastAlert>>
                 val gps = core.second
                 val now = core.third
-                val pinnedCity = tail.pinned?.let { name -> Cities.byUa[name] }
-                val focus = if (tail.followMe) gps
-                    else pinnedCity?.let { LatLng(it.lat, it.lon) } ?: gps
-                val attribution = focusAttribution(tail.followMe, gps, pinnedCity)
+                val focus = resolveFocus(tail.followMe, gps, LocationTracker.isFresh(now), tail.pinned)
                 computeWidgetSnapshot(
                     cs = cs,
                     threats = threats,
                     alerts = alerts,
-                    focus = focus,
-                    token = attribution.token,
+                    focus = focus.location,
+                    token = focus.attribution.token,
                     params = params,
                     mapEnabled = tail.mapEnabled,
                     now = now

@@ -604,6 +604,13 @@ object Cities {
     /** Ukrainian name → city lookup, used to resolve a course-message place to its coordinates. */
     val byUa: Map<String, City> = representativeByName
 
+    /** Resolves a stored pin (UA name, transliterated UA, or EN name) to its [City]. */
+    fun findCity(name: String): City? =
+        byUa[name]
+            ?: uaToEn.entries.firstOrNull { it.value.equals(name, ignoreCase = true) }
+                ?.key?.let { byUa[it] }
+            ?: byUa.values.firstOrNull { it.nameEn.equals(name, ignoreCase = true) }
+
     /** City (by Ukrainian name) → its oblast name stem, used to highlight a city label in red
      *  while an official air-raid alert is active for that oblast. Matched via `contains`
      *  against the alert's oblast/name (e.g. stem "Харківськ" hits "Харківська область").
@@ -612,10 +619,6 @@ object Cities {
         REGIONS.flatMap { r -> r.cities.map { Triple(it.nameUa, r.stem, it.pop) } }
             .groupBy({ it.first }, { it })
             .mapValues { (_, v) -> v.maxByOrNull { it.third }!!.second }
-
-    /** Display default when there is no GPS fix and no pinned city: the camera already
-     *  opens on Odesa, so the header/attribution names it too instead of showing nothing. */
-    val ODESA: City = ALL.first { it.nameUa == "Одеса" }
 
     /**
      * Nearest **major** listed city within [radiusKm] of a GPS position, used to attribute a
@@ -644,30 +647,61 @@ data class FocusAttribution(
     val bannerCityEn: String
 )
 
-fun focusAttribution(followMe: Boolean, userLocation: LatLng?, pinned: City?): FocusAttribution {
+/** Nothing to attribute to: no pinned city and no GPS fix. Country-wide, no oblast claimed. */
+private val COUNTRY_WIDE_ATTRIBUTION =
+    FocusAttribution(token = null, bannerCityUa = "Україна", bannerCityEn = "Ukraine")
+
+/** What the app is currently focused on — one shared answer for the UI, widget and alert service. */
+data class Focus(
+    val location: LatLng?,              // null when there's no pinned city and no GPS fix at all
+    val attribution: FocusAttribution,  // token = null + country-wide banner when location unknown
+    val pinned: Boolean,                // true when the focus is the pinned city
+    val gpsFresh: Boolean,              // caller-supplied freshness of the last fix (informational)
+    val gpsFixMissing: Boolean          // followMe on but no fix ever → persistent warning
+)
+
+/**
+ * Single source of truth for the focus point. Follows the pinned city only when not following
+ * GPS; while following, uses the last-known GPS fix (staleness is fine — the focus never falls
+ * back to a pinned city). With no fix at all the location is null and the attribution is
+ * country-wide, so no oblast or zones are claimed until we know where the user is.
+ */
+fun resolveFocus(
+    followMe: Boolean,
+    lastGps: LatLng?,
+    gpsFresh: Boolean,
+    pinnedName: String?
+): Focus {
+    val pinned = pinnedName?.let { Cities.findCity(it) }
     if (!followMe && pinned != null) {
-        return FocusAttribution(
-            token = Cities.cityOblast[pinned.nameUa],
-            bannerCityUa = pinned.nameUa,
-            bannerCityEn = pinned.nameEn
+        return Focus(
+            location = LatLng(pinned.lat, pinned.lon),
+            attribution = FocusAttribution(
+                token = Cities.cityOblast[pinned.nameUa],
+                bannerCityUa = pinned.nameUa,
+                bannerCityEn = pinned.nameEn
+            ),
+            pinned = true,
+            gpsFresh = gpsFresh,
+            gpsFixMissing = false
         )
     }
-    val gps = userLocation?.let { Cities.nearestCity(it.lat, it.lon) }
-    return if (gps != null) {
-        FocusAttribution(
-            token = Cities.cityOblast[gps.nameUa],
-            bannerCityUa = gps.nameUa,
-            bannerCityEn = gps.nameEn
-        )
-    } else {
-        // No usable fix and no pinned city: resolve to Odesa (the app's display default —
-        // the camera already opens there), so header/banner/widget agree with the map.
-        FocusAttribution(
-            token = Cities.cityOblast[Cities.ODESA.nameUa],
-            bannerCityUa = Cities.ODESA.nameUa,
-            bannerCityEn = Cities.ODESA.nameEn
-        )
-    }
+    val attribution = lastGps?.let { gps ->
+        Cities.nearestCity(gps.lat, gps.lon)?.let { city ->
+            FocusAttribution(
+                token = Cities.cityOblast[city.nameUa],
+                bannerCityUa = city.nameUa,
+                bannerCityEn = city.nameEn
+            )
+        } ?: COUNTRY_WIDE_ATTRIBUTION
+    } ?: COUNTRY_WIDE_ATTRIBUTION
+    return Focus(
+        location = lastGps,
+        attribution = attribution,
+        pinned = false,
+        gpsFresh = gpsFresh,
+        gpsFixMissing = followMe && lastGps == null
+    )
 }
 
 /** Draws city names in the current language, sized to zoom level. MAJOR labels always show;

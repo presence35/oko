@@ -71,26 +71,57 @@ class CitiesTest {
     }
 
     @Test
-    fun `focusAttribution near a minor city uses the major banner`() {
-        val fa = focusAttribution(
+    fun `resolveFocus near a minor city uses the major banner`() {
+        val f = resolveFocus(
             followMe = true,
-            userLocation = LatLng(46.3036, 30.6566),
-            pinned = null
+            lastGps = LatLng(46.3036, 30.6566),
+            gpsFresh = true,
+            pinnedName = null
         )
-        assertEquals("Одеськ", fa.token)
-        assertEquals("Одеса", fa.bannerCityUa)
-        assertEquals("Odesa", fa.bannerCityEn)
+        assertEquals("Одеськ", f.attribution.token)
+        assertEquals("Одеса", f.attribution.bannerCityUa)
+        assertEquals("Odesa", f.attribution.bannerCityEn)
+        assertEquals(false, f.pinned)
+        assertEquals(false, f.gpsFixMissing)
     }
 
     @Test
-    fun `focusAttribution without location falls back to the Odesa display default`() {
-        val fa = focusAttribution(
+    fun `resolveFocus with no fix and no pin is country-wide with a fix-missing warning`() {
+        val f = resolveFocus(
             followMe = true,
-            userLocation = null,
-            pinned = null
+            lastGps = null,
+            gpsFresh = false,
+            pinnedName = null
         )
-        assertEquals(Cities.cityOblast[Cities.ODESA.nameUa], fa.token)
-        assertEquals(Cities.ODESA.nameUa, fa.bannerCityUa)
-        assertEquals(Cities.ODESA.nameEn, fa.bannerCityEn)
+        assertEquals(null, f.attribution.token)
+        assertEquals("Ukraine", f.attribution.bannerCityEn)
+        assertEquals(null, f.location)
+        assertEquals(true, f.gpsFixMissing)
+    }
+
+    @Test
+    fun `resolveFocus keeps the last-known fix even when stale`() {
+        val f = resolveFocus(
+            followMe = true,
+            lastGps = LatLng(46.3036, 30.6566),
+            gpsFresh = false,
+            pinnedName = null
+        )
+        assertEquals(46.3036, f.location?.lat)
+        assertEquals(30.6566, f.location?.lon)
+        assertEquals(false, f.gpsFixMissing)
+    }
+
+    @Test
+    fun `resolveFocus pins only when not following GPS`() {
+        val pinned = resolveFocus(followMe = false, lastGps = null, gpsFresh = false, pinnedName = "Одеса")
+        assertEquals(true, pinned.pinned)
+        assertEquals("Одеськ", pinned.attribution.token)
+        assertEquals(false, pinned.gpsFixMissing)
+
+        val following = resolveFocus(followMe = true, lastGps = null, gpsFresh = false, pinnedName = "Одеса")
+        assertEquals(false, following.pinned)
+        assertEquals(null, following.location)
+        assertEquals(true, following.gpsFixMissing)
     }
 }
