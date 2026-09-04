@@ -1,4 +1,4 @@
-# Ukraine Drones — Release Workflow
+# Oko — Release Workflow
 
 ## Trigger phrase: "release it"
 
@@ -16,7 +16,7 @@ Only when the user says **"release it"**, perform a full release:
 ## While working
 
 - Append user-visible changes to `CHANGELOG.md` under `## [Unreleased]` as you go, so any session can release them.
-- Changelog entries are short one-liners: `- Area: change / Область: зміна` (EN sentence, then UA after ` / `). No multi-paragraph essays.
+- Changelog entries are short one-liners: `- Area: change`. No multi-paragraph essays.
 - The server `version.json` is generated from `app/version.properties` (versionCode/versionName) plus `app/notes_en.txt` / `app/notes_ua.txt`. FTP creds live in `app/upload.properties` (git-ignored).
 - Version numbers: `versionCode` is a monotonic integer; `versionName` is human-readable. Keep both bumped together (the `bumpVersion` task does this).
 
@@ -48,7 +48,7 @@ evaluation contract. Read `ARCHITECTURE.md` for module map and data-flow context
   localization.
 - **EN-only strings during normal work.** Do NOT translate new strings to UA — write only the
   EN text (put it in the UA slot too as a placeholder so `Strings` compiles). A dedicated
-  "translate" command/session fills real UA later. Saves tokens.
+  "translate" command/session fills real UA later--Saves tokens.
 - **Editing files with non-ASCII text** (Cyrillic — `Strings.kt`, `Cities.kt`, etc.): never use
   raw `Get-Content`/`Set-Content` in PowerShell 5.1 — it reads/writes ANSI and corrupts UTF-8
   (mojibake + adds a BOM). Use .NET instead:

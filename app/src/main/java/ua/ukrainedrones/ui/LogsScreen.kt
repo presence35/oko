@@ -232,13 +232,6 @@ fun LogsDropDownSheet(
                 .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(connColor)
-            )
-            Spacer(Modifier.width(8.dp))
             Text(
                 s.logsTitle,
                 style = MaterialTheme.typography.titleMedium,
@@ -249,6 +242,7 @@ fun LogsDropDownSheet(
             Image(
                 painter = painterResource(R.drawable.neptun),
                 contentDescription = s.attributionText,
+                colorFilter = ColorFilter.tint(connColor),
                 modifier = Modifier.height(20.dp)
             )
             Spacer(Modifier.width(6.dp))

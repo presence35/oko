@@ -143,7 +143,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    var showConnectionInfo by remember { mutableStateOf(false) }
     var showZonesSheet by remember { mutableStateOf(false) }
     var activeExplainer by remember { mutableStateOf<Explainer?>(null) }
 
@@ -164,17 +163,11 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 
     // Only one overlay can be up at a time: opening any of them closes the others (and the
     // threat popup), and an arriving update dialog outranks everything.
-    LaunchedEffect(showConnectionInfo, showZonesSheet, uiState.update) {
-        if (showConnectionInfo || showZonesSheet || uiState.update !is UpdateState.Idle) {
+    LaunchedEffect(showZonesSheet, uiState.update) {
+        if (showZonesSheet || uiState.update !is UpdateState.Idle) {
             viewModel.selectThreat(null)
         }
-        if (showConnectionInfo) {
-            showZonesSheet = false
-            activeExplainer = null
-        }
-        if (showZonesSheet) showConnectionInfo = false
         if (uiState.update !is UpdateState.Idle) {
-            showConnectionInfo = false
             showZonesSheet = false
             activeExplainer = null
         }
@@ -184,7 +177,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     // whenever the user navigates to Settings/Guide, so returning to the map is always clean.
     LaunchedEffect(screen, uiState.activeZone, uiState.focusOblastAlertActive) {
         if (screen != Screen.MAP || uiState.activeZone != null || uiState.focusOblastAlertActive) {
-            showConnectionInfo = false
         }
     }
 
@@ -256,7 +248,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         if (uiState.flourish != null) {
             screen = Screen.MAP
             showZonesSheet = false
-            showConnectionInfo = false
             activeExplainer = null
             viewModel.selectThreat(null)
         }
@@ -287,7 +278,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 else settingsCollapse.copy(threats = true)
                 scrollToThreatsTick++
             },
-                        onThreatTapped = { showConnectionInfo = false; showZonesSheet = false; viewModel.selectThreat(it) },
+                        onThreatTapped = { showZonesSheet = false; viewModel.selectThreat(it) },
             onFlourishEjected = viewModel::notifyFlourishEjected,
             onThreatStripTap = { viewModel.panToThreat(it) },
             onDismissPopup = { viewModel.selectThreat(null) },
@@ -303,8 +294,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onThreatCardSizeChange = { viewModel.setThreatCardSize(it) },
             onNeutralize = { id -> viewModel.neutralizeThreat(id) },
             onFlybyFinished = { id -> viewModel.onFlybyFinished(id) },
-            showConnectionInfo = showConnectionInfo,
-            onShowConnectionInfoChange = { showConnectionInfo = it },
             showZonesSheet = showZonesSheet,
             onShowZonesSheetChange = { showZonesSheet = it },
             onOpenShelters = {
@@ -312,7 +301,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 screen = Screen.SHELTERS
             },
             onOpenLogs = {
-                showConnectionInfo = false
                 screen = Screen.LOGS
             },
             onShelterModeChange = { viewModel.setShelterModeActive(it) },
@@ -325,23 +313,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 scope.launch { prefs.setShelterTipStage(next) }
             }
         )
-        }
-        if (showConnectionInfo) {
-            SystemStatusDialog(
-                neptunDown = uiState.neptunDown,
-                degraded = uiState.degraded,
-                s = Strings.get(uiState.language),
-                onClose = { showConnectionInfo = false },
-                onOpenLogs = {
-                    showConnectionInfo = false
-                    screen = Screen.LOGS
-                },
-                onOpenAttribution = {
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse(NeptunConnectionClient.NEPTUN_SITE_URL))
-                    )
-                }
-            )
         }
         if (screen == Screen.SETTINGS) {
             // Composed after MapScreen, so its handler is checked first on Back.
@@ -658,8 +629,6 @@ private fun MapScreen(
     onNeutralize: (String) -> Unit,
     onFlourishEjected: () -> Unit,
     onFlybyFinished: (String) -> Unit,
-    showConnectionInfo: Boolean,
-    onShowConnectionInfoChange: (Boolean) -> Unit,
     showZonesSheet: Boolean,
     onShowZonesSheetChange: (Boolean) -> Unit,
     onOpenShelters: () -> Unit,
@@ -840,8 +809,6 @@ private fun MapScreen(
                     neptunDown = uiState.neptunDown,
                     degraded = uiState.degraded,
                     onOpenLogs = onOpenLogs,
-                    showInfo = showConnectionInfo,
-                    onShowInfoChange = onShowConnectionInfoChange,
                     s = s,
                     modifier = Modifier.padding(end = 4.dp)
                 )
@@ -1125,112 +1092,6 @@ private fun MapScreen(
                 }
             }
         }
-    }
-}
-
-/**
- * System-status dialog behind the connection pill: per-source dot, the three-tier connection
- * legend, the NEPTUN attribution link, and a prominent Logs button.
- */
-@Composable
-private fun SystemStatusDialog(
-    neptunDown: Boolean,
-    degraded: Boolean,
-    s: Strings.StringSet,
-    onClose: () -> Unit,
-    onOpenLogs: () -> Unit,
-    onOpenAttribution: () -> Unit
-) {
-    val connColor = when {
-        neptunDown -> Color(0xFFE57373)
-        degraded -> Color(0xFFFB8C00)
-        else -> Color(0xFF4CAF50)
-    }
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = Color(0xFF1E1E1E),
-            border = BorderStroke(1.dp, Color(0xFF3A3A3A))
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = s.connStatusTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
-                Spacer(Modifier.height(12.dp))
-                SourceStatusRow(color = connColor, name = s.connNeptunLabel, active = !neptunDown)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = when {
-                        neptunDown -> s.connOffline
-                        degraded -> s.connDegraded
-                        else -> s.connOnline
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = connColor
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = if (degraded && !neptunDown) s.connDegradedBody else s.connServerLine,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.7f)
-                )
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = s.logsLegend,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-                Spacer(Modifier.height(8.dp))
-                StatusLegendRow(Color(0xFF4CAF50), s.connOnline)
-                StatusLegendRow(Color(0xFFFB8C00), s.connDegraded)
-                StatusLegendRow(Color(0xFFE57373), s.connOffline)
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = s.attributionText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF64B5F6),
-                    textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.clickable(onClick = onOpenAttribution)
-                )
-                Spacer(Modifier.height(20.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = onOpenLogs,
-                        modifier = Modifier.weight(1f)
-                    ) { Text(s.logsTitle) }
-                    OutlinedButton(onClick = onClose) { Text(s.closeButton) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusLegendRow(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(color)
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.85f)
-        )
     }
 }
 

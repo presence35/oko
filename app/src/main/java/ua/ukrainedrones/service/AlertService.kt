@@ -75,7 +75,7 @@ import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.service.ServiceState
 import ua.ukrainedrones.connection.isConnected
 import ua.ukrainedrones.connection.isDegraded
-import ua.ukrainedrones.connection.reconnectStartMillisOrZero
+import ua.ukrainedrones.connection.offlineSinceOrNull
 
 class AlertService : Service() {
 
@@ -514,7 +514,10 @@ val mappedThreats = registry.allThreats.map { list ->
                 val (focusLoc, focusBannerCity, focusCityUa, focusRegion, focusPinned) = when {
                     !cfg.followMe && pinnedLoc != null && pinnedName != null -> {
                         val c = FocusCity.find(pinnedName)
-                        val name = if (tail.lang == AppLanguage.UA) (c?.nameUa ?: pinnedName) else pinnedName
+                        val name = when {
+                            tail.lang == AppLanguage.UA -> c?.nameUa ?: pinnedName
+                            else -> Cities.byUa[pinnedName]?.nameEn ?: pinnedName
+                        }
                         val reg = c?.oblastStem ?: matchOblast(pinnedLoc.lat, pinnedLoc.lon)?.nameUa ?: ""
                         Quint(pinnedLoc, name, c?.nameUa ?: pinnedName, reg, true)
                     }
@@ -529,7 +532,10 @@ val mappedThreats = registry.allThreats.map { list ->
                     }
                     pinnedLoc != null && pinnedName != null -> {
                         val c = FocusCity.find(pinnedName)
-                        val name = if (tail.lang == AppLanguage.UA) (c?.nameUa ?: pinnedName) else pinnedName
+                        val name = when {
+                            tail.lang == AppLanguage.UA -> c?.nameUa ?: pinnedName
+                            else -> Cities.byUa[pinnedName]?.nameEn ?: pinnedName
+                        }
                         val reg = c?.oblastStem ?: matchOblast(pinnedLoc.lat, pinnedLoc.lon)?.nameUa ?: ""
                         Quint(pinnedLoc, name, c?.nameUa ?: pinnedName, reg, false)
                     }
@@ -627,15 +633,14 @@ val mappedThreats = registry.allThreats.map { list ->
         }
 
         val isOfflineNow = !state.connectionState.isConnected
-        val offlineMinutes = if (isOfflineNow) {
-            val start = state.connectionState.reconnectStartMillisOrZero
-            ((now - start) / 60_000L).toInt()
+        val offlineSince = state.connectionState.offlineSinceOrNull
+        val offlineMinutes = if (isOfflineNow && offlineSince != null) {
+            ((now - offlineSince) / 60_000L).toInt()
         } else 0
 
         val twentyMinMs = 20 * 60 * 1000L
-        val elapsedSinceReconnect = if (isOfflineNow) {
-            val start = state.connectionState.reconnectStartMillisOrZero
-            now - start
+        val elapsedSinceReconnect = if (isOfflineNow && offlineSince != null) {
+            now - offlineSince
         } else 0L
 
         val monitorTitle = when {

@@ -133,9 +133,6 @@ object Strings {
         val connOffline: String,
         val connDegraded: String,
         val connDegradedBody: String,
-        val connServerLine: String,
-        val connStatusTitle: String,
-        val connNeptunLabel: String,
         val connActiveLabel: String,
         val reliabilityLow: String,
         val reliabilityMedium: String,
@@ -742,9 +739,6 @@ object Strings {
         val connOffline: String get() = status.connOffline
         val connDegraded: String get() = status.connDegraded
         val connDegradedBody: String get() = status.connDegradedBody
-        val connServerLine: String get() = status.connServerLine
-        val connStatusTitle: String get() = status.connStatusTitle
-        val connNeptunLabel: String get() = status.connNeptunLabel
         val connActiveLabel: String get() = status.connActiveLabel
         val reliabilityLow: String get() = status.reliabilityLow
         val reliabilityMedium: String get() = status.reliabilityMedium
@@ -1235,9 +1229,6 @@ connOnline = "Онлайн",
         connOffline = "Офлайн",
         connDegraded = "Запасний",
         connDegradedBody = "Запасне з'єднання — дані про загрози можуть затримуватися.",
-        connServerLine = "З'єднання з сервером повітряних тривог NEPTUN.",
-        connStatusTitle = "Статус системи",
-        connNeptunLabel = "NEPTUN",
         connActiveLabel = "Активне",
         reliabilityLow = "Достовірність: Низька",
         reliabilityMedium = "Достовірність: Середня",
@@ -1330,7 +1321,7 @@ connOnline = "Онлайн",
         offlineCriticalBypassSilentTitle = "Обійти тишу",
         offlineCriticalBypassSilentDesc = "Грати звук навіть коли телефон на тиші. Не обходить режим «Не турбувати» — увімкніть відповідний параметр у налаштуваннях каналу, якщо потрібно.",
         offlineIgnoreAction = "Ігнорувати 30 хв",
-        offlinePausedBody = "Повтор призупинено на 30 хв — натисніть «Офлайн», щоб відновити раніше.",
+        offlinePausedBody = "Повтор призупинено на 30 хв — натисніть «Повторити», щоб відновити раніше.",
         offlineLiveFormat = "Офлайн %1\$d/%2\$d хв · спроба %3\$d",
         alertChannelName = "Повітряні тривоги",
         alertChannelDesc = "Сирени повітряної тривоги та термінові зональні сповіщення",
@@ -1802,9 +1793,6 @@ connOnline = "Online",
         connOffline = "Offline",
         connDegraded = "Backup",
         connDegradedBody = "Backup connection active — threat data may be delayed.",
-        connServerLine = "Connection to the NEPTUN air-threat server.",
-        connStatusTitle = "System status",
-        connNeptunLabel = "NEPTUN",
         connActiveLabel = "Active",
         reliabilityLow = "Reliability: Low",
         reliabilityMedium = "Reliability: Average",
@@ -1897,7 +1885,7 @@ alertBannerFormat = "%1\$s: alert",
         offlineCriticalBypassSilentTitle = "Override silent mode",
         offlineCriticalBypassSilentDesc = "Play sound even when the phone is on silent. Does not bypass Do Not Disturb — enable the override in system channel settings if needed.",
         offlineIgnoreAction = "Ignore 30 min",
-        offlinePausedBody = "Retrying paused for 30 min — tap Offline to resume early.",
+        offlinePausedBody = "Retrying paused for 30 min — tap Retry to resume early.",
         offlineLiveFormat = "Offline %1\$d/%2\$d min · attempt %3\$d",
         alertChannelName = "Air alerts",
         alertChannelDesc = "Air-raid sirens and urgent zone alerts",

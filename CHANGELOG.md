@@ -9,6 +9,10 @@
 - Connection: track threat data freshness independently from socket liveness — suppress stale zone alerts if threat frames stop arriving / З'єднання: відстеження свіжості даних загроз окремо від стану сокету — приглушення застарілих зонних тривог, якщо кадри загроз перестають надходити
 - Location: validate location freshness against timeout before evaluating focus and zones / Локація: перевірка свіжості геопозиції за тайм-аутом перед оцінкою фокусу та зон
 - Settings: show warning banner when system notifications are disabled / Налаштування: показ попередження, коли сповіщення вимкнено в системі
+- Notifications: fix pinned city name shown in UA instead of EN on the monitoring notification; fix offline minutes exploding to millions when in Connecting state; fix paused notification saying "tap Offline" instead of "tap Retry" / Сповіщення: виправлено назву закріпленого міста UA замість EN у статусному сповіщенні; виправлено хвилини офлайн, що зриваються до мільйонів у стані Connecting; виправлено сповіщення паузи — «Офлайн» замінено на «Повторити»
+- Connection: tapping the status pill now opens the Logs screen directly instead of the system-status dialog / З'єднання: дотик до статус-пігулки тепер відкриває екран Журналу замість діалогу статусу системи
+- Logs: header neptun icon now tinted by connection status color; removed redundant status dot from Logs header / Журнал: іконка neptun у заголовку Журналу тепер забарвлена за кольором стану з'єднання; зайву крапку статусу прибрано
+- Map: zone-fit and shelter-fit zooms now jump directly instead of animating through uncached zoom levels — fixes white-box flash / Мапа: наближення до зон/притулків тепер стрибає без анімації — виправлено спалах білого прямокутника
 
 - Map: fix threats not moving/facing wrong direction — marker update loop now reads fresh threat data on each tick / Мапа: виправлено загрози, що не рухаються/дивляться в хибному напрямку — цикл оновлення маркерів тепер зчитує свіжі дані загроз кожен тик
 - Map: fix city labels not updating when language is changed / Мапа: виправлено міські мітки, що не оновлюються при зміні мови

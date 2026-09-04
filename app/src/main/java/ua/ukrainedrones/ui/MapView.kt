@@ -720,7 +720,7 @@ fun NeptunMapView(
                     ThreatZone.INNER -> uiState.activeZoneParams.slowRedKm.toDouble()
                     else -> uiState.activeZoneParams.slowYellowKm.toDouble()
                 }
-                mapView.zoomToBoundingBox(zoneBoundingBox(center, radiusKm), true)
+                mapView.zoomToBoundingBox(zoneBoundingBox(center, radiusKm), false)
             }
 
             // Shelter marker tapped: highlight + open its card, but keep the camera where it
@@ -1072,7 +1072,7 @@ fun NeptunMapView(
         val near = focusLocationState?.let { f -> shelterIndex?.nearest(f.lat, f.lon, limit = 25) }
         val box = near?.let { sheltersBoundingBox(it) }
         if (box != null) {
-            mapView.zoomToBoundingBox(box, true)
+            mapView.zoomToBoundingBox(box, false)
         } else {
             val center = focusLocationState?.let { GeoPoint(it.lat, it.lon) } ?: mapView.mapCenter
             mapView.controller.animateTo(center, 18.0, 400L)
