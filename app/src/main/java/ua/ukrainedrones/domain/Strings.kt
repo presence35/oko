@@ -343,6 +343,8 @@ object Strings {
         val smallCitiesChip: String,
         val calmMessagesTitle: String,
         val calmMessagesDesc: String,
+        val threatIconZoomTitle: String,
+        val threatIconZoomDesc: String,
         val deathAnimationTitle: String,
         val deathAnimationDesc: String,
         val followBulletTitle: String,
@@ -941,6 +943,8 @@ object Strings {
         val smallCitiesChip: String get() = misc.smallCitiesChip
         val calmMessagesTitle: String get() = misc.calmMessagesTitle
         val calmMessagesDesc: String get() = misc.calmMessagesDesc
+        val threatIconZoomTitle: String get() = misc.threatIconZoomTitle
+        val threatIconZoomDesc: String get() = misc.threatIconZoomDesc
         val deathAnimationTitle: String get() = misc.deathAnimationTitle
         val deathAnimationDesc: String get() = misc.deathAnimationDesc
         val followBulletTitle: String get() = misc.followBulletTitle
@@ -1441,6 +1445,8 @@ connOnline = "Онлайн",
         smallCitiesChip = "Дрібні",
         calmMessagesTitle = "Заспокійливі повідомлення",
         calmMessagesDesc = "Показувати короткі підбадьорювання в нижній панелі, коли загроз немає. Вимкни, щоб залишати лише «Немає актуальних загроз».",
+        threatIconZoomTitle = "Zoom icons with map",
+        threatIconZoomDesc = "Zoom icons with map",
         deathAnimationTitle = "Збиття загрози",
         deathAnimationDesc = "Коли загрозу перестають відстежувати, прилітає куля і збиває її. Просто для розваги.",
         followBulletTitle = "Слідувати за снарядом",
@@ -2006,6 +2012,8 @@ alertBannerFormat = "%1\$s: alert",
         smallCitiesChip = "Small",
         calmMessagesTitle = "Calm messages",
         calmMessagesDesc = "Show short encouragements in the bottom bar when there are no threats. Turn off to just say \"No relevant threats\".",
+        threatIconZoomTitle = "Zoom icons with map",
+        threatIconZoomDesc = "Enlarge threat icons as you zoom in (capped at 3x). Turn off for constant-size icons.",
         deathAnimationTitle = "Shoot-down animation",
         deathAnimationDesc = "When a threat is no longer tracked, a bullet flies in and shoots it down. Just for fun.",
         followBulletTitle = "Follow the bullet",

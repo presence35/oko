@@ -78,6 +78,7 @@ import org.osmdroid.views.overlay.Polygon
 import java.io.File
 import kotlin.math.cos
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -172,11 +173,11 @@ private fun StringBuilder.appendThreatKey(t: NormalizedThreat) {
 // animation mutates its icon's alpha per frame and must never touch a live marker's icon.
 private val threatIconCache = object : LruCache<String, Bitmap>(48) {}
 
-/** Threat marker icon scales with map zoom — 1x (32dp) at low zoom, 3x by high zoom, capped
- *  so icons never balloon on deep zoom-in. */
+/** Threat marker icon size tracks map zoom (1x at low zoom → 3x by zoom 13), quantized to
+ *  8dp steps so a pinch changes size in few, deliberate jumps instead of every fractional frame. */
 private fun threatIconSizeDp(zoom: Double): Int {
-    val scale = ((zoom - 9.0) / 5.0 * 2.0 + 1.0).coerceIn(1.0, 3.0)
-    return (32 * scale).toInt()
+    val scale = ((zoom - 9.0) / 4.0 * 2.0 + 1.0).coerceIn(1.0, 3.0)
+    return (32.0 * scale / 8.0).roundToInt() * 8
 }
 
 /** Position for the "approaching, precision unknown" orbit: a point on the yellow zone
@@ -587,12 +588,38 @@ fun NeptunMapView(
     val iconSetState by rememberUpdatedState(uiState.iconSet)
     val mapThreatsState by rememberUpdatedState(uiState.mapThreats)
     val slowYellowKmState by rememberUpdatedState(uiState.activeZoneParams.slowYellowKm)
+    val threatIconZoomState by rememberUpdatedState(uiState.threatIconZoom)
     val selectedId by selectedThreatId.collectAsState()
     val selectedThreatIdState by rememberUpdatedState(selectedId)
     val focusLocationState by rememberUpdatedState(uiState.focusLocation)
     val deathAnimationEnabledState by rememberUpdatedState(uiState.deathAnimationEnabled)
         val followBulletState by rememberUpdatedState(uiState.followBullet)
     val hapticsOnState by rememberUpdatedState(LocalHapticsEnabled.current)
+    // Re-size every threat marker to the size bucket matching the current zoom, keeping the
+    // reveal/areaOnly dot. Called from the map's zoom listener so size tracks the gesture
+    // immediately (no 3s poll lag); when the Just Fun toggle is off, size is pinned to 32dp.
+    val resizeThreatIcons: () -> Unit = resize@{
+        val mv = mapViewRef.value ?: return@resize
+        val target = if (threatIconZoomState) threatIconSizeDp(mv.zoomLevelDouble) else 32
+        val ring = newRingState.value
+        val nowMs = System.currentTimeMillis()
+        var dirty = false
+        for (t in mapThreatsState) {
+            val m = markerRefs.value[t.id] ?: continue
+            if (markerIconDp.value[t.id] != target) {
+                val revealed = ring != null && t.id == ring.id && nowMs < ring.activeUntilMs
+                m.icon = threatIconFor(context, t.type.toThreatType(), iconSetState, revealed = revealed, areaOnly = t.areaOnly, sizeDp = target)
+                markerIconDp.value[t.id] = target
+                dirty = true
+            }
+        }
+        if (dirty) mv.invalidate()
+    }
+    // Applying the Just Fun toggle right away: resize to the fixed 32dp (off) or the current
+    // zoom bucket (on) without waiting for the next zoom gesture.
+    LaunchedEffect(uiState.threatIconZoom) {
+        resizeThreatIcons()
+    }
     val mapScope = rememberCoroutineScope()
     val deathFx = remember {
         DeathFxController(
@@ -684,6 +711,7 @@ fun NeptunMapView(
                             ) {
                                 onExitShelterMode()
                             }
+                            resizeThreatIcons()
                             return false
                         }
                     })
@@ -922,7 +950,10 @@ fun NeptunMapView(
                     val marker = Marker(mapView).apply {
                         position = pos
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                        icon = threatIconFor(context, t.type.toThreatType(), iconSet, revealed = revealed, areaOnly = t.areaOnly, sizeDp = threatIconSizeDp(mapView.zoomLevelDouble))
+                        icon = threatIconFor(
+                            context, t.type.toThreatType(), iconSet, revealed = revealed, areaOnly = t.areaOnly,
+                            sizeDp = if (uiState.threatIconZoom) threatIconSizeDp(mapView.zoomLevelDouble) else 32
+                        )
                         alpha = if (stale) 0.45f else 1.0f
                         title = typeLabel
                         snippet = regionLabel
@@ -943,7 +974,7 @@ fun NeptunMapView(
                     }
                     mapView.overlays.add(marker)
                     markerRefs.value[t.id] = marker
-                    markerIconDp.value[t.id] = threatIconSizeDp(mapView.zoomLevelDouble)
+                    markerIconDp.value[t.id] = if (uiState.threatIconZoom) threatIconSizeDp(mapView.zoomLevelDouble) else 32
                 }
 
                 // Nearby shelters — rendered when toggled on, centered around the user/pinned focus.
@@ -1268,8 +1299,7 @@ fun NeptunMapView(
             val mapView = mapViewRef.value ?: continue
             val now = System.currentTimeMillis()
             var dirty = false
-            // Icon size scales with zoom (1x → 3x capped); swap when the bucket changes.
-            val targetSizeDp = threatIconSizeDp(mapView.zoomLevelDouble)
+            // Icon sizing is handled by the zoom listener (resizeThreatIcons) — not here.
             val ring = newRingState.value
             for (t in mapThreatsState) {
                 val marker = markerRefs.value[t.id] ?: continue
@@ -1289,12 +1319,6 @@ fun NeptunMapView(
                 }
                 if (marker.rotation != targetRot) {
                     marker.rotation = targetRot
-                    dirty = true
-                }
-                val revealed = ring != null && t.id == ring.id && now < ring.activeUntilMs
-                if (markerIconDp.value[t.id] != targetSizeDp) {
-                    marker.icon = threatIconFor(context, t.type.toThreatType(), iconSetState, revealed = revealed, areaOnly = nt.areaOnly, sizeDp = targetSizeDp)
-                    markerIconDp.value[t.id] = targetSizeDp
                     dirty = true
                 }
                 val focusPt = focusLocationState

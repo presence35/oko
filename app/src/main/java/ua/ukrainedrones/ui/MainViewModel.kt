@@ -126,6 +126,7 @@ data class UiState(
     val followBullet: Boolean = true,
     val neutralizedTallyEnabled: Boolean = true,
     val neutralizedTallyAllUkraine: Boolean = false,
+    val threatIconZoom: Boolean = true,
     val fastGroupCollapsed: Boolean = false,
     val slowGroupCollapsed: Boolean = false,
     val sheltersEnabled: Boolean = true,
@@ -368,6 +369,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val followBullet: Boolean,
         val neutralizedTallyEnabled: Boolean,
         val neutralizedTallyAllUkraine: Boolean,
+        val threatIconZoom: Boolean,
 val fastGroupCollapsed: Boolean,
         val slowGroupCollapsed: Boolean,
         val sheltersEnabled: Boolean,
@@ -418,6 +420,7 @@ val fastGroupCollapsed: Boolean,
         val followBullet: Boolean,
         val neutralizedTallyEnabled: Boolean,
         val neutralizedTallyAllUkraine: Boolean,
+        val threatIconZoom: Boolean,
         val fastGroupCollapsed: Boolean,
         val slowGroupCollapsed: Boolean,
         val criticalOfflineOverride: Boolean,
@@ -484,13 +487,14 @@ val fastGroupCollapsed: Boolean,
             prefs.criticalOfflineOverride(),
             prefs.criticalOfflineBypassSilent(),
             prefs.flybyAnimationEnabled(),
-            prefs.justFunMasterEnabled()
+            prefs.justFunMasterEnabled(),
+            prefs.threatIconZoom()
         ) { flags: Array<Boolean> ->
             AlertConfig(
                 flags[0], flags[1], flags[2], flags[3], flags[4], flags[5],
                 flags[6], flags[7], flags[8], flags[9], flags[10], flags[11], flags[12],
                 flags[13], flags[14], flags[15], flags[16], flags[17], flags[18], flags[19],
-                flags[20]
+                flags[20], flags[21]
             )
         },
         combine(
@@ -584,6 +588,7 @@ combine(
             followBullet = b.followBullet,
             neutralizedTallyEnabled = b.neutralizedTallyEnabled,
             neutralizedTallyAllUkraine = b.neutralizedTallyAllUkraine,
+            threatIconZoom = b.threatIconZoom,
             fastGroupCollapsed = b.fastGroupCollapsed,
             slowGroupCollapsed = b.slowGroupCollapsed,
             sheltersEnabled = c.sheltersEnabled,
@@ -751,6 +756,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             followBullet = prefs.followBullet,
             neutralizedTallyEnabled = prefs.neutralizedTallyEnabled,
             neutralizedTallyAllUkraine = prefs.neutralizedTallyAllUkraine,
+            threatIconZoom = prefs.threatIconZoom,
             fastGroupCollapsed = prefs.fastGroupCollapsed,
             slowGroupCollapsed = prefs.slowGroupCollapsed,
             sheltersEnabled = prefs.sheltersEnabled,
@@ -1346,6 +1352,10 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
 
     fun setNeutralizedTallyAllUkraine(enabled: Boolean) {
         viewModelScope.launch { prefs.setNeutralizedTallyAllUkraine(enabled) }
+    }
+
+    fun setThreatIconZoom(enabled: Boolean) {
+        viewModelScope.launch { prefs.setThreatIconZoom(enabled) }
     }
 
     fun setLanguage(lang: AppLanguage) {

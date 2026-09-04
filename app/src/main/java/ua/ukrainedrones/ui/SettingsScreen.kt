@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.*
@@ -395,6 +396,8 @@ fun SettingsScreen(
     followBullet: Boolean,
     neutralizedTallyEnabled: Boolean,
     neutralizedTallyAllUkraine: Boolean,
+    threatIconZoom: Boolean,
+    onThreatIconZoomChange: (Boolean) -> Unit,
     fastGroupCollapsed: Boolean,
     slowGroupCollapsed: Boolean,
     versionName: String,
@@ -1389,6 +1392,15 @@ fun SettingsScreen(
                                     )
                                 }
                             }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            AlertToggleRow(
+                                title = s.threatIconZoomTitle,
+                                description = s.threatIconZoomDesc,
+                                checked = threatIconZoom,
+                                onCheckedChange = onThreatIconZoomChange,
+                                icon = rememberVectorPainter(Icons.Default.ZoomIn),
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

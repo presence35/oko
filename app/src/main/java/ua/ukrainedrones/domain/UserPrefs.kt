@@ -77,6 +77,7 @@ class UserPrefs(private val context: Context) {
     private val nightZoneSirenOverrideKey = booleanPreferencesKey("night_zone_siren_override")
     private val nightOfficialSirenOverrideKey = booleanPreferencesKey("night_official_siren_override")
     private val flybyAnimationEnabledKey = booleanPreferencesKey("flyby_animation_enabled")
+    private val threatIconZoomKey = booleanPreferencesKey("threat_icon_zoom")
     private val sheltersEnabledKey = booleanPreferencesKey("shelters_enabled")
     private val sheltersWithKidsEnabledKey = booleanPreferencesKey("shelters_with_kids_enabled")
     private val periodicGpsKey = booleanPreferencesKey("periodic_gps_enabled")
@@ -432,6 +433,13 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setFollowBullet(enabled: Boolean) {
         context.dataStore.edit { it[followBulletKey] = enabled }
+    }
+
+    fun threatIconZoom(): Flow<Boolean> =
+        context.dataStore.data.map { prefs -> prefs[threatIconZoomKey] ?: true }
+
+    suspend fun setThreatIconZoom(enabled: Boolean) {
+        context.dataStore.edit { it[threatIconZoomKey] = enabled }
     }
 
     fun neutralizedTallyEnabled(): Flow<Boolean> =

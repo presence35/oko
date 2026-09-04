@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Map: threat icons scale with zoom (1x→3x capped) instead of staying fixed / Мапа: іконки загроз масштабуються з наближенням (1x→3x з обмеженням) замість фіксованого розміру
+- Map: threat icons scale with zoom (1x→3x capped), tracked live to the zoom gesture; new Just Fun toggle "Zoom icons with map" turns it off for constant-size icons / Мапа: іконки загроз масштабуються з наближенням (1x→3x з обмеженням), слідкуючи за жестом збільшення; новий перемикач у «Просто розвага» — «Збільшувати іконки з мапою» — вимикає це для постійного розміру
 - Map: marker smoothing loop throttled 1s→3s (less CPU/battery; fast threats at deep zoom are slightly coarser) / Мапа: цикл згладжування маркерів зменшено з 1с до 3с (менше навантаження; швидкі загрози при сильному наближенні трохи менш плавні)
 - Map: approx-position threats inside the yellow zone now patrol the zone perimeter (no more misleading "0 km" on the city pin) / Мапа: загрози з приблизною позицією у жовтій зоні тепер обходять її периметр (замість хибного «0 км» на шпильці міста)
 - Threat card: wave count (group size) prefixes the title as "Nx <type>"; source-count pill demoted to plain small text / Картка загрози: кількість хвилі (групи) стає префіксом заголовка «Nx <тип>»; пігулка «джерела» спрощена до звичайного дрібного тексту
