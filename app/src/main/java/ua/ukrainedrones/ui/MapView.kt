@@ -23,7 +23,9 @@ import android.graphics.Point
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
+import android.animation.ValueAnimator
 import android.graphics.drawable.Drawable
+import android.view.animation.DecelerateInterpolator
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -575,6 +577,7 @@ fun NeptunMapView(
     val mapViewRef = remember { mutableStateOf<MapView?>(null) }
     val markerRefs = remember { mutableStateOf<MutableMap<String, Marker>>(mutableMapOf()) }
     val markerIconDp = remember { mutableStateOf<MutableMap<String, Int>>(mutableMapOf()) }
+    val hiddenByDeath = remember { mutableStateOf<MutableSet<String>>(mutableSetOf()) }
     val pausedState by rememberUpdatedState(paused)
     val mapVisibleState by rememberUpdatedState(mapVisible)
     val alertActiveState by rememberUpdatedState(uiState.alertActive)
@@ -1067,11 +1070,12 @@ fun NeptunMapView(
                                 // its card too (reuses the real neutralized-card flow).
                                 val pressedId = markerRefs.value.entries
                                     .firstOrNull { it.value === nearest }?.key
-                                // Unhook the real marker so the normal pipeline stops drawing
-                                // it; the overlay now renders its icon through the flight and
-                                // drops it when the explosion starts.
-                                mapView.overlays.remove(nearest)
-                                markerRefs.value.entries.removeAll { it.value === nearest }
+                                // Hide the marker (alpha=0) so the death animation overlay
+                                // can draw its own copy without visual conflict. The marker
+                                // stays in overlays/markerRefs and reappears after the animation.
+                                val origAlpha = nearest.alpha
+                                nearest.alpha = 0f
+                                if (pressedId != null) hiddenByDeath.value.add(pressedId)
                                 mapView.invalidate()
                                 if (pressedId != null && pressedId == selectedThreatIdState) {
                                     onNeutralize(pressedId)
@@ -1086,14 +1090,21 @@ fun NeptunMapView(
                                         // flies off-screen instead of exploding twice.
                                         deathFx.strikeDud(pressedId, target)
                                     } else {
-                                        // User-initiated strike: never move the camera — the
-                                        // user is already looking at the threat they shot.
+                                        // Fresh icon copy so the death animation's per-frame
+                                        // alpha mutations don't touch the marker's own drawable.
+                                        val threatType = uiState.mapThreats
+                                            .firstOrNull { it.id == pressedId }?.type
+                                            ?.toThreatType() ?: return@longPressHelper true
+                                        val icon = threatIconFor(
+                                            context, threatType, iconSetState,
+                                            sizeDp = markerIconDp.value[pressedId] ?: 32
+                                        )
                                         deathFx.strike(
                                             id = pressedId,
                                             geo = target,
-                                            icon = nearest.icon,
-                                            rotationDeg = nearest.rotation,
-                                            alpha = nearest.alpha
+                                            icon = icon,
+                                            rotationDeg = -nearest.rotation,
+                                            alpha = origAlpha
                                         )
                                         deathFx.strikeHaptics()
                                     }
@@ -1193,7 +1204,7 @@ fun NeptunMapView(
                         markerRefs.value.entries.removeAll { it.value === marker }
                         val anchor = marker.position ?: anchor0
                         val base = IconCatalog.baseDeg(r.type, iconSetState)
-                        val rotation = marker.rotation ?: (r.courseDeg.toFloat() - base + 360f) % 360f
+                        val rotation = -(marker.rotation ?: (-(r.courseDeg.toFloat() - base + 360f) % 360f))
                         // A fresh copy, not the marker's shared drawable.
                         val icon = threatIconFor(
                             context, r.type, iconSetState
@@ -1266,6 +1277,37 @@ fun NeptunMapView(
             deathFx.active.collect { active -> onDeathActiveChange(active) }
         }
 
+        // After a user-shot death animation finishes, wait 2.1s then restore the hidden
+        // marker with a scale-from-zero flourish. Server-resolved threats are NOT in
+        // hiddenByDeath (they use the destroy path), so this only affects playful kills.
+        LaunchedEffect(Unit) {
+            var wasActive = false
+            deathFx.active.collect { active ->
+                if (wasActive && !active) {
+                    delay(2100)
+                    val ids = hiddenByDeath.value.toList()
+                    hiddenByDeath.value.clear()
+                    val mv = mapViewRef.value ?: return@collect
+                    for (id in ids) {
+                        val marker = markerRefs.value[id] ?: continue
+                        val t = mapThreatsState.firstOrNull { it.id == id }
+                        if (t == null) { marker.alpha = 1f; continue }
+                        val targetIcon = marker.icon
+                        val scaleDrawable = ScaleDrawable(targetIcon) { mv.invalidate() }
+                        marker.icon = scaleDrawable
+                        marker.alpha = 1f
+                        mv.invalidate()
+                        val anim = ValueAnimator.ofFloat(0f, 1f)
+                        anim.duration = 300
+                        anim.interpolator = DecelerateInterpolator()
+                        anim.addUpdateListener { scaleDrawable.scale = it.animatedValue as Float }
+                        anim.start()
+                    }
+                }
+                wasActive = active
+            }
+        }
+
         // Surface the tally-tap replay progress so the footer can read "Resolving N threats"
         // per group; null clears the copy.
         LaunchedEffect(Unit) {
@@ -1303,6 +1345,7 @@ fun NeptunMapView(
             val ring = newRingState.value
             for (t in mapThreatsState) {
                 val marker = markerRefs.value[t.id] ?: continue
+                if (t.id in hiddenByDeath.value) continue
                 val nt = t
                 val props = engine.propsFor(nt.type)
                 // Staleness dimming + course rotation update in-place too (they're excluded
@@ -1356,4 +1399,30 @@ fun NeptunMapView(
             if (dirty) mapView.invalidate()
         }
     }
+}
+
+/** Wraps an icon drawable and draws it at a uniform [scale] around its center. Used for the
+ *  scale-from-zero flourish when a user-shot threat marker reappears. */
+private class ScaleDrawable(
+    private val inner: Drawable,
+    private val onInvalidate: () -> Unit
+) : Drawable() {
+    var scale = 0f
+        set(value) { field = value; onInvalidate() }
+
+    override fun draw(canvas: Canvas) {
+        val cx = bounds.centerX().toFloat()
+        val cy = bounds.centerY().toFloat()
+        canvas.save()
+        canvas.scale(scale, scale, cx, cy)
+        inner.draw(canvas)
+        canvas.restore()
+    }
+
+    override fun setAlpha(alpha: Int) { inner.alpha = alpha }
+    override fun setColorFilter(cf: android.graphics.ColorFilter?) { inner.colorFilter = cf }
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity(): Int = inner.opacity
+    override fun getIntrinsicWidth(): Int = inner.intrinsicWidth
+    override fun getIntrinsicHeight(): Int = inner.intrinsicHeight
 }

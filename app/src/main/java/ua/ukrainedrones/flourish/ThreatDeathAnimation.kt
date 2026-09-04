@@ -329,7 +329,8 @@ class ThreatDeathOverlay : Overlay() {
             // Duds never detonate — the projectile just exits and is pruned above.
             if (t >= boomT && !d.dud) {
                 val e = ((t - boomT) / boomLenT).coerceIn(0f, 1f)
-                val maxR = 46f * density
+                val zoomScale = ((mapView.zoomLevelDouble - 9.0) / 4.0 * 2.0 + 1.0).coerceIn(1.0, 3.0).toFloat()
+                val maxR = 46f * density * zoomScale
                 val br = maxR * e
                 val fade = 1f - e
                 // Pre-rendered glow sprite scaled to the blast radius — no per-frame shader.

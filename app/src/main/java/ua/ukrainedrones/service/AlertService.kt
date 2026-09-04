@@ -106,7 +106,7 @@ class AlertService : Service() {
         const val NOTIF_UPDATE = AlertNotificationManager.NOTIF_UPDATE
 
         const val CRITICAL_OFFLINE_MIN = 5
-        private const val ALL_CLEAR_GRACE_MS = 20_000L
+        private const val ALL_CLEAR_GRACE_MS = 0L
         private const val MONITOR_TICK_MS = 1_000L
         private const val MONITOR_TICK_IDLE_MS = 30_000L
         private const val SWEEP_THROTTLE_MS = 10_000L
