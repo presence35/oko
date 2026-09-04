@@ -63,7 +63,9 @@ data class NormalizedThreat(
 data class TrailPoint(val lat: Double, val lon: Double, val tMillis: Long?)
 ```
 
-`flying` is derived: `bearingDeg != null && confirmedAtMillis != null && status == "active"`.
+`flying` is derived: `(bearingDeg != null || heading != null) && (confirmedAtMillis != null || updatedAtMillis != null) && status == "active"`.
+Movement additionally needs a resolvable course + speed; [predictPosition](#predictpositionthreat-speedmps-now--dead-reckoning)
+never fabricates a course for a source that reports none, so a plugin's own movement model is never overridden.
 
 ## Type Properties (Plugin-Provided)
 
@@ -158,10 +160,16 @@ Rules:
 
 ```
 Input: NormalizedThreat, speed, timestamp
-Output: LatLng? (null when not flying or no heading)
+Output: LatLng? (null when no heading or no anchor)
 
-Only for flying threats (bearingDeg + confirmedAtMillis + active).
-Advances from confirmedAtMillis along motionHeading() at speed.
+Gates:
+  1. status != "active" → null
+  2. motionHeading() == null → null (source reported no course at all — the track is
+     never made to move; plugin-provided model is respected)
+  3. no anchor (updatedAtMillis ?: confirmedAtMillis) → null
+
+Advances from the LATEST fix anchor (updatedAt, or confirmedAt when updatedAt is missing)
+along motionHeading() at speed.
 Capped by ThreatProps.horizonSec and ThreatProps.maxGhostMeters.
 ```
 

@@ -482,13 +482,13 @@ val fastGroupCollapsed: Boolean,
             prefs.followBullet(),
             prefs.neutralizedTallyEnabled(),
             prefs.neutralizedTallyAllUkraine(),
+            prefs.threatIconZoom(),
             prefs.fastGroupCollapsed(),
             prefs.slowGroupCollapsed(),
             prefs.criticalOfflineOverride(),
             prefs.criticalOfflineBypassSilent(),
             prefs.flybyAnimationEnabled(),
-            prefs.justFunMasterEnabled(),
-            prefs.threatIconZoom()
+            prefs.justFunMasterEnabled()
         ) { flags: Array<Boolean> ->
             AlertConfig(
                 flags[0], flags[1], flags[2], flags[3], flags[4], flags[5],

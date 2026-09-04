@@ -250,6 +250,40 @@ class ThreatTest {
     }
 
     @Test
+    fun `flying - reported heading alone is enough`() {
+        val threat = makeThreat(
+            bearingDeg = null,
+            heading = 45.0,
+            confirmedAtMillis = System.currentTimeMillis() - 10_000,
+            status = "active"
+        )
+        assertTrue(threat.flying)
+    }
+
+    @Test
+    fun `flying - updatedAt can anchor when confirmedAt is missing`() {
+        val threat = makeThreat(
+            bearingDeg = 180.0,
+            confirmedAtMillis = null,
+            updatedAtMillis = System.currentTimeMillis() - 10_000,
+            status = "active"
+        )
+        assertTrue(threat.flying)
+    }
+
+    @Test
+    fun `flying - no course and no anchor returns false`() {
+        val threat = makeThreat(
+            bearingDeg = null,
+            heading = null,
+            confirmedAtMillis = null,
+            updatedAtMillis = null,
+            status = "active"
+        )
+        assertFalse(threat.flying)
+    }
+
+    @Test
     fun `flying - resolved status returns false`() {
         val threat = makeThreat(
             bearingDeg = 180.0,
@@ -272,7 +306,7 @@ class ThreatTest {
         speedKmh: Double? = 100.0,
         bearingDeg: Double? = 180.0,
         heading: Double? = null,
-        updatedAtMillis: Long = System.currentTimeMillis(),
+        updatedAtMillis: Long? = System.currentTimeMillis(),
         confirmedAtMillis: Long? = System.currentTimeMillis() - 60_000,
         status: String = "active",
         advisory: Boolean = false,

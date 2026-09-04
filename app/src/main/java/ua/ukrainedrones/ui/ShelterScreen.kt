@@ -270,9 +270,9 @@ private fun GpsHeaderRow(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Map,
+                    painter = painterResource(R.drawable.ic_shelter),
                     contentDescription = null,
-                    tint = if (sheltersEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = Color.Unspecified,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -330,10 +330,9 @@ private fun GpsHeaderRow(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_shelter),
+                    imageVector = Icons.Outlined.Map,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = Color.Unspecified
+                    modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(s.shelterShowSheltersOnMap)

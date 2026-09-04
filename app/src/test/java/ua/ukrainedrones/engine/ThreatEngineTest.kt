@@ -96,7 +96,7 @@ class ThreatEngineTest {
     }
 
     @Test
-    fun `predictPosition - not flying returns null`() {
+    fun `predictPosition - no course returns null`() {
         val threat = makeThreat(bearingDeg = null, confirmedAtMillis = System.currentTimeMillis() - 60_000)
         val props = NEPTUN_TYPES["shahed"]!!
         assertNull(engine.predictPosition(threat, 50.0, props, System.currentTimeMillis()))
@@ -114,12 +114,64 @@ class ThreatEngineTest {
         val now = System.currentTimeMillis()
         val threat = makeThreat(
             lat = 50.0, lon = 30.0,
-            bearingDeg = 0.0, confirmedAtMillis = now - 60_000
+            bearingDeg = 0.0, updatedAtMillis = now - 60_000
         )
         val props = NEPTUN_TYPES["shahed"]!!
         val pos = engine.predictPosition(threat, 50.0, props, now)
         assertNotNull(pos)
         assertTrue(pos!!.lat > 50.0)
+        assertEquals(30.0, pos.lon, 0.01)
+    }
+
+    @Test
+    fun `predictPosition - dead reckons along reported heading`() {
+        val now = System.currentTimeMillis()
+        val threat = makeThreat(
+            lat = 50.0, lon = 30.0,
+            bearingDeg = null, heading = 45.0, updatedAtMillis = now - 60_000
+        )
+        val props = NEPTUN_TYPES["shahed"]!!
+        val pos = engine.predictPosition(threat, 50.0, props, now)
+        assertNotNull(pos)
+        assertTrue(pos!!.lat > 50.0)
+        assertTrue(pos.lon > 30.0)
+    }
+
+    @Test
+    fun `predictPosition - anchors on updatedAt not old confirmedAt`() {
+        val now = System.currentTimeMillis()
+        // confirmedAt is 10 min old but the fix was refreshed 1 min ago — the icon must glide
+        // ~1 min of travel (3 km at 50 m/s), not 10 min (which would exceed nothing here).
+        val threat = makeThreat(
+            lat = 50.0, lon = 30.0,
+            bearingDeg = 0.0,
+            updatedAtMillis = now - 60_000,
+            confirmedAtMillis = now - 600_000
+        )
+        val props = NEPTUN_TYPES["shahed"]!!
+        val pos = engine.predictPosition(threat, 50.0, props, now)
+        assertNotNull(pos)
+        val travelledMeters = (pos!!.lat - 50.0) * 111_320.0
+        assertTrue("expected ~3 km glide, got $travelledMeters", travelledMeters in 2500.0..3500.0)
+    }
+
+    @Test
+    fun `predictPosition - measured heading moves a course-less track`() {
+        val now = System.currentTimeMillis()
+        // No bearingDeg, no heading — but the source's own fix history moved north, so the
+        // measured course drives the dead-reckon without overriding the source's model.
+        engine.speedCache.record("glide-measured", now - 10_000, 50.0, 30.0)
+        engine.speedCache.record("glide-measured", now, 50.1, 30.0)
+        val threat = makeThreat(
+            id = "glide-measured",
+            lat = 50.1, lon = 30.0,
+            bearingDeg = null, heading = null,
+            updatedAtMillis = now - 60_000
+        )
+        val props = NEPTUN_TYPES["shahed"]!!
+        val pos = engine.predictPosition(threat, 50.0, props, now)
+        assertNotNull(pos)
+        assertTrue(pos!!.lat > 50.1)
         assertEquals(30.0, pos.lon, 0.01)
     }
 

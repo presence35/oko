@@ -34,8 +34,14 @@ data class NormalizedThreat(
     val trail: List<TrailPoint>,
     val sourceMeta: Map<String, Any> = emptyMap()
 ) {
+    /** A track is dead-reckonable when the source gave it a course (authoritative velocity
+     *  `bearingDeg` or reported `heading`) and an anchor (`confirmedAt`, or `updatedAt` when the
+     *  confirmation time is missing). Movement additionally needs a speed and, in [predictPosition],
+     *  a heading the engine can resolve — it never fabricates a course for a source that reports none. */
     val flying: Boolean
-        get() = bearingDeg != null && confirmedAtMillis != null && status == "active"
+        get() = (bearingDeg != null || heading != null) &&
+            (confirmedAtMillis != null || updatedAtMillis != null) &&
+            status == "active"
 }
 
 fun fallbackCourse(id: String): Double {

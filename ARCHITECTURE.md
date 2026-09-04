@@ -72,9 +72,11 @@ LocationTracker ──┬──► MainViewModel        NightMode.kt / Cities.kt
 - **Threat ingest.** NEPTUN WS + REST merge in `NeptunConnectionClient` (via `ConnectionHolder`) → separate `StateFlow`s: `connectionState`, `threats`, `alerts`; `removedThreats` SharedFlow for map death animations. Consumers read flows directly — no intermediate `NeptunState`.
 - **Position prediction** (both consumers):
   `ThreatEngine`'s `SpeedCache.estimate(id, t, props)` (server speed → trail → nominal)
-  → `predictPosition(t, speed, props, now)` (dead-reckon **only tracks with a real velocity** —
-  `bearingDeg` + `speedKmh`, matching NEPTUN's `flying`; everything else holds the raw fix —
-  capped at the per-type horizon/ghost) → distance to focus → `zoneTier` (slow:
+  → `predictPosition(t, speed, props, now)` (dead-reckon any **active** track with a resolvable
+  course — authoritative `bearingDeg` > reported `heading` > measured from the source's own fix
+  history — anchored on the latest `updatedAt`/`confirmedAt`; tracks a source reports with no
+  course at all hold the raw fix, so a plugin's movement model is never overridden; capped at the
+  per-type horizon/ghost) → distance to focus → `zoneTier` (slow:
   distance-to-confirmed-fix, fast: predicted-ETA). Icon facing shares `motionHeading`, which
   prefers the server's authoritative `bearingDeg` over the reported `heading`.
 - **Update flow.** `UpdateManager.check()` → `Available` → `download()` (progress) →
@@ -224,16 +226,15 @@ Treat these as a contract. If you change one, update **every** place that relies
   (`ODESA_FALLBACK_FOCUS`) and the header/banner/widget attribution (`focusAttribution`'s
   final branch → `Cities.ODESA`) must stay consistent — they intentionally resolve to the same
   city now, including official-alert matching on the Odesa oblast token.
-- **Two independent alert paths.** `MainViewModel` (UI) and `AlertService` (notifications)
-  each reimplement zone tiering, focus attribution, prediction. A change to `zoneTier`,
-  `ZoneParams`, `focusAttribution`, `staleAfterMs`, or `predictPosition` must be mirrored in
-  **both** files or UI and notifications drift. The UI pill (`neptunDown`) immediately reflects
+- **Single evaluation logic.** `MainViewModel` (UI) and `AlertService` (notifications) each
+  construct their own `ThreatEngine(registry.typeCatalog.value)` and call `engine.evaluate(...)`
+  directly — no reimplemented zone/tier/prediction logic in either consumer. Any change to
+  `zoneTier`, `predictPosition`, scoring, or staleness lands once in `engine/` and both paths
+  are covered by `ThreatEngineTest`. The UI pill (`neptunDown`) immediately reflects
   connection drops (no grace filter) so the header and notifications agree; the grace is only
   applied to the connection log. Official-alert **scope** (oblast/city) is shared:
   both call the single `officialAlertActiveFor(...)` gate in `Threat.kt`, and the map's red city
-  labels (`redCities`) follow the same gate, so a city-scoped user sees only covered cities lit. Call `zoneTier` from
-  `ThreatEngine` — never inline
-  it. (Why/mitigation: Deliberate tradeoffs.)
+  labels (`redCities`) follow the same gate, so a city-scoped user sees only covered cities lit.
 - **Official alert announces once per episode, surviving service restarts.** `AlertService`
   persists the announced episode identity (focus token + NEPTUN `since` + reason threat id) to
   `ZonePrefs` (`officialAnnounced*`), loaded inside `startMonitoring()` before the first tick
@@ -301,17 +302,18 @@ Treat these as a contract. If you change one, update **every** place that relies
   `DEATH_EXPLOSION_START_MS`, fades across the explosion) — but only while the map screen is
   visible and the shelter overlay is down (a background screen never plays the flourish); it
   *does* play during an alert because the selected threat was already on screen; with
-  `deathAnimationEnabled` off nothing animates. Dead-reckoning applies only to tracks with a
-  real velocity (matching NEPTUN's `flying`), capped per type. ViewModel ticks 1s (`nowFlow`);
-  service clears on a 20s grace.
+  `deathAnimationEnabled` off nothing animates. Dead-reckoning glides any **active** track with a
+  resolvable course (`bearingDeg` > `heading` > measured from the source's own fix track),
+  anchored on the latest `updatedAt`/`confirmedAt` and capped per type — a track the source
+  reports with no course stays put, so a plugin's movement model is never overridden. ViewModel
+  ticks 1s (`nowFlow`); service clears on a 20s grace.
 
 - **Threat facing always matches its motion.** `engine.predictPosition` (dead-reckoning) and
   `engine.courseDeg(nt)` (icon rotation) both resolve the heading via the engine's `motionHeading`:
-  the server's authoritative velocity `bearingDeg` first, then the top-level `heading`. (The
-  old measured fix-track fallback was dropped with `Prediction.kt` — the speed cache's recorded
-  fixes are not fed back into facing.) Dead-reckoning only glides tracks with a real velocity
-  (`bearingDeg` + `speedKmh`, i.e. `NormalizedThreat.flying`) — matching NEPTUN; everything else holds
-  the raw fix. `courseDeg` keeps the deterministic `fallbackCourse(id)` (NEPTUN's `A(id)`)
+  the server's authoritative velocity `bearingDeg` first, then the top-level `heading`, then the
+  speed cache's measured fix-track heading. Dead-reckoning uses the same `motionHeading` and is
+  gated on the source having any course (or a measured one from its own fixes) — never a
+  fabricated one; `courseDeg` keeps the deterministic `fallbackCourse(id)` (NEPTUN's `A(id)`)
   pseudo-course for *stationary* threats that don't glide. A change to heading resolution must
   stay in the engine so the marker never faces a direction it doesn't move.
 

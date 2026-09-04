@@ -135,10 +135,16 @@ class ThreatEngine(
         props: ThreatProps,
         nowMillis: Long
     ): LatLng? {
-        if (!t.flying) return null
+        if (t.status != "active") return null
+        // Course priority: authoritative velocity bearing > reported heading > measured from the
+        // source's own fix history. Null when the source reports no course at all — such tracks
+        // hold their raw fix and are never made to move (plugin model is respected).
         val heading = motionHeading(t) ?: return null
-        val confirmedAt = t.confirmedAtMillis ?: return null
-        var elapsedSec = (nowMillis - confirmedAt) / 1000.0
+        // Anchor on the LATEST fix: the raw lat/lon is valid as-of updatedAt (or confirmedAt if
+        // updatedAt is missing). Gliding from an old confirmedAt would over-extrapolate a track
+        // whose position has been refreshed since.
+        val anchor = t.updatedAtMillis ?: t.confirmedAtMillis ?: return null
+        var elapsedSec = (nowMillis - anchor) / 1000.0
         if (elapsedSec < 0) return null
         elapsedSec = minOf(elapsedSec, props.horizonSec)
         val dist = minOf(speedMps * elapsedSec, props.maxGhostMeters)
