@@ -91,6 +91,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -371,6 +373,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 neutralizedTallyEnabled = uiState.neutralizedTallyEnabled,
                 neutralizedTallyAllUkraine = uiState.neutralizedTallyAllUkraine,
                 threatIconZoom = uiState.threatIconZoom,
+                onThreatIconZoomChange = { viewModel.setThreatIconZoom(it) },
                 fastGroupCollapsed = uiState.fastGroupCollapsed,
                 slowGroupCollapsed = uiState.slowGroupCollapsed,
                 versionName = BuildConfig.VERSION_NAME,
@@ -426,8 +429,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 onFlybyAnimationChange = { viewModel.setFlybyAnimationEnabled(it) },
                 onFollowBulletChange = { viewModel.setFollowBullet(it) },
                 onNeutralizedTallyChange = { viewModel.setNeutralizedTallyEnabled(it) },
-onNeutralizedTallyAllUkraineChange = { viewModel.setNeutralizedTallyAllUkraine(it) },
-                onThreatIconZoomChange = { viewModel.setThreatIconZoom(it) },
+                onNeutralizedTallyAllUkraineChange = { viewModel.setNeutralizedTallyAllUkraine(it) },
                 onFastGroupCollapse = { viewModel.setFastGroupCollapsed(it) },
                 onSlowGroupCollapse = { viewModel.setSlowGroupCollapsed(it) },
                 onExit = onExit,

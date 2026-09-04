@@ -206,8 +206,7 @@ tasks.register("uploadRelease") {
         val vProps = Properties().apply { versionPropsFile.inputStream().use { load(it) } }
         val vc = vProps.getProperty("versionCode") ?: "0"
         val vn = vProps.getProperty("versionName") ?: "0.0.0"
-        val notesEn = file("notes_en.txt").takeIf { it.exists() }?.readText(Charsets.UTF_8)?.trim().orEmpty()
-        val notesUa = file("notes_ua.txt").takeIf { it.exists() }?.readText(Charsets.UTF_8)?.trim().orEmpty()
+        val (notesEn, notesUa) = buildNotesFromChangelog()
 
         val versionJson = buildString {
             appendLine("{")
@@ -260,3 +259,34 @@ private fun escapeJson(s: String): String = buildString {
         }
     }
 }
+
+private fun buildNotesFromChangelog(): Pair<String, String> {
+    val changelog = file("CHANGELOG.md").takeIf { it.exists() }?.readText(Charsets.UTF_8).orEmpty()
+    val lines = changelog.lines()
+    val start = lines.indexOfFirst { it.trim() == "## [Unreleased]" }
+    if (start < 0) return fallbackNotes()
+    val bullets = lines.drop(start + 1)
+        .takeWhile { !it.trim().startsWith("## ") }
+        .map { it.trim() }
+        .filter { it.startsWith("- ") }
+    val en = mutableListOf<String>()
+    val ua = mutableListOf<String>()
+    for (bullet in bullets) {
+        val text = bullet.removePrefix("- ").trim()
+        val sepIdx = text.indexOf(" / ")
+        if (sepIdx >= 0) {
+            en += text.substring(0, sepIdx).trim()
+            ua += text.substring(sepIdx + 3).trim()
+        } else {
+            en += text
+        }
+    }
+    return if (en.isNotEmpty())
+        Pair(en.joinToString("\n"), ua.joinToString("\n"))
+    else fallbackNotes()
+}
+
+private fun fallbackNotes(): Pair<String, String> = Pair(
+    file("notes_en.txt").takeIf { it.exists() }?.readText(Charsets.UTF_8)?.trim().orEmpty(),
+    file("notes_ua.txt").takeIf { it.exists() }?.readText(Charsets.UTF_8)?.trim().orEmpty()
+)
