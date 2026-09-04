@@ -72,6 +72,7 @@ import ua.ukrainedrones.threatAlertFlow
 import ua.ukrainedrones.NeutralizedTally
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.service.ServiceState
+import ua.ukrainedrones.service.MonitoringStatus
 import ua.ukrainedrones.connection.isConnected
 import ua.ukrainedrones.connection.isDegraded
 import ua.ukrainedrones.connection.offlineSinceOrNull
@@ -113,7 +114,15 @@ class AlertService : Service() {
         private const val VIBRATION_ZONE = 3
 
         fun start(context: Context) {
-            ContextCompat.startForegroundService(context, Intent(context, AlertService::class.java))
+            MonitoringStatus.setRunning(true)
+            try {
+                ContextCompat.startForegroundService(context, Intent(context, AlertService::class.java))
+            } catch (e: Exception) {
+                // A failed start must never look like working monitoring — leave the flag off
+                // so the UI banner surfaces the dead state instead of going silent.
+                MonitoringStatus.setRunning(false)
+                throw e
+            }
         }
 
         fun stop(context: Context) {
@@ -324,6 +333,7 @@ class AlertService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        MonitoringStatus.setRunning(true)
         when (intent?.action) {
             ACTION_RETRY -> {
                 scope.launch {
@@ -1093,6 +1103,7 @@ val mappedThreats = registry.allThreats.map { list ->
     }
 
     override fun onDestroy() {
+        MonitoringStatus.setRunning(false)
         screenReceiver?.let { unregisterReceiver(it) }
         screenReceiver = null
         monitoringJob?.cancel()

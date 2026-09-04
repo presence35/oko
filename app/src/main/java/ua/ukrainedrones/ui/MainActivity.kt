@@ -52,12 +52,9 @@ class MainActivity : ComponentActivity() {
         cleanLegacyOsmdroidCache()
         ConnectionLog.attach(applicationContext)
         DebugLog.attach(applicationContext)
-        lifecycleScope.launch {
-            val monitoringEnabled = UserPrefs(applicationContext).monitoringEnabled().first()
-            if (monitoringEnabled) {
-                AlertService.start(this@MainActivity)
-            }
-        }
+        // Monitoring is always-on: "Stop Monitoring & Exit" is a session-only stop, so a
+        // cold start (re)arms the service before the first frame — no silent dead state.
+        AlertService.start(this@MainActivity)
         setContent {
             // Cap the system font scale so extreme accessibility sizes can't break the layout;
             // the popup/banner still wrap and scroll up to this ceiling.

@@ -110,7 +110,12 @@ object Strings {
         val flybyAnimationLabel: String,
         val flybyAnimationDesc: String,
         val cardSizeSmallLabel: String,
-        val cardSizeLargeLabel: String
+        val cardSizeLargeLabel: String,
+        val bootRestartTitle: String,
+        val bootRestartDesc: String,
+        val bootRestartWarningTitle: String,
+        val bootRestartWarningBody: String,
+        val bootRestartDisableButton: String
     )
 
     data class Status(
@@ -152,7 +157,8 @@ object Strings {
         val hoursAgoSuffix: String,
         val daysAgoSuffix: String,
         val mixedTimeFormat: String,
-        val noThreatsMessage: String
+        val noThreatsMessage: String,
+        val serviceOfflineBanner: String
     )
 
     data class Updates(
@@ -650,6 +656,11 @@ object Strings {
         val disclaimerTitle: String get() = settings.disclaimerTitle
         val disclaimerBody: String get() = settings.disclaimerBody
         val exitButton: String get() = settings.exitButton
+        val bootRestartTitle: String get() = settings.bootRestartTitle
+        val bootRestartDesc: String get() = settings.bootRestartDesc
+        val bootRestartWarningTitle: String get() = settings.bootRestartWarningTitle
+        val bootRestartWarningBody: String get() = settings.bootRestartWarningBody
+        val bootRestartDisableButton: String get() = settings.bootRestartDisableButton
         val systemSectionTitle: String get() = settings.systemSectionTitle
         val locationSectionTitle: String get() = settings.locationSectionTitle
         val justFunSectionTitle: String get() = settings.justFunSectionTitle
@@ -756,6 +767,7 @@ object Strings {
         val connOnline: String get() = status.connOnline
         val connOff: String get() = status.connOff
         val connOffline: String get() = status.connOffline
+        val serviceOfflineBanner: String get() = status.serviceOfflineBanner
         val connDegraded: String get() = status.connDegraded
         val connDegradedBody: String get() = status.connDegradedBody
         val connActiveLabel: String get() = status.connActiveLabel
@@ -1243,6 +1255,11 @@ val iconSetTitle: String get() = misc.iconSetTitle
         flybyAnimationDesc = "Увімкнути або вимкнути анімацію та звук польоту МіГ-31К",
         cardSizeSmallLabel = "Компактні картки",
         cardSizeLargeLabel = "Великі картки",
+        bootRestartTitle = "Restart monitoring after reboot",
+        bootRestartDesc = "After the phone restarts or the app updates, monitoring resumes automatically. Disabling this is a safety risk.",
+        bootRestartWarningTitle = "Safety feature",
+        bootRestartWarningBody = "Turning this off means no air-raid alerts after a reboot until you open the app — an easy thing to forget. If you don't want monitoring at all, pause the app in Android or uninstall it instead of leaving it half-off.",
+        bootRestartDisableButton = "Disable anyway",
     )
 
     private fun uaStatus() = Status(
@@ -1285,6 +1302,7 @@ connOnline = "Онлайн",
         daysAgoSuffix = "дн тому",
         mixedTimeFormat = "%1\$d год %2\$d хв тому",
         noThreatsMessage = "Немає актуальних загроз",
+        serviceOfflineBanner = "SERVICE OFFLINE — tap to reactivate",
     )
 
     private fun uaUpdates() = Updates(
@@ -1825,6 +1843,11 @@ connOnline = "Онлайн",
         flybyAnimationDesc = "Enable or disable the MiG-31K flyby animation and sound",
         cardSizeSmallLabel = "Small cards",
         cardSizeLargeLabel = "Large cards",
+        bootRestartTitle = "Restart monitoring after reboot",
+        bootRestartDesc = "After the phone restarts or the app updates, monitoring resumes automatically. Disabling this is a safety risk.",
+        bootRestartWarningTitle = "Safety feature",
+        bootRestartWarningBody = "Turning this off means no air-raid alerts after a reboot until you open the app — an easy thing to forget. If you don't want monitoring at all, pause the app in Android or uninstall it instead of leaving it half-off.",
+        bootRestartDisableButton = "Disable anyway",
     )
 
     private fun enStatus() = Status(
@@ -1867,6 +1890,7 @@ connOnline = "Online",
         daysAgoSuffix = "d ago",
         mixedTimeFormat = "%1\$d h %2\$d min ago",
         noThreatsMessage = "No relevant threats",
+        serviceOfflineBanner = "SERVICE OFFLINE — tap to reactivate",
     )
 
     private fun enUpdates() = Updates(

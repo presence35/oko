@@ -85,7 +85,7 @@ class UserPrefs(private val context: Context) {
     private val hapticsEnabledKey = booleanPreferencesKey("haptics_enabled")
     private val officialAlertCityScopeKey = booleanPreferencesKey("official_alert_city_scope")
     private val justFunMasterEnabledKey = booleanPreferencesKey("just_fun_master_enabled")
-    private val monitoringEnabledKey = booleanPreferencesKey("monitoring_enabled")
+    private val bootRestartEnabledKey = booleanPreferencesKey("boot_restart_enabled")
 
     fun slowRedKm(): Flow<Int> =
         context.dataStore.data.map { prefs -> prefs[slowRedKmKey] ?: 20 }
@@ -406,12 +406,16 @@ class UserPrefs(private val context: Context) {
         context.dataStore.edit { it[justFunMasterEnabledKey] = enabled }
     }
 
-    /** Whether monitoring is enabled — set false by "Stop Monitoring & Exit", checked by BootReceiver. */
-    fun monitoringEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[monitoringEnabledKey] ?: true }
+    /**
+     * Whether monitoring restarts automatically after a device reboot or in-app update.
+     * Off by the Settings "Restart monitoring after reboot" toggle (with a security
+     * warning); cold-starts of the app always arm monitoring regardless of this flag.
+     */
+    fun bootRestartEnabled(): Flow<Boolean> =
+        context.dataStore.data.map { prefs -> prefs[bootRestartEnabledKey] ?: true }
 
-    suspend fun setMonitoringEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[monitoringEnabledKey] = enabled }
+    suspend fun setBootRestartEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[bootRestartEnabledKey] = enabled }
     }
 
     fun deathAnimationEnabled(): Flow<Boolean> =

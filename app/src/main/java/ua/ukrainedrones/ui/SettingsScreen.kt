@@ -245,9 +245,9 @@ private fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
         ),
         SettingsSection.ALERTS to kw(
             "alert", "alerts", "siren", "sirens", "sound", "official", "notification",
-            "vibration", "vibrate", "volume", "chime",
+            "vibration", "vibrate", "volume", "chime", "boot", "reboot", "restart", "monitoring",
             "оповіщення", "сповіщення", "сирена", "звук", "офіційн", "офіційна",
-            "офіційні", "вібрація", "вібро", "гучність"
+            "офіційні", "вібрація", "вібро", "гучність", "перезавантаження", "моніторинг"
         ),
         SettingsSection.FLOURISH to kw(
             "fun", "animation", "bullet", "death", "flourish", "shoot", "tally", "neutralized",
@@ -416,6 +416,8 @@ fun SettingsScreen(
     onSirenOverrideChange: (Boolean) -> Unit,
     onCriticalOfflineOverrideChange: (Boolean) -> Unit,
     onCriticalOfflineBypassSilentChange: (Boolean) -> Unit,
+    bootRestartEnabled: Boolean,
+    onBootRestartChange: (Boolean) -> Unit,
     onNightEnabledChange: (Boolean) -> Unit,
     onNightStartChange: (Int) -> Unit,
     onNightEndChange: (Int) -> Unit,
@@ -465,6 +467,7 @@ fun SettingsScreen(
     var searchQuery by remember { mutableStateOf("") }
     val searchNormalized = searchQuery.searchNorm()
     val searchWords = searchNormalized.split(" ").filter { it.isNotBlank() }
+    var showBootRestartOffConfirm by remember { mutableStateOf(false) }
     val searching = searchNormalized.isNotEmpty()
     val searchDb = remember(pinnedCity) { buildSearchDb(pinnedCity) }
     val matchedSections = remember(searchNormalized, searchDb) {
@@ -885,6 +888,16 @@ fun SettingsScreen(
                             )
                         }
                     }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AlertToggleRow(
+                        title = s.bootRestartTitle,
+                        description = s.bootRestartDesc,
+                        checked = bootRestartEnabled,
+                        onCheckedChange = { v ->
+                            if (!v) showBootRestartOffConfirm = true else onBootRestartChange(true)
+                        },
+                        emoji = "🛡️"
+                    )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Battery Optimization
                     if (batteryOptimized) {
@@ -1559,6 +1572,23 @@ fun SettingsScreen(
 
     activeExplainer?.let { exp ->
         FeatureExplainerDialog(explainer = exp, s = s, onDismiss = dismissExplainer)
+    }
+
+    if (showBootRestartOffConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBootRestartOffConfirm = false },
+            title = { Text(s.bootRestartWarningTitle) },
+            text = { Text(s.bootRestartWarningBody) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onBootRestartChange(false)
+                    showBootRestartOffConfirm = false
+                }) { Text(s.bootRestartDisableButton) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBootRestartOffConfirm = false }) { Text(s.backButton) }
+            }
+        )
     }
 
     }

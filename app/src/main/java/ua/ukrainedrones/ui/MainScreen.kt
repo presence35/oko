@@ -220,7 +220,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     }
 
     val onExit: () -> Unit = {
-        scope.launch { prefs.setMonitoringEnabled(false) }
         AlertService.stop(context)
         val activity = context as? Activity
         if (activity != null) activity.finishAffinity()
@@ -311,6 +310,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             shelterTipStage = shelterTipStage,
             settingsHintRemaining = settingsHintRemaining,
             onHeaderHeightChange = { headerHeightPx = it },
+            onReactivateMonitoring = { viewModel.reactivateMonitoring() },
             onShelterTipAdvance = {
                 val next = (shelterTipStage + 1).coerceAtMost(6)
                 shelterTipStage = next
@@ -392,6 +392,8 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 onSirenOverrideChange = { viewModel.setSirenOverride(it) },
                 onCriticalOfflineOverrideChange = { viewModel.setCriticalOfflineOverride(it) },
                 onCriticalOfflineBypassSilentChange = { viewModel.setCriticalOfflineBypassSilent(it) },
+                bootRestartEnabled = uiState.bootRestartEnabled,
+                onBootRestartChange = { viewModel.setBootRestartEnabled(it) },
                 onNightEnabledChange = { viewModel.setNightEnabled(it) },
                 onNightStartChange = { viewModel.setNightStartMin(it) },
                 onNightEndChange = { viewModel.setNightEndMin(it) },
@@ -653,7 +655,8 @@ private fun MapScreen(
     shelterTipStage: Int,
     onShelterTipAdvance: () -> Unit,
     settingsHintRemaining: Int = 0,
-    onHeaderHeightChange: (Int) -> Unit = {}
+    onHeaderHeightChange: (Int) -> Unit = {},
+    onReactivateMonitoring: () -> Unit = {}
 ) {
     val s = Strings.get(uiState.language)
     val context = LocalContext.current
@@ -779,6 +782,7 @@ private fun MapScreen(
                     else -> s.appTitle
                 }
             }
+            if (uiState.monitoringRunning) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -849,6 +853,13 @@ private fun MapScreen(
                             }
                     )
                 }
+            }
+            } else {
+                MonitoringOffBanner(
+                    text = s.serviceOfflineBanner,
+                    onClick = onReactivateMonitoring,
+                    onHeightChange = onHeaderHeightChange
+                )
             }
         }
     ) { padding ->
@@ -1892,5 +1903,41 @@ private fun SwipeableSnackbarHost(
                 content = { Snackbar(snackbarData = data) }
             )
         }
+    }
+}
+
+/**
+ * Full-header replacement shown whenever the background monitor is NOT running while the app
+ * is open (a silently-dead AlertService). The NEPTUN socket alone looks fine — the map stays
+ * live — so this banner is the only loud signal that alerts/notifications are off.
+ */
+@Composable
+private fun MonitoringOffBanner(
+    text: String,
+    onClick: () -> Unit,
+    onHeightChange: (Int) -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(AlertRed)
+            .border(2.5.dp, Color(0xFFB71C1C))
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .onGloballyPositioned { coords -> onHeightChange(coords.size.height) }
+            .pressTick(interaction)
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(bounded = true),
+                onClick = onClick
+            ),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = text,
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }

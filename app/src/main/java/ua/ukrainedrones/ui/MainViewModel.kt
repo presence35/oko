@@ -44,6 +44,7 @@ import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.SpeedSource
 import ua.ukrainedrones.engine.ZoneParams
 import ua.ukrainedrones.service.ServiceState
+import ua.ukrainedrones.service.MonitoringStatus
 import org.osmdroid.util.GeoPoint
 import kotlin.math.roundToLong
 import kotlin.random.Random
@@ -53,6 +54,8 @@ data class UiState(
     val connected: Boolean = false,
     val neptunDown: Boolean = false,                 // NEPTUN offline
     val degraded: Boolean = false,                   // connected but stream quiet (orange pill)
+    val monitoringRunning: Boolean = true,           // AlertService foreground monitor alive
+    val bootRestartEnabled: Boolean = true,          // Settings: restart monitoring after reboot
     val threatsInner: List<NormalizedThreat> = emptyList(), // reaching within the red time tier
     val threatsOuter: List<NormalizedThreat> = emptyList(), // in the yellow time tier, beyond red
     val mapThreats: List<NormalizedThreat> = emptyList(),   // all active threats across Europe
@@ -640,6 +643,7 @@ combine(
         prefs.nightOfficialSirenOverride().first()
         prefs.deathAnimationEnabled().first()
         prefs.followBullet().first()
+        prefs.bootRestartEnabled().first()
         emit(Unit)
     }.flowOn(Dispatchers.IO)
 
@@ -650,7 +654,9 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         updateUiFlow,
         shelterIndexFlow,
         now,
-        flybyFlow
+        flybyFlow,
+        MonitoringStatus.running,
+        prefs.bootRestartEnabled()
     ) { values ->
         val live = values[1] as LiveSnapshot
         val prefs = values[2] as PrefsSnapshot
@@ -658,6 +664,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val shelterIndex = values[4] as ShelterIndex?
         val now = values[5] as Long
         val flyby = values[6] as AviationFlybyShow?
+        val monitoringRunning = values[7] as Boolean
+        val bootRestartEnabled = values[8] as Boolean
         val nightActive = isNightActive(
             NightConfig(prefs.night.window.enabled, prefs.night.window.startMin, prefs.night.window.endMin),
             now
@@ -763,7 +771,9 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             hapticsEnabled = resolveHaptics(prefs.hapticsEnabled),
             shelterIndex = shelterIndex,
             shelterOverlayUp = live.shelterModeActive,
-            notificationsDisabledBySystem = !AlertNotificationManager.areNotificationsEnabled(app)
+            notificationsDisabledBySystem = !AlertNotificationManager.areNotificationsEnabled(app),
+            monitoringRunning = monitoringRunning,
+            bootRestartEnabled = bootRestartEnabled
         )
         // A fresh INNER AVIATION (bell on) plays one full-size pass across the viewport; the
         // threat card opens when it lands (onFlybyFinished). Only while genuinely foregrounded
@@ -1005,41 +1015,40 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
 
     fun setSlowRedArmed(armed: Boolean) {
         viewModelScope.launch {
-            if (armed) { prefs.setMonitoringEnabled(true); AlertService.start(app) }
+            if (armed) { AlertService.start(app) }
             prefs.setSlowRedZoneArmed(armed)
         }
     }
 
     fun setSlowYellowArmed(armed: Boolean) {
         viewModelScope.launch {
-            if (armed) { prefs.setMonitoringEnabled(true); AlertService.start(app) }
+            if (armed) { AlertService.start(app) }
             prefs.setSlowYellowZoneArmed(armed)
         }
     }
 
     fun setFastRedArmed(armed: Boolean) {
         viewModelScope.launch {
-            if (armed) { prefs.setMonitoringEnabled(true); AlertService.start(app) }
+            if (armed) { AlertService.start(app) }
             prefs.setFastRedZoneArmed(armed)
         }
     }
 
     fun setFastYellowArmed(armed: Boolean) {
         viewModelScope.launch {
-            if (armed) { prefs.setMonitoringEnabled(true); AlertService.start(app) }
+            if (armed) { AlertService.start(app) }
             prefs.setFastYellowZoneArmed(armed)
         }
     }
 
     /** Master alarm switch: arms or silences all four zone bells together. */
-    fun setAlertsArmed(armed: Boolean) {
+fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch {
-            prefs.setMonitoringEnabled(armed)
-            if (armed) AlertService.start(app)
             prefs.setSlowRedZoneArmed(armed)
             prefs.setSlowYellowZoneArmed(armed)
             prefs.setFastRedZoneArmed(armed)
             prefs.setFastYellowZoneArmed(armed)
+            if (armed) AlertService.start(app)
         }
     }
 
@@ -1061,6 +1070,15 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
 
     fun setCriticalOfflineBypassSilent(enabled: Boolean) {
         viewModelScope.launch { prefs.setCriticalOfflineBypassSilent(enabled) }
+    }
+
+    fun setBootRestartEnabled(enabled: Boolean) {
+        viewModelScope.launch { prefs.setBootRestartEnabled(enabled) }
+    }
+
+    /** Tap on the "Service OFFLINE" banner: bring the foreground monitor back up. */
+    fun reactivateMonitoring() {
+        AlertService.start(app)
     }
 
     fun setBatteryOnboardShown(shown: Boolean) {
@@ -1101,28 +1119,28 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
 
     fun setNightSlowRedArmed(armed: Boolean) {
         viewModelScope.launch {
-            if (armed) { prefs.setMonitoringEnabled(true); AlertService.start(app) }
+            if (armed) { AlertService.start(app) }
             prefs.setNightSlowRedZoneArmed(armed)
         }
     }
 
     fun setNightSlowYellowArmed(armed: Boolean) {
         viewModelScope.launch {
-            if (armed) { prefs.setMonitoringEnabled(true); AlertService.start(app) }
+            if (armed) { AlertService.start(app) }
             prefs.setNightSlowYellowZoneArmed(armed)
         }
     }
 
     fun setNightFastRedArmed(armed: Boolean) {
         viewModelScope.launch {
-            if (armed) { prefs.setMonitoringEnabled(true); AlertService.start(app) }
+            if (armed) { AlertService.start(app) }
             prefs.setNightFastRedZoneArmed(armed)
         }
     }
 
     fun setNightFastYellowArmed(armed: Boolean) {
         viewModelScope.launch {
-            if (armed) { prefs.setMonitoringEnabled(true); AlertService.start(app) }
+            if (armed) { AlertService.start(app) }
             prefs.setNightFastYellowZoneArmed(armed)
         }
     }
