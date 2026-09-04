@@ -15,11 +15,13 @@ import ua.ukrainedrones.service.ServiceState
 /** Connection states shown in the status log — mirrors the header pill's two states. */
 enum class ConnStatus { ONLINE, OFFLINE, DEGRADED }
 
-/** One logged status change. [durationSec] is the episode length for OFF, null for ONLINE. */
+/** One logged status change. [durationSec] is the episode length for OFF, null for ONLINE.
+ *  [activeSource] names the source providing alerts during this episode (null = primary/Neptun). */
 data class ConnLogEntry(
     val atMillis: Long,
     val status: ConnStatus,
-    val durationSec: Long?
+    val durationSec: Long?,
+    val activeSource: String? = null
 )
 
 /**
@@ -76,10 +78,10 @@ object ConnectionLog {
      * episode as soon as the status changes (no grace — every drop counts), bracketing it with
      * a recovery row when it returns online.
      */
-    fun observe(status: ConnStatus, now: Long) {
+    fun observe(status: ConnStatus, now: Long, activeSource: String? = null) {
         val prev = lastStatus
         lastStatus = status
-        val t = commitLogState(prev, status, now, pending, _entries.value, MAX_ENTRIES, 0L) ?: return
+        val t = commitLogState(prev, status, now, pending, _entries.value, MAX_ENTRIES, 0L, activeSource) ?: return
         _entries.value = t.entries
         pending = t.nextPending
         if (t.persistPendingSince >= 0) {
@@ -90,7 +92,16 @@ object ConnectionLog {
 
     /** The in-progress offline episode with its running duration, or null when online. */
     fun currentEpisode(now: Long): ConnLogEntry? =
-        pending?.let { ConnLogEntry(it.atMillis, it.status, (now - it.atMillis) / 1000) }
+        pending?.let { ConnLogEntry(it.atMillis, it.status, (now - it.atMillis) / 1000, it.activeSource) }
+
+    /** Update the source currently owning the alert feed on the in-progress episode. Called
+     *  whenever the registry's active source changes (e.g. a fallback takes over mid-outage),
+     *  so the committed entry reflects which source actually covered the episode. */
+    fun setPendingSource(source: String?) {
+        val p = pending ?: return
+        if (p.status == ConnStatus.ONLINE) return
+        pending = p.copy(activeSource = source)
+    }
 
     private fun persist() {
         val context = appContext ?: return
@@ -106,16 +117,19 @@ object ConnectionLog {
     }
 
     private fun serialize(entries: List<ConnLogEntry>): String =
-        entries.joinToString(LINE_SEP.toString()) { "${it.atMillis}|${it.status.name}|${it.durationSec ?: ""}" }
+        entries.joinToString(LINE_SEP.toString()) {
+            "${it.atMillis}|${it.status.name}|${it.durationSec ?: ""}|${it.activeSource ?: ""}"
+        }
 
     private fun parse(raw: String): List<ConnLogEntry> =
         raw.split(LINE_SEP).mapNotNull { line ->
             val parts = line.split('|')
-            if (parts.size != 3) return@mapNotNull null
+            if (parts.size < 3) return@mapNotNull null
             val at = parts[0].toLongOrNull() ?: return@mapNotNull null
             val status = ConnStatus.entries.firstOrNull { it.name == parts[1] } ?: return@mapNotNull null
             val dur = parts[2].toLongOrNull()
-            ConnLogEntry(at, status, dur)
+            val source = parts.getOrNull(3)?.takeIf { it.isNotEmpty() }
+            ConnLogEntry(at, status, dur, source)
         }.takeLast(MAX_ENTRIES)
 }
 
@@ -144,13 +158,14 @@ internal fun commitLogState(
     pending: ConnLogEntry?,
     entries: List<ConnLogEntry>,
     maxEntries: Int,
-    graceMs: Long
+    graceMs: Long,
+    activeSource: String? = null
 ): LogTransition? {
     if (prevStatus == null) {
         return if (status == ConnStatus.OFFLINE) {
             LogTransition(
                 entries = entries,
-                nextPending = ConnLogEntry(now, status, null),
+                nextPending = ConnLogEntry(now, status, null, activeSource),
                 persistPendingSince = now,
                 persistPendingStatus = status.name,
                 persistLog = false
@@ -170,7 +185,7 @@ internal fun commitLogState(
         }
         clearPending = true
     }
-    val nextPending = if (status == ConnStatus.ONLINE) null else ConnLogEntry(now, status, null)
+    val nextPending = if (status == ConnStatus.ONLINE) null else ConnLogEntry(now, status, null, activeSource)
     if (status == ConnStatus.ONLINE && dirty) {
         newEntries = (newEntries + ConnLogEntry(now, ConnStatus.ONLINE, null)).takeLast(maxEntries)
     }

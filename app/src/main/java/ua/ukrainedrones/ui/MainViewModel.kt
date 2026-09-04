@@ -1410,9 +1410,11 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         fakeNeutralizeFlow.value = true
     }
 
-    /** Whether the app process is foregrounded — drives the flyby auto-trigger gate. */
+    /** Whether the app process is foregrounded — drives the flyby auto-trigger gate and
+     *  REST-source polling cadence (foreground → faster polling). */
     fun setAppForeground(foreground: Boolean) {
         appForegroundFlow.value = foreground
+        AppPluginHolder.setAppForeground(foreground)
     }
 
     /** Calculates flyby duration based on distance to threat (capped 1.5–8 s). */

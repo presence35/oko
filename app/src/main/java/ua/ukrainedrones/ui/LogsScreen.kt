@@ -72,6 +72,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -109,6 +110,11 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ua.ukrainedrones.AppPluginHolder
+import ua.ukrainedrones.engine.OperationalMode
+import ua.ukrainedrones.engine.PluginConnectionState
+import ua.ukrainedrones.engine.SourceType
+import ua.ukrainedrones.engine.ThreatSource
 
 private val DebugRed = Color(0xFFE57373)
 private val DebugAmber = Color(0xFFF9A825)
@@ -120,7 +126,7 @@ private const val VISIBLE_INITIAL = 25
 private const val VISIBLE_STEP = 50
 
 /** Which data source to show. */
-private enum class LogsFilter { DECISIONS, CONNECTIONS, SYSTEM, TESTS }
+private enum class LogsFilter { DECISIONS, CONNECTIONS, SOURCES, SYSTEM, TESTS }
 
 /** How to group decision rows. */
 private enum class GroupBy { TIMELINE, PROXIMITY, TYPE }
@@ -207,7 +213,9 @@ fun LogsDropDownSheet(
     val isDecisions = filter == LogsFilter.DECISIONS
     val isSystem = filter == LogsFilter.SYSTEM
     val isTests = filter == LogsFilter.TESTS
-    val rows: List<LogRow> = buildRows(window, connEntries, systemEntries, now, isDecisions, isSystem, isTests, newestFirst, shownOnly, showFlourish)
+    val isSources = filter == LogsFilter.SOURCES
+    val rows: List<LogRow> = if (isSources) emptyList() else
+        buildRows(window, connEntries, systemEntries, now, isDecisions, isSystem, isTests, newestFirst, shownOnly, showFlourish)
     val visible = rows.take(visibleCount)
     val hasMore = visibleCount < rows.size
     val groups = if (isDecisions) buildGroups(visible.filterIsInstance<DecisionRow>().map { it.entry }, groupBy, showFlourish, proximitySort, newestFirst) else emptyList()
@@ -272,8 +280,8 @@ fun LogsDropDownSheet(
         }
 
         // Tabs
-        val tabFilters = listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SYSTEM, LogsFilter.TESTS)
-        val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSystem, s.logsFilterTests)
+        val tabFilters = listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES, LogsFilter.SYSTEM, LogsFilter.TESTS)
+        val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources, s.logsFilterSystem, s.logsFilterTests)
         ScrollableTabRow(
             selectedTabIndex = tabFilters.indexOf(filter),
             containerColor = Color(0xFF252525),
@@ -352,6 +360,11 @@ fun LogsDropDownSheet(
                     OemSimButton(context, s)
                 }
             }
+            if (filter == LogsFilter.SOURCES) {
+                item(key = "sources") {
+                    SourcesList(s)
+                }
+            }
             if (filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty()) {
                 item(key = "retrylog") {
                     RetryLogCard(connEvents, connRetry, s, now) { ConnectionHolder.getSupervisor(context).dismissLogCard() }
@@ -362,6 +375,7 @@ fun LogsDropDownSheet(
                     Text(
                         when (filter) {
                             LogsFilter.CONNECTIONS -> s.logsEmptyConnections
+                            LogsFilter.SOURCES -> s.logsEmptySources
                             LogsFilter.SYSTEM -> s.apiSystemEmpty
                             LogsFilter.TESTS -> s.logsEmptyConnections
                             else -> s.debugLogEmpty
@@ -1240,7 +1254,91 @@ private fun ConnectionCard(entry: ConnLogEntry, s: Strings.StringSet, lang: AppL
                     )
                 }
             }
+            entry.activeSource?.let { source ->
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "${s.sourceFallbackLabel}: $source",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = DebugAmber
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun SourcesList(s: Strings.StringSet) {
+    val registry = AppPluginHolder.registry
+    val plugins by registry.plugins.collectAsState()
+    val states by registry.perSourceState.collectAsState()
+    if (plugins.isEmpty()) {
+        Text(
+            s.logsEmptySources,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp, horizontal = 24.dp)
+        )
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        plugins.forEach { plugin ->
+            SourceCard(plugin, states[plugin.id] ?: PluginConnectionState.DISCONNECTED, s)
+        }
+    }
+}
+
+@Composable
+private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: Strings.StringSet) {
+    val mode by plugin.operationalMode.collectAsState()
+    val connLabel = when (state) {
+        PluginConnectionState.CONNECTED -> s.connOnline
+        PluginConnectionState.DEGRADED -> s.connDegraded
+        PluginConnectionState.OFFLINE -> s.connOffline
+        else -> s.sourceModeStandby
+    }
+    val modeLabel = when (mode) {
+        OperationalMode.STREAMING -> s.sourceModeStreaming
+        OperationalMode.POLLING -> s.sourceModePolling
+        OperationalMode.STANDBY -> s.sourceModeStandby
+    }
+    val typeLabel = if (plugin.sourceType == SourceType.WS) s.sourceTypeWs else s.sourceTypeRest
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF252525))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    plugin.name,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    typeLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(
+                "$connLabel · $modeLabel",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (state == PluginConnectionState.OFFLINE) DebugRed else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(
+            checked = mode != OperationalMode.STANDBY,
+            onCheckedChange = { enabled ->
+                AppPluginHolder.registry.setEnabled(plugin, enabled)
+            }
+        )
     }
 }
 

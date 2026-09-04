@@ -14,15 +14,20 @@ import ua.ukrainedrones.connection.isPaused
 import ua.ukrainedrones.connection.NeptunConnectionClient
 import ua.ukrainedrones.engine.NEPTUN_TYPES
 import ua.ukrainedrones.engine.NormalizedThreat
+import ua.ukrainedrones.engine.OperationalMode
 import ua.ukrainedrones.engine.PluginConnectionState
+import ua.ukrainedrones.engine.SourceType
 import ua.ukrainedrones.engine.ThreatProps
 import ua.ukrainedrones.engine.ThreatSource
-import ua.ukrainedrones.engine.NEPTUN_TYPES
 
 class NeptunPlugin(private val client: NeptunConnectionClient) : ThreatSource {
 
     override val id = "neptun"
     override val name = "NEPTUN"
+    override val sourceType = SourceType.WS
+
+    private val _operationalMode = MutableStateFlow(OperationalMode.STREAMING)
+    override val operationalMode: StateFlow<OperationalMode> = _operationalMode.asStateFlow()
 
     override val typeCatalog: Map<String, ThreatProps> = NEPTUN_TYPES
 
@@ -57,8 +62,13 @@ class NeptunPlugin(private val client: NeptunConnectionClient) : ThreatSource {
     override fun stop() {
         client.stop()
         _connectionState.value = PluginConnectionState.DISCONNECTED
+        _operationalMode.value = OperationalMode.STANDBY
         _threats.value = emptyList()
         _alerts.value = emptyList()
+    }
+
+    override fun setEnabled(enabled: Boolean) {
+        if (enabled) client.start() else client.stop()
     }
 
     private fun mapConnectionState(state: ConnectionState): PluginConnectionState = when {

@@ -292,6 +292,15 @@ object Strings {
         val debugLogNight: String,
         val debugLogShown: String,
         val debugLogSuppressed: String,
+        val logsFilterSources: String,
+        val logsEmptySources: String,
+        val sourceTypeWs: String,
+        val sourceTypeRest: String,
+        val sourceModeStreaming: String,
+        val sourceModePolling: String,
+        val sourceModeStandby: String,
+        val sourceFallbackLabel: String,
+        val sourceEnabledLabel: String,
         val debugLogSoundOverride: String,
         val debugLogSoundFollows: String,
         val debugGroupOfficial: String,
@@ -892,6 +901,15 @@ object Strings {
         val debugLogNight: String get() = misc.debugLogNight
         val debugLogShown: String get() = misc.debugLogShown
         val debugLogSuppressed: String get() = misc.debugLogSuppressed
+        val logsFilterSources: String get() = misc.logsFilterSources
+        val logsEmptySources: String get() = misc.logsEmptySources
+        val sourceTypeWs: String get() = misc.sourceTypeWs
+        val sourceTypeRest: String get() = misc.sourceTypeRest
+        val sourceModeStreaming: String get() = misc.sourceModeStreaming
+        val sourceModePolling: String get() = misc.sourceModePolling
+        val sourceModeStandby: String get() = misc.sourceModeStandby
+        val sourceFallbackLabel: String get() = misc.sourceFallbackLabel
+        val sourceEnabledLabel: String get() = misc.sourceEnabledLabel
         val debugLogSoundOverride: String get() = misc.debugLogSoundOverride
         val debugLogSoundFollows: String get() = misc.debugLogSoundFollows
         val debugGroupOfficial: String get() = misc.debugGroupOfficial
@@ -1394,6 +1412,15 @@ connOnline = "Онлайн",
         debugLogNight = "Ніч",
         debugLogShown = "Сповіщено",
         debugLogSuppressed = "Без сповіщення — %1\$s",
+        logsFilterSources = "Sources",
+        logsEmptySources = "No sources plugged in",
+        sourceTypeWs = "WS",
+        sourceTypeRest = "REST",
+        sourceModeStreaming = "Streaming",
+        sourceModePolling = "Polling",
+        sourceModeStandby = "Standby",
+        sourceFallbackLabel = "Fallback",
+        sourceEnabledLabel = "Enabled",
         debugLogSoundOverride = "Сигнал завжди",
         debugLogSoundFollows = "За режимом звуку",
         debugGroupOfficial = "Офіційні тривоги",
@@ -1961,6 +1988,15 @@ alertBannerFormat = "%1\$s: alert",
         debugLogNight = "Night",
         debugLogShown = "Notified",
         debugLogSuppressed = "No notification — %1\$s",
+        logsFilterSources = "Sources",
+        logsEmptySources = "No sources plugged in",
+        sourceTypeWs = "WS",
+        sourceTypeRest = "REST",
+        sourceModeStreaming = "Streaming",
+        sourceModePolling = "Polling",
+        sourceModeStandby = "Standby",
+        sourceFallbackLabel = "Fallback",
+        sourceEnabledLabel = "Enabled",
         debugLogSoundOverride = "Siren override",
         debugLogSoundFollows = "Follows ringer",
         debugGroupOfficial = "Official alerts",

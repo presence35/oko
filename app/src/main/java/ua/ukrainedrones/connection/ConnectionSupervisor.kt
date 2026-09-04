@@ -50,6 +50,14 @@ class ConnectionSupervisor(
     private var milestoneMonitorJob: Job? = null
     private var lastRecordedState: ConnectionState? = null
 
+    /** The alert source currently providing coverage (null = primary/Neptun). Mirrored to
+     *  ConnectionLog entries so the log shows which source was active per episode. */
+    @Volatile private var activeSource: String? = null
+
+    fun setActiveSource(source: String?) {
+        activeSource = source
+    }
+
     // Track which milestones have already fired in the current outage episode
     private var firedMilestone3 = false
     private var firedMilestone5 = false
@@ -91,14 +99,14 @@ class ConnectionSupervisor(
             is ConnectionState.Connected -> {
                 resetMilestones()
                 _retryState.value = null
-                ConnectionLog.observe(ConnStatus.ONLINE, now)
+                ConnectionLog.observe(ConnStatus.ONLINE, now, activeSource)
             }
 
             is ConnectionState.Degraded -> {
                 if (prev !is ConnectionState.Degraded) {
                     recordEvent(ConnEventKind.DEGRADED)
                 }
-                ConnectionLog.observe(ConnStatus.DEGRADED, now)
+                ConnectionLog.observe(ConnStatus.DEGRADED, now, activeSource)
             }
 
             is ConnectionState.Connecting -> {
@@ -119,7 +127,7 @@ class ConnectionSupervisor(
                 if (prev is ConnectionState.Connected || prev == null) {
                     recordEvent(ConnEventKind.CONNECTION_LOST)
                 }
-                ConnectionLog.observe(ConnStatus.OFFLINE, now)
+                ConnectionLog.observe(ConnStatus.OFFLINE, now, activeSource)
             }
 
             is ConnectionState.Paused -> {

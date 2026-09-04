@@ -13,11 +13,12 @@ import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import ua.ukrainedrones.connection.ConnectionHolder
-import ua.ukrainedrones.connection.ConnectionState
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import ua.ukrainedrones.connection.ConnectionHolder
+import ua.ukrainedrones.connection.ConnectionState
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.ZoneParams
 import ua.ukrainedrones.engine.NormalizedThreat
@@ -70,8 +71,8 @@ object WidgetUpdater {
                 combine(
                     combine(
                         ConnectionHolder.getClient(context).connectionState,
-                        ConnectionHolder.getClient(context).threats,
-                        ConnectionHolder.getClient(context).alerts
+                        AppPluginHolder.registry.allThreats.map { list -> list.associate { it.id to it } },
+                        AppPluginHolder.registry.allAlerts
                     ) { cs, threats, alerts -> Triple(cs, threats, alerts) },
                     LocationTracker.location,
                     clock

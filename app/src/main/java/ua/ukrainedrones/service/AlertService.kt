@@ -274,6 +274,13 @@ class AlertService : Service() {
             sup.start()
 
             launch {
+                AppPluginHolder.registry.activeAlertSource.collect { source ->
+                    sup.setActiveSource(source)
+                    ConnectionLog.setPendingSource(source)
+                }
+            }
+
+            launch {
                 client.connectionState.collect { cs ->
                     when (cs) {
                         is ConnectionState.Offline -> ServiceState(applicationContext).setReconnectStartMillis(cs.reconnectStartMillis)
