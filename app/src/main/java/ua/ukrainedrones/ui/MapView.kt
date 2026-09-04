@@ -124,8 +124,16 @@ private const val SHELTER_MAX_ZOOM = 19.0
 /** Zooming below this level makes shelter pins clutter — auto-exit shelter mode. */
 private const val SHELTER_AUTO_EXIT_ZOOM = 13.0
 
-/** Ukraine (incl. Crimea) plus a ~0.5° margin — the map can't pan past this. */
+/** Ukraine (incl. Crimea) plus a ~0.5° margin — used to floor the zoom so Ukraine fills the screen. */
 private val UA_VIEW_LIMITS = BoundingBox(UA_TIGHT_MAX_LAT, UA_TIGHT_MAX_LON, UA_TIGHT_MIN_LAT, UA_TIGHT_MIN_LON)
+
+/** Pan boundary: the tight box plus ~1.5° more so the viewport can shift behind the top threat
+ *  card / overlays when zoomed at a country edge, instead of the map getting stuck under them.
+ *  Stays within the wide tile coverage (UA_WIDE ~2°), so the extra strip still renders. */
+private val UA_PAN_LIMITS = BoundingBox(
+    UA_TIGHT_MAX_LAT + 1.5, UA_TIGHT_MAX_LON + 1.5,
+    UA_TIGHT_MIN_LAT - 1.5, UA_TIGHT_MIN_LON - 1.5
+)
 
 private val tileSystem = TileSystemWebMercator()
 
@@ -690,9 +698,11 @@ fun NeptunMapView(
                 // LaunchedEffect). This keeps the tile cache to the viewport the threat map
                 // actually needs.
                 maxZoomLevel = NORMAL_MAX_ZOOM
-                // Clamp the viewport to Ukraine (incl. Crimea) plus a small margin so
-                // the map can't pan out into foreign territory.
-                setScrollableAreaLimitDouble(UA_VIEW_LIMITS)
+                // Clamp panning to the extended Ukraine box (tight bounds + ~1.5°). The extra
+                // strip is what lets a zoomed viewport shift content out from under the top
+                // threat card; the min-zoom floor still uses UA_VIEW_LIMITS so the far-out
+                // view never shows neighbouring territory.
+                setScrollableAreaLimitDouble(UA_PAN_LIMITS)
                 controller.setCenter(DEFAULT_CENTER)
                 // Start at a city-level zoom instead of osmdroid's default whole-globe view;
                 // once the first GPS fix lands, didDefaultFit re-zooms to the yellow zone.
@@ -893,6 +903,17 @@ fun NeptunMapView(
                         forceShowAllProvider = { deathFx.forceShowAllCities.value }
                     )
                 )
+
+                // Subtle outline of Ukraine's perimeter — a faint ring so the country's edge
+                // stays visible now that panning can shift the viewport past the tight bounds.
+                mapView.overlays.add(Polygon(mapView).apply {
+                    points = UKRAINE_BORDER
+                    fillColor = Color.TRANSPARENT
+                    strokeColor = Color.argb(70, 255, 255, 255)
+                    strokeWidth = 2f
+                    title = ""
+                    setInfoWindow(null)
+                })
 
                 // Focus-centered alert zones: yellow ring (outer) and red circle (inner) for
                 // the SLOW distance thresholds — outlines only, no fill so the map stays clean.

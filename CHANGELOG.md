@@ -8,4 +8,5 @@
 - Shot-down drones hide during death animation then scale back in after 2.1s / Збиті дрони ховаються під час анімації знищення і повертаються за 2.1с
 - Fixed threat icon flipping direction when shot / Виправлено перевертання іконки загрози при пострілі
 - Alerts never fall back to a pinned city while following GPS — the last known GPS fix is used even when stale; no fix at all shows a persistent "No GPS fix" warning / Alerts never fall back to a pinned city while following GPS — the last known GPS fix is used even when stale; no fix at all shows a persistent "No GPS fix" warning
+- Map panning now extends past Ukraine's tight bounds so the viewport can shift content out from under the threat card when zoomed at a country edge; added a subtle outline of Ukraine's perimeter / Map panning now extends past Ukraine's tight bounds so the viewport can shift content out from under the threat card when zoomed at a country edge; added a subtle outline of Ukraine's perimeter
 
