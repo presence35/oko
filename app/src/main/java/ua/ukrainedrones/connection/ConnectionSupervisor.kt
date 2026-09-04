@@ -79,9 +79,9 @@ class ConnectionSupervisor(
         scope.cancel()
     }
 
-    fun recordEvent(kind: ConnEventKind, attempt: Int? = null, delayMs: Long? = null) {
+    fun recordEvent(kind: ConnEventKind, attempt: Int? = null, delayMs: Long? = null, detail: String? = null) {
         _connEvents.update { list ->
-            (list + ConnEvent(System.currentTimeMillis(), kind, attempt, delayMs)).takeLast(MAX_CONN_EVENTS)
+            (list + ConnEvent(System.currentTimeMillis(), kind, attempt, delayMs, detail)).takeLast(MAX_CONN_EVENTS)
         }
     }
 

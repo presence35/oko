@@ -86,6 +86,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -113,8 +114,11 @@ import kotlinx.coroutines.launch
 import ua.ukrainedrones.AppPluginHolder
 import ua.ukrainedrones.engine.OperationalMode
 import ua.ukrainedrones.engine.PluginConnectionState
+import ua.ukrainedrones.engine.SourceTestResult
 import ua.ukrainedrones.engine.SourceType
 import ua.ukrainedrones.engine.ThreatSource
+import ua.ukrainedrones.plugins.SourceEvent
+import ua.ukrainedrones.plugins.SourceEventKind
 
 private val DebugRed = Color(0xFFE57373)
 private val DebugAmber = Color(0xFFF9A825)
@@ -362,7 +366,7 @@ fun LogsDropDownSheet(
             }
             if (filter == LogsFilter.SOURCES) {
                 item(key = "sources") {
-                    SourcesList(s)
+                    SourcesList(s, now)
                 }
             }
             if (filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty()) {
@@ -370,7 +374,7 @@ fun LogsDropDownSheet(
                     RetryLogCard(connEvents, connRetry, s, now) { ConnectionHolder.getSupervisor(context).dismissLogCard() }
                 }
             }
-            if (visible.isEmpty()) {
+            if (visible.isEmpty() && !(filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty())) {
                 item {
                     Text(
                         when (filter) {
@@ -1267,10 +1271,14 @@ private fun ConnectionCard(entry: ConnLogEntry, s: Strings.StringSet, lang: AppL
 }
 
 @Composable
-private fun SourcesList(s: Strings.StringSet) {
+private fun SourcesList(s: Strings.StringSet, now: Long) {
     val registry = AppPluginHolder.registry
     val plugins by registry.plugins.collectAsState()
     val states by registry.perSourceState.collectAsState()
+    val events = remember { mutableStateListOf<SourceEvent>() }
+    LaunchedEffect(registry) {
+        registry.sourceEvents.collect { ev -> events.add(0, ev); while (events.size > 20) events.removeAt(events.size - 1) }
+    }
     if (plugins.isEmpty()) {
         Text(
             s.logsEmptySources,
@@ -1285,24 +1293,82 @@ private fun SourcesList(s: Strings.StringSet) {
         plugins.forEach { plugin ->
             SourceCard(plugin, states[plugin.id] ?: PluginConnectionState.DISCONNECTED, s)
         }
+        if (events.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                s.sourceActivityLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+            events.forEach { ev ->
+                SourceEventRow(ev, s, now)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SourceEventRow(ev: SourceEvent, s: Strings.StringSet, now: Long) {
+    val label = when (ev.kind) {
+        SourceEventKind.TOGGLED_ON -> String.format(s.connEventSourceToggled, "on · ${ev.sourceId}")
+        SourceEventKind.TOGGLED_OFF -> String.format(s.connEventSourceToggled, "off · ${ev.sourceId}")
+        SourceEventKind.TAKEOVER -> String.format(s.connEventFallbackActive, ev.sourceId)
+        SourceEventKind.RESTORED -> s.connEventFallbackRestored
+    }
+    val accent = when (ev.kind) {
+        SourceEventKind.TAKEOVER -> DebugAmber
+        SourceEventKind.RESTORED -> DebugGreen
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF1E1E1E))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            color = accent,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            formatAlertAge(now, ev.atMillis, s),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
 @Composable
 private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: Strings.StringSet) {
     val mode by plugin.operationalMode.collectAsState()
+    val enabled by plugin.enabled.collectAsState()
     val connLabel = when (state) {
         PluginConnectionState.CONNECTED -> s.connOnline
         PluginConnectionState.DEGRADED -> s.connDegraded
         PluginConnectionState.OFFLINE -> s.connOffline
         else -> s.sourceModeStandby
     }
-    val modeLabel = when (mode) {
-        OperationalMode.STREAMING -> s.sourceModeStreaming
-        OperationalMode.POLLING -> s.sourceModePolling
-        OperationalMode.STANDBY -> s.sourceModeStandby
+    val status = when {
+        !enabled -> s.connOff
+        plugin.sourceType == SourceType.REST && mode == OperationalMode.POLLING -> "$connLabel · ${s.sourceModePolling}"
+        else -> connLabel
+    }
+    val statusColor = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+        state == PluginConnectionState.OFFLINE -> DebugRed
+        state == PluginConnectionState.DEGRADED -> DebugAmber
+        state == PluginConnectionState.CONNECTED -> DebugGreen
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val typeLabel = if (plugin.sourceType == SourceType.WS) s.sourceTypeWs else s.sourceTypeRest
+    var testing by remember { mutableStateOf(false) }
+    var testResult by remember { mutableStateOf<SourceTestResult?>(null) }
+    val scope = rememberCoroutineScope()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1328,15 +1394,36 @@ private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: St
             }
             Spacer(Modifier.height(3.dp))
             Text(
-                "$connLabel · $modeLabel",
+                status,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (state == PluginConnectionState.OFFLINE) DebugRed else MaterialTheme.colorScheme.onSurfaceVariant
+                color = statusColor
             )
+            testResult?.let { r ->
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    r.summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (r.ok) DebugGreen else DebugRed
+                )
+            }
+        }
+        TextButton(
+            onClick = {
+                testing = true
+                scope.launch {
+                    testResult = plugin.testConnection()
+                    testing = false
+                }
+            },
+            enabled = !testing
+        ) {
+            Text(if (testing) "…" else s.sourceTestLabel)
         }
         Switch(
-            checked = mode != OperationalMode.STANDBY,
-            onCheckedChange = { enabled ->
-                AppPluginHolder.registry.setEnabled(plugin, enabled)
+            checked = enabled,
+            onCheckedChange = { newEnabled ->
+                AppPluginHolder.registry.setEnabled(plugin, newEnabled)
             }
         )
     }

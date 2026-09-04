@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.coroutines.launch
 import ua.ukrainedrones.OblastAlert
 import ua.ukrainedrones.engine.NEPTUN_TYPES
 import ua.ukrainedrones.engine.NormalizedThreat
@@ -35,12 +36,14 @@ private class FakePlugin(
     override val connectionState: StateFlow<PluginConnectionState> = _connectionState.asStateFlow()
     private val _operationalMode = MutableStateFlow(OperationalMode.STREAMING)
     override val operationalMode: StateFlow<OperationalMode> = _operationalMode.asStateFlow()
+    private val _enabled = MutableStateFlow(true)
+    override val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
     var started = false; private set
     var stopped = false; private set
     var enabledCalls = mutableListOf<Boolean>()
     override fun start(scope: CoroutineScope) { started = true }
     override fun stop() { stopped = true }
-    override fun setEnabled(enabled: Boolean) { enabledCalls.add(enabled) }
+    override fun setEnabled(enabled: Boolean) { enabledCalls.add(enabled); _enabled.value = enabled }
 
     fun emitThreats(list: List<NormalizedThreat>) { _threats.value = list }
     fun emitAlerts(list: List<OblastAlert>) { _alerts.value = list }
@@ -238,5 +241,19 @@ class PluginRegistryTest {
         registry.register(a, testScope())
         registry.setEnabled(a, false)
         assertEquals(listOf(false), a.enabledCalls)
+    }
+
+    @Test
+    fun `setEnabled emits a toggle event`() {
+        val registry = PluginRegistry()
+        val a = FakePlugin("a")
+        registry.register(a, testScope())
+        val collected = mutableListOf<SourceEvent>()
+        val job = testScope().launch {
+            registry.sourceEvents.collect { collected.add(it) }
+        }
+        registry.setEnabled(a, false)
+        job.cancel()
+        assertEquals(SourceEventKind.TOGGLED_OFF, collected.firstOrNull()?.kind)
     }
 }

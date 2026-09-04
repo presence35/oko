@@ -29,7 +29,9 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import ua.ukrainedrones.AppLanguage
 import ua.ukrainedrones.resolveFocus
+import ua.ukrainedrones.connection.ConnEventKind
 import ua.ukrainedrones.connection.ConnectionState
+import ua.ukrainedrones.plugins.SourceEventKind
 import ua.ukrainedrones.engine.isFastType
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
@@ -274,9 +276,21 @@ class AlertService : Service() {
             sup.start()
 
             launch {
-                AppPluginHolder.registry.activeAlertSource.collect { source ->
-                    sup.setActiveSource(source)
-                    ConnectionLog.setPendingSource(source)
+                AppPluginHolder.registry.sourceEvents.collect { ev ->
+                    when (ev.kind) {
+                        SourceEventKind.TOGGLED_ON -> sup.recordEvent(ConnEventKind.SOURCE_TOGGLED, detail = "on:${ev.sourceId}")
+                        SourceEventKind.TOGGLED_OFF -> sup.recordEvent(ConnEventKind.SOURCE_TOGGLED, detail = "off:${ev.sourceId}")
+                        SourceEventKind.TAKEOVER -> {
+                            sup.setActiveSource(ev.sourceId)
+                            ConnectionLog.setPendingSource(ev.sourceId)
+                            sup.recordEvent(ConnEventKind.FALLBACK_ACTIVE, detail = ev.sourceId)
+                        }
+                        SourceEventKind.RESTORED -> {
+                            sup.setActiveSource(null)
+                            ConnectionLog.setPendingSource(null)
+                            sup.recordEvent(ConnEventKind.FALLBACK_RESTORED)
+                        }
+                    }
                 }
             }
 

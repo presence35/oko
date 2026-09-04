@@ -18,6 +18,7 @@ import ua.ukrainedrones.OblastAlert
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.OperationalMode
 import ua.ukrainedrones.engine.PluginConnectionState
+import ua.ukrainedrones.engine.SourceTestResult
 import ua.ukrainedrones.engine.SourceType
 import ua.ukrainedrones.engine.ThreatProps
 import ua.ukrainedrones.engine.ThreatSource
@@ -55,13 +56,15 @@ class UbillingPlugin(
     private val _operationalMode = MutableStateFlow(OperationalMode.STANDBY)
     override val operationalMode: StateFlow<OperationalMode> = _operationalMode.asStateFlow()
 
+    private val _enabled = MutableStateFlow(true)
+    override val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
     private var pollJob: Job? = null
-    private var enabled = true
 
     /** When the primary last went unhealthy (null = healthy). Drives the grace period. */
     private var offlineSince: Long? = null
@@ -91,7 +94,7 @@ class UbillingPlugin(
             }
             while (isActive) {
                 val now = System.currentTimeMillis()
-                val interval = computeIntervalMs(offlineSince, foreground, primaryHealthyState, enabled, now)
+                val interval = computeIntervalMs(offlineSince, foreground, primaryHealthyState, _enabled.value, now)
                 if (interval == null) {
                     // Idle: no polling. Re-evaluate frequently enough to catch a state change.
                     delay(5_000)
@@ -113,16 +116,33 @@ class UbillingPlugin(
         _connectionState.value = PluginConnectionState.DISCONNECTED
         _operationalMode.value = OperationalMode.STANDBY
         offlineSince = null
-        enabled = true
+        _enabled.value = true
     }
 
     override fun setEnabled(enabled: Boolean) {
-        this.enabled = enabled
+        _enabled.value = enabled
         if (!enabled) {
             _alerts.value = emptyList()
             _connectionState.value = PluginConnectionState.DISCONNECTED
             _operationalMode.value = OperationalMode.STANDBY
             backoffMs = 0L
+        }
+    }
+
+    /** One-shot live fetch for the Sources tab Test button — independent of the polling loop. */
+    override suspend fun testConnection(): SourceTestResult = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder().url(API_URL).build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    SourceTestResult(false, "HTTP ${response.code}")
+                } else {
+                    val alerts = parseStates(response.body?.string().orEmpty())
+                    SourceTestResult(true, "OK · ${alerts.size} oblasts alerting")
+                }
+            }
+        } catch (e: Exception) {
+            SourceTestResult(false, e.message ?: "fetch failed")
         }
     }
 

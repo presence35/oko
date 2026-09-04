@@ -19,6 +19,12 @@ enum class OperationalMode {
     STANDBY
 }
 
+/** Result of a one-shot [ThreatSource.testConnection] for the Sources tab. */
+data class SourceTestResult(
+    val ok: Boolean,
+    val summary: String
+)
+
 interface ThreatSource {
     val id: String
     val name: String
@@ -30,7 +36,15 @@ interface ThreatSource {
     val connectionState: StateFlow<PluginConnectionState>
     fun start(scope: CoroutineScope)
     fun stop()
-    /** Hard on/off from the Sources tab. Default no-op for sources with no user-facing
-     *  enable switch (WS sources are driven by their own lifecycle). */
-    fun setEnabled(enabled: Boolean) {}
+    /** Whether the source is enabled (Sources tab switch). False stops the source and clears
+     *  its alerts; true restarts it. Default no-op for sources without a user-facing switch. */
+    val enabled: StateFlow<Boolean>
+    fun setEnabled(enabled: Boolean)
+    /** One-shot live check for the Sources tab Test button. REST sources perform a real fetch;
+     *  WS sources report their current connection + data freshness. */
+    suspend fun testConnection(): SourceTestResult =
+        SourceTestResult(
+            ok = connectionState.value == PluginConnectionState.CONNECTED,
+            summary = connectionState.value.toString()
+        )
 }

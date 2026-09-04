@@ -40,6 +40,9 @@ class NeptunPlugin(private val client: NeptunConnectionClient) : ThreatSource {
     private val _connectionState = MutableStateFlow(PluginConnectionState.DISCONNECTED)
     override val connectionState: StateFlow<PluginConnectionState> = _connectionState.asStateFlow()
 
+    private val _enabled = MutableStateFlow(true)
+    override val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
+
     override fun start(scope: CoroutineScope) {
         scope.launch {
             client.threats.collect { map ->
@@ -68,6 +71,7 @@ class NeptunPlugin(private val client: NeptunConnectionClient) : ThreatSource {
     }
 
     override fun setEnabled(enabled: Boolean) {
+        _enabled.value = enabled
         if (enabled) client.start() else client.stop()
     }
 

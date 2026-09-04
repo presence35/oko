@@ -16,7 +16,7 @@ data class ConnRetryState(
 enum class ConnEventKind {
     CONNECTION_LOST, RETRY_SCHEDULED, NO_NETWORK, DEGRADED,
     MILESTONE_3, MILESTONE_5, MILESTONE_6, MILESTONE_10, MILESTONE_20,
-    GAVE_UP, PAUSED
+    GAVE_UP, PAUSED, FALLBACK_ACTIVE, FALLBACK_RESTORED, SOURCE_TOGGLED
 }
 
 /** One line of the current offline episode's reconnect log (the in-between only). */
@@ -24,7 +24,8 @@ data class ConnEvent(
     val atMillis: Long,
     val kind: ConnEventKind,
     val attempt: Int? = null,
-    val delayMs: Long? = null
+    val delayMs: Long? = null,
+    val detail: String? = null
 ) {
     fun label(s: Strings.StringSet): String = when (kind) {
         ConnEventKind.CONNECTION_LOST -> s.connEventLost
@@ -38,6 +39,9 @@ data class ConnEvent(
         ConnEventKind.MILESTONE_20 -> s.connEventMin20
         ConnEventKind.GAVE_UP -> s.connEventGaveUp
         ConnEventKind.PAUSED -> s.connEventPaused
+        ConnEventKind.FALLBACK_ACTIVE -> String.format(s.connEventFallbackActive, detail ?: "")
+        ConnEventKind.FALLBACK_RESTORED -> s.connEventFallbackRestored
+        ConnEventKind.SOURCE_TOGGLED -> String.format(s.connEventSourceToggled, detail ?: "")
     }
 }
 

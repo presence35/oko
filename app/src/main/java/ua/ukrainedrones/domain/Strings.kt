@@ -131,6 +131,7 @@ object Strings {
         val madeBy: String,
         val connOnline: String,
         val connOffline: String,
+        val connOff: String,
         val connDegraded: String,
         val connDegradedBody: String,
         val connActiveLabel: String,
@@ -301,6 +302,8 @@ object Strings {
         val sourceModeStandby: String,
         val sourceFallbackLabel: String,
         val sourceEnabledLabel: String,
+        val sourceTestLabel: String,
+        val sourceActivityLabel: String,
         val debugLogSoundOverride: String,
         val debugLogSoundFollows: String,
         val debugGroupOfficial: String,
@@ -341,6 +344,9 @@ object Strings {
         val connEventMin10: String,
         val connEventMin20: String,
         val connEventGaveUp: String,
+        val connEventFallbackActive: String,
+        val connEventFallbackRestored: String,
+        val connEventSourceToggled: String,
         val connEventPaused: String,
         val cardSizeLabel: String,
         val additionalSettingsTitle: String,
@@ -748,6 +754,7 @@ object Strings {
         val attributionText: String get() = status.attributionText
         val madeBy: String get() = status.madeBy
         val connOnline: String get() = status.connOnline
+        val connOff: String get() = status.connOff
         val connOffline: String get() = status.connOffline
         val connDegraded: String get() = status.connDegraded
         val connDegradedBody: String get() = status.connDegradedBody
@@ -910,6 +917,8 @@ object Strings {
         val sourceModeStandby: String get() = misc.sourceModeStandby
         val sourceFallbackLabel: String get() = misc.sourceFallbackLabel
         val sourceEnabledLabel: String get() = misc.sourceEnabledLabel
+        val sourceTestLabel: String get() = misc.sourceTestLabel
+        val sourceActivityLabel: String get() = misc.sourceActivityLabel
         val debugLogSoundOverride: String get() = misc.debugLogSoundOverride
         val debugLogSoundFollows: String get() = misc.debugLogSoundFollows
         val debugGroupOfficial: String get() = misc.debugGroupOfficial
@@ -950,6 +959,9 @@ object Strings {
         val connEventMin10: String get() = misc.connEventMin10
         val connEventMin20: String get() = misc.connEventMin20
         val connEventGaveUp: String get() = misc.connEventGaveUp
+        val connEventFallbackActive: String get() = misc.connEventFallbackActive
+        val connEventFallbackRestored: String get() = misc.connEventFallbackRestored
+        val connEventSourceToggled: String get() = misc.connEventSourceToggled
         val connEventPaused: String get() = misc.connEventPaused
         val cardSizeLabel: String get() = misc.cardSizeLabel
         val additionalSettingsTitle: String get() = misc.additionalSettingsTitle
@@ -1250,6 +1262,7 @@ val iconSetTitle: String get() = misc.iconSetTitle
         attributionText = "Карта повітряних тривог — NEPTUN",
         madeBy = "Зроблено Presaince",
 connOnline = "Онлайн",
+        connOff = "Off",
         connOffline = "Офлайн",
         connDegraded = "Запасний",
         connDegradedBody = "Запасне з'єднання — дані про загрози можуть затримуватися.",
@@ -1421,6 +1434,8 @@ connOnline = "Онлайн",
         sourceModeStandby = "Standby",
         sourceFallbackLabel = "Fallback",
         sourceEnabledLabel = "Enabled",
+        sourceTestLabel = "Test",
+        sourceActivityLabel = "Activity",
         debugLogSoundOverride = "Сигнал завжди",
         debugLogSoundFollows = "За режимом звуку",
         debugGroupOfficial = "Офіційні тривоги",
@@ -1461,6 +1476,9 @@ connOnline = "Онлайн",
         connEventMin10 = "10 хв офлайн",
         connEventMin20 = "20 хв офлайн — перепідключення зупинено",
         connEventGaveUp = "Зупинено — повтор призупинено",
+        connEventFallbackActive = "Fallback active: %1\$s",
+        connEventFallbackRestored = "Primary restored",
+        connEventSourceToggled = "Source %1\$s",
         connEventPaused = "Повтор призупинено на 30 хв",
         cardSizeLabel = "Розмір і деталізація картки загрози",
         additionalSettingsTitle = "Додаткові налаштування",
@@ -1826,6 +1844,7 @@ connOnline = "Онлайн",
         attributionText = "Air threat map — NEPTUN",
         madeBy = "Made by Presaince",
 connOnline = "Online",
+        connOff = "Off",
         connOffline = "Offline",
         connDegraded = "Backup",
         connDegradedBody = "Backup connection active — threat data may be delayed.",
@@ -1997,6 +2016,8 @@ alertBannerFormat = "%1\$s: alert",
         sourceModeStandby = "Standby",
         sourceFallbackLabel = "Fallback",
         sourceEnabledLabel = "Enabled",
+        sourceTestLabel = "Test",
+        sourceActivityLabel = "Activity",
         debugLogSoundOverride = "Siren override",
         debugLogSoundFollows = "Follows ringer",
         debugGroupOfficial = "Official alerts",
@@ -2037,6 +2058,9 @@ alertBannerFormat = "%1\$s: alert",
         connEventMin10 = "10 min offline",
         connEventMin20 = "20 min offline — reconnection stopped",
         connEventGaveUp = "Gave up — reconnect paused",
+        connEventFallbackActive = "Fallback active: %1\$s",
+        connEventFallbackRestored = "Primary restored",
+        connEventSourceToggled = "Source %1\$s",
         connEventPaused = "Retrying paused for 30 min",
         cardSizeLabel = "Threat card size and detail",
         additionalSettingsTitle = "Additional settings",

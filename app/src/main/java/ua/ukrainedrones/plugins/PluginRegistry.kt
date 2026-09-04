@@ -1,8 +1,11 @@
 package ua.ukrainedrones.plugins
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -13,6 +16,16 @@ import ua.ukrainedrones.engine.PluginConnectionState
 import ua.ukrainedrones.engine.SourceType
 import ua.ukrainedrones.engine.ThreatProps
 import ua.ukrainedrones.engine.ThreatSource
+
+/** Kinds of source activity surfaced in the live connection log / Sources tab. */
+enum class SourceEventKind { TOGGLED_ON, TOGGLED_OFF, TAKEOVER, RESTORED }
+
+/** One source-activity event: a toggle from the Sources tab or an alert-owner handover. */
+data class SourceEvent(
+    val atMillis: Long,
+    val kind: SourceEventKind,
+    val sourceId: String
+)
 
 /**
  * Health authority over all threat sources. Owns the merged feeds and the aggregate
@@ -52,6 +65,10 @@ class PluginRegistry {
     private val _activeAlertSource = MutableStateFlow<String?>(null)
     val activeAlertSource: StateFlow<String?> = _activeAlertSource.asStateFlow()
 
+    /** Source-activity feed (toggles + alert-owner handovers) consumed by the live log. */
+    private val _sourceEvents = MutableSharedFlow<SourceEvent>(extraBufferCapacity = 64)
+    val sourceEvents: SharedFlow<SourceEvent> = _sourceEvents.asSharedFlow()
+
     fun register(plugin: ThreatSource, scope: CoroutineScope) {
         _plugins.update { it + plugin }
         rebuildTypeCatalog()
@@ -84,6 +101,13 @@ class PluginRegistry {
         plugin.setEnabled(enabled)
         remergeAlerts()
         recheckConnection()
+        _sourceEvents.tryEmit(
+            SourceEvent(
+                atMillis = System.currentTimeMillis(),
+                kind = if (enabled) SourceEventKind.TOGGLED_ON else SourceEventKind.TOGGLED_OFF,
+                sourceId = plugin.id
+            )
+        )
     }
 
     private fun rebuildTypeCatalog() {
@@ -131,8 +155,24 @@ class PluginRegistry {
                 }
             }
         }
+        val prevOwner = _activeAlertSource.value
         _allAlerts.value = owned.values.toList()
         _activeAlertSource.value = owner
+        if (owner != prevOwner) {
+            // Handover event: a fallback took over, or ownership returned to the primary/cleared.
+            val kind = when {
+                owner != null && owner != PRIMARY_ID -> SourceEventKind.TAKEOVER
+                prevOwner != null && prevOwner != PRIMARY_ID -> SourceEventKind.RESTORED
+                else -> null
+            }
+            if (kind != null) {
+                _sourceEvents.tryEmit(SourceEvent(System.currentTimeMillis(), kind, owner ?: prevOwner ?: PRIMARY_ID))
+            }
+        }
+    }
+
+    companion object {
+        private const val PRIMARY_ID = "neptun"
     }
 
     private fun ThreatSource.isAuthoritativeAlertSource(): Boolean = when (sourceType) {
