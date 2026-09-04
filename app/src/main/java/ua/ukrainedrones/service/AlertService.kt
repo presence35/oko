@@ -130,6 +130,7 @@ class AlertService : Service() {
     private var officialAnnouncedToken: String? = null
     private var officialAnnouncedSince: String? = null
     private var officialAnnouncedReasonId: String? = null
+    private var officialAnnouncedCity: String? = null
     private var knownZones: Map<String, ThreatZone> = emptyMap()
     private var debugOfficialActive = false
     private var lastChannelLang: AppLanguage? = null
@@ -317,6 +318,7 @@ class AlertService : Service() {
                     client.pauseFor(30)
                 }
             }
+            NeutralizedTally.ACTION_NEUTRALIZED_DISMISS -> tally.reset()
         }
         return START_STICKY
     }
@@ -365,6 +367,7 @@ class AlertService : Service() {
             officialAnnouncedToken = svcState.officialAnnouncedToken().first().ifBlank { null }
             officialAnnouncedSince = svcState.officialAnnouncedSince().first().ifBlank { null }
             officialAnnouncedReasonId = svcState.officialAnnouncedReasonId().first().ifBlank { null }
+            officialAnnouncedCity = svcState.officialAnnouncedCity().first().ifBlank { null }
 
             // Restore active zone alerts across service restarts (Check 7 fix)
             val savedZonesJson = svcState.activeZoneAlerts().first()
@@ -561,6 +564,7 @@ val mappedThreats = registry.allThreats.map { list ->
                         threats.values.toList(),
                         activeOfficialAlert,
                         focusLoc,
+                        params,
                         tail.lang
                     )
                 } else {
@@ -715,7 +719,12 @@ val mappedThreats = registry.allThreats.map { list ->
             persistKnownZones()
         }
 
-        if (officialRegionToken != null && state.focusToken != officialRegionToken) {
+        // Dropping the announced region: the user stopped monitoring it (focus moved to a
+        // different oblast) OR re-pinned to a different city (even within the same oblast —
+        // the oblast token alone can't see that, so the announced city is tracked too).
+        val pinnedCityChanged = state.focusPinned && officialAnnouncedCity != null &&
+            state.focusBannerCity != officialAnnouncedCity
+        if (officialRegionToken != null && (state.focusToken != officialRegionToken || pinnedCityChanged)) {
             if (alertable.isEmpty()) {
                 cancelAlert()
             }
@@ -723,6 +732,7 @@ val mappedThreats = registry.allThreats.map { list ->
             debugOfficialActive = false
             officialRegionToken = null
             wasFocusAlertActive = false
+            officialAnnouncedCity = null
             clearOfficialAnnounced()
         }
 
@@ -734,6 +744,7 @@ val mappedThreats = registry.allThreats.map { list ->
             wasFocusAlertActive = true
             currentReasonThreatId = officialAnnouncedReasonId
             officialRegionToken = state.focusToken
+            officialAnnouncedCity = state.focusBannerCity
         }
         officialAnnouncedToken = null
         officialAnnouncedSince = null
@@ -782,10 +793,15 @@ val mappedThreats = registry.allThreats.map { list ->
             currentReasonThreatId = state.officialReasonThreatId
             officialRegionToken = state.focusToken
             wasFocusAlertActive = true
+            officialAnnouncedCity = state.focusBannerCity
             persistOfficialAnnounced(state)
         } else if (officialActive && wasFocusAlertActive && !posted && alertable.isEmpty() &&
-            state.officialReasonThreatId != currentReasonThreatId && alertNotificationShowing()
+            state.officialReasonThreatId != currentReasonThreatId && alertNotificationShowing() &&
+            state.officialReasonThreatId != null
         ) {
+            // Only refresh the shown notification when the new reason is a threat actually
+            // inside the user's zones — once the reason falls back to the bare oblast name
+            // (nothing nearby), a dismissed notification must not be re-raised about it.
             val reasonThreat = state.officialReasonThreatId?.let { all[it] }
             postAlert(
                 null,
@@ -799,6 +815,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 silent = true
             )
             currentReasonThreatId = state.officialReasonThreatId
+            officialAnnouncedCity = state.focusBannerCity
             persistOfficialAnnounced(state)
         }
 
@@ -811,6 +828,7 @@ val mappedThreats = registry.allThreats.map { list ->
             currentReasonThreatId = null
             debugOfficialActive = false
             wasFocusAlertActive = false
+            officialAnnouncedCity = null
             clearOfficialAnnounced()
             DebugLog.recordOfficial(
                 DebugLogKind.OFFICIAL_OFF,
@@ -837,6 +855,7 @@ val mappedThreats = registry.allThreats.map { list ->
             currentReasonThreatId = null
             officialRegionToken = null
             debugOfficialActive = false
+            officialAnnouncedCity = null
             clearOfficialAnnounced()
             DebugLog.recordOfficial(
                 DebugLogKind.OFFICIAL_OFF,
@@ -872,6 +891,7 @@ val mappedThreats = registry.allThreats.map { list ->
             }
             wasFocusAlertActive = false
             officialRegionToken = null
+            officialAnnouncedCity = null
             clearOfficialAnnounced()
         }
 
@@ -1003,7 +1023,8 @@ val mappedThreats = registry.allThreats.map { list ->
     private fun persistOfficialAnnounced(state: MonitorState) {
         scope.launch {
             ServiceState(applicationContext).setOfficialAnnounced(
-                state.focusToken, state.focusOblastAlertSince, state.officialReasonThreatId
+                state.focusToken, state.focusOblastAlertSince, state.officialReasonThreatId,
+                state.focusBannerCity
             )
         }
     }

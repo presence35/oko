@@ -463,6 +463,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 onWithKidsChange = { viewModel.setSheltersWithKidsEnabled(it) },
                 sheltersEnabled = uiState.sheltersEnabled,
                 onSheltersEnabledChange = { viewModel.setSheltersEnabled(it) },
+                onShowOnMap = {
+                    viewModel.setSheltersEnabled(true)
+                    screen = Screen.MAP
+                },
                 now = now,
                 onBack = { screen = if (sheltersFromSettings) Screen.SETTINGS else Screen.MAP }
             )
@@ -1275,7 +1279,7 @@ private fun ThreatStripFooter(
     } else if (total == 0) {
         val footerText = when {
             deathActive -> s.neutralizingLabel
-            else -> remember(calmMessagesEnabled) { noThreatsMessage(language, calmMessagesEnabled) }
+            else -> remember(calmMessagesEnabled, language) { noThreatsMessage(language, calmMessagesEnabled) }
         }
         Text(
             footerText,

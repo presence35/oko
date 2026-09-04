@@ -159,6 +159,8 @@ fun ThreatPopupCard(
     val engine = remember { ThreatEngine(NEPTUN_TYPES) }
     val typeInfo = threatTypeInfoByString(threat.type) ?: ThreatTypeCatalog.INFO.getValue(ThreatType.UNKNOWN)
     val typeLabel = if (lang == AppLanguage.UA) typeInfo.labelUa else typeInfo.labelEn
+    // Wave count (group size) prefixes the title when the server reports it.
+    val titleLabel = if (threat.count > 0) "${threat.count}x $typeLabel" else typeLabel
 
     val regionText = listOf(threat.locality, threat.district, threat.region)
         .filter { !it.isNullOrBlank() }
@@ -318,7 +320,7 @@ fun ThreatPopupCard(
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Text(
-                                    typeLabel,
+                                    titleLabel,
                                     fontWeight = FontWeight.SemiBold,
                                     style = MaterialTheme.typography.titleMedium,
                                     color = Color.White
@@ -423,7 +425,7 @@ fun ThreatPopupCard(
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        typeLabel,
+                                        titleLabel,
                                         fontWeight = FontWeight.SemiBold,
                                         style = MaterialTheme.typography.titleMedium,
                                         color = Color.White
@@ -480,15 +482,6 @@ fun ThreatPopupCard(
                             Spacer(Modifier.height(10.dp))
                         }
 
-                        threat.count.takeIf { it > 0 }?.let {
-                            Text(
-                                "${s.groupLabel}: $it",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF9E9E9E)
-                            )
-                            Spacer(Modifier.height(4.dp))
-                        }
-
                         UncertaintyBar(uncertaintyKm = threat.uncertaintyKm, s = s)
 
                         if (threat.areaOnly) {
@@ -518,18 +511,11 @@ fun ThreatPopupCard(
                             ) {
                                 ReliabilityBar(reliability = Reliability.fromApi(threat.reliability), s = s)
                                 confirmations?.let { n ->
-                                    Surface(
-                                        shape = RoundedCornerShape(20.dp),
-                                        color = DistUserAmber.copy(alpha = 0.18f)
-                                    ) {
-                                        Text(
-                                            "$n ${sourcesWord(n, lang)}",
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                            color = DistUserAmber,
-                                            fontWeight = FontWeight.Medium,
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
-                                    }
+                                    Text(
+                                        "$n ${sourcesWord(n, lang)}",
+                                        color = Color(0xFF9E9E9E),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
                                 }
                             }
                             Text(

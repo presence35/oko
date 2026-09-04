@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- Map: threat icons scale with zoom (1x→3x capped) instead of staying fixed / Мапа: іконки загроз масштабуються з наближенням (1x→3x з обмеженням) замість фіксованого розміру
+- Map: marker smoothing loop throttled 1s→3s (less CPU/battery; fast threats at deep zoom are slightly coarser) / Мапа: цикл згладжування маркерів зменшено з 1с до 3с (менше навантаження; швидкі загрози при сильному наближенні трохи менш плавні)
+- Map: approx-position threats inside the yellow zone now patrol the zone perimeter (no more misleading "0 km" on the city pin) / Мапа: загрози з приблизною позицією у жовтій зоні тепер обходять її периметр (замість хибного «0 км» на шпильці міста)
+- Threat card: wave count (group size) prefixes the title as "Nx <type>"; source-count pill demoted to plain small text / Картка загрози: кількість хвилі (групи) стає префіксом заголовка «Nx <тип>»; пігулка «джерела» спрощена до звичайного дрібного тексту
+- Shelter: list header gains a "Show shelters on map" button; the toggle now reads "Show button on map" / Укриття: у шапці списку з'явилась кнопка «Показати укриття на мапі»; перемикач тепер називається «Показати кнопку на мапі»
+- Shelter: map reachable directly from the list — button enables shelters and jumps to the map / Укриття: зі списку можна одразу перейти на мапу — кнопка вмикає укриття та відкриває мапу
+- Map: calm footer message re-randomises when the language changes (was cached until the calm-messages toggle) / Мапа: спокійне повідомлення внизу оновлюється при зміні мови (раніше кешувалось до перемикання спокійних повідомлень)
+- Alerts: official-alert reason picks the nearest threat inside the user's configured zones; a drone 100 km away in the same oblast is no longer announced as local / Сповіщення: причина офіційної тривоги обирає найближчу загрозу в налаштованих зонах; дрон за 100 км у тій самій області більше не анонсується як місцевий
+- Alerts: city-level scope now matches threats by locality or city proximity (≤15 km), not a loose oblast-stem match / Сповіщення: рівень «Місто» тепер враховує загрози за населеним пунктом або близькістю до міста (≤15 км), а не за загальним збігом області
+- Alerts: dismissed official notification is not re-raised when the reason falls back to the bare oblast name (outside zones) / Сповіщення: відхилене офіційне сповіщення не з'являється знову, коли причина зводиться лише до назви області (поза зонами)
+- Alerts: official all-clear is dropped when the user re-pins to a different city, even within the same oblast / Сповіщення: відбій офіційної тривоги скасовується при зміні закріпленого міста, навіть у межах тієї самої області
+- Tally: swiping away (or tapping) the neutralized-threat notification now actually resets the counter (service handled the dismiss action) / Лічильник: свайп (або тап) по сповіщенню про збиті загрози тепер дійсно скидає лічильник (сервіс обробляє дію закриття)
+
 - Internal: migrated all UI/service/widget consumers onto the engine's `NormalizedThreat`; deleted the `Threat` display DTO and `Compat.kt` aliases / Внутрішнє: міграцію всіх UI/service/widget споживачів на `NormalizedThreat` рушія; видалено DTO `Threat` та аліаси `Compat.kt`
 - Service: fix startup crash by aligning startForeground foregroundServiceType with manifest declaration / Сервіс: виправлено збій запуску узгодженням foregroundServiceType у startForeground з оголошенням у маніфесті
 - Connection: remove legacy REST polling fallback completely; WebSocket channel is now the sole data source / З'єднання: повне видалення застарілого опитування REST; потік WebSocket тепер є єдиним джерелом даних

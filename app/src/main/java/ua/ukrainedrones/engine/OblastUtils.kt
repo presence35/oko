@@ -50,35 +50,51 @@ fun canonicalToken(region: String): String? {
 
 fun isCityScopedSuppressed(city: FocusCityInfo, threats: List<NormalizedThreat>): Boolean {
     if (threats.isEmpty()) return false
-    val stem = city.oblastStem ?: return false
     return threats.none { t ->
-        t.status == "active" && !t.advisory && !t.areaOnly &&
-            (t.region?.contains(stem, ignoreCase = true) == true ||
-                t.locality?.contains(city.nameUa, ignoreCase = true) == true)
+        t.status == "active" && !t.advisory && !t.areaOnly && isThreatAtCity(t, city)
     }
 }
+
+/** A threat counts as "at the city" for city-level scoping when its locality names the city or
+ *  its raw fix is within the city's near area. Locality strings are often the district, so
+ *  proximity is the fallback that keeps a 100km-away oblast threat from counting as local. */
+private fun isThreatAtCity(t: NormalizedThreat, city: FocusCityInfo): Boolean {
+    val loc = t.locality
+    if (loc != null &&
+        (loc.equals(city.nameUa, ignoreCase = true) ||
+            loc.contains(city.nameUa, ignoreCase = true) ||
+            city.nameUa.contains(loc, ignoreCase = true))
+    ) return true
+    return distanceFlat(city.lat, city.lon, t.lat, t.lon) / 1000.0 <= CITY_SCOPE_KM
+}
+
+private const val CITY_SCOPE_KM = 15.0
 
 fun deriveOfficialAlertReason(
     threats: List<NormalizedThreat>,
     alert: OblastAlert?,
     focus: LatLng?,
+    params: ZoneParams,
     lang: AppLanguage
 ): Pair<String?, String?> {
     if (alert == null) return null to null
     val token = canonicalToken(alert.oblast) ?: return null to null
     val now = System.currentTimeMillis()
+    // No focus point → can't judge proximity; fall back to the alert name alone.
+    if (focus == null) return alert.name to null
     var best: NormalizedThreat? = null
-    var bestScore = -1.0
+    var bestDistKm = Double.MAX_VALUE
     for (t in threats) {
         if (t.status != "active" || t.advisory || t.areaOnly) continue
         if (oblastEngine.isStale(t, oblastEngine.propsFor(t.type), now)) continue
         if (!inOblast(t.region, t.district, t.locality, token)) continue
-        val distKm = if (focus != null) {
-            distanceFlat(focus.lat, focus.lon, t.lat, t.lon) / 1000.0
-        } else null
-        val score = distKm ?: 0.0
-        if (score > bestScore) {
-            bestScore = score
+        val distKm = distanceFlat(focus.lat, focus.lon, t.lat, t.lon) / 1000.0
+        // Only threats inside the user's configured zones qualify as the "reason" — a drone
+        // 100km away in the same oblast must not be announced as if it were local.
+        val props = oblastEngine.propsFor(t.type)
+        if (oblastEngine.zoneTier(props, distKm, t.speedKmh, params) == null) continue
+        if (distKm < bestDistKm) {
+            bestDistKm = distKm
             best = t
         }
     }

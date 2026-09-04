@@ -55,6 +55,7 @@ fun ShelterScreen(
     onWithKidsChange: (Boolean) -> Unit,
     sheltersEnabled: Boolean,
     onSheltersEnabledChange: (Boolean) -> Unit,
+    onShowOnMap: () -> Unit,
     now: Long,
     onBack: () -> Unit
 ) {
@@ -138,6 +139,7 @@ fun ShelterScreen(
                     onWithKidsChange = onWithKidsChange,
                     sheltersEnabled = sheltersEnabled,
                     onSheltersEnabledChange = onSheltersEnabledChange,
+                    onShowOnMap = onShowOnMap,
                     onForceRefresh = forceGps,
                     showSettingsFallback = showSettingsFallback,
                     onOpenSettings = {
@@ -190,6 +192,7 @@ private fun GpsHeaderRow(
     onWithKidsChange: (Boolean) -> Unit,
     sheltersEnabled: Boolean,
     onSheltersEnabledChange: (Boolean) -> Unit,
+    onShowOnMap: () -> Unit,
     onForceRefresh: () -> Unit,
     showSettingsFallback: Boolean,
     onOpenSettings: () -> Unit
@@ -318,6 +321,19 @@ private fun GpsHeaderRow(
                     checked = withKids,
                     onCheckedChange = onWithKidsChange
                 )
+            }
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = onShowOnMap,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Map,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(s.shelterShowSheltersOnMap)
             }
             if (showSettingsFallback) {
                 Spacer(Modifier.height(8.dp))

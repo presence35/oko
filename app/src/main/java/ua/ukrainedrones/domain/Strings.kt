@@ -372,6 +372,7 @@ object Strings {
         val shelterWithKidsTitle: String,
         val shelterWithKidsDesc: String,
         val shelterShowOnMap: String,
+        val shelterShowSheltersOnMap: String,
         val shelterGpsUnknown: String,
         val periodicGpsTitle: String,
         val periodicGpsDesc: String,
@@ -969,6 +970,7 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val shelterWithKidsTitle: String get() = misc.shelterWithKidsTitle
         val shelterWithKidsDesc: String get() = misc.shelterWithKidsDesc
         val shelterShowOnMap: String get() = misc.shelterShowOnMap
+        val shelterShowSheltersOnMap: String get() = misc.shelterShowSheltersOnMap
         val shelterGpsUnknown: String get() = misc.shelterGpsUnknown
         val periodicGpsTitle: String get() = misc.periodicGpsTitle
         val periodicGpsDesc: String get() = misc.periodicGpsDesc
@@ -1467,7 +1469,8 @@ connOnline = "Онлайн",
         shelterSectionTitle = "Укриття",
         shelterWithKidsTitle = "З дітьми",
         shelterWithKidsDesc = "З дітьми йдуть повільніше — час ходьби рахуємо трохи довше.",
-        shelterShowOnMap = "Показати на мапі",
+        shelterShowOnMap = "Показати кнопку на мапі",
+        shelterShowSheltersOnMap = "Показати укриття на мапі",
         shelterGpsUnknown = "GPS: —",
         periodicGpsTitle = "Періодична GPS-синхронізація (15 хв)",
         periodicGpsDesc = "Звичайне фонове відстеження використовує вежі зв'язку для збереження батареї. Синхронізація вмикає GPS на кілька секунд кожні 15 хвилин, щоб уникнути зміщення дистанції до загроз та розрахунку укриттів.",
@@ -2031,7 +2034,8 @@ alertBannerFormat = "%1\$s: alert",
         shelterSectionTitle = "Shelter",
         shelterWithKidsTitle = "With kids",
         shelterWithKidsDesc = "Kids walk slower.",
-        shelterShowOnMap = "Show on map",
+        shelterShowOnMap = "Show button on map",
+        shelterShowSheltersOnMap = "Show shelters on map",
         shelterGpsUnknown = "GPS: —",
         periodicGpsTitle = "Periodic GPS sync (15 min)",
         periodicGpsDesc = "Normal background monitoring uses low-power cell towers. Periodic sync wakes GPS for a few seconds every 15 min to prevent cell-tower drift from skewing threat distance and shelter walking times.",

@@ -24,6 +24,7 @@ class ServiceState(private val context: Context) {
     private val officialAnnouncedTokenKey = stringPreferencesKey("official_announced_token")
     private val officialAnnouncedSinceKey = stringPreferencesKey("official_announced_since")
     private val officialAnnouncedReasonIdKey = stringPreferencesKey("official_announced_reason_id")
+    private val officialAnnouncedCityKey = stringPreferencesKey("official_announced_city")
     private val activeZoneAlertsKey = stringPreferencesKey("active_zone_alerts")
     private val debugLogKey = stringPreferencesKey("debug_log")
     private val lastUpdateCheckKey = longPreferencesKey("last_update_check")
@@ -82,11 +83,15 @@ class ServiceState(private val context: Context) {
     fun officialAnnouncedReasonId(): Flow<String> =
         context.dataStore.data.map { prefs -> prefs[officialAnnouncedReasonIdKey] ?: "" }
 
-    suspend fun setOfficialAnnounced(token: String?, since: String?, reasonId: String?) {
+    fun officialAnnouncedCity(): Flow<String> =
+        context.dataStore.data.map { prefs -> prefs[officialAnnouncedCityKey] ?: "" }
+
+    suspend fun setOfficialAnnounced(token: String?, since: String?, reasonId: String?, city: String? = null) {
         context.dataStore.edit {
             it[officialAnnouncedTokenKey] = token ?: ""
             it[officialAnnouncedSinceKey] = since ?: ""
             it[officialAnnouncedReasonIdKey] = reasonId ?: ""
+            it[officialAnnouncedCityKey] = city ?: ""
         }
     }
 

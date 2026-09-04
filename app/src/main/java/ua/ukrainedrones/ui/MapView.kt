@@ -172,7 +172,29 @@ private fun StringBuilder.appendThreatKey(t: NormalizedThreat) {
 // animation mutates its icon's alpha per frame and must never touch a live marker's icon.
 private val threatIconCache = object : LruCache<String, Bitmap>(48) {}
 
-/** Threat marker icon at a fixed size regardless of map zoom. When [revealed], draws a small
+/** Threat marker icon scales with map zoom — 1x (32dp) at low zoom, 3x by high zoom, capped
+ *  so icons never balloon on deep zoom-in. */
+private fun threatIconSizeDp(zoom: Double): Int {
+    val scale = ((zoom - 9.0) / 5.0 * 2.0 + 1.0).coerceIn(1.0, 3.0)
+    return (32 * scale).toInt()
+}
+
+/** Position for the "approaching, precision unknown" orbit: a point on the yellow zone
+ *  perimeter around [focus], advancing the angle over time so the icon patrols the ring. */
+private fun orbitPosition(focus: LatLng, radiusMeters: Double, angleRad: Double): LatLng {
+    val dLat = (radiusMeters * cos(angleRad)) / 111_320.0
+    val dLon = (radiusMeters * sin(angleRad)) / (111_320.0 * cos(Math.toRadians(focus.lat)))
+    return LatLng(focus.lat + dLat, focus.lon + dLon)
+}
+
+/** An approximate-position threat inside the user's yellow zone patrols the zone's perimeter
+ *  instead of parking on its raw fix (often the city pin, which reads as "0km" / already here). */
+private fun shouldOrbitFocus(nt: NormalizedThreat, focus: LatLng?, yellowKm: Int): Boolean {
+    if (focus == null || nt.areaOnly || nt.positionQuality != "approx") return false
+    return distanceFlat(focus.lat, focus.lon, nt.lat, nt.lon) / 1000.0 <= yellowKm
+}
+
+/** Threat marker icon at a size that scales with zoom. When [revealed], draws a small
  *  green dot in the icon's top-right corner — the notification-reveal marker — so it's a single
  *  tappable marker (no separate overlay intercepting the tap) that moves with the threat. */
 private fun threatIconFor(
@@ -180,9 +202,10 @@ private fun threatIconFor(
     type: ThreatType,
     iconSet: ThreatIconSet,
     revealed: Boolean = false,
-    areaOnly: Boolean = false
+    areaOnly: Boolean = false,
+    sizeDp: Int = 32
 ): Drawable {
-    val key = "${type.name}|${iconSet.name}|$revealed|$areaOnly"
+    val key = "${type.name}|${iconSet.name}|$revealed|$areaOnly|$sizeDp"
     val cached = threatIconCache.get(key)
     val bmp: Bitmap
     if (cached != null) {
@@ -190,7 +213,7 @@ private fun threatIconFor(
     } else {
         val src = ContextCompat.getDrawable(context, IconCatalog.res(type, iconSet))!!
         val density = context.resources.displayMetrics.density
-        val targetW = (32 * density).toInt().coerceAtLeast(2)
+        val targetW = (sizeDp * density).toInt().coerceAtLeast(2)
         val iw = src.intrinsicWidth.coerceAtLeast(1)
         val ih = src.intrinsicHeight.coerceAtLeast(1)
         val w = targetW
@@ -320,6 +343,13 @@ private data class NewRingState(val id: String?, val activeUntilMs: Long)
 private const val NEW_RING_MS = 8_000L
 /** How long the zone-slider camera refit waits after the value stops changing. */
 private const val ZONE_REFIT_DEBOUNCE_MS = 350L
+/** One full orbit of an approximate-position threat around the yellow zone perimeter. */
+private const val ORBIT_PERIOD_MS = 15_000L
+/** Orbit angle offset keyed by threat id so nearby threats don't patrol in lockstep. */
+private fun orbitPhase(id: String): Double {
+    val deg = Math.floorMod(id.hashCode(), 360)
+    return Math.toRadians(deg.toDouble())
+}
 
 /**
  * Instant single-tap detection for threat markers. osmdroid only delivers marker taps via
@@ -543,6 +573,7 @@ fun NeptunMapView(
     val lastPinnedCity = remember { mutableStateOf<String?>(null) }
     val mapViewRef = remember { mutableStateOf<MapView?>(null) }
     val markerRefs = remember { mutableStateOf<MutableMap<String, Marker>>(mutableMapOf()) }
+    val markerIconDp = remember { mutableStateOf<MutableMap<String, Int>>(mutableMapOf()) }
     val pausedState by rememberUpdatedState(paused)
     val mapVisibleState by rememberUpdatedState(mapVisible)
     val alertActiveState by rememberUpdatedState(uiState.alertActive)
@@ -555,6 +586,7 @@ fun NeptunMapView(
     val hiddenTypesState by rememberUpdatedState(uiState.hiddenTypes)
     val iconSetState by rememberUpdatedState(uiState.iconSet)
     val mapThreatsState by rememberUpdatedState(uiState.mapThreats)
+    val slowYellowKmState by rememberUpdatedState(uiState.activeZoneParams.slowYellowKm)
     val selectedId by selectedThreatId.collectAsState()
     val selectedThreatIdState by rememberUpdatedState(selectedId)
     val focusLocationState by rememberUpdatedState(uiState.focusLocation)
@@ -787,7 +819,7 @@ fun NeptunMapView(
                     markerRefs.value[id]?.let { m ->
                         val t = uiState.mapThreats.firstOrNull { it.id == id }
                         if (t != null) {
-                            m.icon = threatIconFor(context, t.type.toThreatType(), iconSetState, revealed = true)
+                            m.icon = threatIconFor(context, t.type.toThreatType(), iconSetState, revealed = true, sizeDp = markerIconDp.value[id] ?: 32)
                             mapView.invalidate()
                         }
                     }
@@ -806,6 +838,7 @@ fun NeptunMapView(
 
                 mapView.overlays.clear()
                 markerRefs.value.clear()
+                markerIconDp.value.clear()
 
                 // Bottom-most overlay: single-tap on empty map closes the popup, while
                 // markers added after it keep tap priority. Long-press is handled by the
@@ -872,10 +905,16 @@ fun NeptunMapView(
                     // Place markers at their dead-reckoned position straight away (matching the
                     // animation loop) so a rebuild never snaps a moving marker back to its raw fix
                     // and returning to the app doesn't flash stale fixes before the loop corrects.
-                    val predicted = engine.speedCache.estimate(nt.id, nt, props)?.let {
+                    val focusPt = uiState.focusLocation
+                    val orbit = shouldOrbitFocus(nt, focusPt, uiState.activeZoneParams.slowYellowKm)
+                    val predicted = if (orbit) null else engine.speedCache.estimate(nt.id, nt, props)?.let {
                         engine.predictPosition(nt, it, props, System.currentTimeMillis())
                     }
-                    val pos = predicted?.let { GeoPoint(it.lat, it.lon) } ?: GeoPoint(nt.lat, nt.lon)
+                    val pos = predicted?.let { GeoPoint(it.lat, it.lon) }
+                        ?: if (orbit && focusPt != null) {
+                            val angle = (System.currentTimeMillis() / ORBIT_PERIOD_MS.toDouble()) * 2.0 * Math.PI + orbitPhase(nt.id)
+                            orbitPosition(focusPt, uiState.activeZoneParams.slowYellowKm * 1000.0, angle).let { GeoPoint(it.lat, it.lon) }
+                        } else GeoPoint(nt.lat, nt.lon)
                     val stale = engine.isStale(nt, props, System.currentTimeMillis())
                     val nowMs = System.currentTimeMillis()
                     val ring = newRingState.value
@@ -883,7 +922,7 @@ fun NeptunMapView(
                     val marker = Marker(mapView).apply {
                         position = pos
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                        icon = threatIconFor(context, t.type.toThreatType(), iconSet, revealed = revealed, areaOnly = t.areaOnly)
+                        icon = threatIconFor(context, t.type.toThreatType(), iconSet, revealed = revealed, areaOnly = t.areaOnly, sizeDp = threatIconSizeDp(mapView.zoomLevelDouble))
                         alpha = if (stale) 0.45f else 1.0f
                         title = typeLabel
                         snippet = regionLabel
@@ -904,6 +943,7 @@ fun NeptunMapView(
                     }
                     mapView.overlays.add(marker)
                     markerRefs.value[t.id] = marker
+                    markerIconDp.value[t.id] = threatIconSizeDp(mapView.zoomLevelDouble)
                 }
 
                 // Nearby shelters — rendered when toggled on, centered around the user/pinned focus.
@@ -1222,12 +1262,15 @@ fun NeptunMapView(
     // without clearing the whole map. Only invalidates when something actually moved.
     LaunchedEffect(Unit) {
         while (true) {
-            delay(1000)
+            delay(3000)
             // The map is fully hidden behind Settings — skip the marker smoothing to save battery.
             if (pausedState) continue
             val mapView = mapViewRef.value ?: continue
             val now = System.currentTimeMillis()
             var dirty = false
+            // Icon size scales with zoom (1x → 3x capped); swap when the bucket changes.
+            val targetSizeDp = threatIconSizeDp(mapView.zoomLevelDouble)
+            val ring = newRingState.value
             for (t in mapThreatsState) {
                 val marker = markerRefs.value[t.id] ?: continue
                 val nt = t
@@ -1248,27 +1291,39 @@ fun NeptunMapView(
                     marker.rotation = targetRot
                     dirty = true
                 }
-                val speed = engine.speedCache.estimate(nt.id, nt, props) ?: continue
-                val predicted = engine.predictPosition(nt, speed, props, now) ?: continue
+                val revealed = ring != null && t.id == ring.id && now < ring.activeUntilMs
+                if (markerIconDp.value[t.id] != targetSizeDp) {
+                    marker.icon = threatIconFor(context, t.type.toThreatType(), iconSetState, revealed = revealed, areaOnly = nt.areaOnly, sizeDp = targetSizeDp)
+                    markerIconDp.value[t.id] = targetSizeDp
+                    dirty = true
+                }
+                val focusPt = focusLocationState
+                val orbit = shouldOrbitFocus(nt, focusPt, slowYellowKmState)
+                val targetPos = if (orbit && focusPt != null) {
+                    val angle = (now / ORBIT_PERIOD_MS.toDouble()) * 2.0 * Math.PI + orbitPhase(nt.id)
+                    orbitPosition(focusPt, slowYellowKmState * 1000.0, angle)
+                } else {
+                    val speed = engine.speedCache.estimate(nt.id, nt, props) ?: continue
+                    engine.predictPosition(nt, speed, props, now) ?: continue
+                }
                 val cur = marker.position
                 if (cur != null &&
-                    distanceFlat(cur.latitude, cur.longitude, predicted.lat, predicted.lon) > 1.0
+                    distanceFlat(cur.latitude, cur.longitude, targetPos.lat, targetPos.lon) > 1.0
                 ) {
-                    marker.position = GeoPoint(predicted.lat, predicted.lon)
+                    marker.position = GeoPoint(targetPos.lat, targetPos.lon)
                     dirty = true
                 }
             }
             if (dirty) mapView.invalidate()
             // Reveal badge: when the 8s window ends, strip the green dot off the revealed
             // marker (the dot is baked into the icon, so expiry is just an icon swap).
-            val ring = newRingState.value
             if (ring != null && now >= ring.activeUntilMs) {
                 newRingState.value = null
                 ring.id?.let { id ->
                     markerRefs.value[id]?.let { m ->
                         val t = mapThreatsState.firstOrNull { it.id == id }
                         if (t != null) {
-                            m.icon = threatIconFor(context, t.type.toThreatType(), iconSetState)
+                            m.icon = threatIconFor(context, t.type.toThreatType(), iconSetState, areaOnly = t.areaOnly, sizeDp = markerIconDp.value[id] ?: 32)
                             dirty = true
                         }
                     }
