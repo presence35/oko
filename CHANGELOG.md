@@ -26,6 +26,7 @@
 - Connection: tapping the status pill now opens the Logs screen directly instead of the system-status dialog / З'єднання: дотик до статус-пігулки тепер відкриває екран Журналу замість діалогу статусу системи
 - Logs: header neptun icon now tinted by connection status color; removed redundant status dot from Logs header / Журнал: іконка neptun у заголовку Журналу тепер забарвлена за кольором стану з'єднання; зайву крапку статусу прибрано
 - Map: zone-fit and shelter-fit zooms now jump directly instead of animating through uncached zoom levels — fixes white-box flash / Мапа: наближення до зон/притулків тепер стрибає без анімації — виправлено спалах білого прямокутника
+- Shelter: "Show shelters on map" button now actually enables shelter overlay + zooms to fit; shelter list button uses shelter icon instead of generic map icon / Укриття: кнопка «Показати укриття на мапі» тепер дійсно вмикає оверлей укриттів та наближає їх; кнопка у списку використовує іконку укриття замість загальної іконки мапи
 
 - Map: fix threats not moving/facing wrong direction — marker update loop now reads fresh threat data on each tick / Мапа: виправлено загрози, що не рухаються/дивляться в хибному напрямку — цикл оновлення маркерів тепер зчитує свіжі дані загроз кожен тик
 - Map: fix city labels not updating when language is changed / Мапа: виправлено міські мітки, що не оновлюються при зміні мови

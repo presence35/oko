@@ -4,14 +4,12 @@ import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.distanceFlat
-import ua.ukrainedrones.connection.NeptunConnectionClient
 
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.app.Activity
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -93,8 +91,6 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -144,6 +140,8 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     var showZonesSheet by remember { mutableStateOf(false) }
+    var showNearbyShelters by remember { mutableStateOf(false) }
+    var shelterZoomTick by remember { mutableStateOf(0) }
     var activeExplainer by remember { mutableStateOf<Explainer?>(null) }
 
     // The Settings-open update check surfaces here as a snackbar with a Download action.
@@ -304,6 +302,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 screen = Screen.LOGS
             },
             onShelterModeChange = { viewModel.setShelterModeActive(it) },
+            showNearbyShelters = showNearbyShelters,
+            onShowNearbySheltersChange = { showNearbyShelters = it },
+            shelterZoomTick = shelterZoomTick,
+            onShelterZoomTick = { shelterZoomTick++ },
             shelterTipStage = shelterTipStage,
             settingsHintRemaining = settingsHintRemaining,
             onHeaderHeightChange = { headerHeightPx = it },
@@ -465,6 +467,8 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 onSheltersEnabledChange = { viewModel.setSheltersEnabled(it) },
                 onShowOnMap = {
                     viewModel.setSheltersEnabled(true)
+                    showNearbyShelters = true
+                    shelterZoomTick++
                     screen = Screen.MAP
                 },
                 now = now,
@@ -638,6 +642,10 @@ private fun MapScreen(
     onOpenShelters: () -> Unit,
     onOpenLogs: () -> Unit,
     onShelterModeChange: (Boolean) -> Unit,
+    showNearbyShelters: Boolean,
+    onShowNearbySheltersChange: (Boolean) -> Unit,
+    shelterZoomTick: Int,
+    onShelterZoomTick: () -> Unit,
     shelterTipStage: Int,
     onShelterTipAdvance: () -> Unit,
     settingsHintRemaining: Int = 0,
@@ -666,9 +674,7 @@ private fun MapScreen(
     var zoomZone by remember { mutableStateOf<ThreatZone?>(null) }
     var zoomTick by remember { mutableStateOf(0) }
     var fitZonesTick by remember { mutableStateOf(0) }
-    var shelterZoomTick by remember { mutableStateOf(0) }
     var shelterSelectTick by remember { mutableStateOf(0) }
-    var showNearbyShelters by remember { mutableStateOf(false) }
     var selectedShelter by remember { mutableStateOf<NearestShelter?>(null) }
     var deathActive by remember { mutableStateOf(false) }
     var replayProgress by remember { mutableStateOf<ReplayProgress?>(null) }
@@ -698,11 +704,11 @@ private fun MapScreen(
             onShelterTipAdvance()
         }
         val willShow = !showNearbyShelters
-        showNearbyShelters = willShow
+        onShowNearbySheltersChange(willShow)
         if (!willShow) {
             selectedShelter = null
         } else {
-            shelterZoomTick++
+            onShelterZoomTick()
             // A fix younger than 5 minutes is fine to reuse — repeated toggling in a red
             // alert shouldn't hammer the GPS; the shelter list screen can force a fresh fix.
             val fixAgeMs = lastPreciseFixMs?.let { now - it }
@@ -851,7 +857,7 @@ private fun MapScreen(
                         iconSet = uiState.iconSet,
                         onScaleChange = { scaleMpp = it },
                         onThreatTapped = {
-                            showNearbyShelters = false
+                            onShowNearbySheltersChange(false)
                             selectedShelter = null
                             onThreatTapped(it)
                         },
@@ -879,7 +885,7 @@ private fun MapScreen(
                             shelterSelectTick++
                         },
                         onExitShelterMode = {
-                            showNearbyShelters = false
+                            onShowNearbySheltersChange(false)
                             selectedShelter = null
                         },
                         onDeathActiveChange = { deathActive = it },
@@ -947,7 +953,7 @@ private fun MapScreen(
                             lang = uiState.language,
                             notificationsDisabled = uiState.notificationsDisabledBySystem,
                             onZoneTap = { zone ->
-                                showNearbyShelters = false
+                                onShowNearbySheltersChange(false)
                                 selectedShelter = null
                                 zoomZone = zone
                                 zoomTick++
