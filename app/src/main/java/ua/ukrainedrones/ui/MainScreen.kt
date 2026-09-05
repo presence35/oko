@@ -115,7 +115,6 @@ private val AlertRed = Color(0xFFD32F2F)
 @Composable
 fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsState()
-    val now by viewModel.now.collectAsState()
     val context = LocalContext.current
 
     var screen by remember { mutableStateOf(Screen.MAP) }
@@ -265,7 +264,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             uiState = uiState,
             selection = viewModel.selectionUi,
             selectedThreatId = viewModel.selectedThreatId,
-            now = now,
             settingsOpen = screen == Screen.SETTINGS,
             mapVisible = screen == Screen.MAP && !wizardShown,
             onOpenSettings = openSettings,
@@ -479,7 +477,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                     shelterZoomTick++
                     screen = Screen.MAP
                 },
-                now = now,
                 onBack = { screen = if (sheltersFromSettings) Screen.SETTINGS else Screen.MAP }
             )
         }
@@ -624,7 +621,6 @@ private fun MapScreen(
     uiState: UiState,
     selection: StateFlow<SelectionUi>,
     selectedThreatId: StateFlow<String?>,
-    now: Long,
     settingsOpen: Boolean,
     mapVisible: Boolean,
     onOpenSettings: () -> Unit,
@@ -689,7 +685,9 @@ private fun MapScreen(
     var replayProgress by remember { mutableStateOf<ReplayProgress?>(null) }
     var countdown by remember { mutableStateOf<Int?>(null) }
     var autoStrikeActive by remember { mutableStateOf(false) }
+    var strikeType by remember { mutableStateOf<ThreatType?>(null) }
     var cancelTick by remember { mutableStateOf(0) }
+    var footerHeightPx by remember { mutableStateOf(0) }
 
     // Surface shelter-mode to the ViewModel so the resolved-threat flourish/card is
     // suppressed while the shelter overlay is up.
@@ -723,7 +721,7 @@ private fun MapScreen(
             onShelterZoomTick()
             // A fix younger than 5 minutes is fine to reuse — repeated toggling in a red
             // alert shouldn't hammer the GPS; the shelter list screen can force a fresh fix.
-            val fixAgeMs = lastPreciseFixMs?.let { now - it }
+            val fixAgeMs = lastPreciseFixMs?.let { System.currentTimeMillis() - it }
             if (fixAgeMs == null || fixAgeMs >= 5 * 60_000L) {
                 showToast(
                     s.updatingPreciseGpsToast,
@@ -913,6 +911,7 @@ private fun MapScreen(
                         onReplayProgressChange = { replayProgress = it },
                         onCountdownChange = { countdown = it },
                         onAutoStrikeActiveChange = { autoStrikeActive = it },
+                        onStrikeTypeChange = { strikeType = it },
                         onCancelRequestTick = cancelTick,
                         onFlourishEjected = onFlourishEjected,
                         modifier = Modifier.fillMaxSize()
@@ -948,47 +947,52 @@ private fun MapScreen(
                             .align(Alignment.BottomEnd)
                             .padding(end = 12.dp, bottom = 4.dp)
                     )
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 4.dp),
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        val shelterFocus = uiState.focusLocation
-                        val shelterIndex = uiState.shelterIndex
-                        if (uiState.sheltersEnabled && shelterIndex != null && shelterFocus != null &&
-                            shelterIndex.withinRegion(shelterFocus.lat, shelterFocus.lon)
+                    if (countdown == null && !autoStrikeActive) {
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 4.dp),
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Box(modifier = Modifier.size(width = 16.dp, height = 18.dp))
-                                ShelterCircle(
-                                    alertActive = uiState.focusOblastAlertActive,
-                                    active = showNearbyShelters,
-                                    contentDescription = s.shelterButtonLabel,
-                                    onClick = onToggleShelters,
-                                    onLongClick = onOpenShelters
-                                )
+                            val shelterFocus = uiState.focusLocation
+                            val shelterIndex = uiState.shelterIndex
+                            if (uiState.sheltersEnabled && shelterIndex != null && shelterFocus != null &&
+                                shelterIndex.withinRegion(shelterFocus.lat, shelterFocus.lon)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(modifier = Modifier.size(width = 16.dp, height = 18.dp))
+                                    ShelterCircle(
+                                        alertActive = uiState.focusOblastAlertActive,
+                                        active = showNearbyShelters,
+                                        contentDescription = s.shelterButtonLabel,
+                                        onClick = onToggleShelters,
+                                        onLongClick = onOpenShelters
+                                    )
+                                }
                             }
+                            ZoneButtons(
+                                redArmed = uiState.activeSlowRedArmed || uiState.activeFastRedArmed,
+                                yellowArmed = uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
+                                lang = uiState.language,
+                                notificationsDisabled = uiState.notificationsDisabledBySystem,
+                                onZoneTap = { zone ->
+                                    onShowNearbySheltersChange(false)
+                                    selectedShelter = null
+                                    zoomZone = zone
+                                    zoomTick++
+                                },
+                                onEditZones = openZonesPanel
+                            )
                         }
-                        ZoneButtons(
-                            redArmed = uiState.activeSlowRedArmed || uiState.activeFastRedArmed,
-                            yellowArmed = uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
-                            lang = uiState.language,
-                            notificationsDisabled = uiState.notificationsDisabledBySystem,
-                            onZoneTap = { zone ->
-                                onShowNearbySheltersChange(false)
-                                selectedShelter = null
-                                zoomZone = zone
-                                zoomTick++
-                            },
-                            onEditZones = openZonesPanel
-                        )
                     }
                 }
 
                 Box {
-                    Surface(tonalElevation = 2.dp) {
+                    Surface(
+                        modifier = Modifier.onSizeChanged { footerHeightPx = it.height },
+                        tonalElevation = 2.dp
+                    ) {
                         ThreatStripFooter(
                             inner = uiState.threatsInner,
                             outer = uiState.threatsOuter,
@@ -1004,14 +1008,22 @@ private fun MapScreen(
                             onThreatStripTap = onThreatStripTap
                         )
                     }
-                    if (countdown != null || autoStrikeActive) {
-                        CountdownOverlay(
-                            count = countdown,
-                            tapToCancelLabel = s.tapToCancelLabel,
-                            onCancel = { cancelTick++ }
-                        )
-                    }
                 }
+            }
+
+            if (countdown != null || autoStrikeActive) {
+                val typeLabel = strikeType?.let { t ->
+                    val info = ThreatTypeCatalog.INFO.getValue(t)
+                    if (uiState.language == AppLanguage.UA) info.labelUa else info.labelEn
+                }
+                CountdownOverlay(
+                    count = countdown,
+                    threatTypeLabel = typeLabel,
+                    remainingTotal = uiState.threatsInner.size + uiState.threatsOuter.size,
+                    tapToCancelLabel = s.tapToCancelLabel,
+                    footerHeightPx = footerHeightPx,
+                    onCancel = { cancelTick++ }
+                )
             }
 
             // Threat popup: the full interactive card while a threat is selected, crossfading
@@ -1377,79 +1389,76 @@ private fun ThreatStripFooter(
 }
 
 @Composable
-private fun CountdownOverlay(count: Int?, tapToCancelLabel: String, onCancel: () -> Unit) {
+private fun BoxScope.CountdownOverlay(
+    count: Int?,
+    threatTypeLabel: String?,
+    remainingTotal: Int,
+    tapToCancelLabel: String,
+    footerHeightPx: Int,
+    onCancel: () -> Unit
+) {
     val amber = Color(0xFFF9A825)
-    val scale = remember { Animatable(1.8f) }
-    val alpha = remember { Animatable(0f) }
-    LaunchedEffect(count) {
-        scale.snapTo(1.8f)
-        alpha.snapTo(0f)
-        launch { scale.animateTo(1f, tween(300, easing = FastOutSlowInEasing)) }
-        launch { alpha.animateTo(1f, tween(150)) }
-    }
+    val density = LocalDensity.current
+    val overlayH = with(density) { (footerHeightPx * 1.5f).toDp().coerceAtLeast(48.dp) }
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .align(Alignment.BottomCenter)
+            .height(overlayH)
             .background(if (count != null) Color.Black.copy(alpha = 0.85f) else Color.Transparent)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onCancel
             )
-            .padding(vertical = 14.dp)
     ) {
         if (count != null) {
-            // Countdown phase: reticle + number centered; the footer text is hidden by the
-            // dark backdrop, replaced by the targeting lock. During the death animation the
+            // Countdown phase: dark strip with "3 2 1" (the active digit highlighted) and a
+            // thin line naming the target + remaining total. During the death animation the
             // backdrop is transparent so the footer's "Neutralizing threat…" stays visible.
-            Canvas(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .size(48.dp)
-                    .graphicsLayer { scaleX = scale.value; scaleY = scale.value; this.alpha = alpha.value }
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                val sw = 2.dp.toPx()
-                val inset = 4.dp.toPx()
-                val len = 12.dp.toPx()
-                val w = size.width
-                val h = size.height
-                // top-left
-                drawLine(amber, Offset(inset, inset), Offset(inset + len, inset), sw)
-                drawLine(amber, Offset(inset, inset), Offset(inset, inset + len), sw)
-                // top-right
-                drawLine(amber, Offset(w - inset, inset), Offset(w - inset - len, inset), sw)
-                drawLine(amber, Offset(w - inset, inset), Offset(w - inset, inset + len), sw)
-                // bottom-left
-                drawLine(amber, Offset(inset, h - inset), Offset(inset + len, h - inset), sw)
-                drawLine(amber, Offset(inset, h - inset), Offset(inset, h - inset - len), sw)
-                // bottom-right
-                drawLine(amber, Offset(w - inset, h - inset), Offset(w - inset - len, h - inset), sw)
-                drawLine(amber, Offset(w - inset, h - inset), Offset(w - inset, h - inset - len), sw)
-                // crosshair lines
-                val cx = w / 2
-                val cy = h / 2
-                val gap = 6.dp.toPx()
-                val arm = 8.dp.toPx()
-                drawLine(amber, Offset(cx - gap - arm, cy), Offset(cx - gap, cy), sw)
-                drawLine(amber, Offset(cx + gap, cy), Offset(cx + gap + arm, cy), sw)
-                drawLine(amber, Offset(cx, cy - gap - arm), Offset(cx, cy - gap), sw)
-                drawLine(amber, Offset(cx, cy + gap), Offset(cx, cy + gap + arm), sw)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    for (n in 3 downTo 1) {
+                        val active = n == count
+                        val dim by animateFloatAsState(
+                            if (active) 1f else 0.35f,
+                            tween(200), label = "cdDim$n"
+                        )
+                        val grow by animateFloatAsState(
+                            if (active) 1f else 0.8f,
+                            tween(200), label = "cdGrow$n"
+                        )
+                        Text(
+                            text = "$n",
+                            color = amber.copy(alpha = dim),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.graphicsLayer { scaleX = grow; scaleY = grow }
+                        )
+                    }
+                }
+                if (threatTypeLabel != null) {
+                    Text(
+                        text = "$threatTypeLabel · $remainingTotal",
+                        color = Color.White.copy(alpha = 0.75f),
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
             }
-            Text(
-                text = "$count",
-                color = amber,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .graphicsLayer { scaleX = scale.value; scaleY = scale.value; this.alpha = alpha.value }
-            )
         }
         // Edge hint — the whole strip is tappable.
         Text(
             text = tapToCancelLabel,
             color = amber,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 16.dp)
@@ -1499,20 +1508,20 @@ internal fun ScaleIndicator(metersPerPixel: Double, lang: AppLanguage, modifier:
     val label = if (chosen >= 1000.0) "${(chosen / 1000.0).roundToInt()} ${s.kmUnit}"
     else "${chosen.roundToInt()} ${s.meterUnit}"
 
-    // Google-Maps-style scale: label above a thin alternating bar. The label is drawn
-    // in a bold white font (no background) so it stays readable over the map tiles.
+    // Google-Maps-style scale: label above a thin alternating bar. Muted white (same as the
+    // CARTO attribution) so the pair stays balanced and subtle over the map tiles.
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             label,
             style = MaterialTheme.typography.labelLarge.copy(
-                color = Color.White,
+                color = Color.White.copy(alpha = 0.40f),
                 fontWeight = FontWeight.Bold
             )
         )
         Spacer(Modifier.height(3.dp))
         Row(
             modifier = Modifier
-                .border(width = 1.dp, color = Color.White)
+                .border(width = 1.dp, color = Color.White.copy(alpha = 0.40f))
                 .height(3.dp)
                 .width(barDp)
         ) {
@@ -1524,7 +1533,7 @@ internal fun ScaleIndicator(metersPerPixel: Double, lang: AppLanguage, modifier:
                         .height(3.dp)
                         .background(
                             if (i % 2 == 0) Color.Black
-                            else Color.White
+                            else Color.White.copy(alpha = 0.40f)
                         )
                 )
             }

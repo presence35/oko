@@ -205,6 +205,15 @@ private fun shouldOrbitFocus(nt: NormalizedThreat, focus: LatLng?, yellowKm: Int
     return distanceFlat(focus.lat, focus.lon, nt.lat, nt.lon) / 1000.0 <= yellowKm
 }
 
+/**
+ * Marker rotation that points a threat icon's nose along [courseDeg] (compass bearing, clockwise
+ * from north) given the icon art's baked-in facing [baseDeg]. osmdroid renders `marker.rotation`
+ * negated (its `Marker.draw` passes `-mBearing` into `Canvas.rotate`), so the rotation must be the
+ * negative of the compass offset — otherwise east/west courses render mirrored (icon flying tail-first).
+ */
+internal fun threatMarkerRotation(courseDeg: Float, baseDeg: Float): Float =
+    -((courseDeg - baseDeg + 360f) % 360f)
+
 /** Threat marker icon at a size that scales with zoom. When [revealed], draws a small
  *  green dot in the icon's top-right corner — the notification-reveal marker — so it's a single
  *  tappable marker (no separate overlay intercepting the tap) that moves with the threat. */
@@ -525,6 +534,7 @@ fun NeptunMapView(
     onReplayProgressChange: (ReplayProgress?) -> Unit = {},
     onCountdownChange: (Int?) -> Unit = {},
     onAutoStrikeActiveChange: (Boolean) -> Unit = {},
+    onStrikeTypeChange: (ThreatType?) -> Unit = {},
     onCancelRequestTick: Int = 0,
     onFlourishEjected: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -590,6 +600,11 @@ fun NeptunMapView(
     val markerRefs = remember { mutableStateOf<MutableMap<String, Marker>>(mutableMapOf()) }
     val markerIconDp = remember { mutableStateOf<MutableMap<String, Int>>(mutableMapOf()) }
     val hiddenByDeath = remember { mutableStateOf<MutableSet<String>>(mutableSetOf()) }
+    // Per-threat glide tween jobs; each new tick cancels the previous glide and re-targets.
+    val tweenJobs = remember { mutableMapOf<String, Job>() }
+    // True while a finger is on the map: freeze dead-reckon glides so icons stay rigidly
+    // ground-fixed while panning instead of sliding along with the gesture.
+    val mapTouching = remember { mutableStateOf(false) }
     val pausedState by rememberUpdatedState(paused)
     val mapVisibleState by rememberUpdatedState(mapVisible)
     val alertActiveState by rememberUpdatedState(uiState.alertActive)
@@ -695,6 +710,20 @@ fun NeptunMapView(
                 overlayManager.tilesOverlay.setLoadingBackgroundColor(Color.BLACK)
                 overlayManager.tilesOverlay.setLoadingLineColor(Color.BLACK)
                 setMultiTouchControls(true)
+                // Observe-only: never consumes (returns false), so osmdroid's own gesture
+                // pipeline (pan/zoom/double-tap) is untouched. Just freezes the glide tweens
+                // for the duration of a touch so icons don't slide along with the finger.
+                setOnTouchListener { _, event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            mapTouching.value = true
+                            tweenJobs.values.forEach { it.cancel() }
+                            tweenJobs.clear()
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> mapTouching.value = false
+                    }
+                    false
+                }
                 // No +/– buttons — everyone uses pinch. Contours stay clean on the map.
                 setBuiltInZoomControls(false)
                 // Cap normal zoom at the ~5 km viewport level; deep zoom (street-level shelter
@@ -876,14 +905,17 @@ fun NeptunMapView(
             } else if (deathFx.isActive) {
                 // A death animation is mid-flight: defer the clear+rebuild until it finishes.
                 // clearing mapView.overlays (of which deathFx is a member) while the 16ms
-                // invalidate loop is drawing can race the overlay list. The 1s UI-state tick
-                // recomposes this update block, so the deferred rebuild fires right after.
+                // invalidate loop is drawing can race the overlay list. The death-active flow
+                // flips false when the show ends, which recomposes this update block and fires
+                // the deferred rebuild.
             } else {
                 lastOverlayKey.value = overlayKey
 
                 mapView.overlays.clear()
                 markerRefs.value.clear()
                 markerIconDp.value.clear()
+                tweenJobs.values.forEach { it.cancel() }
+                tweenJobs.clear()
 
                 // Bottom-most overlay: single-tap on empty map closes the popup, while
                 // markers added after it keep tap priority. Long-press is handled by the
@@ -1019,7 +1051,7 @@ fun NeptunMapView(
                         rotation = if (nt.areaOnly) 0f else {
                             val course = engine.courseDeg(nt).toFloat()
                             val base = IconCatalog.baseDeg(t.type.toThreatType(), iconSet)
-                            (course - base + 360f) % 360f
+                            threatMarkerRotation(course, base)
                         }
                         // Instant taps are handled by InstantThreatTapOverlay (onSingleTapUp,
                         // no double-tap wait). This listener only absorbs osmdroid's late
@@ -1257,7 +1289,7 @@ fun NeptunMapView(
                         val markerAlpha = marker.alpha ?: 1f
                         val followBullet = followBulletState
                         val pressedId = r.id
-                        deathFx.startAutoCountdown {
+                        deathFx.startAutoCountdown(r.type) {
                             // Countdown finished — unhook the marker, fire the strike.
                             mapViewRef.value?.overlays?.remove(marker)
                             markerRefs.value.entries.removeAll { it.value === marker }
@@ -1338,6 +1370,11 @@ fun NeptunMapView(
             deathFx.autoStrikeActive.collect { active -> onAutoStrikeActiveChange(active) }
         }
 
+        // Surface the threat type being targeted by the auto-countdown.
+        LaunchedEffect(Unit) {
+            deathFx.strikeType.collect { type -> onStrikeTypeChange(type) }
+        }
+
         // User tapped the footer stop overlay: cancel the countdown, or eject the in-flight
         // animation, depending on which phase the auto-strike is in.
         LaunchedEffect(onCancelRequestTick) {
@@ -1404,7 +1441,7 @@ fun NeptunMapView(
     // without clearing the whole map. Only invalidates when something actually moved.
     LaunchedEffect(Unit) {
         while (true) {
-            delay(3000)
+            delay(1000)
             // The map is fully hidden behind Settings — skip the marker smoothing to save battery.
             if (pausedState) continue
             val mapView = mapViewRef.value ?: continue
@@ -1413,6 +1450,7 @@ fun NeptunMapView(
             // Icon sizing is handled by the zoom listener (resizeThreatIcons) — not here.
             val ring = newRingState.value
             for (t in mapThreatsState) {
+                if (mapTouching.value) continue
                 val marker = markerRefs.value[t.id] ?: continue
                 if (t.id in hiddenByDeath.value) continue
                 val nt = t
@@ -1427,7 +1465,7 @@ fun NeptunMapView(
                 val targetRot = if (nt.areaOnly) 0f else {
                     val course = engine.courseDeg(nt).toFloat()
                     val base = IconCatalog.baseDeg(t.type.toThreatType(), iconSetState)
-                    (course - base + 360f) % 360f
+                    threatMarkerRotation(course, base)
                 }
                 if (marker.rotation != targetRot) {
                     marker.rotation = targetRot
@@ -1446,8 +1484,25 @@ fun NeptunMapView(
                 if (cur != null &&
                     distanceFlat(cur.latitude, cur.longitude, targetPos.lat, targetPos.lon) > 1.0
                 ) {
-                    marker.position = GeoPoint(targetPos.lat, targetPos.lon)
-                    dirty = true
+                    // Glide the marker from where it is to the dead-reckoned target instead of
+                    // teleporting: dead-reckoning is linear in time (constant heading + speed,
+                    // horizon-capped), so a linear tween reproduces the true path between the
+                    // sparse ticks. ~30fps for a second, invalidating only when this marker moved.
+                    val from = LatLng(cur.latitude, cur.longitude)
+                    tweenJobs[t.id]?.cancel()
+                    tweenJobs[t.id] = mapScope.launch {
+                        val steps = 30
+                        for (i in 1..steps) {
+                            if (pausedState) return@launch
+                            delay((1000 / steps).toLong())
+                            val f = i / steps.toFloat()
+                            marker.position = GeoPoint(
+                                from.lat + (targetPos.lat - from.lat) * f,
+                                from.lon + (targetPos.lon - from.lon) * f
+                            )
+                            mapView.invalidate()
+                        }
+                    }
                 }
             }
             if (dirty) mapView.invalidate()

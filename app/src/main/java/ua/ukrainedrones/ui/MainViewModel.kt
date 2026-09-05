@@ -246,12 +246,6 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     private val neptunForUi = combine(connectionStateFlow, threatsFlow, alertsFlow) { cs, t, a ->
         Triple(cs, t, a)
     }.sample(120)
-    /** Wall-clock epoch millis, updated once per second. UI components that need a live
-     *  timestamp (shelter fix age) collect this instead of reading it from UiState —
-     *  removing it from UiState lets StateFlow dedup no-op ticks. */
-    val now: StateFlow<Long> = MutableStateFlow(System.currentTimeMillis()).also { it ->
-        viewModelScope.launch { while (isActive) { delay(1000); it.value = System.currentTimeMillis() } }
-    }
     /** Last NEPTUN frame timestamp, derived from the connection state. Collected by the
      *  connection status sheet to show "last update Xs ago" without polluting UiState. */
     val lastFrameAt: Flow<Long> = connectionStateFlow.map { cs ->
@@ -419,7 +413,6 @@ val fastGroupCollapsed: Boolean,
         val showMapScale: Boolean,
         val showMediumCities: Boolean,
         val showSmallCities: Boolean,
-        val fillAlertRegions: Boolean,
         val deathAnimationEnabled: Boolean,
         val followBullet: Boolean,
         val neutralizedTallyEnabled: Boolean,
@@ -430,7 +423,8 @@ val fastGroupCollapsed: Boolean,
         val criticalOfflineOverride: Boolean,
         val criticalOfflineBypassSilent: Boolean,
         val flybyAnimationEnabled: Boolean,
-        val justFunMasterEnabled: Boolean
+        val justFunMasterEnabled: Boolean,
+        val fillAlertRegions: Boolean
     )
 
     private val liveSnapshot = combine(
@@ -659,7 +653,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         prefsSnapshot,
         updateUiFlow,
         shelterIndexFlow,
-        now,
         flybyFlow,
         MonitoringStatus.running,
         prefs.bootRestartEnabled()
@@ -668,10 +661,13 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val prefs = values[2] as PrefsSnapshot
         val updateUi = values[3] as UpdateUi
         val shelterIndex = values[4] as ShelterIndex?
-        val now = values[5] as Long
-        val flyby = values[6] as AviationFlybyShow?
-        val monitoringRunning = values[7] as Boolean
-        val bootRestartEnabled = values[8] as Boolean
+        val flyby = values[5] as AviationFlybyShow?
+        val monitoringRunning = values[6] as Boolean
+        val bootRestartEnabled = values[7] as Boolean
+        // No 1s wall-clock flow: the model rebuild is event-driven, so stamp the build time
+        // here. Per-second visuals (staleness dimming, marker motion) live in MapView's own
+        // 1s loop; ghost/night freshness re-arms on the next frame or pref change.
+        val now = System.currentTimeMillis()
         val nightActive = isNightActive(
             NightConfig(prefs.night.window.enabled, prefs.night.window.startMin, prefs.night.window.endMin),
             now

@@ -87,6 +87,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -359,8 +360,8 @@ fun LogsDropDownSheet(
                     }
                 }
             }
-            if (filter == LogsFilter.TESTS) {
-                item(key = "testoem") {
+            if (filter == LogsFilter.SYSTEM) {
+                item(key = "oemsim") {
                     OemSimButton(context, s)
                 }
             }
@@ -369,19 +370,23 @@ fun LogsDropDownSheet(
                     SourcesList(s, now)
                 }
             }
+            if (filter == LogsFilter.TESTS) {
+                item(key = "tests") {
+                    SourceTestsList(s, now)
+                }
+            }
             if (filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty()) {
                 item(key = "retrylog") {
                     RetryLogCard(connEvents, connRetry, s, now) { ConnectionHolder.getSupervisor(context).dismissLogCard() }
                 }
             }
-            if (visible.isEmpty() && !(filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty())) {
+            if (visible.isEmpty() && filter != LogsFilter.SOURCES && filter != LogsFilter.TESTS
+                && !(filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty())) {
                 item {
                     Text(
                         when (filter) {
                             LogsFilter.CONNECTIONS -> s.logsEmptyConnections
-                            LogsFilter.SOURCES -> s.logsEmptySources
                             LogsFilter.SYSTEM -> s.apiSystemEmpty
-                            LogsFilter.TESTS -> s.logsEmptyConnections
                             else -> s.debugLogEmpty
                         },
                         style = MaterialTheme.typography.bodyLarge,
@@ -1303,6 +1308,97 @@ private fun SourcesList(s: Strings.StringSet, now: Long) {
             )
             events.forEach { ev ->
                 SourceEventRow(ev, s, now)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SourceTestsList(s: Strings.StringSet, now: Long) {
+    val registry = AppPluginHolder.registry
+    val plugins by registry.plugins.collectAsState()
+    val scope = rememberCoroutineScope()
+    val results = remember { mutableStateMapOf<String, Pair<Long, SourceTestResult>>() }
+    val running = remember { mutableStateMapOf<String, Boolean>() }
+
+    fun run(plugin: ThreatSource) {
+        if (running[plugin.id] == true) return
+        running[plugin.id] = true
+        scope.launch {
+            val r = plugin.testConnection()
+            results[plugin.id] = System.currentTimeMillis() to r
+            running[plugin.id] = false
+        }
+    }
+
+    LaunchedEffect(plugins) {
+        plugins.forEach { run(it) }
+    }
+
+    if (plugins.isEmpty()) {
+        Text(
+            s.logsEmptySources,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp, horizontal = 24.dp)
+        )
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        plugins.forEach { plugin ->
+            val result = results[plugin.id]
+            val busy = running[plugin.id] == true
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF252525))
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        plugin.name,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    when {
+                        busy -> Text(
+                            s.sourceTestRunning,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        result != null -> {
+                            Text(
+                                result.second.summary,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (result.second.ok) DebugGreen else DebugRed
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                formatAlertAge(now, result.first, s),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        else -> Text(
+                            "…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                TextButton(
+                    onClick = { run(plugin) },
+                    enabled = !busy
+                ) {
+                    Text(if (busy) "…" else s.sourceTestLabel)
+                }
             }
         }
     }

@@ -63,7 +63,6 @@ fun ShelterScreen(
     sheltersEnabled: Boolean,
     onSheltersEnabledChange: (Boolean) -> Unit,
     onShowOnMap: () -> Unit,
-    now: Long,
     onBack: () -> Unit
 ) {
     val s = Strings.get(lang)
@@ -72,6 +71,16 @@ fun ShelterScreen(
     val lastPreciseFixMs by LocationTracker.lastPreciseFixAtMs.collectAsState()
     val trackerRefreshing by LocationTracker.isRefreshing.collectAsState()
     var gpsRefreshing by remember { mutableStateOf(false) }
+    // GPS-fix age only matters while this screen is open; tick a local clock here instead
+    // of a global ViewModel timer so the map never recomposes on a dead second. 10s is
+    // plenty — the label only changes on minute boundaries.
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(10_000)
+            now = System.currentTimeMillis()
+        }
+    }
 
     // Reset GPS spinner when a new fix arrives or tracker finishes
     LaunchedEffect(lastFixMs, trackerRefreshing) {

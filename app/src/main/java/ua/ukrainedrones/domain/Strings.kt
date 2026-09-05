@@ -309,6 +309,7 @@ object Strings {
         val sourceFallbackLabel: String,
         val sourceEnabledLabel: String,
         val sourceTestLabel: String,
+        val sourceTestRunning: String,
         val sourceActivityLabel: String,
         val debugLogSoundOverride: String,
         val debugLogSoundFollows: String,
@@ -953,6 +954,7 @@ object Strings {
         val sourceFallbackLabel: String get() = misc.sourceFallbackLabel
         val sourceEnabledLabel: String get() = misc.sourceEnabledLabel
         val sourceTestLabel: String get() = misc.sourceTestLabel
+        val sourceTestRunning: String get() = misc.sourceTestRunning
         val sourceActivityLabel: String get() = misc.sourceActivityLabel
         val debugLogSoundOverride: String get() = misc.debugLogSoundOverride
         val debugLogSoundFollows: String get() = misc.debugLogSoundFollows

@@ -23,7 +23,11 @@ class CitiesTest {
                     assertTrue("same name '$name' too close: ${a.nameUa} vs ${b.nameUa}", km >= 20.0)
                 }
             }
-            assertEquals("name lookups must resolve to the largest holder", group.maxByOrNull { it.pop }, Cities.byUa[name])
+            assertEquals(
+                "name lookups must resolve to the major holder when one exists, else the largest",
+                group.firstOrNull { it.major } ?: group.maxByOrNull { it.pop },
+                Cities.byUa[name]
+            )
             assertTrue(Cities.uaToEn[name]!!.isNotBlank())
             assertTrue(Cities.cityOblast.containsKey(name))
         }

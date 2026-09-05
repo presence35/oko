@@ -16,6 +16,7 @@ import ua.ukrainedrones.engine.NEPTUN_TYPES
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.OperationalMode
 import ua.ukrainedrones.engine.PluginConnectionState
+import ua.ukrainedrones.engine.SourceTestResult
 import ua.ukrainedrones.engine.SourceType
 import ua.ukrainedrones.engine.ThreatProps
 import ua.ukrainedrones.engine.ThreatSource
@@ -73,6 +74,24 @@ class NeptunPlugin(private val client: NeptunConnectionClient) : ThreatSource {
     override fun setEnabled(enabled: Boolean) {
         _enabled.value = enabled
         if (enabled) client.start() else client.stop()
+    }
+
+    override suspend fun testConnection(): SourceTestResult {
+        val state = _connectionState.value
+        if (state != PluginConnectionState.CONNECTED) {
+            return SourceTestResult(false, "connection: $state")
+        }
+        val now = System.currentTimeMillis()
+        val socketAgeMs = client.lastSocketFrame.value
+        val threatAgeMs = client.lastValidThreatUpdate.value
+        val parts = mutableListOf("connected")
+        if (threatAgeMs > 0L) {
+            parts += "threats ${_threats.value.size} · data ${(now - threatAgeMs) / 1000}s old"
+        } else if (socketAgeMs > 0L) {
+            parts += "socket ${(now - socketAgeMs) / 1000}s old"
+        }
+        parts += "alerts ${_alerts.value.size}"
+        return SourceTestResult(true, parts.joinToString(" · "))
     }
 
     private fun mapConnectionState(state: ConnectionState): PluginConnectionState = when {

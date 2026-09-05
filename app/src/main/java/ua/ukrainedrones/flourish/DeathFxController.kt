@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.TileSystem
@@ -31,7 +32,7 @@ private val UA_MAX_LON = UA_TIGHT_MAX_LON
 private const val REPLAY_PAN_BEAT_MS = 120L
 
 /** Fixed zoom level during a single strike — wide enough to see the projectile path. */
-private const val STRIKE_ZOOM_LEVEL = 11.0
+private const val STRIKE_ZOOM_LEVEL = 10.0
 
 /**
  * Map-side flourish facade: owns the death-animation overlay plus everything that drives it —
@@ -72,6 +73,10 @@ class DeathFxController(
      *  a "tap to stop" strip over the footer for the whole duration. */
     private val _autoStrikeActive = MutableStateFlow(false)
     val autoStrikeActive: StateFlow<Boolean> = _autoStrikeActive.asStateFlow()
+
+    /** The threat type being targeted while an auto-countdown runs — null once it fires. */
+    private val _strikeType = MutableStateFlow<ThreatType?>(null)
+    val strikeType: StateFlow<ThreatType?> = _strikeType.asStateFlow()
 
     private val _replayProgress = MutableStateFlow<ReplayProgress?>(null)
     /** During the tally-tap replay: per-group position for the footer copy + overall position
@@ -117,18 +122,23 @@ class DeathFxController(
      * countdown reaches zero. A new countdown replaces any in-flight one (latest wins).
      * Tap-to-cancel: call [cancelAutoCountdown].
      */
-    fun startAutoCountdown(onFire: () -> Unit) {
+    fun startAutoCountdown(type: ThreatType?, onFire: () -> Unit) {
         countdownJob?.cancel()
         pendingAutoStrike = onFire
+        _strikeType.value = type
         countdownJob = scope.launch {
             for (n in 3 downTo 1) {
                 _countdown.value = n
                 delay(1000L)
             }
             _countdown.value = null
+            _strikeType.value = null
             _autoStrikeActive.value = true
             pendingAutoStrike?.invoke()
             pendingAutoStrike = null
+            // Wait for the death animation to finish naturally, then drop the active flag.
+            overlay.active.first { !it }
+            _autoStrikeActive.value = false
         }
     }
 
@@ -138,6 +148,7 @@ class DeathFxController(
         countdownJob = null
         pendingAutoStrike = null
         _countdown.value = null
+        _strikeType.value = null
         _autoStrikeActive.value = false
     }
 
@@ -255,7 +266,7 @@ class DeathFxController(
         // A group spans about a third of the current viewport width — zoomed in, groups are
         // tight; zoomed out, everything clusters.
         val mpp = TileSystem.GroundResolution(mapView.mapCenter.latitude, mapView.zoomLevelDouble)
-        val groupDist = mpp * mapView.width * 0.33f
+        val groupDist = mpp * mapView.width * 0.45f
         val groups = clusterFlourish(records, groupDist.toDouble())
         DebugLog.recordFlourish(
             DebugLogReason.FIRED,
