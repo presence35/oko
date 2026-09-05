@@ -576,6 +576,7 @@ fun NeptunMapView(
             append('O').append(uiState.focusOblastAlertActive)
             append('M').append(uiState.showMediumCities)
             append('N').append(uiState.showSmallCities)
+            append('K').append(uiState.fillAlertRegions)
             append('S').append(showNearbyShelters)
             if (showNearbyShelters) {
                 append('L').append(selectedShelter?.shelter?.id)

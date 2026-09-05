@@ -271,8 +271,8 @@ fun OblastAlert.inOblast(token: String): Boolean {
 fun OblastAlert.isOblastWide(): Boolean {
     val k = key.lowercase()
     val n = name.lowercase()
-    return k.endsWith("область") || n.endsWith("область") ||
-        k.endsWith("республіка") || n.endsWith("республіка")
+    return k.contains("область") || n.contains("область") ||
+        k.contains("республіка") || n.contains("республіка")
 }
 
 /**
