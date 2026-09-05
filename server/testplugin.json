@@ -1,0 +1,10 @@
+{
+  "script": [
+    { "at": 0, "burst": { "types": ["shahed", "cruise"], "count": 3, "minKm": 60, "maxKm": 250, "aimAtFocus": true } },
+    { "at": 5000, "aviation": { "km": 150 } },
+    { "at": 20000, "burst": { "types": ["recon", "fpv"], "count": 4, "minKm": 20, "maxKm": 90, "aimAtFocus": true } },
+    { "at": 40000, "alerts": [ { "key": "луганська", "name": "Луганська область", "oblast": "Луганська область" } ] },
+    { "at": 60000, "burst": { "types": ["ballistic"], "count": 1, "minKm": 200, "maxKm": 400, "aimAtFocus": false } },
+    { "at": 90000, "clearAlerts": true }
+  ]
+}

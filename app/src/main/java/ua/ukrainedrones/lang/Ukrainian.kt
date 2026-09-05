@@ -580,7 +580,7 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         nightEnabledPrefix = "Увімкнено · ",
         nightSirenSuffix = " · Сирена завжди",
         nightZonesSuffix = " · Нічні зони",
-        alertsOfficialPrefix = "Офіційні: ",
+        alertsOfficialPrefix = "Офіційні: %s",
         alertsSirenOverride = "Сирена завжди: УВІМК",
         onWord = "УВІМК",
         offWord = "ВИМК",
@@ -592,6 +592,7 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         threatsHiddenMapFormat = "Приховано на мапі: %d",
         threatsSilencedFormat = "Без звуку: %d",
         selfLanguageName = "Українська",
+        iconsLabel = "іконки",
     ),
     wordForms = Strings.WordForms(
         sources = listOf("джерело", "джерела", "джерел"),

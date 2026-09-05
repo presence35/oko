@@ -239,17 +239,51 @@ data class OblastAlert(
     val since: String?
 )
 
+/** True when [token] appears in [text] delimited by word boundaries (no regex allocation). */
+private fun containsWord(text: String, token: String): Boolean {
+    var idx = text.indexOf(token, ignoreCase = true)
+    while (idx >= 0) {
+        val before = idx == 0 || !text[idx - 1].isLetterOrDigit()
+        val after = idx + token.length >= text.length || !text[idx + token.length].isLetterOrDigit()
+        if (before && after) return true
+        idx = text.indexOf(token, idx + 1, ignoreCase = true)
+    }
+    return false
+}
+
 /** True when the official alert belongs to the oblast whose adjectival stem is [token]. */
-fun OblastAlert.inOblast(token: String): Boolean =
-    oblast.startsWith(token, ignoreCase = true) || name.startsWith(token, ignoreCase = true)
+fun OblastAlert.inOblast(token: String): Boolean {
+    val t = token.trim()
+    if (t.isEmpty()) return false
+    // Prefix match handles "Харківськ" → "Харківська область"; a whole-word match handles
+    // Crimea ("Крим" in "Автономна Республіка Крим") and short stems.
+    return oblast.startsWith(t, ignoreCase = true) || name.startsWith(t, ignoreCase = true) ||
+        containsWord(oblast, t) || containsWord(name, t)
+}
+
+/**
+ * True when the alert names the whole oblast (or autonomous republic) rather than a single
+ * city/raion. Oblast-wide alerts cover every city in the region: e.g. "Луганська область" or
+ * "Автономна Республіка Крим" ring/lit the whole stem, not just the seat. Checks only the
+ * alert's own region designation ([key]/[name]) — the `oblast` field of a raion alert names
+ * its parent oblast, so it must never count here.
+ */
+fun OblastAlert.isOblastWide(): Boolean {
+    val k = key.lowercase()
+    val n = name.lowercase()
+    return k.endsWith("область") || n.endsWith("область") ||
+        k.endsWith("республіка") || n.endsWith("республіка")
+}
 
 /**
  * True when the official alert actually covers the focus city, for the "City alerts" scope.
  * NEPTUN's raion-level entries name the district (e.g. "Одеський район") while the city is
  * "Одеса" — Ukrainian adjectival stems drop the ending, so we match on a shared 4-char stem
  * rather than exact substring (a safety app may over-ring a neighbouring city, never miss one).
+ * Oblast-wide alerts ([OblastAlert.isOblastWide]) cover every city, so they return true here.
  */
 fun OblastAlert.coversCity(cityUa: String): Boolean {
+    if (isOblastWide()) return true
     val c = cityUa.trim().lowercase()
     if (c.length < 4) return c.isNotEmpty() &&
         (key.lowercase().contains(c) || name.lowercase().contains(c))

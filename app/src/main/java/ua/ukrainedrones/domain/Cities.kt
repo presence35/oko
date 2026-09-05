@@ -17,6 +17,10 @@ import org.osmdroid.views.overlay.Overlay
  *  everything else only up close. */
 enum class CityTier { MAJOR, MEDIUM, MINOR }
 
+/** Progressive reveal within the MAJOR tier: the top-5 overview set always shows at the
+ *  zoomed-out country view; MID majors appear once you zoom in; the rest only up close. */
+enum class MajorReveal { OVERVIEW, MID, LATE }
+
 /** A place name drawn on the map. Tier controls when the label appears ([CityLabelOverlay]). */
 @Immutable
 data class City(
@@ -25,7 +29,8 @@ data class City(
     val lon: Double,
     val tier: CityTier = CityTier.MINOR,
     val pop: Int = 0,
-    val nameEn: String = Transliteration.transliterate(nameUa)
+    val nameEn: String = Transliteration.transliterate(nameUa),
+    val reveal: MajorReveal = MajorReveal.LATE
 ) {
     /** Attribution/banner/pin-picker eligibility — always MAJOR-only (see [Cities.nearestCity]). */
     val major: Boolean get() = tier == CityTier.MAJOR
@@ -47,7 +52,7 @@ object Cities {
 
     private val REGIONS: List<Region> = listOf(
         Region("Київськ", listOf(
-            City("Київ", 50.4501, 30.5234, CityTier.MAJOR),
+            City("Київ", 50.4501, 30.5234, CityTier.MAJOR, reveal = MajorReveal.OVERVIEW),
             City("Біла Церква", 49.7954, 30.1167, CityTier.MEDIUM),
             City("Бровари", 50.5184, 30.7908),
             City("Бориспіль", 50.3506, 30.9553),
@@ -85,7 +90,7 @@ object Cities {
             City("Чайки", 50.4303, 30.2838, pop = 12000), // pop ~12000
         )),
         Region("Одеськ", listOf(
-            City("Одеса", 46.4825, 30.7233, CityTier.MAJOR),
+            City("Одеса", 46.4825, 30.7233, CityTier.MAJOR, reveal = MajorReveal.OVERVIEW),
             City("Чорноморськ", 46.3036, 30.6566),
             City("Південне", 46.6226, 31.1014),
             City("Білгород-Дністровський", 46.1947, 30.3484),
@@ -110,7 +115,7 @@ object Cities {
             City("Черемушки", 46.4325, 30.7115),
         )),
         Region("Львівськ", listOf(
-            City("Львів", 49.8397, 24.0297, CityTier.MAJOR),
+            City("Львів", 49.8397, 24.0297, CityTier.MAJOR, reveal = MajorReveal.OVERVIEW),
             City("Дрогобич", 49.3500, 23.5050),
             City("Стрий", 49.2620, 23.8500),
             City("Самбір", 49.5180, 23.1970),
@@ -136,8 +141,8 @@ object Cities {
             City("Стебник", 49.301, 23.552, pop = 20200), // pop ~20200
         )),
         Region("Дніпропетровськ", listOf(
-            City("Дніпро", 48.4647, 35.0462, CityTier.MAJOR),
-            City("Кривий Ріг", 47.9105, 33.3918, CityTier.MAJOR),
+            City("Дніпро", 48.4647, 35.0462, CityTier.MAJOR, reveal = MajorReveal.OVERVIEW),
+            City("Кривий Ріг", 47.9105, 33.3918, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Кам'янське", 48.5147, 34.6102, CityTier.MEDIUM),
             City("Нікополь", 47.5720, 34.3580, CityTier.MEDIUM),
             City("Павлоград", 48.5170, 35.8730),
@@ -162,7 +167,7 @@ object Cities {
             City("Таромське", 48.4428, 34.7885, pop = 13289), // pop ~13289
         )),
         Region("Харківськ", listOf(
-            City("Харків", 49.9935, 36.2304, CityTier.MAJOR),
+            City("Харків", 49.9935, 36.2304, CityTier.MAJOR, reveal = MajorReveal.OVERVIEW),
             City("Чугуїв", 49.8370, 36.9390),
             City("Лозова", 48.8890, 36.3900),
             City("Ізюм", 49.2090, 37.2520),
@@ -185,7 +190,7 @@ object Cities {
             City("Солоницівка", 49.9968, 36.0346, pop = 12378), // pop ~12378
         )),
         Region("Запорізьк", listOf(
-            City("Запоріжжя", 47.8388, 35.1396, CityTier.MAJOR),
+            City("Запоріжжя", 47.8388, 35.1396, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Мелітополь", 46.8380, 35.3600, CityTier.MEDIUM),
             City("Бердянськ", 46.7540, 36.7890),
             City("Енергодар", 47.4980, 34.6560),
@@ -204,7 +209,7 @@ object Cities {
             City("Якимівка", 46.7011, 35.1633, pop = 11069), // pop ~11069
         )),
         Region("Вінницьк", listOf(
-            City("Вінниця", 49.2331, 28.4682, CityTier.MAJOR),
+            City("Вінниця", 49.2331, 28.4682, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Жмеринка", 49.0370, 28.1130),
             City("Могилів-Подільський", 48.4470, 27.7980),
             City("Хмільник", 49.5540, 27.9580),
@@ -223,7 +228,7 @@ object Cities {
             City("Ямпіль", 48.2406, 28.2814, pop = 10957), // pop ~10957
         )),
         Region("Миколаївськ", listOf(
-            City("Миколаїв", 46.9750, 31.9946, CityTier.MAJOR),
+            City("Миколаїв", 46.9750, 31.9946, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Вознесенськ", 47.5653, 31.3311),
             City("Первомайськ", 48.0446, 30.8506),
             City("Южноукраїнськ", 47.8150, 31.1780),
@@ -237,7 +242,7 @@ object Cities {
             City("Нова Одеса", 47.3127, 31.7697, pop = 13547), // pop ~13547
         )),
         Region("Херсонськ", listOf(
-            City("Херсон", 46.6354, 32.6169, CityTier.MAJOR),
+            City("Херсон", 46.6354, 32.6169, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Нова Каховка", 46.7560, 33.3850),
             City("Каховка", 46.7980, 33.4760),
             City("Генічеськ", 46.1750, 34.8000),
@@ -268,7 +273,7 @@ object Cities {
             City("Устинівка", 48.1540, 32.5350)
         )),
         Region("Полтавськ", listOf(
-            City("Полтава", 49.5883, 34.5514, CityTier.MAJOR),
+            City("Полтава", 49.5883, 34.5514, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Кременчук", 49.0680, 33.4230, CityTier.MEDIUM),
             City("Горішні Плавні", 49.0110, 33.6500),
             City("Лубни", 50.0190, 32.9970),
@@ -436,7 +441,7 @@ object Cities {
             City("Носівка", 50.938, 31.5803, pop = 12908), // pop ~12908
         )),
         Region("Донецьк", listOf(
-            City("Донецьк", 48.0159, 37.8029, CityTier.MAJOR),
+            City("Донецьк", 48.0159, 37.8029, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Маріуполь", 47.0971, 37.5434, CityTier.MEDIUM),
             City("Горлівка", 48.3380, 38.0860, CityTier.MEDIUM),
             City("Краматорськ", 48.7310, 37.5560, CityTier.MEDIUM),
@@ -490,7 +495,7 @@ object Cities {
             City("Ясинувата", 48.1268, 37.8592, pop = 37600), // pop ~37600
         )),
         Region("Луганськ", listOf(
-            City("Луганськ", 48.5740, 39.3078, CityTier.MAJOR),
+            City("Луганськ", 48.5740, 39.3078, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Алчевськ", 48.4690, 38.8000, CityTier.MEDIUM),
             City("Сєвєродонецьк", 48.9480, 38.4870, CityTier.MEDIUM),
             City("Лисичанськ", 48.9040, 38.4320, CityTier.MEDIUM),
@@ -583,14 +588,8 @@ object Cities {
         ))
     )
 
-    /** Population from which a non-seat place is labeled from mid-zoom ([CityTier.MEDIUM]). */
-    private const val MEDIUM_POP = 50_000
-
-    /** All cities, flat, in the order defined above; big non-seats auto-promoted to MEDIUM. */
+    /** All cities, flat, in the order defined above. MEDIUM is exactly the curated set. */
     val ALL: List<City> = REGIONS.flatMap { it.cities }
-        .map { c ->
-            if (c.tier == CityTier.MINOR && c.pop >= MEDIUM_POP) c.copy(tier = CityTier.MEDIUM) else c
-        }
 
     /** Ukrainian name → representative city (highest-population holder of that name —
      *  Ukraine has a few same-named towns in different oblasts). Used when translating
@@ -704,11 +703,12 @@ fun resolveFocus(
     )
 }
 
-/** Draws city names in the current language, sized to zoom level. MAJOR labels always show;
- *  MEDIUM/MINOR respect the Settings toggles ([showMediumCities] / [showSmallCities], both on
- *  by default). Cities in [redCityNames] (by Ukrainian name) are drawn red — the set already
- *  respects the official-alert scope (whole oblast by default, city-level when the City scope
- *  is on). */
+/** Draws city names in the current language, sized to zoom level. MAJOR labels reveal
+ *  progressively by [MajorReveal]: the top-5 overview set shows from the country view, MID
+ *  majors from mid-zoom, the rest up close. MEDIUM/MINOR respect the Settings toggles
+ *  ([showMediumCities] / [showSmallCities], both on by default). Cities in [redCityNames]
+ *  (by Ukrainian name) are drawn red — the set already respects the official-alert scope
+ *  (whole oblast by default, city-level when the City scope is on). */
 class CityLabelOverlay(
     context: Context,
     private val lang: AppLanguage,
@@ -734,7 +734,11 @@ class CityLabelOverlay(
         val forceAll = forceShowAllProvider()
         for (c in Cities.ALL) {
             val minZoom = when (c.tier) {
-                CityTier.MAJOR -> 4.0
+                CityTier.MAJOR -> if (forceAll) 4.0 else when (c.reveal) {
+                    MajorReveal.OVERVIEW -> 4.0
+                    MajorReveal.MID -> 7.5
+                    MajorReveal.LATE -> 9.0
+                }
                 CityTier.MEDIUM -> if (forceAll || showMediumCities) 6.5 else Double.MAX_VALUE
                 CityTier.MINOR -> if (forceAll || showSmallCities) 10.0 else Double.MAX_VALUE
             }

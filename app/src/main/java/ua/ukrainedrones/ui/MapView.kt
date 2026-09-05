@@ -943,7 +943,8 @@ fun NeptunMapView(
                         val rings = OblastBoundaries.byStem[stem] ?: continue
                         for (ring in rings) {
                             if (ring.size < 3) continue
-                            val points = ring.map { GeoPoint(it[0], it[1]) }
+                            // Rings are stored as (lon, lat); osmdroid GeoPoint is (lat, lon).
+                            val points = ring.map { GeoPoint(it[1], it[0]) }
                             mapView.overlays.add(Polygon(mapView).apply {
                                 this.points = points
                                 fillColor = Color.argb(55, 255, 60, 60)

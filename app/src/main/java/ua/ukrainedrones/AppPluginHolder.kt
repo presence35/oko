@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import ua.ukrainedrones.connection.ConnectionHolder
 import ua.ukrainedrones.plugins.NeptunPlugin
 import ua.ukrainedrones.plugins.PluginRegistry
+import ua.ukrainedrones.plugins.TestPlugin
 import ua.ukrainedrones.plugins.UbillingPlugin
 
 object AppPluginHolder {
@@ -35,6 +36,7 @@ object AppPluginHolder {
             appForeground = _appForeground
         )
         registry.register(ubilling, scope)
+        registry.register(TestPlugin(), scope)
         _registry = registry
     }
 

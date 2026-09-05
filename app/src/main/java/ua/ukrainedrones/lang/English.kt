@@ -580,7 +580,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
         nightEnabledPrefix = "Active · ",
         nightSirenSuffix = " · Siren override ON",
         nightZonesSuffix = " · Night zones",
-        alertsOfficialPrefix = "Official: ",
+        alertsOfficialPrefix = "Official: %s",
         alertsSirenOverride = "Siren override: ON",
         onWord = "ON",
         offWord = "OFF",
@@ -592,6 +592,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
         threatsHiddenMapFormat = "Hidden on map: %d",
         threatsSilencedFormat = "Silenced: %d",
         selfLanguageName = "English",
+        iconsLabel = "icons",
     ),
     wordForms = Strings.WordForms(
         sources = listOf("source", "sources"),

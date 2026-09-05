@@ -187,6 +187,8 @@ fun LogsDropDownSheet(
     iconSet: ThreatIconSet,
     neptunDown: Boolean,
     degraded: Boolean,
+    threatCount: Int = 0,
+    alertCount: Int = 0,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -199,7 +201,7 @@ fun LogsDropDownSheet(
     val scope = rememberCoroutineScope()
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     var filter by rememberSaveable { mutableStateOf(LogsFilter.DECISIONS) }
-    var groupBy by rememberSaveable { mutableStateOf(GroupBy.PROXIMITY) }
+    var groupBy by rememberSaveable { mutableStateOf(GroupBy.TIMELINE) }
     var newestFirst by rememberSaveable { mutableStateOf(true) }
     var proximitySort by rememberSaveable { mutableStateOf(ProximitySort.DISTANCE) }
     var shownOnly by rememberSaveable { mutableStateOf(true) }
@@ -231,6 +233,12 @@ fun LogsDropDownSheet(
         degraded -> Color(0xFFFB8C00)
         else -> Color(0xFF4CAF50)
     }
+    val healthWord = when {
+        neptunDown -> s.connOffline
+        degraded -> s.connDegraded
+        else -> s.connOnline
+    }
+    val healthCounts = "$threatCount ${s.threatsLabel} · $alertCount ${s.alertsLabel}"
 
     Column(
         modifier = modifier
@@ -238,11 +246,12 @@ fun LogsDropDownSheet(
             .fillMaxHeight(0.85f)
             .background(Color(0xFF1E1E1E))
     ) {
-        // Top Header Bar
+        // Top Header Bar — overall-health readout: title, then the NEPTUN mark tinted by the
+        // live aggregate connection state plus a status word and live threat/alert counts.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -256,32 +265,38 @@ fun LogsDropDownSheet(
                 painter = painterResource(R.drawable.neptun),
                 contentDescription = s.attributionText,
                 colorFilter = ColorFilter.tint(connColor),
-                modifier = Modifier.height(20.dp)
+                modifier = Modifier.height(18.dp)
             )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                NeptunConnectionClient.NEPTUN_DOMAIN,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF90CAF9),
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable {
-                    context.startActivity(
-                        Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse(NeptunConnectionClient.NEPTUN_SITE_URL)
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(
+                    NeptunConnectionClient.NEPTUN_DOMAIN,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF90CAF9),
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(NeptunConnectionClient.NEPTUN_SITE_URL)
+                            )
                         )
-                    )
-                }
-            )
-            val closeInteraction = remember { MutableInteractionSource() }
-            IconButton(
-                onClick = onClose,
-                interactionSource = closeInteraction,
-                modifier = Modifier.pressTick(closeInteraction)
-            ) {
-                Icon(Icons.Filled.Close, contentDescription = s.closeButton, tint = Color.White)
+                    }
+                )
+                Text(
+                    healthWord,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = connColor
+                )
             }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                healthCounts,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         // Tabs
@@ -489,14 +504,20 @@ fun LogsScreen(
     s: Strings.StringSet,
     lang: AppLanguage,
     iconSet: ThreatIconSet,
+    neptunDown: Boolean,
+    degraded: Boolean,
+    threatCount: Int = 0,
+    alertCount: Int = 0,
     onBack: () -> Unit
 ) {
     LogsDropDownSheet(
         s = s,
         lang = lang,
         iconSet = iconSet,
-        neptunDown = false,
-        degraded = false,
+        neptunDown = neptunDown,
+        degraded = degraded,
+        threatCount = threatCount,
+        alertCount = alertCount,
         onClose = onBack,
         modifier = Modifier.fillMaxHeight(1f)
     )
@@ -893,8 +914,14 @@ private fun DebugLogKind.label(
     lang: AppLanguage,
     s: Strings.StringSet
 ): String = when (this) {
-    DebugLogKind.OFFICIAL_ON -> s.debugKindOfficialOn
-    DebugLogKind.OFFICIAL_OFF -> s.debugKindOfficialOff
+    DebugLogKind.OFFICIAL_ON -> {
+        val loc = localityText(locality, lang)
+        if (loc != null) "${s.debugKindOfficialOn} · $loc" else s.debugKindOfficialOn
+    }
+    DebugLogKind.OFFICIAL_OFF -> {
+        val loc = localityText(locality, lang)
+        if (loc != null) "${s.debugKindOfficialOff} · $loc" else s.debugKindOfficialOff
+    }
     DebugLogKind.ZONE_ENTER -> {
         val typeLabel = threatType?.let {
             val info = ThreatTypeCatalog.INFO.getValue(it)

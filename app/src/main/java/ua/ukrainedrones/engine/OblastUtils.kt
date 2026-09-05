@@ -5,7 +5,6 @@ import ua.ukrainedrones.Cities
 import ua.ukrainedrones.ThreatType
 import ua.ukrainedrones.ThreatTypeCatalog
 import ua.ukrainedrones.Transliteration
-import ua.ukrainedrones.FocusCityInfo
 import ua.ukrainedrones.OblastAlert
 
 private val oblastEngine = ThreatEngine(NEPTUN_TYPES)
@@ -34,6 +33,14 @@ fun threatBody(t: NormalizedThreat, lang: AppLanguage): String {
     return if (whereText != null) "$label — $whereText" else label
 }
 
+/** The alert's region name in the given language: UA keeps the raw server text; EN
+ *  transliterates (КМУ №55) so an oblast alert never leaks Cyrillic into the EN path. */
+fun alertRegionName(alert: OblastAlert, lang: AppLanguage): String {
+    val raw = alert.name.ifBlank { alert.oblast }.ifBlank { alert.key }
+    return if (lang == AppLanguage.UA) raw
+    else Cities.byUa[raw]?.nameEn ?: Transliteration.transliterate(raw)
+}
+
 fun matchOblast(lat: Double, lon: Double): OblastMatch? {
     val city = Cities.nearestCity(lat, lon) ?: return null
     val stem = Cities.cityOblast[city.nameUa] ?: return null
@@ -48,28 +55,6 @@ fun canonicalToken(region: String): String? {
     return stem.ifBlank { null }
 }
 
-fun isCityScopedSuppressed(city: FocusCityInfo, threats: List<NormalizedThreat>): Boolean {
-    if (threats.isEmpty()) return false
-    return threats.none { t ->
-        t.status == "active" && !t.advisory && !t.areaOnly && isThreatAtCity(t, city)
-    }
-}
-
-/** A threat counts as "at the city" for city-level scoping when its locality names the city or
- *  its raw fix is within the city's near area. Locality strings are often the district, so
- *  proximity is the fallback that keeps a 100km-away oblast threat from counting as local. */
-private fun isThreatAtCity(t: NormalizedThreat, city: FocusCityInfo): Boolean {
-    val loc = t.locality
-    if (loc != null &&
-        (loc.equals(city.nameUa, ignoreCase = true) ||
-            loc.contains(city.nameUa, ignoreCase = true) ||
-            city.nameUa.contains(loc, ignoreCase = true))
-    ) return true
-    return distanceFlat(city.lat, city.lon, t.lat, t.lon) / 1000.0 <= CITY_SCOPE_KM
-}
-
-private const val CITY_SCOPE_KM = 15.0
-
 fun deriveOfficialAlertReason(
     threats: List<NormalizedThreat>,
     alert: OblastAlert?,
@@ -81,7 +66,7 @@ fun deriveOfficialAlertReason(
     val token = canonicalToken(alert.oblast) ?: return null to null
     val now = System.currentTimeMillis()
     // No focus point → can't judge proximity; fall back to the alert name alone.
-    if (focus == null) return alert.name to null
+    if (focus == null) return alertRegionName(alert, lang) to null
     var best: NormalizedThreat? = null
     var bestDistKm = Double.MAX_VALUE
     for (t in threats) {
@@ -102,7 +87,7 @@ fun deriveOfficialAlertReason(
         val body = threatBody(best, lang)
         body to best.id
     } else {
-        alert.name to null
+        alertRegionName(alert, lang) to null
     }
 }
 

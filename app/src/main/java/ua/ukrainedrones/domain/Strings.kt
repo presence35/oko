@@ -576,6 +576,7 @@ object Strings {
         val threatsHiddenMapFormat: String,
         val threatsSilencedFormat: String,
         val selfLanguageName: String,
+        val iconsLabel: String,
     )
 
     data class WordForms(
@@ -771,7 +772,7 @@ object Strings {
                 ThreatIconSet.COMIC -> iconSetComicLabel
                 ThreatIconSet.RUSSIAN -> iconSetRussianLabel
             }
-            return "${subtitles.selfLanguageName} · $sizeName · $iconName"
+            return "${subtitles.selfLanguageName} · $sizeName · ${subtitles.iconsLabel}: $iconName"
         }
         val redZoneAlert: String get() = status.redZoneAlert
         val yellowZoneAlert: String get() = status.yellowZoneAlert

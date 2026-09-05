@@ -36,12 +36,14 @@ import ua.ukrainedrones.engine.isFastType
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.OblastAlert
+import ua.ukrainedrones.Transliteration
 import ua.ukrainedrones.ThreatType
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.inOblast
 import ua.ukrainedrones.engine.deriveOfficialAlertReason
-import ua.ukrainedrones.engine.isCityScopedSuppressed
+import ua.ukrainedrones.engine.alertRegionName
+import ua.ukrainedrones.officialAlertActiveFor
 import ua.ukrainedrones.engine.threatBody
 import ua.ukrainedrones.UpdateInfo
 import ua.ukrainedrones.UpdateManager
@@ -61,10 +63,6 @@ import ua.ukrainedrones.data.SystemEntryKind
 import ua.ukrainedrones.data.TelegramNotifier
 import ua.ukrainedrones.NightZones
 import ua.ukrainedrones.Strings
-import ua.ukrainedrones.engine.inOblast
-import ua.ukrainedrones.engine.deriveOfficialAlertReason
-import ua.ukrainedrones.engine.isCityScopedSuppressed
-import ua.ukrainedrones.engine.threatBody
 import ua.ukrainedrones.UserPrefs
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.isWithinNight
@@ -185,6 +183,7 @@ class AlertService : Service() {
         val focusPinned: Boolean,
         val officialReason: String?,
         val officialReasonThreatId: String?,
+        val officialRegion: String?,
         val zoneThreats: Map<String, ThreatZone>,
         val params: ZoneParams,
         val lang: AppLanguage,
@@ -544,18 +543,27 @@ val mappedThreats = registry.allThreats.map { list ->
                 val focusBannerCity =
                     if (tail.lang == AppLanguage.UA) focus.attribution.bannerCityUa else focus.attribution.bannerCityEn
                 val focusCityUa = focus.attribution.bannerCityUa
-                val focusRegion = focus.attribution.bannerCityUa
+                val focusRegion =
+                    if (tail.lang == AppLanguage.UA) focus.attribution.bannerCityUa
+                    else focus.attribution.bannerCityEn.ifBlank { Transliteration.transliterate(focus.attribution.bannerCityUa) }
                 val focusPinned = focus.pinned
                 val gpsFixMissing = focus.gpsFixMissing
                 val focusToken = focus.attribution.token
                 currentToken = focusToken
 
-                val (focusOblastAlertActive, focusOblastAlertSince) = if (focusToken != null) {
+                // Raw episode = oblast-wide matching (scope=false): the all-clear latch keys on
+                // this ending so a scope flip never synthesizes a false all-clear. Effective =
+                // the same shared gate the map uses, so a city-scoped user rings only when the
+                // alert actually covers the focus (or is oblast-wide). Mirror rule.
+                val (focusOblastAlertRaw, focusOblastAlertSince) = if (focusToken != null) {
                     val alert = alerts.firstOrNull { it.inOblast(focusToken) }
                     (alert != null) to alert?.since
                 } else {
                     false to null
                 }
+                val effectiveOfficialActive = officialAlertActiveFor(
+                    alerts, focusToken, focusCityUa, cfg.officialAlertCityScope
+                )
 
                 val activeOfficialAlert = focusToken?.let { token -> alerts.firstOrNull { it.inOblast(token) } }
                 val (officialReason, officialReasonThreatId) = if (activeOfficialAlert != null) {
@@ -570,14 +578,6 @@ val mappedThreats = registry.allThreats.map { list ->
                     null to null
                 }
 
-                val focusCityObj = focusCityUa.let { FocusCity.find(it) }
-                val cityScopedSuppressed = cfg.officialAlertCityScope &&
-                    focusCityObj != null &&
-                    activeOfficialAlert != null &&
-                    isCityScopedSuppressed(focusCityObj, threats.values.toList())
-
-                val effectiveOfficialActive = focusOblastAlertActive && !cityScopedSuppressed
-
                 val zoneThreats = if (focusLoc != null && !threatDataStale) {
                     val threatList = threats.values.toList()
                     val engineFocus = LatLng(focusLoc.lat, focusLoc.lon)
@@ -591,7 +591,7 @@ val mappedThreats = registry.allThreats.map { list ->
 
                 MonitorState(
                     focusOblastAlertActive = effectiveOfficialActive,
-                    focusOblastAlertRaw = focusOblastAlertActive,
+                    focusOblastAlertRaw = focusOblastAlertRaw,
                     focusToken = focusToken,
                     focusOblastAlertSince = focusOblastAlertSince,
                     focusBannerCity = focusBannerCity,
@@ -600,6 +600,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     focusPinned = focusPinned,
                     officialReason = officialReason,
                     officialReasonThreatId = officialReasonThreatId,
+                    officialRegion = activeOfficialAlert?.let { alertRegionName(it, tail.lang) },
                     zoneThreats = zoneThreats,
                     params = params,
                     lang = tail.lang,
@@ -772,7 +773,8 @@ val mappedThreats = registry.allThreats.map { list ->
                 },
                 threatId = reasonThreat?.id,
                 threatType = reasonThreat?.type?.toThreatType(),
-                locality = reasonThreat?.let { it.locality ?: it.district ?: it.region } ?: state.focusCityUa,
+                locality = reasonThreat?.let { it.locality ?: it.district ?: it.region }
+                    ?: state.officialRegion ?: state.focusCityUa,
                 distanceKm = distanceFromFocusKm(reasonThreat, state),
                 now = System.currentTimeMillis()
             )
@@ -840,7 +842,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 reason = DebugLogReason.TOGGLE_OFF,
                 threatId = null,
                 threatType = null,
-                locality = state.focusCityUa,
+                locality = state.officialRegion ?: state.focusCityUa,
                 distanceKm = null,
                 now = System.currentTimeMillis()
             )
@@ -867,7 +869,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 reason = DebugLogReason.FIRED,
                 threatId = null,
                 threatType = null,
-                locality = state.focusCityUa,
+                locality = state.officialRegion ?: state.focusCityUa,
                 distanceKm = null,
                 now = System.currentTimeMillis()
             )
@@ -885,7 +887,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     reason = DebugLogReason.TOGGLE_OFF,
                     threatId = null,
                     threatType = null,
-                    locality = state.focusCityUa,
+                    locality = state.officialRegion ?: state.focusCityUa,
                     distanceKm = null,
                     now = System.currentTimeMillis()
                 )

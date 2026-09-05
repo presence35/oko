@@ -49,12 +49,29 @@ class CitiesTest {
     }
 
     @Test
+    fun `progressive major reveal has exactly five overview and eight mid majors`() {
+        val overview = Cities.ALL.filter { it.reveal == MajorReveal.OVERVIEW }
+        val mid = Cities.ALL.filter { it.reveal == MajorReveal.MID }
+        assertEquals(
+            listOf("Київ", "Одеса", "Львів", "Дніпро", "Харків"),
+            overview.map { it.nameUa }
+        )
+        assertEquals(5, overview.size)
+        assertEquals(8, mid.size)
+        for (c in overview + mid) assertTrue("non-major tagged ${c.nameUa}", c.major)
+        // Every MAJOR has an explicit reveal; MINOR/MEDIUM fall back to LATE (unused).
+        val majors = Cities.ALL.filter { it.tier == CityTier.MAJOR }
+        assertEquals(5 + 8, majors.count { it.reveal != MajorReveal.LATE })
+        assertEquals(majors.size - 13, majors.count { it.reveal == MajorReveal.LATE })
+    }
+
+    @Test
     fun `list is large enough for country-scale context`() {
         val majors = Cities.ALL.count { it.tier == CityTier.MAJOR }
         val mediums = Cities.ALL.count { it.tier == CityTier.MEDIUM }
         val minors = Cities.ALL.count { it.tier == CityTier.MINOR }
         assertEquals(26, majors)
-        assertEquals(20, mediums)
+        assertEquals(14, mediums)
         assertTrue("expected ~400+ minors, got $minors", minors >= 400)
     }
 

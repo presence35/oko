@@ -2508,10 +2508,15 @@ private fun CardSizeTile(
 }
 
 /** Icon-slot size inside an icon-set tile. */
-private val IconTileSlot = 36.dp
+private val IconTileSlot = 44.dp
+
+/** Gap between icon slots in a tile's swipeable row. */
+private val IconTileSpacing = 8.dp
 
 /** Icon-style picker: four stacked full-width rows (one per real set — Photos,
- *  Army, Comic, Russian), each showing all seven icons side by side. */
+ *  Army, Comic, Russian). Each row is a horizontally swipeable strip of enlarged icons whose
+ *  right-most icon half-peeks as a "more" affordance; the pack name sits as a subtle badge in
+ *  the row's top-right corner. */
 @Composable
 internal fun IconSetSelector(
     lang: AppLanguage,
@@ -2586,23 +2591,48 @@ internal fun IconSetTile(
             else MaterialTheme.colorScheme.outlineVariant
         )
     ) {
-        Row(
+        val types = IconCatalog.photoTypes()
+        val naturalWidth = (slot + IconTileSpacing) * types.size + IconTileSpacing
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                .clip(RoundedCornerShape(14.dp))
         ) {
-            IconCatalog.photoTypes().forEach { type ->
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    ThreatIcon(
-                        type = type,
-                        set = set,
-                        size = slot,
-                        contentDescription = label
-                    )
+            // Content width = min(natural, viewport + half-slot), so the right-most icon always
+            // half-peeks as a swipe affordance and the strip is scrollable to reveal the rest.
+            val maxStrip = maxWidth + slot / 2
+            val stripWidth = if (naturalWidth <= maxStrip) naturalWidth else maxStrip
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .width(stripWidth)
+                    .padding(horizontal = IconTileSpacing, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(IconTileSpacing)
+            ) {
+                types.forEach { type ->
+                    Box(modifier = Modifier.size(slot), contentAlignment = Alignment.Center) {
+                        ThreatIcon(
+                            type = type,
+                            set = set,
+                            size = slot,
+                            contentDescription = label
+                        )
+                    }
                 }
             }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            )
         }
     }
 }
