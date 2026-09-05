@@ -40,6 +40,22 @@ object TelegramNotifier {
         send(token, chatId, text)
     }
 
+    fun sendUbillingSchemaChanged(oldHash: String, newHash: String) {
+        val token = BuildConfig.TELEGRAM_BOT_TOKEN
+        val chatId = BuildConfig.TELEGRAM_CHAT_ID
+        if (token.isBlank() || chatId.isBlank()) {
+            Log.w(TAG, "Telegram credentials not configured")
+            return
+        }
+        val text = buildString {
+            appendLine("\u26A0\uFE0F Ubilling schema changed")
+            appendLine("Old: ${oldHash.take(16)}")
+            appendLine("New: ${newHash.take(16)}")
+            append("Check alerts.in.ua raw format")
+        }
+        send(token, chatId, text)
+    }
+
     private fun send(token: String, chatId: String, text: String) {
         scope.launch {
             try {

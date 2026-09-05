@@ -363,6 +363,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 showMapScale = uiState.showMapScale,
                 showMediumCities = uiState.showMediumCities,
                 showSmallCities = uiState.showSmallCities,
+                fillAlertRegions = uiState.fillAlertRegions,
                 sheltersEnabled = uiState.sheltersEnabled,
                 periodicGps = uiState.periodicGps,
                 calmMessagesEnabled = uiState.calmMessagesEnabled,
@@ -420,6 +421,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 onShowMapScaleChange = { viewModel.setShowMapScale(it) },
                 onShowMediumCitiesChange = { viewModel.setShowMediumCities(it) },
                 onShowSmallCitiesChange = { viewModel.setShowSmallCities(it) },
+                onFillAlertRegionsChange = { viewModel.setFillAlertRegions(it) },
                 onSheltersEnabledChange = { viewModel.setSheltersEnabled(it) },
                 onOpenShelterList = {
                 sheltersFromSettings = true
@@ -685,6 +687,9 @@ private fun MapScreen(
     var selectedShelter by remember { mutableStateOf<NearestShelter?>(null) }
     var deathActive by remember { mutableStateOf(false) }
     var replayProgress by remember { mutableStateOf<ReplayProgress?>(null) }
+    var countdown by remember { mutableStateOf<Int?>(null) }
+    var autoStrikeActive by remember { mutableStateOf(false) }
+    var cancelTick by remember { mutableStateOf(0) }
 
     // Surface shelter-mode to the ViewModel so the resolved-threat flourish/card is
     // suppressed while the shelter overlay is up.
@@ -906,6 +911,9 @@ private fun MapScreen(
                         },
                         onDeathActiveChange = { deathActive = it },
                         onReplayProgressChange = { replayProgress = it },
+                        onCountdownChange = { countdown = it },
+                        onAutoStrikeActiveChange = { autoStrikeActive = it },
+                        onCancelRequestTick = cancelTick,
                         onFlourishEjected = onFlourishEjected,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -979,21 +987,30 @@ private fun MapScreen(
                     }
                 }
 
-                Surface(tonalElevation = 2.dp) {
-                    ThreatStripFooter(
-                        inner = uiState.threatsInner,
-                        outer = uiState.threatsOuter,
-                        hiddenTypes = uiState.hiddenTypes,
-                        silencedTypes = uiState.silencedTypes,
-                        focusLocation = uiState.focusLocation,
-                        iconSet = uiState.iconSet,
-                        language = uiState.language,
-                        calmMessagesEnabled = uiState.calmMessagesEnabled,
-                        deathActive = deathActive,
-                        replayProgress = replayProgress,
-                        s = s,
-                        onThreatStripTap = onThreatStripTap
-                    )
+                Box {
+                    Surface(tonalElevation = 2.dp) {
+                        ThreatStripFooter(
+                            inner = uiState.threatsInner,
+                            outer = uiState.threatsOuter,
+                            hiddenTypes = uiState.hiddenTypes,
+                            silencedTypes = uiState.silencedTypes,
+                            focusLocation = uiState.focusLocation,
+                            iconSet = uiState.iconSet,
+                            language = uiState.language,
+                            calmMessagesEnabled = uiState.calmMessagesEnabled,
+                            deathActive = deathActive,
+                            replayProgress = replayProgress,
+                            s = s,
+                            onThreatStripTap = onThreatStripTap
+                        )
+                    }
+                    if (countdown != null || autoStrikeActive) {
+                        CountdownOverlay(
+                            count = countdown,
+                            tapToCancelLabel = s.tapToCancelLabel,
+                            onCancel = { cancelTick++ }
+                        )
+                    }
                 }
             }
 
@@ -1356,6 +1373,87 @@ private fun ThreatStripFooter(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CountdownOverlay(count: Int?, tapToCancelLabel: String, onCancel: () -> Unit) {
+    val amber = Color(0xFFF9A825)
+    val scale = remember { Animatable(1.8f) }
+    val alpha = remember { Animatable(0f) }
+    LaunchedEffect(count) {
+        scale.snapTo(1.8f)
+        alpha.snapTo(0f)
+        launch { scale.animateTo(1f, tween(300, easing = FastOutSlowInEasing)) }
+        launch { alpha.animateTo(1f, tween(150)) }
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (count != null) Color.Black.copy(alpha = 0.85f) else Color.Transparent)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onCancel
+            )
+            .padding(vertical = 14.dp)
+    ) {
+        if (count != null) {
+            // Countdown phase: reticle + number centered; the footer text is hidden by the
+            // dark backdrop, replaced by the targeting lock. During the death animation the
+            // backdrop is transparent so the footer's "Neutralizing threat…" stays visible.
+            Canvas(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .size(48.dp)
+                    .graphicsLayer { scaleX = scale.value; scaleY = scale.value; this.alpha = alpha.value }
+            ) {
+                val sw = 2.dp.toPx()
+                val inset = 4.dp.toPx()
+                val len = 12.dp.toPx()
+                val w = size.width
+                val h = size.height
+                // top-left
+                drawLine(amber, Offset(inset, inset), Offset(inset + len, inset), sw)
+                drawLine(amber, Offset(inset, inset), Offset(inset, inset + len), sw)
+                // top-right
+                drawLine(amber, Offset(w - inset, inset), Offset(w - inset - len, inset), sw)
+                drawLine(amber, Offset(w - inset, inset), Offset(w - inset, inset + len), sw)
+                // bottom-left
+                drawLine(amber, Offset(inset, h - inset), Offset(inset + len, h - inset), sw)
+                drawLine(amber, Offset(inset, h - inset), Offset(inset, h - inset - len), sw)
+                // bottom-right
+                drawLine(amber, Offset(w - inset, h - inset), Offset(w - inset - len, h - inset), sw)
+                drawLine(amber, Offset(w - inset, h - inset), Offset(w - inset, h - inset - len), sw)
+                // crosshair lines
+                val cx = w / 2
+                val cy = h / 2
+                val gap = 6.dp.toPx()
+                val arm = 8.dp.toPx()
+                drawLine(amber, Offset(cx - gap - arm, cy), Offset(cx - gap, cy), sw)
+                drawLine(amber, Offset(cx + gap, cy), Offset(cx + gap + arm, cy), sw)
+                drawLine(amber, Offset(cx, cy - gap - arm), Offset(cx, cy - gap), sw)
+                drawLine(amber, Offset(cx, cy + gap), Offset(cx, cy + gap + arm), sw)
+            }
+            Text(
+                text = "$count",
+                color = amber,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .graphicsLayer { scaleX = scale.value; scaleY = scale.value; this.alpha = alpha.value }
+            )
+        }
+        // Edge hint — the whole strip is tappable.
+        Text(
+            text = tapToCancelLabel,
+            color = amber,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 16.dp)
+        )
     }
 }
 

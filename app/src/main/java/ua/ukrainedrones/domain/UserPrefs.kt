@@ -86,6 +86,7 @@ class UserPrefs(private val context: Context) {
     private val officialAlertCityScopeKey = booleanPreferencesKey("official_alert_city_scope")
     private val justFunMasterEnabledKey = booleanPreferencesKey("just_fun_master_enabled")
     private val bootRestartEnabledKey = booleanPreferencesKey("boot_restart_enabled")
+    private val fillAlertRegionsKey = booleanPreferencesKey("fill_alert_regions")
 
     fun slowRedKm(): Flow<Int> =
         context.dataStore.data.map { prefs -> prefs[slowRedKmKey] ?: 20 }
@@ -416,6 +417,13 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setBootRestartEnabled(enabled: Boolean) {
         context.dataStore.edit { it[bootRestartEnabledKey] = enabled }
+    }
+
+    fun fillAlertRegions(): Flow<Boolean> =
+        context.dataStore.data.map { prefs -> prefs[fillAlertRegionsKey] ?: false }
+
+    suspend fun setFillAlertRegions(enabled: Boolean) {
+        context.dataStore.edit { it[fillAlertRegionsKey] = enabled }
     }
 
     fun deathAnimationEnabled(): Flow<Boolean> =

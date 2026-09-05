@@ -30,6 +30,7 @@ object AppPluginHolder {
         val neptun = NeptunPlugin(client)
         val registry = PluginRegistry().also { it.register(neptun, scope) }
         val ubilling = UbillingPlugin(
+            context = context.applicationContext,
             primaryHealthy = registry.wsHealthy,
             appForeground = _appForeground
         )

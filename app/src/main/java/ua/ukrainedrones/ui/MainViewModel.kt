@@ -122,6 +122,8 @@ data class UiState(
     val showMapScale: Boolean = true,
     val showMediumCities: Boolean = true,
     val showSmallCities: Boolean = true,
+    val fillAlertRegions: Boolean = false,
+    val alertOblastTokens: Set<String> = emptySet(),
     val justFunMasterEnabled: Boolean = false,
     val deathAnimationEnabled: Boolean = true,
     val flybyAnimationEnabled: Boolean = true,
@@ -363,6 +365,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val showMapScale: Boolean,
         val showMediumCities: Boolean,
         val showSmallCities: Boolean,
+        val fillAlertRegions: Boolean,
         val justFunMasterEnabled: Boolean,
         val deathAnimationEnabled: Boolean,
         val flybyAnimationEnabled: Boolean,
@@ -416,6 +419,7 @@ val fastGroupCollapsed: Boolean,
         val showMapScale: Boolean,
         val showMediumCities: Boolean,
         val showSmallCities: Boolean,
+        val fillAlertRegions: Boolean,
         val deathAnimationEnabled: Boolean,
         val followBullet: Boolean,
         val neutralizedTallyEnabled: Boolean,
@@ -488,13 +492,14 @@ val fastGroupCollapsed: Boolean,
             prefs.criticalOfflineOverride(),
             prefs.criticalOfflineBypassSilent(),
             prefs.flybyAnimationEnabled(),
-            prefs.justFunMasterEnabled()
+            prefs.justFunMasterEnabled(),
+            prefs.fillAlertRegions()
         ) { flags: Array<Boolean> ->
             AlertConfig(
                 flags[0], flags[1], flags[2], flags[3], flags[4], flags[5],
                 flags[6], flags[7], flags[8], flags[9], flags[10], flags[11], flags[12],
                 flags[13], flags[14], flags[15], flags[16], flags[17], flags[18], flags[19],
-                flags[20], flags[21]
+                flags[20], flags[21], flags[22]
             )
         },
         combine(
@@ -582,6 +587,7 @@ combine(
             showMapScale = b.showMapScale,
             showMediumCities = b.showMediumCities,
             showSmallCities = b.showSmallCities,
+            fillAlertRegions = b.fillAlertRegions,
             justFunMasterEnabled = b.justFunMasterEnabled,
             deathAnimationEnabled = b.deathAnimationEnabled,
             flybyAnimationEnabled = b.flybyAnimationEnabled,
@@ -755,6 +761,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             showMapScale = prefs.showMapScale,
             showMediumCities = prefs.showMediumCities,
             showSmallCities = prefs.showSmallCities,
+            fillAlertRegions = prefs.fillAlertRegions,
             justFunMasterEnabled = prefs.justFunMasterEnabled,
             deathAnimationEnabled = prefs.deathAnimationEnabled,
             flybyAnimationEnabled = prefs.flybyAnimationEnabled,
@@ -982,6 +989,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             focusLocation = focusLocation,
             gpsFixMissing = focus.gpsFixMissing,
             redCities = redCities,
+            alertOblastTokens = activeRegionTokens,
             threatLevel = evaluation.threatLevel,
             revealRequest = reveal,
             flourish = flourish,
@@ -1322,6 +1330,10 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setShowSmallCities(show: Boolean) {
         viewModelScope.launch { prefs.setShowSmallCities(show) }
+    }
+
+    fun setFillAlertRegions(enabled: Boolean) {
+        viewModelScope.launch { prefs.setFillAlertRegions(enabled) }
     }
 
     fun setFastGroupCollapsed(collapsed: Boolean) {

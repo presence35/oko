@@ -1436,18 +1436,21 @@ private fun SystemCard(entry: SystemEntry, s: Strings.StringSet, lang: AppLangua
         SystemEntryKind.SDK_CHECK_FAILED -> DebugRed
         SystemEntryKind.MALFORMED_FRAME -> DebugRed
         SystemEntryKind.UNKNOWN_TYPE_DETECTED -> DebugAmber
+        SystemEntryKind.UBILLING_SCHEMA_CHANGED -> DebugAmber
     }
     val icon = when (entry.kind) {
         SystemEntryKind.SDK_CHANGED -> Icons.Filled.Warning
         SystemEntryKind.SDK_CHECK_FAILED -> Icons.Filled.Close
         SystemEntryKind.MALFORMED_FRAME -> Icons.Filled.Warning
         SystemEntryKind.UNKNOWN_TYPE_DETECTED -> Icons.Filled.Warning
+        SystemEntryKind.UBILLING_SCHEMA_CHANGED -> Icons.Filled.Warning
     }
     val label = when (entry.kind) {
         SystemEntryKind.SDK_CHANGED -> s.apiSdkChanged
         SystemEntryKind.SDK_CHECK_FAILED -> s.apiSdkCheckFailed
         SystemEntryKind.MALFORMED_FRAME -> s.apiMalformedFrame
         SystemEntryKind.UNKNOWN_TYPE_DETECTED -> s.apiUnknownType
+        SystemEntryKind.UBILLING_SCHEMA_CHANGED -> s.apiUbillingSchemaChanged
     }
     val context = LocalContext.current
     Row(

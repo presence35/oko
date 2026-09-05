@@ -62,6 +62,17 @@ class DeathFxController(
     // The running tally-tap replay, so a red alert can cancel it mid-show (clear()).
     private var replayJob: Job? = null
 
+    /** Countdown before an auto-strike fires: 3 → 2 → 1, then the pending strike executes. */
+    private val _countdown = MutableStateFlow<Int?>(null)
+    val countdown: StateFlow<Int?> = _countdown.asStateFlow()
+    private var countdownJob: Job? = null
+    private var pendingAutoStrike: (() -> Unit)? = null
+
+    /** True from when an auto-countdown fires until the death animation ends — the UI shows
+     *  a "tap to stop" strip over the footer for the whole duration. */
+    private val _autoStrikeActive = MutableStateFlow(false)
+    val autoStrikeActive: StateFlow<Boolean> = _autoStrikeActive.asStateFlow()
+
     private val _replayProgress = MutableStateFlow<ReplayProgress?>(null)
     /** During the tally-tap replay: per-group position for the footer copy + overall position
      *  for its progress bar. */
@@ -89,6 +100,8 @@ class DeathFxController(
         replayJob = null
         _replayProgress.value = null
         forceShowAllCities.value = false
+        cancelAutoCountdown()
+        _autoStrikeActive.value = false
         overlay.clear()
     }
 
@@ -97,6 +110,40 @@ class DeathFxController(
         replayJob?.cancel()
         _replayProgress.value = null
         replayJob = scope.launch { replay(records) }
+    }
+
+    /**
+     * Start a 3-second countdown before an auto-strike fires. [onFire] executes when the
+     * countdown reaches zero. A new countdown replaces any in-flight one (latest wins).
+     * Tap-to-cancel: call [cancelAutoCountdown].
+     */
+    fun startAutoCountdown(onFire: () -> Unit) {
+        countdownJob?.cancel()
+        pendingAutoStrike = onFire
+        countdownJob = scope.launch {
+            for (n in 3 downTo 1) {
+                _countdown.value = n
+                delay(1000L)
+            }
+            _countdown.value = null
+            _autoStrikeActive.value = true
+            pendingAutoStrike?.invoke()
+            pendingAutoStrike = null
+        }
+    }
+
+    /** Cancel a running auto-countdown — the pending strike is dropped. */
+    fun cancelAutoCountdown() {
+        countdownJob?.cancel()
+        countdownJob = null
+        pendingAutoStrike = null
+        _countdown.value = null
+        _autoStrikeActive.value = false
+    }
+
+    /** Eject an in-flight auto-strike: stop the death animation + camera pan instantly. */
+    fun ejectAutoStrike() {
+        clear()
     }
 
     /** User-initiated or server-driven strike: spawn the projectile + explosion. The bullet

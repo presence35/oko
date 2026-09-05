@@ -18,7 +18,7 @@ import ua.ukrainedrones.service.ServiceState
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
-enum class SystemEntryKind { SDK_CHANGED, SDK_CHECK_FAILED, MALFORMED_FRAME, UNKNOWN_TYPE_DETECTED }
+enum class SystemEntryKind { SDK_CHANGED, SDK_CHECK_FAILED, MALFORMED_FRAME, UNKNOWN_TYPE_DETECTED, UBILLING_SCHEMA_CHANGED }
 
 data class SystemEntry(
     val atMillis: Long,
@@ -108,6 +108,47 @@ object ApiMonitor {
         } catch (e: Exception) {
             Log.w(TAG, "Manifest check error: ${e.message}")
             ManifestResult.Failed(e.message ?: "Unknown error")
+        }
+    }
+
+    /**
+     * Structural fingerprint of a JSON response: sorted set of all object keys at every nesting
+     * level, joined by `/`. Values, array lengths, and key order are irrelevant — only the shape
+     * of the object tree matters. Returns null if the body is not valid JSON or contains no objects.
+     */
+    fun schemaFingerprint(body: String): String? = try {
+        val keys = mutableListOf<String>()
+        fun walk(obj: JSONObject) {
+            val names = obj.keys().asSequence().toList().sorted()
+            keys.addAll(names)
+            for (name in names) {
+                val child = obj.opt(name)
+                if (child is JSONObject) walk(child)
+            }
+        }
+        walk(JSONObject(body))
+        sha256(keys.joinToString("/"))
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
+     * Check the ubilling response body against the last-known structural fingerprint. Returns
+     * [ManifestResult.Unchanged] if the structure is the same, [ManifestResult.Changed] if it
+     * shifted (old/new hash persisted), or [ManifestResult.Failed] if the body is unparseable.
+     */
+    suspend fun checkUbillingSchema(context: Context, body: String): ManifestResult {
+        val svcState = ServiceState(context)
+        val oldHash = svcState.lastUbillingSchemaHash().first()
+        val newHash = schemaFingerprint(body)
+        return if (newHash == null) {
+            ManifestResult.Failed("Cannot compute schema fingerprint")
+        } else if (newHash == oldHash) {
+            ManifestResult.Unchanged
+        } else {
+            svcState.setLastUbillingSchemaHash(newHash)
+            Log.w(TAG, "Ubilling schema changed! SHA: $oldHash -> $newHash")
+            ManifestResult.Changed(oldHash, newHash)
         }
     }
 

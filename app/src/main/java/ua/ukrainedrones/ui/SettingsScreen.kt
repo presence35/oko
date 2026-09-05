@@ -270,8 +270,10 @@ private fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
         SettingsSection.SYSTEM to kw(
             "system", "display", "interface", "language", "ukrainian", "english", "icon", "icons",
             "card", "cards", "size", "scale", "battery", "exempt",
+            "fill", "region", "regions", "oblast", "oblasts", "alert fill", "region fill",
             "система", "інтерфейс", "дисплей", "мова", "українськ", "англійськ", "іконка", "іконки",
             "картка", "картки", "розмір", "масштаб", "батарея",
+            "заливка", "область", "області", "заливка областей", "заливка регіонів",
             "енерг", "звільнення"
         )
     )
@@ -386,6 +388,7 @@ fun SettingsScreen(
     showMapScale: Boolean,
     showMediumCities: Boolean,
     showSmallCities: Boolean,
+    fillAlertRegions: Boolean,
     sheltersEnabled: Boolean,
     periodicGps: Boolean,
     calmMessagesEnabled: Boolean,
@@ -444,6 +447,7 @@ fun SettingsScreen(
     onShowMapScaleChange: (Boolean) -> Unit,
     onShowMediumCitiesChange: (Boolean) -> Unit,
     onShowSmallCitiesChange: (Boolean) -> Unit,
+    onFillAlertRegionsChange: (Boolean) -> Unit,
     onSheltersEnabledChange: (Boolean) -> Unit,
     onOpenShelterList: () -> Unit = {},
     onJustFunMasterChange: (Boolean) -> Unit,
@@ -1189,7 +1193,7 @@ fun SettingsScreen(
                     title = s.systemSectionTitle,
                     icon = painterResource(id = R.drawable.ic_language),
                     expanded = collapse.system,
-                    subtitle = s.systemSubtitle(lang, threatCardSize, iconSet),
+                    subtitle = s.systemSubtitle(threatCardSize, iconSet),
                     onToggle = { onCollapseChange(collapse.copy(system = !collapse.system)) }
                 ) {
                     // Language Switcher
@@ -1276,6 +1280,13 @@ fun SettingsScreen(
                         smallLabel = s.smallCitiesChip,
                         onMediumChange = onShowMediumCitiesChange,
                         onSmallChange = onShowSmallCitiesChange
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AlertToggleRow(
+                        title = s.fillAlertRegionsTitle,
+                        description = s.fillAlertRegionsDesc,
+                        checked = fillAlertRegions,
+                        onCheckedChange = onFillAlertRegionsChange
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Haptic press feedback

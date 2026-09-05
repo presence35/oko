@@ -1,5 +1,7 @@
 package ua.ukrainedrones.plugins
 
+import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,6 +17,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import ua.ukrainedrones.OblastAlert
+import ua.ukrainedrones.data.ApiMonitor
+import ua.ukrainedrones.data.ManifestResult
+import ua.ukrainedrones.data.SystemEntry
+import ua.ukrainedrones.data.SystemEntryKind
+import ua.ukrainedrones.data.TelegramNotifier
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.OperationalMode
 import ua.ukrainedrones.engine.PluginConnectionState
@@ -35,6 +42,7 @@ import java.util.concurrent.TimeUnit
  * and clears, handing ownership back to the primary.
  */
 class UbillingPlugin(
+    private val context: Context? = null,
     private val primaryHealthy: Flow<Boolean>,
     private val appForeground: Flow<Boolean>
 ) : ThreatSource {
@@ -178,11 +186,31 @@ class UbillingPlugin(
             val request = Request.Builder().url(API_URL).build()
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@withContext false
-                _alerts.value = parseStates(response.body?.string().orEmpty())
+                val body = response.body?.string().orEmpty()
+                _alerts.value = parseStates(body)
+                checkSchema(body)
                 true
             }
         } catch (_: Exception) {
             false
+        }
+    }
+
+    private suspend fun checkSchema(body: String) {
+        val ctx = context ?: return
+        val result = ApiMonitor.checkUbillingSchema(ctx, body)
+        when (result) {
+            is ManifestResult.Changed -> {
+                ApiMonitor.record(
+                    SystemEntry(System.currentTimeMillis(), SystemEntryKind.UBILLING_SCHEMA_CHANGED,
+                        "SHA256: ${result.oldHash.take(16)} -> ${result.newHash.take(16)}")
+                )
+                TelegramNotifier.sendUbillingSchemaChanged(result.oldHash, result.newHash)
+            }
+            is ManifestResult.Failed -> {
+                Log.w(TAG, "Ubilling schema check failed: ${result.message}")
+            }
+            ManifestResult.Unchanged -> { /* no-op */ }
         }
     }
 
@@ -202,6 +230,7 @@ class UbillingPlugin(
     }
 
     companion object {
+        private const val TAG = "UbillingPlugin"
         private const val API_URL = "https://ubilling.net.ua/aerialalerts/"
         internal const val GRACE_MS = 5 * 60_000L
         internal const val POLL_FAST_MS = 15_000L

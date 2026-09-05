@@ -523,6 +523,9 @@ fun NeptunMapView(
     onExitShelterMode: () -> Unit = {},
     onDeathActiveChange: (Boolean) -> Unit = {},
     onReplayProgressChange: (ReplayProgress?) -> Unit = {},
+    onCountdownChange: (Int?) -> Unit = {},
+    onAutoStrikeActiveChange: (Boolean) -> Unit = {},
+    onCancelRequestTick: Int = 0,
     onFlourishEjected: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -547,6 +550,7 @@ fun NeptunMapView(
         uiState.focusOblastAlertActive,
         uiState.showMediumCities,
         uiState.showSmallCities,
+        uiState.fillAlertRegions,
         showNearbyShelters,
         selectedShelter?.shelter?.id,
         uiState.redCities,
@@ -895,10 +899,37 @@ fun NeptunMapView(
                     })
                 )
 
+                // Oblast region fill: when fillAlertRegions is on, shade alerting oblasts
+                // with a subtle red fill instead of coloring city labels red.
+                if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
+                    val fillPaint = Paint().apply {
+                        isAntiAlias = true
+                        color = Color.argb(55, 255, 60, 60)
+                        style = Paint.Style.FILL
+                    }
+                    for (stem in uiState.alertOblastTokens) {
+                        val rings = OblastBoundaries.byStem[stem] ?: continue
+                        for (ring in rings) {
+                            if (ring.size < 3) continue
+                            val points = ring.map { GeoPoint(it[0], it[1]) }
+                            mapView.overlays.add(Polygon(mapView).apply {
+                                this.points = points
+                                fillColor = Color.argb(55, 255, 60, 60)
+                                strokeColor = Color.argb(30, 255, 80, 80)
+                                strokeWidth = 1f
+                                title = ""
+                                setInfoWindow(null)
+                            })
+                        }
+                    }
+                }
+
                 // City labels (English names on top of label-free tiles)
+                // In fill mode, suppress red labels (fill replaces them).
                 mapView.overlays.add(
                     CityLabelOverlay(
-                        context, lang, uiState.redCities,
+                        context, lang,
+                        redCityNames = if (uiState.fillAlertRegions) emptySet() else uiState.redCities,
                         uiState.showMediumCities, uiState.showSmallCities,
                         forceShowAllProvider = { deathFx.forceShowAllCities.value }
                     )
@@ -1217,31 +1248,30 @@ fun NeptunMapView(
                         // projectile just streaks across and off-screen, then is dropped.
                         deathFx.strikeDud(r.id, anchor0)
                     } else {
-                        // Unhook the real marker right away — the overlay draws its own copy of the
-                        // icon, so keeping the shared marker would render the same drawable twice
-                        // (its bounds/alpha are mutated per frame, and the marker's own draw fights
-                        // back, making the icon flip or change direction mid-flight).
-                        mapViewRef.value?.overlays?.remove(marker)
-                        markerRefs.value.entries.removeAll { it.value === marker }
                         val anchor = marker.position ?: anchor0
                         val base = IconCatalog.baseDeg(r.type, iconSetState)
                         val rotation = -(marker.rotation ?: (-(r.courseDeg.toFloat() - base + 360f) % 360f))
-                        // A fresh copy, not the marker's shared drawable.
                         val icon = threatIconFor(
                             context, r.type, iconSetState
                         )
-                        // With follow-the-bullet on, the camera glides onto the target so the
-                        // strike is actually seen.
-                        deathFx.followStrike(anchor, followBulletState)
-                        mapViewRef.value?.invalidate()
-                        deathFx.strike(
-                            id = r.id,
-                            geo = anchor,
-                            icon = icon,
-                            rotationDeg = rotation,
-                            alpha = marker.alpha ?: 1f
-                        )
-                        deathFx.strikeHaptics()
+                        val markerAlpha = marker.alpha ?: 1f
+                        val followBullet = followBulletState
+                        val pressedId = r.id
+                        deathFx.startAutoCountdown {
+                            // Countdown finished — unhook the marker, fire the strike.
+                            mapViewRef.value?.overlays?.remove(marker)
+                            markerRefs.value.entries.removeAll { it.value === marker }
+                            deathFx.followStrike(anchor, followBullet)
+                            mapViewRef.value?.invalidate()
+                            deathFx.strike(
+                                id = pressedId,
+                                geo = anchor,
+                                icon = icon,
+                                rotationDeg = rotation,
+                                alpha = markerAlpha
+                            )
+                            deathFx.strikeHaptics()
+                        }
                     }
                 }
         }
@@ -1296,6 +1326,24 @@ fun NeptunMapView(
         // is flying / an explosion is on screen.
         LaunchedEffect(Unit) {
             deathFx.active.collect { active -> onDeathActiveChange(active) }
+        }
+
+        // Surface the auto-strike countdown so the UI can show a "tap to cancel" overlay.
+        LaunchedEffect(Unit) {
+            deathFx.countdown.collect { c -> onCountdownChange(c) }
+        }
+
+        // Surface whether an auto-strike death animation is in flight (after countdown fired).
+        LaunchedEffect(Unit) {
+            deathFx.autoStrikeActive.collect { active -> onAutoStrikeActiveChange(active) }
+        }
+
+        // User tapped the footer stop overlay: cancel the countdown, or eject the in-flight
+        // animation, depending on which phase the auto-strike is in.
+        LaunchedEffect(onCancelRequestTick) {
+            if (onCancelRequestTick == 0) return@LaunchedEffect
+            if (deathFx.countdown.value != null) deathFx.cancelAutoCountdown()
+            else deathFx.ejectAutoStrike()
         }
 
         // After a user-shot death animation finishes, wait 2.1s then restore the hidden

@@ -596,7 +596,7 @@ object Cities {
      *  Ukraine has a few same-named towns in different oblasts). Used when translating
      *  NEPTUN's course text and resolving a course-message place to coordinates. */
     private val representativeByName: Map<String, City> =
-        ALL.groupBy { it.nameUa }.mapValues { (_, v) -> v.maxByOrNull { it.pop }!! }
+        ALL.groupBy { it.nameUa }.mapValues { (_, v) -> v.firstOrNull { it.major } ?: v.maxByOrNull { it.pop }!! }
 
     /** Ukrainian → English place-name lookup, used when translating NEPTUN's course text. */
     val uaToEn: Map<String, String> = representativeByName.mapValues { it.value.nameEn }
