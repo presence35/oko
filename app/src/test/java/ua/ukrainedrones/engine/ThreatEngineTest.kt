@@ -491,6 +491,113 @@ class ThreatEngineTest {
     }
 
     @Test
+    fun `evaluate - official alert fills focusOblastAlertActive and redCities`() {
+        val alert = OblastAlert(key = "odesa", name = "Одеська область", oblast = "Одеська", since = "x")
+        val result = engine.evaluate(
+            threats = emptyList(),
+            focus = LatLng(userLat, userLng),
+            params = params,
+            hiddenTypes = emptySet(),
+            silencedTypes = emptySet(),
+            now = System.currentTimeMillis(),
+            alerts = listOf(alert),
+            focusToken = "Одеськ"
+        )
+        assertTrue(result.focusOblastAlertActive)
+        assertTrue(result.redCities.isNotEmpty())
+    }
+
+    @Test
+    fun `evaluate - city scope narrows a raion alert away from the seat`() {
+        val raion = OblastAlert(key = "бердянський", name = "Бердянський район", oblast = "Запорізька область", since = null)
+        val scoped = engine.evaluate(
+            threats = emptyList(),
+            focus = LatLng(userLat, userLng),
+            params = params,
+            hiddenTypes = emptySet(),
+            silencedTypes = emptySet(),
+            now = System.currentTimeMillis(),
+            alerts = listOf(raion),
+            focusToken = "Запорізьк",
+            focusCityUa = "Запоріжжя",
+            cityScope = true
+        )
+        assertFalse(scoped.focusOblastAlertActive)
+        val oblastWide = engine.evaluate(
+            threats = emptyList(),
+            focus = LatLng(userLat, userLng),
+            params = params,
+            hiddenTypes = emptySet(),
+            silencedTypes = emptySet(),
+            now = System.currentTimeMillis(),
+            alerts = listOf(raion),
+            focusToken = "Запорізьк",
+            cityScope = false
+        )
+        assertTrue(oblastWide.focusOblastAlertActive)
+    }
+
+    @Test
+    fun `evaluate - reason derives from the nearest in-zone threat in the alert oblast`() {
+        val now = System.currentTimeMillis()
+        val alert = OblastAlert(key = "odesa", name = "Одеська область", oblast = "Одеська", since = "x")
+        val threat = NormalizedThreat(
+            id = "odesa-threat",
+            type = "shahed",
+            title = "Test",
+            region = "Одеська",
+            district = null,
+            locality = null,
+            lat = 46.48,
+            lon = 30.73,
+            heading = null,
+            bearingDeg = null,
+            status = "active",
+            advisory = false,
+            areaOnly = false,
+            confirmations = 1,
+            reliability = "high",
+            count = 1,
+            explanationShort = null,
+            speedKmh = 180.0,
+            uncertaintyKm = null,
+            positionQuality = "confirmed",
+            confirmedAtMillis = now - 60_000,
+            updatedAtMillis = now - 30_000,
+            trail = emptyList()
+        )
+        val result = engine.evaluate(
+            threats = listOf(threat),
+            focus = LatLng(46.48, 30.73),
+            params = params,
+            hiddenTypes = emptySet(),
+            silencedTypes = emptySet(),
+            now = now,
+            alerts = listOf(alert),
+            focusToken = "Одеськ"
+        )
+        assertEquals("odesa-threat", result.reasonThreatId)
+        assertTrue(result.officialReason != null)
+    }
+
+    @Test
+    fun `evaluate - no alerts leaves official outputs empty`() {
+        val result = engine.evaluate(
+            threats = emptyList(),
+            focus = LatLng(userLat, userLng),
+            params = params,
+            hiddenTypes = emptySet(),
+            silencedTypes = emptySet(),
+            now = System.currentTimeMillis(),
+            alerts = emptyList(),
+            focusToken = "Одеськ"
+        )
+        assertFalse(result.focusOblastAlertActive)
+        assertTrue(result.redCities.isEmpty())
+        assertNull(result.officialReason)
+    }
+
+    @Test
     fun `scoreThreat - returns 0 beyond yellow zone`() {
         val threat = makeThreat()
         val props = NEPTUN_TYPES["shahed"]!!

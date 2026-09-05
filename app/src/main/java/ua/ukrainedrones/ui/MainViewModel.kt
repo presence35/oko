@@ -38,6 +38,9 @@ import ua.ukrainedrones.connection.isOffline
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
+import ua.ukrainedrones.engine.OblastAlert
+import ua.ukrainedrones.engine.inOblast
+import ua.ukrainedrones.engine.isOblastWide
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toEngineString
 import ua.ukrainedrones.engine.toThreatType
@@ -910,12 +913,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val focusLocation = focus.location
         val attribution = focus.attribution
         val focusToken = attribution.token
-        val focusOblastAlertActive = officialAlertActiveFor(
-            alerts,
-            focusToken,
-            attribution.bannerCityUa.takeIf { it.isNotBlank() },
-            officialAlertCityScope
-        )
         val focusBannerCity = (
             if (language == AppLanguage.UA) attribution.bannerCityUa else attribution.bannerCityEn
         ).ifBlank { Strings.get(language).unknownLocation }
@@ -929,17 +926,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         // Distinct oblasts under ANY official alert (whole-oblast or region) — the Logs header count.
         val alertingOblastCount = Cities.cityOblast.values.toSet()
             .count { citiesToken -> alerts.any { it.inOblast(citiesToken) } }
-        // Cities shown red on the map/picker — always region-precise (mirrors NEPTUN): a
-        // whole-oblast alert covers every city in the region; a raion/city alert covers only the
-        // cities it actually names (coversCity). The City-scope toggle now governs only the
-        // siren/notification scope, not the map labels.
-        val redCities = buildSet {
-            for (city in Cities.ALL) {
-                val token = Cities.cityOblast[city.nameUa] ?: continue
-                val covered = alerts.any { it.inOblast(token) && (it.isOblastWide() || it.coversCity(city.nameUa)) }
-                if (covered) add(city.nameUa)
-            }
-        }
 
         val threatList = if (threatDataStale) emptyList() else threats.values
             .filter { it.type.toThreatType() in mapEnabledTypes }
@@ -952,12 +938,19 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             params = engineParams,
             hiddenTypes = emptySet(),
             silencedTypes = silencedTypeStrings,
-            now = now
+            now = now,
+            alerts = alerts,
+            focusToken = focusToken,
+            focusCityUa = attribution.bannerCityUa.takeIf { it.isNotBlank() },
+            cityScope = officialAlertCityScope,
+            lang = language
         )
         val inInner = evaluation.threatsInner
         val inOuter = evaluation.threatsOuter
         val mapThreats = evaluation.mapThreats
         val threatScores = evaluation.threatScores
+        val focusOblastAlertActive = evaluation.focusOblastAlertActive
+        val redCities = evaluation.redCities
 
         val activeZone: ThreatZone? = evaluation.activeZone
         val alertActive = activeZone != null || focusOblastAlertActive

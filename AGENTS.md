@@ -28,9 +28,11 @@ evaluation contract. Read `ARCHITECTURE.md` for module map and data-flow context
 ### Engine conventions
 
 - **No mirror rule.** UI and service call `ThreatEngine.evaluate()` — one call site,
-  no duplicated logic. See `BEHAVIORS.md` for the contract.
-- **Source-agnostic.** Engine works with `NormalizedThreat` and `ThreatProps`. Never
-  touches NEPTUN JSON or source-specific formats.
+  no duplicated logic. Official-alert facts (`officialAlertActiveFor` gate, `redCities`,
+  reason) are also engine-owned (`engine/OblastAlert.kt` + `ThreatEngine`); consumers only
+  orchestrate. See `BEHAVIORS.md` for the contract.
+- **Source-agnostic.** Engine works with `NormalizedThreat`, `ThreatProps` and `OblastAlert`
+  (the alert currency). Never touches NEPTUN JSON or source-specific formats.
 - **Plugin-provided type properties.** `ThreatProps` come from the active plugin.
   Engine defaults exist for unknown types. Never hardcode type names in engine logic.
 - **Explicit `now` parameter.** All time-dependent functions take a timestamp.
@@ -81,5 +83,5 @@ key-invariants section of `ARCHITECTURE.md` in the same change, so the docs neve
 ### Repository state
 
 Single squashed history on `main` containing only the refactored app — the
-pre-refactor project and the `refactor/` scaffold are gone. The refactor plan
-lives in `BEHAVIORS.md` under "Session Status".
+pre-refactor project and the `refactor/` scaffold are gone. The refactor is complete;
+`BEHAVIORS.md` is now the living engine behavioral contract (not a plan).

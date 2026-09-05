@@ -1,5 +1,7 @@
 package ua.ukrainedrones.engine
 
+import ua.ukrainedrones.AppLanguage
+import ua.ukrainedrones.Cities
 import kotlin.math.*
 
 enum class ThreatZone { INNER, OUTER }
@@ -40,7 +42,12 @@ class ThreatEngine(
         params: ZoneParams,
         hiddenTypes: Set<String>,
         silencedTypes: Set<String>,
-        now: Long
+        now: Long,
+        alerts: List<OblastAlert> = emptyList(),
+        focusToken: String? = null,
+        focusCityUa: String? = null,
+        cityScope: Boolean = false,
+        lang: AppLanguage = AppLanguage.EN
     ): ThreatEvaluationResult {
         val inInner = mutableListOf<NormalizedThreat>()
         val inOuter = mutableListOf<NormalizedThreat>()
@@ -95,6 +102,19 @@ class ThreatEngine(
             else -> null
         }
 
+        // Official-alert facts: single derivation owned by the engine (mirror rule). The gate,
+        // red-city labels and the human-readable reason all come from here — consumers never
+        // re-implement alert matching. Orchestration (region latch, announce-once, sound policy)
+        // stays in AlertService.
+        val focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, cityScope)
+        val redCities = computeRedCities(alerts)
+        val activeAlert = focusToken?.let { token -> alerts.firstOrNull { it.inOblast(token) } }
+        val (officialReason, reasonThreatId) = if (activeAlert != null) {
+            deriveOfficialAlertReason(activeAlert, threats, focus, params, lang, now)
+        } else {
+            null to null
+        }
+
         return ThreatEvaluationResult(
             threatsInner = inInner,
             threatsOuter = inOuter,
@@ -102,8 +122,64 @@ class ThreatEngine(
             mapThreats = mapThreats,
             threatScores = threatScores,
             activeZone = activeZone,
+            redCities = redCities,
+            focusOblastAlertActive = focusOblastAlertActive,
+            officialReason = officialReason,
+            reasonThreatId = reasonThreatId,
             threatLevel = aggregateScores(threatScores)
         )
+    }
+
+    /** Cities shown red on the map — region-precise (mirrors NEPTUN): a whole-oblast alert covers
+     *  every city in the region; a raion/city alert covers only the cities it actually names
+     *  ([OblastAlert.coversCity]). The City-scope toggle governs only the siren/notification
+     *  scope, not the map labels. Scope-independent, so red labels light nationwide. */
+    fun computeRedCities(alerts: List<OblastAlert>): Set<String> {
+        if (alerts.isEmpty()) return emptySet()
+        return buildSet {
+            for (city in Cities.ALL) {
+                val token = Cities.cityOblast[city.nameUa] ?: continue
+                val covered = alerts.any { it.inOblast(token) && (it.isOblastWide() || it.coversCity(city.nameUa)) }
+                if (covered) add(city.nameUa)
+            }
+        }
+    }
+
+    /** Human-readable attribution for an active official alert: the highest-scoring live threat
+     *  inside the user's configured zones, falling back to the transliterated region name when
+     *  nothing is in range (or there is no focus point to judge proximity by). */
+    fun deriveOfficialAlertReason(
+        alert: OblastAlert,
+        threats: List<NormalizedThreat>,
+        focus: LatLng?,
+        params: ZoneParams,
+        lang: AppLanguage,
+        now: Long
+    ): Pair<String?, String?> {
+        val token = canonicalToken(alert.oblast) ?: return null to null
+        // No focus point → can't judge proximity; fall back to the alert name alone.
+        if (focus == null) return alertRegionName(alert, lang) to null
+        var best: NormalizedThreat? = null
+        var bestDistKm = Double.MAX_VALUE
+        for (t in threats) {
+            if (t.status != "active" || t.advisory || t.areaOnly) continue
+            if (isStale(t, propsFor(t.type), now)) continue
+            if (!inOblast(t.region, t.district, t.locality, token)) continue
+            val distKm = distanceFlat(focus.lat, focus.lon, t.lat, t.lon) / 1000.0
+            // Only threats inside the user's configured zones qualify as the "reason" — a drone
+            // 100km away in the same oblast must not be announced as if it were local.
+            val props = propsFor(t.type)
+            if (zoneTier(props, distKm, t.speedKmh, params) == null) continue
+            if (distKm < bestDistKm) {
+                bestDistKm = distKm
+                best = t
+            }
+        }
+        return if (best != null) {
+            threatBody(best, lang) to best.id
+        } else {
+            alertRegionName(alert, lang) to null
+        }
     }
 
     fun zoneTier(

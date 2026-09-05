@@ -3,6 +3,7 @@ package ua.ukrainedrones
 import ua.ukrainedrones.connection.ConnectionState
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.NormalizedThreat
+import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.ZoneParams
 import org.junit.Assert.assertEquals

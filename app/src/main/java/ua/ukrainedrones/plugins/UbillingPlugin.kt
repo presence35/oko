@@ -16,7 +16,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
-import ua.ukrainedrones.OblastAlert
+import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.data.ApiMonitor
 import ua.ukrainedrones.data.ManifestResult
 import ua.ukrainedrones.data.SystemEntry

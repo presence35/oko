@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import ua.ukrainedrones.OblastAlert
+import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.OperationalMode
 import ua.ukrainedrones.engine.PluginConnectionState

@@ -17,7 +17,7 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import ua.ukrainedrones.LocationTracker
-import ua.ukrainedrones.OblastAlert
+import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.UPDATE_BASE_URL
 import ua.ukrainedrones.UA_TIGHT_MIN_LAT
 import ua.ukrainedrones.UA_TIGHT_MAX_LAT

@@ -2,7 +2,6 @@ package ua.ukrainedrones.engine
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
-import ua.ukrainedrones.OblastAlert
 
 /** How a source reaches the network. WS sources hold an always-on socket (FGS-safe,
  *  background monitoring). REST sources poll and are battery-managed (adaptive intervals,

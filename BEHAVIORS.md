@@ -8,7 +8,8 @@ behavior here, update the implementation in the same change.
 | Input | Type | Description |
 |---|---|---|
 | Threat stream | `List<NormalizedThreat>` | Source-agnostic threat objects (see Threat Model) |
-| Official alerts | `List<OblastAlert>` | Regional alert feed |
+| Official alerts | `List<OblastAlert>` | Regional alert feed (source-agnostic alert currency, `engine/OblastAlert.kt`) |
+| Alert focus | `focusToken: String?`, `focusCityUa: String?`, `cityScope: Boolean` | Which oblast stem / city the official-alert gate scopes to |
 | Focus state | `LatLng`, `FocusCity?`, `hasGps: Boolean` | Where to center evaluation |
 | Zone params | `ZoneParams` (day/night variants) | User thresholds + armed bells |
 | Type gates | `hiddenTypes: Set<String>`, `silencedTypes: Set<String>` | Per-source filtering |
@@ -21,11 +22,14 @@ behavior here, update the implementation in the same change.
 | Output | Type | Description |
 |---|---|---|
 | Zone groups | `threatsInner`, `threatsOuter`, `activeZone`, `zoneThreats` | Tier classification |
-| Map threats | `List<NormalizedThreat>` with predicted coords | Display-ready (ghosts excluded) |
-| Red cities | `Set<String>` | Cities under official alert |
-| Official alert | `focusOblastAlertActive: Boolean`, `officialReason: String?`, `reasonThreatId: String?` | Siren state + attribution |
+| Map threats | `List<NormalizedThreat>` (raw fixes) | Display-ready, ghosts excluded. Prediction is applied downstream: consumers glide via `predictPosition` on their own tick (MapView's 1s marker loop, popup proximity) |
+| Red cities | `Set<String>` | Cities under official alert (region-precise; scope-independent, labels light nationwide) |
+| Official alert | `focusOblastAlertActive: Boolean`, `officialReason: String?`, `reasonThreatId: String?` | Siren state (scoped) + attribution, owned by the engine |
 | Threat level | `Double` (0–10) | Aggregate gauge |
 | Proximity | `ThreatProximity?` (per selected threat) | Distance, ETA, speed source |
+
+The service's **raw** (scope=false) gate for the all-clear latch is the same engine function
+`officialAlertActiveFor(alerts, token, null, scope = false)` — consumers never re-implement matching.
 
 ## Threat Model
 
@@ -79,6 +83,7 @@ references type names directly.
 data class ThreatProps(
     val isFast: Boolean,           // tier by ETA (true) vs distance (false)
     val reachKm: Double,           // max engagement range
+    val alwaysInnerWithinReach: Boolean, // inside reachKm always rings INNER (aviation's country-wide warning)
     val staleAfterMs: Long,        // when to dim
     val ghostCapMs: Long,          // when to remove entirely
     val nominalSpeedMps: Double?,  // fallback speed (null = no dead-reckon without real velocity)
@@ -96,6 +101,7 @@ threat types.
 val DEFAULT_THREAT_PROPS = ThreatProps(
     isFast = false,
     reachKm = 1500.0,
+    alwaysInnerWithinReach = false,
     staleAfterMs = 300_000L,       // 5 min
     ghostCapMs = 900_000L,         // 15 min
     nominalSpeedMps = null,         // no dead-reckon without real velocity
@@ -108,14 +114,14 @@ val DEFAULT_THREAT_PROPS = ThreatProps(
 
 ```kotlin
 val NEPTUN_TYPES = mapOf(
-    "shahed"       to ThreatProps(isFast = false, reachKm = 1000.0, staleAfterMs = 300_000, ghostCapMs = 900_000, nominalSpeedMps = 50.0, horizonSec = 300.0, maxGhostMeters = 18_000.0),
-    "fpv"          to ThreatProps(isFast = false, reachKm = 40.0,   staleAfterMs = 300_000, ghostCapMs = 900_000, nominalSpeedMps = 33.33, horizonSec = 300.0, maxGhostMeters = 18_000.0),
-    "cruise"       to ThreatProps(isFast = true,  reachKm = 1500.0, staleAfterMs = 180_000, ghostCapMs = 900_000, nominalSpeedMps = 236.11, horizonSec = 180.0, maxGhostMeters = 30_000.0),
-    "ballistic"    to ThreatProps(isFast = true,  reachKm = 1500.0, staleAfterMs = 90_000,  ghostCapMs = 900_000, nominalSpeedMps = 916.67, horizonSec = 90.0, maxGhostMeters = 20_000.0),
-    "kab"          to ThreatProps(isFast = true,  reachKm = 70.0,   staleAfterMs = 180_000, ghostCapMs = 900_000, nominalSpeedMps = 250.0, horizonSec = 180.0, maxGhostMeters = 10_000.0),
-    "aviation"     to ThreatProps(isFast = true,  reachKm = 9999.0, staleAfterMs = 240_000, ghostCapMs = 7_200_000, nominalSpeedMps = 250.0, horizonSec = 240.0, maxGhostMeters = 24_000.0),
-    "recon"        to ThreatProps(isFast = false, reachKm = 50.0,   staleAfterMs = 300_000, ghostCapMs = 900_000, nominalSpeedMps = 22.22, horizonSec = 300.0, maxGhostMeters = 12_000.0),
-    "unknown"      to ThreatProps(isFast = false, reachKm = 1500.0, staleAfterMs = 300_000, ghostCapMs = 900_000, nominalSpeedMps = null, horizonSec = 240.0, maxGhostMeters = 10_000.0),
+    "shahed"       to ThreatProps(isFast = false, reachKm = 1000.0, alwaysInnerWithinReach = false, staleAfterMs = 300_000, ghostCapMs = 900_000, nominalSpeedMps = 50.0, horizonSec = 300.0, maxGhostMeters = 18_000.0),
+    "fpv"          to ThreatProps(isFast = false, reachKm = 40.0,   alwaysInnerWithinReach = false, staleAfterMs = 300_000, ghostCapMs = 900_000, nominalSpeedMps = 33.33, horizonSec = 300.0, maxGhostMeters = 18_000.0),
+    "cruise"       to ThreatProps(isFast = true,  reachKm = 1500.0, alwaysInnerWithinReach = false, staleAfterMs = 180_000, ghostCapMs = 900_000, nominalSpeedMps = 236.11, horizonSec = 180.0, maxGhostMeters = 30_000.0),
+    "ballistic"    to ThreatProps(isFast = true,  reachKm = 1500.0, alwaysInnerWithinReach = false, staleAfterMs = 90_000,  ghostCapMs = 900_000, nominalSpeedMps = 916.67, horizonSec = 90.0, maxGhostMeters = 20_000.0),
+    "kab"          to ThreatProps(isFast = true,  reachKm = 70.0,   alwaysInnerWithinReach = false, staleAfterMs = 180_000, ghostCapMs = 900_000, nominalSpeedMps = 250.0, horizonSec = 180.0, maxGhostMeters = 10_000.0),
+    "aviation"     to ThreatProps(isFast = true,  reachKm = 9999.0, alwaysInnerWithinReach = true,  staleAfterMs = 240_000, ghostCapMs = 7_200_000, nominalSpeedMps = 250.0, horizonSec = 240.0, maxGhostMeters = 24_000.0),
+    "recon"        to ThreatProps(isFast = false, reachKm = 50.0,   alwaysInnerWithinReach = false, staleAfterMs = 300_000, ghostCapMs = 900_000, nominalSpeedMps = 22.22, horizonSec = 300.0, maxGhostMeters = 12_000.0),
+    "unknown"      to ThreatProps(isFast = false, reachKm = 1500.0, alwaysInnerWithinReach = false, staleAfterMs = 300_000, ghostCapMs = 900_000, nominalSpeedMps = null, horizonSec = 240.0, maxGhostMeters = 10_000.0),
 )
 ```
 
@@ -127,7 +133,7 @@ given the same inputs.
 ### `evaluate(...)` — Main Evaluation Pass
 
 ```
-Input: threats, focus, params, hiddenTypes, silencedTypes, nightActive, nightParams, nightArmed, now
+Input: threats, focus, params, hiddenTypes, silencedTypes, now, alerts, focusToken, focusCityUa, cityScope, lang
 Output: EvaluationResult
 
 For each threat:
@@ -135,7 +141,7 @@ For each threat:
   2. Skip hidden types (not on map at all)
   3. Record fix in speed cache (if not stale)
   4. Compute predicted position (if flying)
-  5. Add to mapThreats (all visible threats)
+  5. Add to mapThreats (all visible threats, raw fixes)
   6. Skip stale, advisory, areaOnly, silenced types, no focus → no zone evaluation
   7. Compute distance (Haversine)
   8. For fast types: use predicted position for distance
@@ -144,6 +150,11 @@ For each threat:
   10. Call zoneTier()
   11. If tiered: compute score, add to zoneThreatsMap, categorize inner/outer
   12. Return EvaluationResult
+
+Official-alert facts (same pass, engine-owned):
+  13. focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, cityScope)
+  14. redCities = computeRedCities(alerts) — region-precise labels
+  15. officialReason/reasonThreatId = deriveOfficialAlertReason(first oblast-matching alert, ...)
 ```
 
 ### `zoneTier(props, distKm, speedKmh, params)` — Zone Classification
@@ -154,7 +165,8 @@ Output: ThreatZone? (INNER | OUTER | null)
 
 Rules:
   1. distKm > props.reachKm → null (out of range)
-  2. props.isFast && AVIATION special → always INNER (within reach)
+  2. props.alwaysInnerWithinReach → always INNER (aviation's country-wide warning; flag is
+     plugin-provided via ThreatProps, not hardcoded to the type name)
   3. props.isFast → tier by ETA (etaMinutes → fastRedMin/fastYellowMin)
   4. !props.isFast → tier by distance (slowRedKm/slowYellowKm)
 ```
@@ -211,7 +223,7 @@ Return: distKm / speedKmh * 60.0
 Null when speedKmh is null or <= 0.
 ```
 
-### `scoreThreat(threat, distKm, eta, zoneParams, now)` — Per-Threat Score (0–10)
+### `scoreThreat(threat, props, distKm, etaMin, redKm, yellowKm, now)` — Per-Threat Score (0–10)
 
 ```
 Multiplicative combination:
@@ -234,20 +246,22 @@ Diminishing returns: top 3 scores × weights [1.0, 0.5, 0.25]
 Clamped to 0–10.
 ```
 
-### `officialAlertActive(alerts, token, city, scope)` — Siren Gate
+### `officialAlertActiveFor(alerts, token, cityUa, scope)` — Siren Gate
 
 ```
-Returns true when any alert covers the focus point.
+Engine gate (engine/OblastAlert.kt). Returns true when any alert covers the focus point.
 scope=false → oblast-wide matching
 scope=true  → oblast + city name matching (coversCity)
 Falls back to oblast-wide when city name is unknown.
 ```
 
-### `deriveReason(threats, alert, focus, lang)` — Human-Readable Reason
+### `deriveOfficialAlertReason(alert, threats, focus, params, lang, now)` — Human-Readable Reason
 
 ```
-Finds the highest-scoring active threat in the alert's oblast.
-Returns formatted reason string + threat ID.
+ThreatEngine method. Finds the highest-scoring active threat in the alert's oblast that falls
+inside the user's configured zones; falls back to the transliterated region name when nothing
+is in range or there is no focus point.
+Returns (formatted reason string, threat ID).
 ```
 
 ### Staleness Lifecycle
@@ -298,8 +312,7 @@ Thread-safe. Owned by engine. Not a global singleton.
    not the predicted position.
 8. **Fast tier uses predicted position.** Distance for fast threats is from the
    dead-reckoned position.
-9. **AVIATION always INNER within reach.** MiG-31K takeoff = country-wide warning.
-   Only opt-out is the type's bell toggle.
+9. **`alwaysInnerWithinReach` types always ring INNER within reach.** MiG-31K takeoff = country-wide warning; the flag comes from `ThreatProps` (aviation sets it), so no type name is hardcoded in the engine. Only opt-out is the type's bell toggle.
 10. **Advisory/areaOnly never tier.** These are informational only.
 11. **Dark-only theme.** No light theme. Theme is a plugin interface; only dark ships.
 12. **Zero UI regressions.** Existing Compose UI, map markers, cards, settings must
@@ -307,6 +320,10 @@ Thread-safe. Owned by engine. Not a global singleton.
 13. **Thread-safe speed cache.** Handles concurrent access from Main and IO.
 14. **Explicit `now` parameter.** All time-dependent functions take an explicit timestamp.
     Enables deterministic testing.
+15. **Official-alert evaluation is engine-owned.** The gate, red-city labels and the
+    reason all derive in `ThreatEngine.evaluate` / `engine/OblastAlert.kt`; consumers only
+    orchestrate (region latch, announce-once, sound policy) and read the facts. The widget
+    reads `eval.focusOblastAlertActive` — no third implementation anywhere.
 
 ## Consumer Behaviors (Reference)
 
@@ -362,67 +379,16 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 
 No log feeds back into engine evaluation. All logging is write-only.
 
-## Plugin Architecture
+## Plugin contract
 
-### ThreatSource Interface
+The `ThreatSource` interface, plugin registry health authority and theme plugin contract are
+documented in `ARCHITECTURE.md` (module map + "Official alert sources" invariant). This doc is
+the behavioral contract only: engine + consumers. The interface has grown beyond the original
+sketch (`id`, `sourceType`, `operationalMode`, `enabled`/`setEnabled`, `testConnection`, and the
+registry's takeover merge) — see the code for the current shape.
 
-```kotlin
-interface ThreatSource {
-    val name: String
-    val typeCatalog: Map<String, ThreatProps>
-    fun connect()
-    fun disconnect()
-    val threats: Flow<List<NormalizedThreat>>
-    val alerts: Flow<List<OblastAlert>>
-    val connectionState: Flow<ConnectionState>
-    val supportsOfficialAlerts: Boolean get() = false
-}
-```
+## Status
 
-### ThemePlugin Interface
-
-```kotlin
-interface ThemePlugin {
-    val name: String
-    val isDark: Boolean
-    val colors: ColorScheme
-    val typography: Typography
-}
-```
-
-Only `DarkThemePlugin` ships. Architecture supports adding light/other themes later.
-Implemented in `theme/ThemePlugin.kt` + `theme/DarkThemePlugin.kt`; `MainActivity` uses
-`DarkThemePlugin.colors`.
-
-### Plugin Registry
-
-```kotlin
-object PluginRegistry {
-    fun register(source: ThreatSource)
-    fun get(name: String): ThreatSource?
-    fun active(): ThreatSource?
-}
-```
-
-## File Map (Current → New) — completed
-
-| Current File | Responsibility | New Location (actual) |
-|---|---|---|
-| `Zones.kt` | `zoneTier`, `reachKm`, `etaMinutes`, `ZoneParams` | `engine/ThreatEngine.kt` |
-| `Prediction.kt` | `predictPosition`, `motionHeading`, `distanceMeters`, `ThreatSpeedTracker` | `engine/ThreatEngine.kt` + `engine/SpeedCache.kt` |
-| `ThreatLevel.kt` | `scoreOf`, `overall` | `engine/ThreatEngine.kt` |
-| `ThreatEvaluator.kt` | `evaluate`, `zoneThreats`, `buildOfficialReason` | `engine/ThreatEngine.kt` + `engine/OblastUtils.kt` (geographic utils) |
-| `Threat.kt` | `Threat` data class, JSON parsing | kept as the UI display type; bridged to `engine/NormalizedThreat.kt` via `engine/TypeMapping.kt` |
-| `NeptunConnectionClient.kt` | WebSocket, REST merge | wrapped by `plugins/NeptunPlugin.kt` |
-| `NightMode.kt` | Night window, effective params | kept in `domain/NightMode.kt` (app-layer, no engine equivalent) |
-| `Cities.kt` | Focus attribution, city labels | kept in `domain/Cities.kt` (app-layer, no engine equivalent) |
-
-## Session Status
-
-- [x] Session 1: BEHAVIORS.md (this document)
-- [x] Session 2: Engine kernel (engine/*, 44 tests passing)
-- [x] Session 3: Plugin system (ThreatSource, NeptunPlugin, PluginRegistry, TypeMapping, 54 tests passing)
-- [x] Session 4: UI refactor (AppPluginHolder, reverse mapper, MainViewModel + AlertService wired to registry, 54 tests passing)
-- [x] Session 5: Cleanup (test harness / TEMP toggles removed; `ThemePlugin` + `DarkThemePlugin` implemented in `theme/`; EN-only strings convention)
-- [x] Session 6: UI currency = `NormalizedThreat` (`Threat` display DTO + `toThreat()` reverse mapper deleted; `NeptunConnectionClient` emits `Map<String, NormalizedThreat>`; `Compat.kt` deleted; all consumers import `engine.LatLng/ThreatZone/ZoneParams` directly; `ThreatTypeCatalog.INFO[threat.type]` → `threatTypeInfoByString`; 197 tests passing)
-- [x] Session 7: Multi-source alerts (Ubilling REST fallback). `ThreatSource` gains `SourceType`/`OperationalMode`/`setEnabled`; `PluginRegistry` becomes the health authority (`perSourceState`, `wsHealthy`, `activeAlertSource`) with **takeover** alert merge (authoritative source = sole truth; stale holders fill only when nothing is authoritative); Ubilling polls adaptively (idle when healthy / 5-min grace, 15s foreground / 30s background past grace, 2s→8s backoff), never via the dead feed's threat count; Logs **Sources** tab lists sources + toggles; `ConnectionLog` tags `activeSource`; widget reads the merged registry feed; 229 tests passing.
+The engine/plugin/UI refactor (original "Sessions 1–7" plan) is complete and squashed onto
+`main`. This document is the living behavioral contract — update it alongside any engine
+behavior change.

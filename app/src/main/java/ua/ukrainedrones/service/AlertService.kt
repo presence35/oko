@@ -35,15 +35,14 @@ import ua.ukrainedrones.plugins.SourceEventKind
 import ua.ukrainedrones.engine.isFastType
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
-import ua.ukrainedrones.OblastAlert
+import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.Transliteration
 import ua.ukrainedrones.ThreatType
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.inOblast
-import ua.ukrainedrones.engine.deriveOfficialAlertReason
 import ua.ukrainedrones.engine.alertRegionName
-import ua.ukrainedrones.officialAlertActiveFor
+import ua.ukrainedrones.engine.officialAlertActiveFor
 import ua.ukrainedrones.engine.threatBody
 import ua.ukrainedrones.UpdateInfo
 import ua.ukrainedrones.UpdateManager
@@ -567,12 +566,13 @@ val mappedThreats = registry.allThreats.map { list ->
 
                 val activeOfficialAlert = focusToken?.let { token -> alerts.firstOrNull { it.inOblast(token) } }
                 val (officialReason, officialReasonThreatId) = if (activeOfficialAlert != null) {
-                    deriveOfficialAlertReason(
-                        threats.values.toList(),
+                    engine.deriveOfficialAlertReason(
                         activeOfficialAlert,
+                        threats.values.toList(),
                         focusLoc,
                         params,
-                        tail.lang
+                        tail.lang,
+                        now
                     )
                 } else {
                     null to null

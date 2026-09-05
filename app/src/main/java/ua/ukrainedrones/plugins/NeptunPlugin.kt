@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import ua.ukrainedrones.OblastAlert
+import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.connection.ConnectionState
 import ua.ukrainedrones.connection.isConnected
 import ua.ukrainedrones.connection.isDegraded

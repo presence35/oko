@@ -26,7 +26,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
-import ua.ukrainedrones.OblastAlert
+import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.ThreatType
 import ua.ukrainedrones.data.ApiMonitor
 import ua.ukrainedrones.data.SystemEntry

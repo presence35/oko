@@ -3,6 +3,11 @@ package ua.ukrainedrones
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ua.ukrainedrones.engine.OblastAlert
+import ua.ukrainedrones.engine.coversCity
+import ua.ukrainedrones.engine.inOblast
+import ua.ukrainedrones.engine.isOblastWide
+import ua.ukrainedrones.engine.officialAlertActiveFor
 
 class OblastAlertScopeTest {
 

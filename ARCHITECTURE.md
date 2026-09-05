@@ -16,10 +16,13 @@ change a documented invariant, update the relevant section.
 
 ## Package structure
 
-Source files are grouped into subdirectories by subsystem (`data/ domain/ service/ ui/
-widget/`) while keeping a **single flat package** `ua.ukrainedrones` — so any file can reach
-any other without import ceremony. The subdirs are organizational only; don't add package
-qualifiers. Migrate to a true multi-package layout only if it ever outgrows maintainability.
+Source files are grouped into subdirectories by subsystem (`data/ domain/ engine/ plugins/
+connection/ service/ ui/ widget/ flourish/ theme/ lang/`). The UI/domain/widget/flourish/lang
+layers share the root package `ua.ukrainedrones`; the subsystems keep their own packages
+(`ua.ukrainedrones.engine`, `.plugins`, `.connection`, `.service`, `.theme`, `.data`) where
+isolation matters (the engine kernel, the plugin SPI, the connection layer). There is no
+single flat package — sub-packages are already the norm; keep adding files inside their
+subsystem's package rather than the root.
 
 ## System overview
 
@@ -55,7 +58,7 @@ LocationTracker ──┬──► MainViewModel        NightMode.kt / Cities.kt
 | NEPTUN connection | `NeptunConnectionClient` (via `ConnectionHolder`) | UI, `AlertService` |
 | Connection state machine | `ConnectionState` sealed interface | UI, `AlertService`, widget |
 | Network validation | `NetworkMonitor` | `NeptunConnectionClient` |
-| Official oblast alerts | `PluginRegistry.allAlerts` (priority-ordered sources, takeover merge; primary = `NeptunConnectionClient.alerts`, fallback = `UbillingPlugin`) | UI, `AlertService`, widget |
+| Official oblast alerts | `PluginRegistry.allAlerts` (priority-ordered sources, takeover merge; primary = `NeptunConnectionClient.alerts`, fallback = `UbillingPlugin`); **derivation** (`officialAlertActiveFor`, `redCities`, reason) owned by `engine/` | UI, `AlertService`, widget |
 | Threat prediction | `engine/ThreatEngine.kt` | ViewModel, service, MapView, widget |
 | Zone tier math | `engine/ThreatEngine.kt` | ViewModel, service |
 | Night rule resolution | `NightMode.kt` | ViewModel, service |
@@ -70,16 +73,12 @@ LocationTracker ──┬──► MainViewModel        NightMode.kt / Cities.kt
 ## Data flow
 
 - **Threat ingest.** NEPTUN WS + REST merge in `NeptunConnectionClient` (via `ConnectionHolder`) → separate `StateFlow`s: `connectionState`, `threats`, `alerts`; `removedThreats` SharedFlow for map death animations. `PluginRegistry` merges plugin feeds into `allThreats`/`allAlerts` (takeover semantics); consumers read the registry, never a specific source. Consumers read flows directly — no intermediate `NeptunState`. NEPTUN's alerts carry the whole-oblast/region split: each `OblastAlert` is tagged `wide` from the `raions`/`oblasts` arrays, so map coloring is region-precise (fill = wide only; city labels = `coversCity`) instead of guessing from the name.
-- **Position prediction** (both consumers):
-  `ThreatEngine`'s `SpeedCache.estimate(id, t, props)` (server speed → trail → nominal)
-  → `predictPosition(t, speed, props, now)` (dead-reckon any **fresh** track that the source
-  itself reports a course for — authoritative `bearingDeg` or reported `heading`, anchored on the
-  latest `updatedAt`/`confirmedAt`; gated by `ThreatEngine.canDrift` = `!isStale && flying`, so a
-  stale track holds its fix and a track NEPTUN gives no course never moves — the client-measured
-  fix-track heading is **not** used for drift; capped at the per-type horizon/ghost) → distance to
-  focus → `zoneTier` (slow: distance-to-confirmed-fix, fast: predicted-ETA). Icon facing shares
-  `motionHeading`, which prefers the server's authoritative `bearingDeg` over the reported
-  `heading` and only then falls back to the measured fix-track heading.
+- **Position prediction** (both consumers): the full contract — `SpeedCache` speed priority,
+  `predictPosition` dead-reckoning gates (`canDrift` = fresh + `flying`, server-coursed only),
+  `motionHeading`/`courseDeg` facing chain, per-type horizon/ghost caps, slow-distance vs
+  fast-ETA tiering — is the **engine behavioral contract** in `BEHAVIORS.md`; `ThreatEngineTest`
+  pins it. App-side facts: MapView glides markers on its own 1s tick (30fps tween); the service
+  clears on a 20s grace.
 - **Update flow.** `UpdateManager.check()` → `Available` → `download()` (progress) →
   `buildInstallIntent()` → system installer. `AlertService` also checks silently every day at
   16:20 while it runs and posts one "new version available" notification per new build
@@ -108,13 +107,13 @@ detail that matters when editing that file.
 | `connection/ConnectionSupervisor.kt` | Milestone tracker for offline episodes. Compares `offlineSinceOrNull` to thresholds (3/5/6/10/20 min) and emits milestone `ConnEventKind` entries. |
 | `connection/ConnectionHolder.kt` | Lazy singleton holder for `NeptunConnectionClient` + `ConnectionSupervisor`. `getClient(context)` / `getSupervisor(context)` / `clear()`. Avoids startup race — MainViewModel constructs before `AlertService.onCreate` runs. |
 | `NeptunClient.kt` | `object` holding shared constants (`OFFLINE_GRACE_MS`, `DEGRADED_STALE_MS`, `USER_SHOT_GRACE_MS`, `NEPTUN_DOMAIN`) and data classes (`ConnRetryState`, `ConnEventKind`, `ConnEvent`, `ThreatRemoved`). |
-| `Threat.kt` | NEPTUN display metadata + parsing: `ThreatType`/`ThreatTypeCatalog`/`Reliability` (labels, staleness, nominal speeds), `OblastAlert`/`inOblast` (prefix or whole-word match, so Crimea's republic form hits the "Крим" stem)/`isOblastWide` (a payload `wide` tag when the source provides it, name heuristic otherwise — a tagged "Севастополь" is correctly whole-oblast though its name lacks "область")/`coversCity` (whole-oblast alerts cover every city) + shared `officialAlertActiveFor` scope gate; `translateCourseAssessment` (EN course text, word-level common-word translation); `normalizedThreatFromJson` — NEPTUN JSON → `NormalizedThreat` directly (the engine currency; no `Threat` display DTO anymore). |
+| `Threat.kt` | NEPTUN display metadata + JSON parsing: `ThreatType`/`ThreatTypeCatalog`/`Reliability` (labels, staleness, nominal speeds), `translateCourseAssessment` (EN course text, word-level common-word translation), `normalizedThreatFromJson` — NEPTUN JSON → `NormalizedThreat` directly (the engine currency; no `Threat` display DTO). The alert currency + matching gates moved out to `engine/OblastAlert.kt`. |
 
 ### State / orchestration
 
 | File | Responsibility |
 | --- | --- |
-| `MainViewModel.kt` | `AndroidViewModel`. Combines NEPTUN + GPS + prefs (flourish data/policy live in `flourish/Flourish.kt` — `FlourishRecord`/`FlourishShow` and the `FlourishPolicy` gates used by `buildUiState`) → `StateFlow<UiState>`; drives the update flow (daily start check, a Settings-open check that raises `updateReminderTick` — a snackbar with a Download action — instead of a clickable toast, which Android can't make touchable, plus manual check/download/install); UI-side copy of zone/focus/alert logic (tradeoffs); `neutralizeThreat` long-press hook. Reads `ConnectionHolder.getClient(app)` for `connectionState` and the registry for `threats`/`alerts` (`registry.allThreats`/`allAlerts`); sampled at 120 ms for UI. `neptunForUi` is a `combine(connectionState, threats, alerts)` → `.sample(120)`. Map coloring is region-precise: `redCities` = cities covered by `coversCity` (whole-oblast alerts cover every city), `alertOblastTokens` (the fill) = whole-oblast alerts only. No global wall-clock StateFlow — consumers with time-based UI run their own scoped clocks (see the recomposition contract below). |
+| `MainViewModel.kt` | `AndroidViewModel`. Combines NEPTUN + GPS + prefs (flourish data/policy live in `flourish/Flourish.kt` — `FlourishRecord`/`FlourishShow` and the `FlourishPolicy` gates used by `buildUiState`) → `StateFlow<UiState>`; drives the update flow (daily start check, a Settings-open check that raises `updateReminderTick` — a snackbar with a Download action — instead of a clickable toast, which Android can't make touchable, plus manual check/download/install); `neutralizeThreat` long-press hook. Reads `ConnectionHolder.getClient(app)` for `connectionState` and the registry for `threats`/`alerts` (`registry.allThreats`/`allAlerts`); sampled at 120 ms for UI. `neptunForUi` is a `combine(connectionState, threats, alerts)` → `.sample(120)`. All zone/tier/prediction and official-alert facts come from one `engine.evaluate(...)` (mirror rule); the UI keeps only display projections (`alertOblastTokens` for the red oblast fill, `alertingOblastCount` for the Logs header) built from the engine's alert gates. No global wall-clock StateFlow — consumers with time-based UI run their own scoped clocks (see the recomposition contract below). |
 | `ConnectionLog.kt` | `object` singleton. Persisted ring buffer (last 10 episodes) fed by the watchdog; commits drops only past `OFFLINE_GRACE_MS`. `ConnStatus` = ONLINE/OFFLINE (no backup state). `ConnLogEntry.activeSource` records which source owned the alert feed during the episode (null = primary). Pure `commitLogState` (tested); rendered in the Logs screen. Non-blocking persistence (no `runBlocking` on IO). |
 | `DebugLog.kt` | `object` singleton. Persisted audit trail (last 500 decisions, rolling 24h window) written by `AlertService`, read by the Logs screen. Records every alert/threat decision in the active region — official on/off, zone entries, region threats — with day/night and effective sound, whether a notification was shown and why not. `DebugLog.sweep` runs once per service tick and is **read-only for the decision path**: it describes the service's own computed maps (`zoneThreats`/`alertable`/`knownZones`/`postedId`), never re-derives formulas. Pure `computeSweep`/serialize/parse (tested). Non-blocking persistence (no `runBlocking` on IO). *Note:* the whole feature is additive — removing it is deleting the write hooks + this object + `DebugLogScreen`. |
 | `Shelters.kt` | Odesa shelter dataset: `Shelter`/`NearestShelter` (adult ~5 km/h, kid ~3 km/h walk minutes), `ShelterIndex` (JSON parse, Odesa bbox, nearest ranking). |
@@ -127,11 +126,12 @@ detail that matters when editing that file.
 | `engine/ThreatProps.kt` | `ThreatProps` (isFast, reachKm, alwaysInnerWithinReach, staleAfterMs, ghostCapMs, nominalSpeedMps, horizonSec, maxGhostMeters), `DEFAULT_THREAT_PROPS`, `NEPTUN_TYPES` catalog. |
 | `engine/Distance.kt` | Haversine `distanceHaversine`/`bearingHaversine`; equirectangular `distanceFlat`/`bearingFlat` (short-range display basis). |
 | `engine/SpeedCache.kt` | Engine-internal per-threat fix queue → measured speed/heading; `SpeedSource` (RECORDED/TYPICAL). |
-| `engine/ThreatEngine.kt` | The core: `evaluate` (inner/outer zones, mapThreats, scores, activeZone, threatLevel), `zoneTier`, `predictPosition`, `motionHeading`, `isStale`/`isExpired`/`isGhost`, `computeProximity`, `scoreThreat`/`aggregateScores`; `ThreatZone`, `ZoneParams`, `ThreatEvaluationResult`, `ThreatProximity`. |
+| `engine/OblastAlert.kt` | Source-agnostic alert currency + matching gates: `OblastAlert`, `inOblast` (prefix or whole-word, so Crimea's republic form hits the "Крим" stem), `isOblastWide` (NEPTUN tag, fallback name heuristic), `coversCity` (4-char stem match; oblast-wide covers every city), `officialAlertActiveFor` scope gate. Engine-owned (moved from `data/Threat.kt`). |
+| `engine/ThreatEngine.kt` | The core: `evaluate` (inner/outer zones, mapThreats, scores, activeZone, threatLevel, **plus the engine-owned official-alert outputs** `redCities`/`focusOblastAlertActive`/`officialReason`/`reasonThreatId`), `zoneTier`, `predictPosition`, `motionHeading`, `isStale`/`isExpired`/`isGhost`, `canDrift`, `computeProximity`, `scoreThreat`/`aggregateScores`, `computeRedCities`, `deriveOfficialAlertReason`; `ThreatZone`, `ZoneParams`, `ThreatEvaluationResult`, `ThreatProximity`. |
 | `engine/ThreatSource.kt` | `ThreatSource` plugin interface + `PluginConnectionState` (source-agnostic connection state) + `SourceType` (WS/REST) + `OperationalMode` (STREAMING/POLLING/STANDBY) + `enabled: StateFlow<Boolean>`/`setEnabled` (Sources-tab switch; false stops the source and clears its alerts) + `testConnection()` (`SourceTestResult` — live one-shot check for the Sources tab Test button; REST does a real fetch, WS reports state/freshness). |
 | `engine/TypeMapping.kt` | `ThreatType`→engine string (`toEngineString`). No reverse mapper — `NormalizedThreat` is the app-wide currency; NEPTUN JSON parses straight to it (`data/Threat.kt`). |
 | `engine/TypeBridge.kt` | App↔engine bridge: `String.toThreatType()`, `threatTypeInfoByString`, `isFastType(type)` (from `ThreatProps.isFast`), `typicalSpeedKmh(type)` (from `nominalSpeedMps`). |
-| `engine/OblastUtils.kt` | Geographic/text utilities (kept from the old `ThreatEvaluator`): `inOblast`, `inFocusOblast`, `matchOblast`, `canonicalToken`, `threatBody`, `alertRegionName`, `deriveOfficialAlertReason`, `OblastMatch`. *Note:* `alertRegionName` renders the alert's region in the UI language (UA raw / EN transliterated) for the official-reason fallbacks; `deriveOfficialAlertReason` picks the **nearest** active threat that falls inside the user's configured `ZoneParams` zones, falling back to the transliterated region name when nothing is in range. |
+| `engine/OblastUtils.kt` | Geographic/text utilities (kept from the old `ThreatEvaluator`): `inOblast`, `inFocusOblast`, `matchOblast`, `canonicalToken`, `threatBody`, `alertRegionName`, `OblastMatch`. *Note:* `alertRegionName` renders the alert's region in the UI language (UA raw / EN transliterated) for the official-reason fallbacks; the nearest-in-zone reason picker lives on `ThreatEngine.deriveOfficialAlertReason`. |
 | `plugins/NeptunPlugin.kt` | Wraps `NeptunConnectionClient` as a `ThreatSource` (`sourceType = WS`, `operationalMode = STREAMING`). |
 | `plugins/UbillingPlugin.kt` | REST alert fallback (`sourceType = REST`). Polls `https://ubilling.net.ua/aerialalerts/` with **adaptive** intervals: idle while the primary is healthy or within a 5-min grace; past grace → 15s foreground / 30s background. Self-tracks the offline duration from `registry.wsHealthy`; exponential 2s→8s backoff on failures; `alertnow` states → `OblastAlert`; `since = null`. Clears alerts on recovery/disable so it hands ownership back to the primary. On every successful poll, a structural schema fingerprint (sorted nested-key hash of the JSON response body) is compared to the last-known hash in `ServiceState`; a mismatch is recorded as `UBILLING_SCHEMA_CHANGED` in `ApiMonitor` and pushed to Telegram — same pattern as the NEPTUN SDK manifest check. |
 | `plugins/TestPlugin.kt` | Peace-time simulator (`sourceType = WS`). While enabled it fetches `testplugin.json` from the update server and plays a timed script of threat/alert events (random bursts aimed at the focus, a MiG-31K AVIATION takeoff that auto-triggers the flyby, fake oblast alerts, clear events). Reports CONNECTED while running; `stop()`/disable clears its output — exactly like a real source. `typeCatalog` empty (inherits NEPTUN_TYPES via registry merge). Disabled by default. |
@@ -149,7 +149,7 @@ detail that matters when editing that file.
 | `Transliteration.kt` | Official КМУ №55 Ukrainian→Latin romanization (the EN gate). |
 | `ZonePrefs.kt` | `AppLanguage`/`ThreatCardSize`/`ThreatIconSet` + DataStore store (`zone_prefs`): all toggles/thresholds/language/follow/pin/visibility, night config, and — problematically — serialized `ConnectionLog`, offline-restore state, onboarding flags. `haptics_enabled` is tri-state (absent = follow the system haptic setting). Also `threatMapFlow`/`threatAlertFlow`; the resolved-threat tally's focus-oblast default + "All of Ukraine" opt-in (`neutralized_tally_all_ukraine`), and the daily-update notify marker (`last_notified_update_code`). *Note:* god object mixing prefs with persisted state — split candidate (tradeoffs). |
 | `Strings.kt` | UA/EN `StringSet` table (never Android resource localization); `formatRelativeTime`, `formatDateTime` (app language, not device locale). |
-| `WidgetSnapshot.kt` | `WidgetSnapshot` + pure `computeWidgetSnapshot(...)` — deterministic projection of threat state for the widget, computed via the engine (`ThreatEngine(NEPTUN_TYPES).evaluate`, `engine.isStale`, `distanceFlat`, `resolveFocus`, `inOblast`). Counts + per-type `typeCounts` mirror the footer-strip semantics; `primaryThreat` = nearest live threat (id + position) so the widget can reveal it; `sourceOnline` is grace-filtered like the app pill. Takes `ConnectionState` + `Map<String, Threat>` + `List<OblastAlert>` directly (no `NeptunState`). Tested by `WidgetSnapshotTest`. |
+| `WidgetSnapshot.kt` | `WidgetSnapshot` + pure `computeWidgetSnapshot(...)` — deterministic projection of threat state for the widget, computed via the engine (`ThreatEngine(NEPTUN_TYPES).evaluate`, `engine.isStale`, `distanceFlat`, `resolveFocus`); `officialAlert` comes from `eval.focusOblastAlertActive`. Counts + per-type `typeCounts` mirror the footer-strip semantics; `primaryThreat` = nearest live threat (id + position) so the widget can reveal it; `sourceOnline` is grace-filtered like the app pill. Takes `ConnectionState` + `Map<String, NormalizedThreat>` + `List<OblastAlert>` directly (no `NeptunState`). Tested by `WidgetSnapshotTest`. |
 | `IconCatalog.kt` | Single source for threat icons: vector/photo/army/comic/russian sets, per-set facing (`baseDeg`), `ThreatIcon` composable; assets in `app/src/main/iconpacks/`. |
 | `Toasts.kt` | Shared toast helper: one function decides placement — top (below the header banner, via `ToastHost(topInset)`) normally, bottom (above the floating zone/shelter buttons) when a card/popup is visible. Dark themed pill. Callers never hardcode gravity. |
 | `Compat.kt` | *(deleted — Session 6)* engine `LatLng`/`ThreatZone`/`ZoneParams` are now imported directly (`ua.ukrainedrones.engine.*`) instead of root-package typealiases. |
@@ -234,17 +234,16 @@ Treat these as a contract. If you change one, update **every** place that relies
   fix at all, the UI and the ongoing notification show a persistent "No GPS fix" warning.
 - **Single evaluation logic.** `MainViewModel` (UI) and `AlertService` (notifications) each
   construct their own `ThreatEngine(registry.typeCatalog.value)` and call `engine.evaluate(...)`
-  directly — no reimplemented zone/tier/prediction logic in either consumer. Any change to
-  `zoneTier`, `predictPosition`, scoring, or staleness lands once in `engine/` and both paths
-  are covered by `ThreatEngineTest`. The UI pill (`neptunDown`) immediately reflects
-  connection drops (no grace filter) so the header and notifications agree; the grace is only
-  applied to the connection log. Official-alert **scope** (oblast/city) is shared:
-  both call the single `officialAlertActiveFor(...)` gate in `Threat.kt`, and the map's red city
-  labels (`redCities`) follow the same gate. Oblast-wide alerts (name/oblast ends in "область"
-  or "республіка") cover the whole stem — every city in the region lights and rings; the City
-  scope narrows only alerts that name a specific city/raion. `AlertService` uses the same gate
-  (no separate suppression logic). `inOblast` matches by prefix or whole word, so Crimea's
-  "Автономна Республіка Крим" hits the "Крим" stem.
+  directly — no reimplemented zone/tier/prediction/alert logic in either consumer. The full
+  engine contract (tiering, dead-reckoning, scoring, official alerts) lives in `BEHAVIORS.md`,
+  pinned by `ThreatEngineTest`. Official-alert scope (oblast/city) is engine-owned: the
+  `officialAlertActiveFor` gate lives in `engine/OblastAlert.kt`, and the UI banner, `redCities`
+  labels and the service's siren all read engine outputs. Oblast-wide alerts (name/oblast ends
+  in "область" or "республіка") cover the whole stem — every city in the region lights and
+  rings; the City scope narrows only alerts that name a specific city/raion. `inOblast` matches
+  by prefix or whole word, so Crimea's "Автономна Республіка Крим" hits the "Крим" stem. The UI
+  pill (`neptunDown`) immediately reflects connection drops (no grace filter) so the header and
+  notifications agree; the grace is only applied to the connection log.
 - **Official alert announces once per episode, surviving service restarts.** `AlertService`
   persists the announced episode identity (focus token + NEPTUN `since` + reason threat id) to
   `ZonePrefs` (`officialAnnounced*`), loaded inside `startMonitoring()` before the first tick
@@ -268,9 +267,10 @@ Treat these as a contract. If you change one, update **every** place that relies
 
 - **Widgets read snapshots, never evaluate.** The home-screen widget is a passive renderer of
   `WidgetSnapshot`, computed solely by `WidgetUpdater` via `computeWidgetSnapshot` — which calls
-  the engine (`ThreatEngine.evaluate`, `isStale`, `distanceFlat`) plus `resolveFocus`/
-  `inOblast`. A change to zone/tier/prediction logic must **not** be reimplemented in the widget
-  layer; update `computeWidgetSnapshot` instead. Counts mirror footer-strip semantics.
+  the engine (`ThreatEngine.evaluate`, `isStale`, `distanceFlat`) plus `resolveFocus`; the
+  `officialAlert` flag comes straight from `eval.focusOblastAlertActive` (no third
+  implementation). A change to zone/tier/prediction/alert logic must **not** be reimplemented in
+  the widget layer; update `computeWidgetSnapshot` instead. Counts mirror footer-strip semantics.
 
 - **Threat type gating.** `threatMapFlow` gates map rendering, `threatAlertFlow` gates alerts —
   decoupled toggles: map-off doesn't silence alerts; alerts-on auto-enables map visibility (an
@@ -287,49 +287,33 @@ Treat these as a contract. If you change one, update **every** place that relies
   last was instead of drifting to a pin. With no fix at all the location is `null` — no fake
   region alert, and `gpsFixMissing` drives the persistent "No GPS fix" warning.
 
-- **Zone tiering.** `engine.zoneTier(props, distKm, speedKmh, ZoneParams(slowRedKm,
-  slowYellowKm, fastRedMin, fastYellowMin))`. Fast types (`ThreatProps.isFast`, via
-  `isFastType`) tier by ETA (≤ fastRedMin → INNER, ≤ fastYellowMin → OUTER); slow types by
-  distance (≤ slowRedKm → INNER, ≤ slowYellowKm → OUTER). Slow distance is to the **confirmed
-  raw fix**, never the dead-reckoned position, so the drawn circles and alerts always agree.
-  Speed from the engine's `SpeedCache` (server → measured → nominal); a fast threat with no
-  usable speed never tiers. **AVIATION is the exception:** a MiG-31K takeoff alert is a
-  country-wide Kinzhal warning — within `reachKm` it always rings INNER regardless of ETA or
-  thresholds; the only opt-out is the type's bell. `reachKm` caps distance (KAB 70, FPV 40,
-  recon 50, Shahed 1000, else 1500 km). Map
-  circles show the slow km thresholds only. Advisory (observation) threats never tier/sound.
-  Armed bells are per group×tier (slow/fast × red/yellow), stored for day and night, resolved
-  per tick by `effectiveArmed`. **Slider coupling:** the yellow threshold is relative to red —
-  setters clamp yellow to `red+2 … max` (slow 1–20 km red / yellow ≤50; fast 1–5 min red /
-  yellow ≤20) in `ZonePrefs`; the UI sliders derive the yellow range from the red value live.
+- **Zone tiering.** The formula — fast-by-ETA vs slow-by-distance, `reachKm` caps,
+  `alwaysInnerWithinReach` (aviation's country-wide INNER), speed from `SpeedCache` — is the
+  engine contract in `BEHAVIORS.md`. App-side facts: map circles show the slow km thresholds
+  only; advisory threats never tier/sound; armed bells are per group×tier (slow/fast ×
+  red/yellow), stored for day and night, resolved per tick by `effectiveArmed`. **Slider
+  coupling:** the yellow threshold is relative to red — setters clamp yellow to `red+2 … max`
+  (slow 1–20 km red / yellow ≤50; fast 1–5 min red / yellow ≤20) in `ZonePrefs`; the UI sliders
+  derive the yellow range from the red value live.
 
-- **Expiry / ghosts.** `ThreatProps.staleAfterMs` per type (90s ballistic … 300s UAV). Stale
-  threats stay mapped **dimmed** (alpha 0.45, tappable) but are excluded from strip, tiers,
-  gauge, alerts. Removal only on server resolve / `remove` frame / `isGhost` (staleness +
-  `ghostCapMs` ~30 min). **AVIATION never locally expires:** a MiG-31K takeoff pin sits at the
-  launch airbase without fix refreshes, so age-based expiry would kill every real alert before
-  it rang — only the server's `status: "stale"` retires it early, and its ghost cap is its own
-  (2h) instead of window + 30 min. When the **selected** threat disappears that way,
+- **Expiry / ghosts.** `staleAfterMs`/`ghostCapMs` per type and the `canDrift` dead-reckon gate
+  are the engine contract in `BEHAVIORS.md`. App-side facts: stale threats stay mapped
+  **dimmed** (alpha 0.45, tappable) but excluded from strip, tiers, gauge, alerts; removal only
+  on server resolve / `remove` frame / ghost. **AVIATION never locally expires:** a MiG-31K
+  takeoff pin sits at the launch airbase without fix refreshes, so age-based expiry would kill
+  every real alert before it rang — only the server's `status: "stale"` retires it early, and
+  its ghost cap is its own (2h). When the **selected** threat disappears that way,
   `MainViewModel` swaps the popup for the neutralizing card (flips at
-  `DEATH_EXPLOSION_START_MS`, fades across the explosion) — but only while the map screen is
-  visible and the shelter overlay is down (a background screen never plays the flourish); it
-  *does* play during an alert because the selected threat was already on screen; with
-  `deathAnimationEnabled` off nothing animates. Dead-reckoning glides only a **fresh** track the
-  source itself reports a course for (`canDrift` = `!isStale` + `flying`), anchored on the latest
-  `updatedAt`/`confirmedAt` and capped per type — a track NEPTUN gives no course (or a stale one)
-  holds its last reported fix, so a plugin's movement model is never overridden and nothing
-  drifts after the track went quiet. MapView
+  `DEATH_EXPLOSION_START_MS`, fades across the explosion) — only while the map screen is visible
+  and the shelter overlay is down; it *does* play during an alert; with `deathAnimationEnabled`
+  off nothing animates. MapView
   glides markers on its own 1s tick (30fps tween); the service clears on a 20s grace.
 
-- **Threat facing always matches its motion.** `engine.predictPosition` (dead-reckoning) and
-  `engine.courseDeg(nt)` (icon rotation) both resolve the heading via the engine's `motionHeading`:
-  the server's authoritative velocity `bearingDeg` first, then the top-level `heading`, then the
-  speed cache's measured fix-track heading. Dead-reckoning uses only the server-reported course
-  (`bearingDeg`/`heading`) and is gated on `canDrift` (fresh + `flying`) — never a fabricated or
-  client-measured one; `courseDeg` keeps the deterministic `fallbackCourse(id)` (NEPTUN's `A(id)`)
-  pseudo-course for *stationary* threats that don't glide, and may use the measured heading for
-  rotation only. A change to heading resolution must
-  stay in the engine so the marker never faces a direction it doesn't move.
+- **Threat facing always matches its motion.** The heading resolution chain (`motionHeading`:
+  `bearingDeg` → `heading` → measured), the dead-reckon course rule (server-reported only,
+  gated by `canDrift`) and the `fallbackCourse(id)` pseudo-course for stationary threats are the
+  engine contract in `BEHAVIORS.md` — a change must stay in the engine so the marker never faces
+  a direction it doesn't move.
 
 - **Place names transliterate, never translate.** Any Ukrainian proper noun in the EN UI →
   `Cities.uaToEn` → `Transliteration.transliterate`; military vocabulary is hard-coded
@@ -345,10 +329,11 @@ Treat these as a contract. If you change one, update **every** place that relies
   CONNECTED/DEGRADED, or REST poller engaged and having actually fetched), its snapshots are the
   sole truth; if nothing is authoritative the last-known state is held (never fabricated all-clear).
   This means an active REST fallback (Ubilling) supersedes the primary's stale held alerts during
-  an outage, so a real all-clear can't be masked. Alert **scope** (oblast/city) is shared:
-  both consumers call the single `officialAlertActiveFor(...)` gate in `Threat.kt`, and the map's red city
-  labels (`redCities`) follow the same gate — oblast-wide alerts cover the whole stem, City scope
-  narrows only city/raion-named alerts. NEPTUN's list is held (never cleared) while its socket is down — but once a fallback takes over,
+  an outage, so a real all-clear can't be masked. Alert **scope** (oblast/city) is engine-owned:
+  both consumers read the `officialAlertActiveFor(...)` gate in `engine/OblastAlert.kt`, and the
+  map's red city labels (`redCities`) come from the engine result — oblast-wide alerts cover the
+  whole stem, City scope narrows only city/raion-named alerts. NEPTUN's list is held (never
+  cleared) while its socket is down — but once a fallback takes over,
   the fallback's snapshot is authoritative for the regions it reports. A continuous
   Neptun→Ubilling→Neptun handover never re-rings: the runtime announce latch keys on the alert
   staying active, not on `since` (Ubilling reports `since = null`); only a service kill
@@ -418,17 +403,21 @@ Must not:
 - own the WebSocket lifecycle
 - directly perform map rendering
 - duplicate zone math
+- compute official-alert facts locally (read them from the engine result)
 
 ### AlertService
 
 Owns:
 - background monitoring
 - notification lifecycle
+- official-alert orchestration (region latch, announce-once persistence, sound policy) — reading
+  engine-produced facts, never re-deriving the gate or formulas
 
 Must not:
 - depend on Compose
 - use UI-only selected state
 - implement new zone formulas locally
+- re-implement the official-alert gate/reason (engine-owned)
 
 ### MapView
 
@@ -452,16 +441,21 @@ Must not:
 - **Mitigation:** both consumers call the engine — `ThreatEngine.evaluate(...)` /
   `computeProximity(...)` — on their own instance built from the shared `typeCatalog`
   (`AppPluginHolder.registry.typeCatalog.value`). The engine owns zone tiering, dead-reckoning,
-  staleness/ghost rules, scoring and proximity; neither consumer re-implements a decision
-  formula. Any change lands once, in `engine/`, and both paths are covered by `ThreatEngineTest`.
+  staleness/ghost rules, scoring, proximity **and the official-alert facts** (`redCities`,
+  `focusOblastAlertActive`, reason); neither consumer re-implements a decision formula. Any
+  change lands once, in `engine/`, and both paths are covered by `ThreatEngineTest`.
 - **Note:** each `ThreatEngine` carries its own `SpeedCache` (speed history is per-consumer,
   not a shared singleton). Speed fallback is deterministic (server → trail → nominal), so
-  consumers can't disagree near a zone boundary.
+  consumers can't disagree near a zone boundary. The service additionally reads the raw
+  (scope=false) gate and the `since`/region of the active alert for its region-latch
+  orchestration — facts, not formulas.
 
-### Flat package
+### Sub-packages, not flat
 
-All code in one flat package — deliberate for now (Package structure). Cost grows with file
-count; migrate by subsystem when it outgrows maintainability.
+The UI/domain/widget layers share the root package; the subsystems (`engine/ plugins/
+connection/ service/ theme/ data/`) have real sub-packages (Package structure). Import
+ceremony between them is the cost of isolation; the engine kernel stays free of app-layer
+types.
 
 ### Foreground service instead of backend/push
 
@@ -506,11 +500,14 @@ The doc distinguishes **preferences** from **persisted application state**.
 ## Testing
 
 JUnit unit tests in `app/src/test/java/ua/ukrainedrones/`. Invariant → test: the engine
-(`zoneTier`, `predictPosition`, staleness/ghost, scoring) is pinned by `ThreatEngineTest`, which
-both UI and service consumers rely on.
+(`zoneTier`, `predictPosition`, staleness/ghost, scoring, official alerts) is pinned by
+`ThreatEngineTest`, which both UI and service consumers rely on.
 
 - `engine/ThreatEngineTest.kt` — `evaluate` zoning, `zoneTier` tiering, `predictPosition`,
-  `motionHeading`, `isStale`/`isGhost` caps, scoring, AVIATION override, null-speed fast.
+  `motionHeading`, `isStale`/`isGhost` caps, scoring, AVIATION override, null-speed fast,
+  official-alert outputs (scoped/raw gate, `redCities`, reason).
+- `OblastAlertScopeTest.kt` — `inOblast`/`isOblastWide`/`coversCity`/`officialAlertActiveFor`
+  matching rules (the `engine/OblastAlert.kt` gates).
 - `engine/TypeMappingTest.kt` — `ThreatType`↔String, `Threat`↔`NormalizedThreat` round trip.
 - `plugins/PluginRegistryTest.kt` — plugin merging, `typeCatalog`.
 - `CitiesTest.kt` — city-list integrity; majors-only `nearestCity`/`resolveFocus`.

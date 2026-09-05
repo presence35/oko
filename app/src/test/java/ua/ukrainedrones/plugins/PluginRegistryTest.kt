@@ -10,7 +10,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlinx.coroutines.launch
-import ua.ukrainedrones.OblastAlert
+import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.NEPTUN_TYPES
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.OperationalMode

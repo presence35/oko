@@ -22,6 +22,7 @@ import ua.ukrainedrones.connection.ConnectionState
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.ZoneParams
 import ua.ukrainedrones.engine.NormalizedThreat
+import ua.ukrainedrones.engine.OblastAlert
 
 /**
  * Background bridge between the live app state and the home-screen widget. Runs inside

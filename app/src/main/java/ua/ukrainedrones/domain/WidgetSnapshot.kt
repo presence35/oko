@@ -11,6 +11,7 @@ import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.ZoneParams
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.NormalizedThreat
+import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.toThreatType
 import kotlin.math.roundToInt
@@ -76,7 +77,9 @@ fun computeWidgetSnapshot(
         params = params,
         hiddenTypes = emptySet(),
         silencedTypes = emptySet(),
-        now = now
+        now = now,
+        alerts = alerts,
+        focusToken = token
     )
 
     var count = 0
@@ -101,7 +104,7 @@ fun computeWidgetSnapshot(
     }
     nearestKm = nearestKm?.let { it.coerceAtMost(WidgetSnapshot.NEAREST_CAP_KM).roundToInt().toDouble() }
 
-    val officialAlert = token != null && alerts.any { it.inOblast(token) }
+    val officialAlert = eval.focusOblastAlertActive
 
     // Online = the app-pill semantics: not down AND past the shared grace window, so short
     // socket blips (drops that recover inside OFFLINE_GRACE_MS) don't flicker the badge.
