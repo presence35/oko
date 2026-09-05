@@ -2,6 +2,7 @@ package ua.ukrainedrones.engine
 
 import ua.ukrainedrones.AppLanguage
 import ua.ukrainedrones.Cities
+import ua.ukrainedrones.CityRaions
 import kotlin.math.*
 
 enum class ThreatZone { INNER, OUTER }
@@ -47,6 +48,7 @@ class ThreatEngine(
         focusToken: String? = null,
         focusCityUa: String? = null,
         cityScope: Boolean = false,
+        fillRegions: Boolean = false,
         lang: AppLanguage = AppLanguage.EN
     ): ThreatEvaluationResult {
         val inInner = mutableListOf<NormalizedThreat>()
@@ -107,7 +109,7 @@ class ThreatEngine(
         // re-implement alert matching. Orchestration (region latch, announce-once, sound policy)
         // stays in AlertService.
         val focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, cityScope)
-        val redCities = computeRedCities(alerts)
+        val redCities = computeRedCities(alerts, fillRegions)
         val activeAlert = focusToken?.let { token -> alerts.firstOrNull { it.inOblast(token) } }
         val (officialReason, reasonThreatId) = if (activeAlert != null) {
             deriveOfficialAlertReason(activeAlert, threats, focus, params, lang, now)
@@ -130,19 +132,45 @@ class ThreatEngine(
         )
     }
 
-    /** Cities shown red on the map — region-precise (mirrors NEPTUN): a whole-oblast alert covers
-     *  every city in the region; a raion/city alert covers only the cities it actually names
-     *  ([OblastAlert.coversCity]). The City-scope toggle governs only the siren/notification
-     *  scope, not the map labels. Scope-independent, so red labels light nationwide. */
-    fun computeRedCities(alerts: List<OblastAlert>): Set<String> {
+    /** Cities shown red on the map — region-precise (mirrors NEPTUN):
+ *  - a whole-oblast alert covers every city in the region;
+ *  - a raion/city alert with the region fill ON covers only the cities in that raion
+ *    ([CityRaions] membership, name-match as a last resort);
+ *  - a raion/city alert with the fill OFF covers every city in the alerting oblast (broad labels
+ *    stand in for the missing fill).
+ *  Scope-independent, so red labels light nationwide. */
+fun computeRedCities(alerts: List<OblastAlert>, fillRegions: Boolean): Set<String> {
         if (alerts.isEmpty()) return emptySet()
         return buildSet {
             for (city in Cities.ALL) {
                 val token = Cities.cityOblast[city.nameUa] ?: continue
-                val covered = alerts.any { it.inOblast(token) && (it.isOblastWide() || it.coversCity(city.nameUa)) }
-                if (covered) add(city.nameUa)
+                val wide = alerts.any { it.inOblast(token) && it.isOblastWide() }
+                if (wide) {
+                    add(city.nameUa)
+                    continue
+                }
+                val regionAlert = alerts.any { it.inOblast(token) && !it.isOblastWide() }
+                if (!regionAlert) continue
+                if (fillRegions) {
+                    val regionAlerts = alerts.filter { it.inOblast(token) && !it.isOblastWide() }
+                    val raion = CityRaions.cityRaion[city.nameUa]
+                    val covered = regionAlerts.any { a ->
+                        (raion != null && raionCovers(a, raion)) || a.coversCity(city.nameUa)
+                    }
+                    if (covered) add(city.nameUa)
+                } else {
+                    add(city.nameUa)
+                }
             }
         }
+    }
+
+    /** True when the alert's raion key/name matches this city's raion ([CityRaions]). */
+    private fun raionCovers(alert: OblastAlert, raion: String): Boolean {
+        val key = alert.key.trim().lowercase()
+        val name = alert.name.lowercase()
+        val r = raion.lowercase()
+        return (key.isNotEmpty() && (r.contains(key) || key.contains(r))) || name.contains(r)
     }
 
     /** Human-readable attribution for an active official alert: the highest-scoring live threat
@@ -231,7 +259,10 @@ class ThreatEngine(
         var elapsedSec = (nowMillis - anchor) / 1000.0
         if (elapsedSec < 0) return null
         elapsedSec = minOf(elapsedSec, props.horizonSec)
-        val dist = minOf(speedMps * elapsedSec, props.maxGhostMeters)
+        // Distance-capped drift: the marker may never move more than DRIFT_MAX_METERS from its
+        // last confirmed fix (nor the per-type ghost cap) — a time window alone would let a fast
+        // threat appear to cross the whole country at the app's map scale.
+        val dist = minOf(speedMps * elapsedSec, props.maxGhostMeters, DRIFT_MAX_METERS)
         val rad = Math.toRadians(heading)
         val dLat = dist * cos(rad) / 111_320.0
         val dLon = dist * sin(rad) / (111_320.0 * cos(Math.toRadians(t.lat)).coerceAtLeast(0.01))
@@ -320,6 +351,11 @@ class ThreatEngine(
     }
 
     companion object {
+        /** Hard cap on dead-reckoning distance: a marker may never sit farther than this from its
+         *  last confirmed fix — a "relevant distance" at the app's map scale, so drift never looks
+         *  like the threat crossed the country. */
+        const val DRIFT_MAX_METERS = 5_000.0
+
         val BASE_SEVERITY: Map<String, Double> = mapOf(
             "ballistic" to 10.0,
             "cruise" to 8.0,

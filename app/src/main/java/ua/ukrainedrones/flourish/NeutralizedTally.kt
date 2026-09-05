@@ -6,6 +6,10 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ua.ukrainedrones.connection.ThreatRemoved
@@ -32,6 +36,22 @@ class NeutralizedTally(
 
     private var neutralizedCount = 0
     private val perTypeCounts = mutableMapOf<ThreatType, Int>()
+
+    /** Master "Just Fun" gate: live mirror of the master pref. [onResolved] no-ops while it's
+     *  off, and flipping it off resets the running tally so nothing fun survives. */
+    private val justFunEnabled = MutableStateFlow(false)
+
+    init {
+        scope.launch {
+            UserPrefs(context).justFunMasterEnabled()
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    justFunEnabled.value = enabled
+                    if (!enabled) reset()
+                }
+        }
+    }
+
     // Running memory of resolved threats (position + type) so tapping the tally notification can
     // replay a shot-down show. Capped at 21; flourish survives alerts and background.
     private data class ResolvedRecord(val lat: Double, val lon: Double, val type: ThreatType)
@@ -46,6 +66,7 @@ class NeutralizedTally(
      *  replay. Keeps the last 21 (the tally count itself can run much higher after a long
      *  absence — the replay only needs enough to be fun, not exhaustive). */
     fun onResolved(removed: ThreatRemoved, lang: AppLanguage) {
+        if (!justFunEnabled.value) return
         if (seenRemovalIds.contains(removed.id)) return
         seenRemovalIds.addLast(removed.id)
         while (seenRemovalIds.size > 64) seenRemovalIds.removeFirst()

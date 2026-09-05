@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -53,7 +54,25 @@ class DeathFxController(
     /** The overlay itself — added to the map's overlay list and driven per frame. */
     val overlay = ThreatDeathOverlay()
 
+    /** Master "Just Fun" gate: live mirror of the master pref. All flourish entry points
+     *  no-op while it's off, and flipping it off ejects anything in flight ([clear]). */
+    private val justFunEnabled = MutableStateFlow(false)
+
+    init {
+        scope.launch {
+            UserPrefs(context).justFunMasterEnabled()
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    justFunEnabled.value = enabled
+                    if (!enabled) clear()
+                }
+        }
+    }
+
     private val vibrator = context.getSystemService(Vibrator::class.java)
+    // The delayed "shot then kill" haptic jobs — each strike launches one; clear() cancels them
+    // all so an eject also silences the pending detonation buzz. Pruned on completion.
+    private val hapticJobs = mutableListOf<Job>()
     // A pending "return the camera to where the user was" job — replaced by each new strike.
     private var cameraReturnJob: Job? = null
     // The original camera position before the first strike in a sequence — persists across
@@ -130,11 +149,19 @@ class DeathFxController(
         cancelAutoCountdown()
         _autoStrikeActive.value = false
         _pendingStrikeCount.value = 0
+        // An eject must also stop the fun's haptics: cancel any pending/queued shot-kill pulses
+        // and cut a buzz already in flight.
+        if (hapticJobs.isNotEmpty()) {
+            hapticJobs.forEach { it.cancel() }
+            hapticJobs.clear()
+            vibrator?.cancel()
+        }
         overlay.clear()
     }
 
     /** Launch the tally-tap replay on the controller's scope, replacing any show in flight. */
     fun startReplay(records: List<FlourishRecord>) {
+        if (!justFunEnabled.value) return
         replayJob?.cancel()
         _replayProgress.value = null
         replayJob = scope.launch { replay(records) }
@@ -146,6 +173,7 @@ class DeathFxController(
      * Tap-to-cancel: call [cancelAutoCountdown].
      */
     fun startAutoCountdown(type: ThreatType?, onFire: () -> Unit) {
+        if (!justFunEnabled.value) return
         countdownJob?.cancel()
         pendingAutoStrike = onFire
         _strikeType.value = type
@@ -187,18 +215,28 @@ class DeathFxController(
     }
 
     /** User-initiated or server-driven strike: spawn the projectile + explosion. The bullet
-     *  takes off from a random point on the viewport edge (clamped to Ukraine). */
+     *  takes off from a random point on the viewport edge (clamped to Ukraine). Returns true
+     *  only when a strike actually launched — false when the Just Fun master is off, so the
+     *  caller can skip its side effects (marker hide, user-shot grace). */
     fun strike(
         id: String? = null,
         geo: GeoPoint,
         icon: Drawable? = null,
         rotationDeg: Float = 0f,
         alpha: Float = 1f
-    ) = overlay.spawn(id, geo, randomEdgeOrigin(), icon, rotationDeg, alpha)
+    ): Boolean {
+        if (!justFunEnabled.value) return false
+        overlay.spawn(id, geo, randomEdgeOrigin(), icon, rotationDeg, alpha)
+        return true
+    }
 
-    /** Follow-up projectile for an already-destroyed threat: no icon, never explodes. */
-    fun strikeDud(id: String?, geo: GeoPoint) {
-        randomEdgeOrigin()?.let { overlay.spawnDud(id, geo, it) }
+    /** Follow-up projectile for an already-destroyed threat: no icon, never explodes. Returns
+     *  true only when a dud actually launched (master gate + a valid edge origin). */
+    fun strikeDud(id: String?, geo: GeoPoint): Boolean {
+        if (!justFunEnabled.value) return false
+        val origin = randomEdgeOrigin() ?: return false
+        overlay.spawnDud(id, geo, origin)
+        return true
     }
 
     /** A random point exactly on the viewport edge (0px), converted to geo and clamped to
@@ -262,9 +300,10 @@ class DeathFxController(
      *  detonates. USAGE_ALARM keeps both audible as vibration even when the system "touch
      *  feedback" haptics are off. */
     fun strikeHaptics() {
+        if (!justFunEnabled.value) return
         if (BuildConfig.DEBUG) android.util.Log.d("VibTrace", "strikeHaptics() source=flourish")
         val vibrator = vibrator ?: return
-        scope.launch {
+        val job = scope.launch {
             vibrator.vibrate(
                 VibrationEffect.createOneShot(40L, VibrationEffect.DEFAULT_AMPLITUDE),
                 VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM)
@@ -275,6 +314,8 @@ class DeathFxController(
                 VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM)
             )
         }
+        hapticJobs += job
+        job.invokeOnCompletion { hapticJobs.remove(job) }
     }
 
     /**
@@ -286,6 +327,7 @@ class DeathFxController(
      * [startReplay]; the caller gates on visibility/alert/lifecycle before invoking.
      */
     suspend fun replay(records: List<FlourishRecord>) {
+        if (!justFunEnabled.value) return
         val mapView = mapView() ?: return
         if (records.isEmpty()) return
         // Snapshot — see followStrike; getMapCenter() hands back a live mutable point.

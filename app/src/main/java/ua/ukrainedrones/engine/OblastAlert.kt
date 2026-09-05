@@ -72,6 +72,23 @@ fun OblastAlert.coversCity(cityUa: String): Boolean {
 }
 
 /**
+ * The alerting raion's adjectival name (e.g. "Бердянський" from "Бердянський район"),
+ * or null when the alert names a whole oblast or a bare city rather than a raion.
+ * The map fills the alerting raion polygon only when this is non-null and matches a
+ * boundary key. Falls back to the key when the name carries no "район" suffix; both
+ * candidates must read as a Ukrainian raion adjectival (ends in "кий").
+ */
+fun OblastAlert.raionName(): String? {
+    if (isOblastWide()) return null
+    val n = name.trim().lowercase()
+    val k = key.trim().lowercase()
+    val fromName = n.substringBefore(" район").substringBefore(" р-н").trim()
+    if (fromName.isNotEmpty() && fromName != n) return fromName.takeIf { it.endsWith("кий") }
+    val fromKey = k.substringBefore(" район").substringBefore(" р-н").trim()
+    return fromKey.takeIf { it.length >= 4 && it.endsWith("кий") }
+}
+
+/**
  * Whether an official alert is active for the focus point. [scope] chooses the granularity:
  * `false` = the whole oblast rings (current behaviour); `true` = only when the alert covers the
  * focus city by name ([OblastAlert.coversCity]). Falls back to oblast-wide matching when the

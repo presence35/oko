@@ -6,6 +6,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import androidx.core.content.ContextCompat
 import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
@@ -170,7 +174,8 @@ class AlertNotificationManager(private val context: Context) {
         retryLabel: String? = null,
         progressMax: Int? = null,
         progressNow: Int? = null,
-        ignoreLabel: String? = null
+        ignoreLabel: String? = null,
+        red: Boolean = false
     ): Notification {
         val b = NotificationCompat.Builder(context, CHANNEL_MONITOR)
             .setSmallIcon(R.drawable.ic_trident)
@@ -179,6 +184,13 @@ class AlertNotificationManager(private val context: Context) {
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(openAppIntent())
+        if (red) {
+            // Red-tint the icon + colorize the whole card on supported devices (Android 12+);
+            // older versions show the red large icon instead. setColorized needs the large icon.
+            b.setColor(Color.RED)
+            b.setLargeIcon(redIconBitmap())
+            b.setColorized(true)
+        }
 
         if (retryLabel != null) {
             b.addAction(R.drawable.ic_trident, retryLabel, retryPendingIntent())
@@ -190,6 +202,20 @@ class AlertNotificationManager(private val context: Context) {
             b.addAction(R.drawable.ic_trident, ignoreLabel, ignoreRetryPendingIntent())
         }
         return b.build()
+    }
+
+    /** Red-tinted trident as a large-icon bitmap (used to colorize the monitor notification red). */
+    private fun redIconBitmap(): Bitmap {
+        val size = 96
+        val drawable = ContextCompat.getDrawable(context, R.drawable.ic_trident)?.mutate()
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        if (drawable != null) {
+            drawable.setTint(Color.RED)
+            drawable.setBounds(0, 0, size, size)
+            drawable.draw(canvas)
+        }
+        return bmp
     }
 
     fun postAlertNotification(

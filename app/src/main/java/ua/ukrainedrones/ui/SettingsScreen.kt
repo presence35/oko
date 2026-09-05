@@ -77,6 +77,9 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.graphics.StrokeCap
@@ -444,6 +447,8 @@ fun SettingsScreen(
     onDisclaimerShown: () -> Unit,
     onThreatCardSizeChange: (ThreatCardSize) -> Unit,
     onIconSetChange: (ThreatIconSet) -> Unit,
+    overlapMode: OverlapMode,
+    onOverlapModeChange: (OverlapMode) -> Unit,
     onShowMapScaleChange: (Boolean) -> Unit,
     onShowMediumCitiesChange: (Boolean) -> Unit,
     onShowSmallCitiesChange: (Boolean) -> Unit,
@@ -1261,6 +1266,47 @@ fun SettingsScreen(
                         )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // Icon packs — always available (a display setting, not gated by Just Fun).
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(
+                            s.iconSetTitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        IconSetSelector(
+                            lang = lang,
+                            selected = iconSet,
+                            onChange = onIconSetChange
+                        )
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // Overlapping-threats render mode (display setting).
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(
+                            s.overlapModeTitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            s.overlapModeDesc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OverlapModeChip(OverlapMode.DEFAULT, s.overlapDefaultLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.DEFAULT) }
+                            OverlapModeChip(OverlapMode.GRID, s.overlapGridLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.GRID) }
+                            OverlapModeChip(OverlapMode.SPREAD, s.overlapSpreadLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.SPREAD) }
+                            OverlapModeChip(OverlapMode.COUNT, s.overlapCountLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.COUNT) }
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Visual map toggles
                     AlertToggleRow(
                         title = s.showMapScaleTitle,
@@ -1286,7 +1332,9 @@ fun SettingsScreen(
                         title = s.fillAlertRegionsTitle,
                         description = s.fillAlertRegionsDesc,
                         checked = fillAlertRegions,
-                        onCheckedChange = onFillAlertRegionsChange
+                        onCheckedChange = onFillAlertRegionsChange,
+                        icon = remember { UkraineSilhouettePainter() },
+                        iconTint = ZoneRedColor
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Haptic press feedback
@@ -1341,21 +1389,6 @@ fun SettingsScreen(
                 ) {
                     AnimatedVisibility(visible = justFunMasterEnabled) {
                         Column {
-                            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                Text(
-                                    s.iconSetTitle,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(Modifier.height(10.dp))
-                                IconSetSelector(
-                                    lang = lang,
-                                    selected = iconSet,
-                                    onChange = onIconSetChange
-                                )
-                            }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             AlertToggleRow(
                                 title = s.calmMessagesTitle,
                                 description = s.calmMessagesDesc,
@@ -2508,10 +2541,96 @@ private fun CardSizeTile(
 }
 
 /** Icon-slot size inside an icon-set tile. */
-private val IconTileSlot = 44.dp
+private val IconTileSlot = 60.dp
 
 /** Gap between icon slots in a tile's swipeable row. */
-private val IconTileSpacing = 8.dp
+private val IconTileSpacing = 10.dp
+
+/**
+ * A filled Ukraine silhouette drawn from [UKRAINE_BORDER], normalized to a unit
+ * path. The settings row tints it red via `ColorFilter`, so the "Fill alerting
+ * regions" toggle reads as a red map of the country.
+ */
+private class UkraineSilhouettePainter : Painter() {
+    private val aspect: Float
+    private val unitPath: Path
+
+    init {
+        var minLat = Double.MAX_VALUE
+        var maxLat = -Double.MAX_VALUE
+        var minLon = Double.MAX_VALUE
+        var maxLon = -Double.MAX_VALUE
+        for (p in UKRAINE_BORDER) {
+            if (p.latitude < minLat) minLat = p.latitude
+            if (p.latitude > maxLat) maxLat = p.latitude
+            if (p.longitude < minLon) minLon = p.longitude
+            if (p.longitude > maxLon) maxLon = p.longitude
+        }
+        val lonSpan = maxLon - minLon
+        val latSpan = maxLat - minLat
+        aspect = (latSpan / lonSpan).toFloat()
+        unitPath = Path().apply {
+            var first = true
+            for (p in UKRAINE_BORDER) {
+                val x = ((p.longitude - minLon) / lonSpan).toFloat()
+                val y = ((1.0 - (p.latitude - minLat) / latSpan) * (latSpan / lonSpan)).toFloat()
+                if (first) {
+                    moveTo(x, y)
+                    first = false
+                } else {
+                    lineTo(x, y)
+                }
+            }
+            close()
+        }
+    }
+
+    override val intrinsicSize: Size get() = Size(1f, aspect)
+
+    override fun DrawScope.onDraw() {
+        val scale = minOf(size.width, size.height / aspect)
+        val dx = (size.width - scale) / 2f
+        val dy = (size.height - scale * aspect) / 2f
+        withTransform({
+            translate(dx, dy)
+            scale(scale, scale)
+        }) {
+            drawPath(unitPath, Color.White)
+        }
+    }
+}
+
+/** One chip of the overlapping-threats mode selector. */
+@Composable
+private fun OverlapModeChip(
+    mode: OverlapMode,
+    label: String,
+    selected: OverlapMode,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val selectedMode = mode == selected
+    val interactionSource = remember { MutableInteractionSource() }
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (selectedMode) MaterialTheme.colorScheme.primary else Color.Transparent,
+        contentColor = if (selectedMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        border = BorderStroke(
+            1.dp,
+            if (selectedMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
+        modifier = modifier
+            .pressTick(interactionSource)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()
+        )
+    }
+}
 
 /** Icon-style picker: four stacked full-width rows (one per real set — Photos,
  *  Army, Comic, Russian). Each row is a horizontally swipeable strip of enlarged icons whose
@@ -2598,10 +2717,10 @@ internal fun IconSetTile(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
         ) {
-            // Content width = min(natural, viewport + half-slot), so the right-most icon always
-            // half-peeks as a swipe affordance and the strip is scrollable to reveal the rest.
-            val maxStrip = maxWidth + slot / 2
-            val stripWidth = if (naturalWidth <= maxStrip) naturalWidth else maxStrip
+            // Content width is the full natural strip so the horizontal scroll can reach
+            // every icon (a capped width made the 7th icon unreachable). On wide screens the
+            // strip fits whole and nothing scrolls.
+            val stripWidth = naturalWidth
             Row(
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())

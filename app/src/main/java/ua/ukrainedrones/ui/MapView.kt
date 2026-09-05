@@ -5,6 +5,7 @@ import ua.ukrainedrones.connection.NeptunConnectionClient
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
+import ua.ukrainedrones.engine.ThreatProps
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.threatTypeInfoByString
@@ -77,8 +78,10 @@ import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.Polygon
+import org.osmdroid.views.overlay.Polyline
 
 import java.io.File
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.roundToInt
@@ -184,10 +187,11 @@ private fun StringBuilder.appendThreatKey(t: NormalizedThreat) {
 // animation mutates its icon's alpha per frame and must never touch a live marker's icon.
 private val threatIconCache = object : LruCache<String, Bitmap>(48) {}
 
-/** Threat marker icon size tracks map zoom (1x at low zoom → 3x by zoom 13), quantized to
- *  8dp steps so a pinch changes size in few, deliberate jumps instead of every fractional frame. */
+/** Threat marker icon size tracks map zoom (1x at low zoom → 3x only by the final ~3 zoom
+ *  levels before max, so icons stay small at normal view zooms and never balloon early),
+ *  quantized to 8dp steps so a pinch changes size in few, deliberate jumps. */
 private fun threatIconSizeDp(zoom: Double): Int {
-    val scale = ((zoom - 9.0) / 4.0 * 2.0 + 1.0).coerceIn(1.0, 3.0)
+    val scale = ((zoom - 11.5) / 3.0 * 2.0 + 1.0).coerceIn(1.0, 3.0)
     return (32.0 * scale / 8.0).roundToInt() * 8
 }
 
@@ -199,11 +203,11 @@ private fun orbitPosition(focus: LatLng, radiusMeters: Double, angleRad: Double)
     return LatLng(focus.lat + dLat, focus.lon + dLon)
 }
 
-/** An approximate-position threat inside the user's yellow zone patrols the zone's perimeter
- *  instead of parking on its raw fix (often the city pin, which reads as "0km" / already here). */
-private fun shouldOrbitFocus(nt: NormalizedThreat, focus: LatLng?, yellowKm: Int): Boolean {
+/** An approximate-position threat inside its orbit ring patrols that ring's perimeter instead of
+ *  parking on its raw fix (often the city pin, which reads as "0km" / already here). */
+private fun shouldOrbitFocus(nt: NormalizedThreat, focus: LatLng?, ringKm: Int): Boolean {
     if (focus == null || nt.areaOnly || nt.positionQuality != "approx") return false
-    return distanceFlat(focus.lat, focus.lon, nt.lat, nt.lon) / 1000.0 <= yellowKm
+    return distanceFlat(focus.lat, focus.lon, nt.lat, nt.lon) / 1000.0 <= ringKm
 }
 
 /**
@@ -370,6 +374,152 @@ private const val ORBIT_PERIOD_MS = 15_000L
 private fun orbitPhase(id: String): Double {
     val deg = Math.floorMod(id.hashCode(), 360)
     return Math.toRadians(deg.toDouble())
+}
+
+/** Orbit angle for [id] at wall-clock [now] (a full ring every ORBIT_PERIOD_MS). */
+internal fun orbitAngle(now: Long, id: String): Double =
+    (now / ORBIT_PERIOD_MS.toDouble()) * 2.0 * Math.PI + orbitPhase(id)
+
+/** Compass bearing of the orbit's direction of travel at [angleRad]. The ring is patrolled
+ *  clockwise — position is focus + r·(cos a north, sin a east), so the tangent is atan2(cos a, −sin a). */
+internal fun orbitTangentBearing(angleRad: Double): Double {
+    val deg = Math.toDegrees(atan2(cos(angleRad), -sin(angleRad)))
+    return (deg + 360.0) % 360.0
+}
+
+/** Orbit ring radius: fast threats patrol the tight red ring, slow threats the yellow one. */
+private fun orbitRadiusKm(isFast: Boolean, redKm: Int, yellowKm: Int): Int = if (isFast) redKm else yellowKm
+
+/** How a threat is shown on the map right now. */
+internal enum class ThreatPoseMode { PARKED, ORBIT, DRIFT }
+
+/** Desired on-map pose for a threat: position + compass heading. Parked threats hold their raw
+ *  fix with the reported course; orbiting threats follow their ring (tangent heading); drifting
+ *  threats dead-reckon along their course. Single source used by both the rebuild and the
+ *  animation loop so placement and facing always agree. */
+internal data class MarkerPose(
+    val lat: Double,
+    val lon: Double,
+    val headingDeg: Float,
+    val mode: ThreatPoseMode
+)
+
+internal fun resolveThreatPose(
+    engine: ThreatEngine,
+    t: NormalizedThreat,
+    props: ThreatProps,
+    focus: LatLng?,
+    redKm: Int,
+    yellowKm: Int,
+    now: Long
+): MarkerPose {
+    val drift = engine.canDrift(t, props, now)
+    val ringKm = orbitRadiusKm(props.isFast, redKm, yellowKm)
+    if (drift && focus != null && shouldOrbitFocus(t, focus, ringKm)) {
+        val angle = orbitAngle(now, t.id)
+        val pos = orbitPosition(focus, ringKm * 1000.0, angle)
+        return MarkerPose(pos.lat, pos.lon, orbitTangentBearing(angle).toFloat(), ThreatPoseMode.ORBIT)
+    }
+    if (drift) {
+        val predicted = engine.speedCache.estimate(t.id, t, props)
+            ?.let { engine.predictPosition(t, it, props, now) }
+        if (predicted != null) {
+            return MarkerPose(predicted.lat, predicted.lon, engine.courseDeg(t).toFloat(), ThreatPoseMode.DRIFT)
+        }
+    }
+    return MarkerPose(t.lat, t.lon, engine.courseDeg(t).toFloat(), ThreatPoseMode.PARKED)
+}
+
+/** Per-id de-overlap result: the marker position to use, or null when the threat is collapsed
+ *  into a counted representative (COUNT mode) and should render no marker. [chip] is a count
+ *  caption for representatives. */
+private data class ThreatPlacement(val pos: GeoPoint?, val chip: String?)
+
+/** Deterministic screen-space de-overlap for threats sharing a coordinate: GRID spreads them on
+ *  a small 2D grid, SPREAD fans them in a half-overlapping staggered row, COUNT collapses
+ *  same-type stacks into one counted representative (mixed types auto-grid so each stays
+ *  visible), DEFAULT keeps markers exactly on their positions. Returns id → placement. */
+private fun deOverlapThreats(
+    poses: List<Triple<String, LatLng, String>>,  // id, pose, type
+    mapView: MapView,
+    mode: OverlapMode,
+    stepPx: Int
+): Map<String, ThreatPlacement> {
+    val raw = HashMap<String, ThreatPlacement>(poses.size)
+    if (mode == OverlapMode.DEFAULT || mapView.width <= 0 || mapView.height <= 0) {
+        for ((id, pose, _) in poses) raw[id] = ThreatPlacement(geoFromPixels(mapView, pose), null)
+        return raw
+    }
+
+    val reuse = Point()
+    val cells = HashMap<Pair<Int, Int>, MutableList<Triple<String, LatLng, String>>>()
+    for (item in poses) {
+        val (id, pose, _) = item
+        mapView.projection.toPixels(GeoPoint(pose.lat, pose.lon), reuse)
+        val key = (reuse.x / stepPx) to (reuse.y / stepPx)
+        cells.getOrPut(key) { mutableListOf() }.add(item)
+    }
+    val out = HashMap<String, ThreatPlacement>(poses.size)
+    for (members in cells.values) {
+        val sorted = members.sortedBy { it.first }
+        if (sorted.size == 1) {
+            val (id, pose, _) = sorted[0]
+            out[id] = ThreatPlacement(geoFromPixels(mapView, pose), null)
+            continue
+        }
+        when (mode) {
+            OverlapMode.GRID -> {
+                val cols = kotlin.math.ceil(kotlin.math.sqrt(sorted.size.toDouble())).toInt().coerceAtLeast(1)
+                val rows = kotlin.math.ceil(sorted.size / cols.toDouble()).toInt()
+                sorted.forEachIndexed { i, (id, pose, _) ->
+                    val dx = (i % cols - (cols - 1) / 2.0) * stepPx
+                    val dy = (i / cols - (rows - 1) / 2.0) * stepPx
+                    out[id] = ThreatPlacement(offsetFromPixels(mapView, pose, dx, dy), null)
+                }
+            }
+            OverlapMode.SPREAD -> {
+                val half = stepPx / 2.0
+                sorted.forEachIndexed { i, (id, pose, _) ->
+                    val dx = i * half
+                    val dy = if (i % 2 == 0) 0.0 else half
+                    out[id] = ThreatPlacement(offsetFromPixels(mapView, pose, dx, dy), null)
+                }
+            }
+            OverlapMode.COUNT -> {
+                val byType = LinkedHashMap<String, MutableList<Triple<String, LatLng, String>>>()
+                for (m in sorted) byType.getOrPut(m.third) { mutableListOf() }.add(m)
+                val reps = byType.values.map { it.first() }
+                val cols = kotlin.math.ceil(kotlin.math.sqrt(reps.size.toDouble())).toInt().coerceAtLeast(1)
+                val rows = kotlin.math.ceil(reps.size / cols.toDouble()).toInt()
+                reps.forEachIndexed { i, (id, pose, type) ->
+                    val dx = (i % cols - (cols - 1) / 2.0) * stepPx
+                    val dy = (i / cols - (rows - 1) / 2.0) * stepPx
+                    val count = byType.getValue(type).size
+                    out[id] = ThreatPlacement(
+                        offsetFromPixels(mapView, pose, dx, dy),
+                        if (count > 1) "$count" else null
+                    )
+                }
+                for (m in sorted) {
+                    if (m.first !in out) out[m.first] = ThreatPlacement(null, null)
+                }
+            }
+            else -> {}
+        }
+    }
+    return out
+}
+
+private fun geoFromPixels(mapView: MapView, pose: LatLng): GeoPoint {
+    val reuse = Point()
+    mapView.projection.toPixels(GeoPoint(pose.lat, pose.lon), reuse)
+    return GeoPoint(mapView.projection.fromPixels(reuse.x, reuse.y))
+}
+
+private fun offsetFromPixels(mapView: MapView, pose: LatLng, dxPx: Double, dyPx: Double): GeoPoint {
+    val reuse = Point()
+    mapView.projection.toPixels(GeoPoint(pose.lat, pose.lon), reuse)
+    return GeoPoint(mapView.projection.fromPixels((reuse.x + dxPx).toInt(), (reuse.y + dyPx).toInt()))
 }
 
 /**
@@ -563,6 +713,7 @@ fun NeptunMapView(
         uiState.showMediumCities,
         uiState.showSmallCities,
         uiState.fillAlertRegions,
+        uiState.alertRaionKeys,
         showNearbyShelters,
         selectedShelter?.shelter?.id,
         uiState.redCities,
@@ -579,6 +730,7 @@ fun NeptunMapView(
             append('M').append(uiState.showMediumCities)
             append('N').append(uiState.showSmallCities)
             append('K').append(uiState.fillAlertRegions)
+            for ((stem, raion) in uiState.alertRaionKeys) append('J').append(stem).append('=').append(raion).append(';')
             append('S').append(showNearbyShelters)
             if (showNearbyShelters) {
                 append('L').append(selectedShelter?.shelter?.id)
@@ -609,9 +761,7 @@ fun NeptunMapView(
     val markerRefs = remember { mutableStateOf<MutableMap<String, Marker>>(mutableMapOf()) }
     val markerIconDp = remember { mutableStateOf<MutableMap<String, Int>>(mutableMapOf()) }
     val hiddenByDeath = remember { mutableStateOf<MutableSet<String>>(mutableSetOf()) }
-    // Per-threat glide tween jobs; each new tick cancels the previous glide and re-targets.
-    val tweenJobs = remember { mutableMapOf<String, Job>() }
-    // True while a finger is on the map: freeze dead-reckon glides so icons stay rigidly
+    // True while a finger is on the map: the animation loop freezes marker writes so icons stay
     // ground-fixed while panning instead of sliding along with the gesture.
     val mapTouching = remember { mutableStateOf(false) }
     val pausedState by rememberUpdatedState(paused)
@@ -626,6 +776,7 @@ fun NeptunMapView(
     val hiddenTypesState by rememberUpdatedState(uiState.hiddenTypes)
     val iconSetState by rememberUpdatedState(uiState.iconSet)
     val mapThreatsState by rememberUpdatedState(uiState.mapThreats)
+    val slowRedKmState by rememberUpdatedState(uiState.activeZoneParams.slowRedKm)
     val slowYellowKmState by rememberUpdatedState(uiState.activeZoneParams.slowYellowKm)
     val threatIconZoomState by rememberUpdatedState(uiState.threatIconZoom)
     val selectedId by selectedThreatId.collectAsState()
@@ -726,15 +877,12 @@ fun NeptunMapView(
                 overlayManager.tilesOverlay.setLoadingLineColor(Color.BLACK)
                 setMultiTouchControls(true)
                 // Observe-only: never consumes (returns false), so osmdroid's own gesture
-                // pipeline (pan/zoom/double-tap) is untouched. Just freezes the glide tweens
-                // for the duration of a touch so icons don't slide along with the finger.
+                // pipeline (pan/zoom/double-tap) is untouched. While a finger is down, the
+                // animation loop freezes marker writes so icons stay ground-fixed during a pan;
+                // it resumes from the live clock the frame after release.
                 setOnTouchListener { _, event ->
                     when (event.actionMasked) {
-                        MotionEvent.ACTION_DOWN -> {
-                            mapTouching.value = true
-                            tweenJobs.values.forEach { it.cancel() }
-                            tweenJobs.clear()
-                        }
+                        MotionEvent.ACTION_DOWN -> mapTouching.value = true
                         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> mapTouching.value = false
                     }
                     false
@@ -930,8 +1078,6 @@ fun NeptunMapView(
                 mapView.overlays.clear()
                 markerRefs.value.clear()
                 markerIconDp.value.clear()
-                tweenJobs.values.forEach { it.cancel() }
-                tweenJobs.clear()
 
                 // Bottom-most overlay: single-tap on empty map closes the popup, while
                 // markers added after it keep tap priority. Long-press is handled by the
@@ -973,13 +1119,36 @@ fun NeptunMapView(
                     }
                 }
 
+                // Raion region fill: a raion/city alert (NEPTUN `raions`) that names a raion
+                // shades that raion's polygon instead of only tinting its cities' labels.
+                if (uiState.fillAlertRegions && uiState.alertRaionKeys.isNotEmpty()) {
+                    for ((stem, raion) in uiState.alertRaionKeys) {
+                        val rings = RaionBoundaries.forKey(stem, raion) ?: continue
+                        for (ring in rings) {
+                            if (ring.size < 3) continue
+                            val points = ring.map { GeoPoint(it[1], it[0]) }
+                            mapView.overlays.add(Polygon(mapView).apply {
+                                this.points = points
+                                fillColor = Color.argb(55, 255, 60, 60)
+                                strokeColor = Color.argb(30, 255, 80, 80)
+                                strokeWidth = 1f
+                                title = ""
+                                setInfoWindow(null)
+                            })
+                        }
+                    }
+                }
+
                 // City labels (English names on top of label-free tiles). Region-precise red:
-                // in fill mode the wide-oblast fill already covers whole regions, so skip red
-                // labels there; raion-only alerts have no fill, so their covered cities must
-                // still read red via their labels.
+                // in fill mode the wide-oblast and raion fills already cover the region, so skip
+                // red labels for cities inside a filled oblast or a filled raion; cities only
+                // covered by a city-level alert (no polygon) still read red via their labels.
                 val redLabels = if (uiState.fillAlertRegions) {
                     uiState.redCities.filter { c ->
-                        (Cities.cityOblast[c] ?: "") !in uiState.alertOblastTokens
+                        val stem = Cities.cityOblast[c] ?: return@filter true
+                        if (stem in uiState.alertOblastTokens) return@filter false
+                        val raion = CityRaions.cityRaion[c] ?: return@filter true
+                        (stem to raion) !in uiState.alertRaionKeys
                     }.toSet()
                 } else uiState.redCities
                 mapView.overlays.add(
@@ -991,15 +1160,12 @@ fun NeptunMapView(
                     )
                 )
 
-                // Subtle outline of Ukraine's perimeter — a faint ring so the country's edge
-                // stays visible now that panning can shift the viewport past the tight bounds.
-                mapView.overlays.add(Polygon(mapView).apply {
-                    points = UKRAINE_BORDER
-                    fillColor = Color.TRANSPARENT
-                    strokeColor = Color.argb(70, 255, 255, 255)
-                    strokeWidth = 2f
-                    title = ""
-                    setInfoWindow(null)
+                // Subtle outline of Ukraine's land border — an open polyline, so it hugs the
+                // land borders tightly (river borders included) and never crosses the sea.
+                mapView.overlays.add(Polyline(mapView).apply {
+                    setPoints(ArrayList(UKRAINE_LAND_BORDER))
+                    color = Color.argb(70, 255, 255, 255)
+                    width = 2f
                 })
 
                 // Focus-centered alert zones: yellow ring (outer) and red circle (inner) for
@@ -1030,10 +1196,27 @@ fun NeptunMapView(
 
                 // Threats anywhere in the country — tappable, type icon; stale/expired ones
                 // render dimmed (still tappable) until they pass the hard ghost cap.
+                // De-overlap first: same-coordinate threats spread/grid/count per the setting.
+                val overlapDensity = context.resources.displayMetrics.density
+                val stepPx = ((if (uiState.threatIconZoom) threatIconSizeDp(mapView.zoomLevelDouble) else 32) * overlapDensity).toInt().coerceAtLeast(24)
+                val placements = deOverlapThreats(
+                    uiState.mapThreats.map { t ->
+                        val p = engine.propsFor(t.type)
+                        val pose = resolveThreatPose(
+                            engine, t, p, uiState.focusLocation,
+                            uiState.activeZoneParams.slowRedKm, uiState.activeZoneParams.slowYellowKm,
+                            System.currentTimeMillis()
+                        )
+                        Triple(t.id, LatLng(pose.lat, pose.lon), t.type)
+                    },
+                    mapView, uiState.overlapMode, stepPx
+                )
                 for (t in uiState.mapThreats) {
                     // A user-shot drone stays hidden while its death animation plays; the
                     // next redraw after the animation brings it back in place.
                     if (deathFx.isActiveFor(t.id)) continue
+                    val placement = placements[t.id] ?: continue
+                    val pos = placement.pos ?: continue // collapsed into a count representative
                     val nt = t
                     val props = engine.propsFor(nt.type)
                     engine.speedCache.record(nt.id, nt.updatedAtMillis ?: System.currentTimeMillis(), nt.lat, nt.lon)
@@ -1041,20 +1224,15 @@ fun NeptunMapView(
                     val typeLabel = if (lang == AppLanguage.UA) typeInfo.labelUa else typeInfo.labelEn
                     val rawRegion = t.region ?: t.district ?: t.locality ?: strings.noRegion
                     val regionLabel = if (lang == AppLanguage.EN) Cities.uaToEn[rawRegion] ?: rawRegion else rawRegion
-                    // Place markers at their dead-reckoned position straight away (matching the
-                    // animation loop) so a rebuild never snaps a moving marker back to its raw fix
-                    // and returning to the app doesn't flash stale fixes before the loop corrects.
+                    // Place markers at their from-clock pose straight away (matching the animation loop) so a
+                    // rebuild never snaps a moving marker back to its raw fix and returning to the
+                    // app doesn't flash stale fixes before the loop corrects.
                     val focusPt = uiState.focusLocation
-                    val drift = engine.canDrift(nt, props, System.currentTimeMillis())
-                    val orbit = drift && shouldOrbitFocus(nt, focusPt, uiState.activeZoneParams.slowYellowKm)
-                    val predicted = if (orbit || !drift) null else engine.speedCache.estimate(nt.id, nt, props)?.let {
-                        engine.predictPosition(nt, it, props, System.currentTimeMillis())
-                    }
-                    val pos = predicted?.let { GeoPoint(it.lat, it.lon) }
-                        ?: if (orbit && focusPt != null) {
-                            val angle = (System.currentTimeMillis() / ORBIT_PERIOD_MS.toDouble()) * 2.0 * Math.PI + orbitPhase(nt.id)
-                            orbitPosition(focusPt, uiState.activeZoneParams.slowYellowKm * 1000.0, angle).let { GeoPoint(it.lat, it.lon) }
-                        } else GeoPoint(nt.lat, nt.lon)
+                    val pose = resolveThreatPose(
+                        engine, nt, props, focusPt,
+                        uiState.activeZoneParams.slowRedKm, uiState.activeZoneParams.slowYellowKm,
+                        System.currentTimeMillis()
+                    )
                     val stale = engine.isStale(nt, props, System.currentTimeMillis())
                     val nowMs = System.currentTimeMillis()
                     val ring = newRingState.value
@@ -1062,6 +1240,7 @@ fun NeptunMapView(
                     val marker = Marker(mapView).apply {
                         position = pos
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        placement.chip?.let { setSubDescription(it) }
                         icon = threatIconFor(
                             context, t.type.toThreatType(), iconSet, revealed = revealed, areaOnly = t.areaOnly,
                             sizeDp = if (uiState.threatIconZoom) threatIconSizeDp(mapView.zoomLevelDouble) else 32
@@ -1069,14 +1248,13 @@ fun NeptunMapView(
                         alpha = if (stale) 0.45f else 1.0f
                         title = typeLabel
                         snippet = regionLabel
-                        // Rotate to show course, mirroring NEPTUN's predict().heading: velocity
-                        // bearing while live, else reported heading, else their A(id) pseudo-course.
-                        // The classic icons face up at 0°; the photo/army sets have a baked-in
-                        // facing angle, so their rotation is the course minus that base (0..360).
+                        // Rotate to show course, mirroring NEPTUN's predict().heading: the orbit tangent while
+                        // patrolling a ring, else the reported course. The classic icons face up at
+                        // 0°; the photo/army sets have a baked-in facing angle, so their rotation is
+                        // the heading minus that base.
                         rotation = if (nt.areaOnly) 0f else {
-                            val course = engine.courseDeg(nt).toFloat()
                             val base = IconCatalog.baseDeg(t.type.toThreatType(), iconSet)
-                            threatMarkerRotation(course, base)
+                            threatMarkerRotation(pose.headingDeg, base)
                         }
                         // Instant taps are handled by InstantThreatTapOverlay (onSingleTapUp,
                         // no double-tap wait). This listener only absorbs osmdroid's late
@@ -1179,22 +1357,14 @@ fun NeptunMapView(
                                 // its card too (reuses the real neutralized-card flow).
                                 val pressedId = markerRefs.value.entries
                                     .firstOrNull { it.value === nearest }?.key
-                                // Hide the marker (alpha=0) so the death animation overlay
-                                // can draw its own copy without visual conflict. The marker
-                                // stays in overlays/markerRefs and reappears after the animation.
-                                val origAlpha = nearest.alpha
-                                nearest.alpha = 0f
-                                if (pressedId != null) hiddenByDeath.value.add(pressedId)
-                                mapView.invalidate()
-                                if (pressedId != null && pressedId == selectedThreatIdState) {
-                                    onNeutralize(pressedId)
-                                }
-                                // Remember the shot so a same-id respawn within the grace window
-                                // doesn't re-alert (the object itself is never removed).
-                                if (pressedId != null) ConnectionHolder.getClient(context).markUserShot(pressedId)
+                                // The easter egg is gated on the death-animation toggle here; the
+                                // engine independently gates the Just Fun master and reports
+                                // whether a strike actually launched. Only when it did do we touch
+                                // the marker or the alert grace — otherwise the long-press is a
+                                // pure no-op (no hide, no vibration, no user-shot grace).
                                 if (deathAnimationEnabledState) {
                                     val target = nearest.position ?: GeoPoint(p.latitude, p.longitude)
-                                    if (deathFx.isActiveFor(pressedId)) {
+                                    val played = if (deathFx.isActiveFor(pressedId)) {
                                         // Already being struck — a follow-up projectile just
                                         // flies off-screen instead of exploding twice.
                                         deathFx.strikeDud(pressedId, target)
@@ -1213,8 +1383,23 @@ fun NeptunMapView(
                                             geo = target,
                                             icon = icon,
                                             rotationDeg = -nearest.rotation,
-                                            alpha = origAlpha
+                                            alpha = nearest.alpha
                                         )
+                                    }
+                                    if (played) {
+                                        // Hide the marker (alpha=0) so the death animation overlay
+                                        // can draw its own copy without visual conflict. The marker
+                                        // stays in overlays/markerRefs and reappears after the
+                                        // animation.
+                                        nearest.alpha = 0f
+                                        if (pressedId != null) hiddenByDeath.value.add(pressedId)
+                                        mapView.invalidate()
+                                        if (pressedId != null && pressedId == selectedThreatIdState) {
+                                            onNeutralize(pressedId)
+                                        }
+                                        // Remember the shot so a same-id respawn within the grace
+                                        // window doesn't re-alert (the object itself is never removed).
+                                        if (pressedId != null) ConnectionHolder.getClient(context).markUserShot(pressedId)
                                         deathFx.strikeHaptics()
                                     }
                                 }
@@ -1416,12 +1601,12 @@ fun NeptunMapView(
             deathFx.pendingStrikeCount.collect { n -> onPendingStrikeCountChange(n) }
         }
 
-        // User tapped the footer stop overlay: cancel the countdown, or eject the in-flight
-        // animation, depending on which phase the auto-strike is in.
+        // User tapped the emergency-eject stop: cancel the countdown, eject any in-flight death
+        // animation, stop the replay, and return the camera home — one clear() handles every
+        // playful phase (countdown, auto-strike, manual long-press, tally replay).
         LaunchedEffect(onCancelRequestTick) {
             if (onCancelRequestTick == 0) return@LaunchedEffect
-            if (deathFx.countdown.value != null) deathFx.cancelAutoCountdown()
-            else deathFx.ejectAutoStrike()
+            deathFx.clear()
         }
 
         // After a user-shot death animation finishes, wait 2.1s then restore the hidden
@@ -1477,82 +1662,77 @@ fun NeptunMapView(
             }
         }
 
-    // Smoothly advance markers between the (sparse) server fixes: predict each threat's
-    // current position from its heading + estimated speed and move the marker in-place,
-    // without clearing the whole map. Only invalidates when something actually moved.
+    // Markers are a pure function of the wall clock: orbit/drift/parked positions and headings
+    // all derive from `now` (resolveThreatPose). One loop recomputes every marker's pose each
+    // frame while anything is moving (30fps), idles at 1s otherwise, and freezes writes while the
+    // map is hidden, paused, or a finger is on it (icons stay ground-fixed during pan — motion
+    // resumes from the live clock the frame after release). Data changes rebuild markers via
+    // overlayKey; this loop only touches in-place state (pose, rotation, staleness alpha).
     LaunchedEffect(Unit) {
         while (true) {
-            delay(1000)
-            // The map is fully hidden behind Settings — skip the marker smoothing to save battery.
-            if (pausedState) continue
-            val mapView = mapViewRef.value ?: continue
+            if (pausedState || !mapVisibleState || mapTouching.value) {
+                delay(150)
+                continue
+            }
+            val mapView = mapViewRef.value
+            if (mapView == null) {
+                delay(1000)
+                continue
+            }
             val now = System.currentTimeMillis()
             var dirty = false
-            // Icon sizing is handled by the zoom listener (resizeThreatIcons) — not here.
-            val ring = newRingState.value
+            var moving = false
+            val focusPt = focusLocationState
+            // De-overlap the live poses each frame so spread/grid/count stay consistent with the rebuild.
+            val stepPx = ((if (threatIconZoomState) threatIconSizeDp(mapView.zoomLevelDouble) else 32) *
+                context.resources.displayMetrics.density).toInt().coerceAtLeast(24)
+            val placements = deOverlapThreats(
+                mapThreatsState.map { t ->
+                    val p = engine.propsFor(t.type)
+                    val pose = resolveThreatPose(engine, t, p, focusPt, slowRedKmState, slowYellowKmState, now)
+                    Triple(t.id, LatLng(pose.lat, pose.lon), t.type)
+                },
+                mapView, uiState.overlapMode, stepPx
+            )
             for (t in mapThreatsState) {
-                if (mapTouching.value) continue
                 val marker = markerRefs.value[t.id] ?: continue
                 if (t.id in hiddenByDeath.value) continue
-                val nt = t
-                val props = engine.propsFor(nt.type)
-                // Staleness dimming + course rotation update in-place too (they're excluded
-                // from overlayKey, so a full rebuild no longer runs for them).
-                val targetAlpha = if (engine.isStale(nt, props, now)) 0.45f else 1.0f
+                val placement = placements[t.id] ?: continue
+                val targetPos = placement.pos ?: continue // collapsed into a count representative
+                val props = engine.propsFor(t.type)
+                // Staleness dimming + pose update in-place (both excluded from overlayKey, so a
+                // full rebuild no longer runs for them).
+                val targetAlpha = if (engine.isStale(t, props, now)) 0.45f else 1.0f
                 if (marker.alpha != targetAlpha) {
                     marker.alpha = targetAlpha
                     dirty = true
                 }
-                val targetRot = if (nt.areaOnly) 0f else {
-                    val course = engine.courseDeg(nt).toFloat()
+                val pose = resolveThreatPose(engine, t, props, focusPt, slowRedKmState, slowYellowKmState, now)
+                if (pose.mode != ThreatPoseMode.PARKED) moving = true
+                val targetRot = if (t.areaOnly) 0f else {
                     val base = IconCatalog.baseDeg(t.type.toThreatType(), iconSetState)
-                    threatMarkerRotation(course, base)
+                    threatMarkerRotation(pose.headingDeg, base)
                 }
                 if (marker.rotation != targetRot) {
                     marker.rotation = targetRot
                     dirty = true
                 }
-                val focusPt = focusLocationState
-                val drift = engine.canDrift(nt, props, now)
-                val orbit = drift && shouldOrbitFocus(nt, focusPt, slowYellowKmState)
-                val targetPos = if (orbit && focusPt != null) {
-                    val angle = (now / ORBIT_PERIOD_MS.toDouble()) * 2.0 * Math.PI + orbitPhase(nt.id)
-                    orbitPosition(focusPt, slowYellowKmState * 1000.0, angle)
-                } else if (drift) {
-                    val speed = engine.speedCache.estimate(nt.id, nt, props) ?: continue
-                    engine.predictPosition(nt, speed, props, now) ?: continue
-                } else {
-                    // Stale or no server course: hold the reported fix (no drift).
-                    LatLng(nt.lat, nt.lon)
+                if (placement.chip != marker.subDescription) {
+                    marker.setSubDescription(placement.chip)
+                    dirty = true
                 }
                 val cur = marker.position
                 if (cur != null &&
-                    distanceFlat(cur.latitude, cur.longitude, targetPos.lat, targetPos.lon) > 1.0
+                    distanceFlat(cur.latitude, cur.longitude, targetPos.latitude, targetPos.longitude) > 1.0
                 ) {
-                    // Glide the marker from where it is to the dead-reckoned target instead of
-                    // teleporting: dead-reckoning is linear in time (constant heading + speed,
-                    // horizon-capped), so a linear tween reproduces the true path between the
-                    // sparse ticks. ~30fps for a second, invalidating only when this marker moved.
-                    val from = LatLng(cur.latitude, cur.longitude)
-                    tweenJobs[t.id]?.cancel()
-                    tweenJobs[t.id] = mapScope.launch {
-                        val steps = 30
-                        for (i in 1..steps) {
-                            if (pausedState) return@launch
-                            delay((1000 / steps).toLong())
-                            val f = i / steps.toFloat()
-                            marker.position = GeoPoint(
-                                from.lat + (targetPos.lat - from.lat) * f,
-                                from.lon + (targetPos.lon - from.lon) * f
-                            )
-                            mapView.invalidate()
-                        }
-                    }
+                    marker.position = targetPos
+                    dirty = true
                 }
             }
             if (dirty) mapView.invalidate()
             // Reveal badge: when the 8s window ends, strip the green dot off the revealed
             // marker (the dot is baked into the icon, so expiry is just an icon swap).
+            val ring = newRingState.value
             if (ring != null && now >= ring.activeUntilMs) {
                 newRingState.value = null
                 ring.id?.let { id ->
@@ -1566,6 +1746,7 @@ fun NeptunMapView(
                 }
             }
             if (dirty) mapView.invalidate()
+            delay(if (moving) 33 else 1000)
         }
     }
 }

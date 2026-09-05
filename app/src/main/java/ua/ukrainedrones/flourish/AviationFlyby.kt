@@ -31,19 +31,36 @@ object AviationFlyby {
      * The threat whose takeoff should play the flyby next, or null. Only INNER-tier AVIATION
      * qualifies (evaluate() already dropped advisory/type-off entries), each id plays at most
      * once per process, and nothing plays while the map isn't the visible foreground screen.
+     * Gated by the master "Just Fun" switch ([justFunEnabled]) and the flyby sub-toggle
+     * ([flybyEnabled]) — both must be on, or no show.
      */
     fun nextShow(
         innerThreats: List<NormalizedThreat>,
         playedIds: Set<String>,
         visible: Boolean,
+        justFunEnabled: Boolean,
+        flybyEnabled: Boolean,
         tick: Long
     ): AviationFlybyShow? {
-        if (!visible) return null
+        if (!visible || !justFunEnabled || !flybyEnabled) return null
         val t = innerThreats.firstOrNull { it.type.toThreatType() == ThreatType.AVIATION && it.id !in playedIds }
             ?: return null
         // Pure spectacle: a fresh random bearing every pass — "to somewhere, who knows".
         val course = Random.nextDouble(0.0, 360.0)
         return AviationFlybyShow(tick, t.id, course)
+    }
+
+    /** User-initiated pass (notification tap) gated by the same master + flyby toggles. */
+    fun tapShow(
+        justFunEnabled: Boolean,
+        flybyEnabled: Boolean,
+        tick: Long,
+        threatId: String,
+        courseDeg: Double,
+        durationMs: Long = AVIATION_FLYBY_DURATION_MS
+    ): AviationFlybyShow? {
+        if (!justFunEnabled || !flybyEnabled) return null
+        return AviationFlybyShow(tick, threatId, courseDeg, durationMs)
     }
 
     /** Unit direction of travel in screen coords (x right, y down) for a compass [courseDeg]. */

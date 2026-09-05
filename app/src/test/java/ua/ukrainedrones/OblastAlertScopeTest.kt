@@ -1,6 +1,8 @@
 package ua.ukrainedrones
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ua.ukrainedrones.engine.OblastAlert
@@ -8,6 +10,7 @@ import ua.ukrainedrones.engine.coversCity
 import ua.ukrainedrones.engine.inOblast
 import ua.ukrainedrones.engine.isOblastWide
 import ua.ukrainedrones.engine.officialAlertActiveFor
+import ua.ukrainedrones.engine.raionName
 
 class OblastAlertScopeTest {
 
@@ -84,5 +87,27 @@ class OblastAlertScopeTest {
         val alerts = listOf(alert("бердянський", "Бердянський район", "Запорізька область"))
         assertTrue(officialAlertActiveFor(alerts, "Запорізьк", "Бердянськ", scope = true))
         assertFalse(officialAlertActiveFor(alerts, "Запорізьк", "Запоріжжя", scope = true))
+    }
+
+    @Test
+    fun `raionName - raion alert strips the район suffix`() {
+        assertEquals(
+            "бердянський",
+            alert("бердянський", "Бердянський район", "Запорізька область").raionName()
+        )
+    }
+
+    @Test
+    fun `raionName - bare adjectival name falls back to the key`() {
+        assertEquals(
+            "дніпровський",
+            alert("дніпровський", "Дніпровський", "Дніпропетровська область").raionName()
+        )
+    }
+
+    @Test
+    fun `raionName - oblast-wide and city alerts are null`() {
+        assertNull(alert("луганська", "Луганська область", "Луганська область").raionName())
+        assertNull(alert("dnipro", "Дніпро", "Дніпропетровська область").raionName())
     }
 }

@@ -147,6 +147,7 @@ class AlertService : Service() {
     private var lastMonitorProgressMax: Int? = null
     private var lastMonitorProgressNow: Int? = null
     private var lastMonitorIgnore: String? = null
+    private var lastMonitorRed: Boolean = false
 
     private var hasShownGpsFallbackToast = false
     @Volatile private var wasConnected = true
@@ -648,11 +649,13 @@ val mappedThreats = registry.allThreats.map { list ->
             now - offlineSince
         } else 0L
 
+        val redAlert = (state.officialAlertsEnabled && state.focusOblastAlertActive) ||
+            state.zoneThreats.values.any { it == ThreatZone.INNER }
         val monitorTitle = when {
             isOfflineNow -> s.offlineStatusTitle
             state.focusPinned -> String.format(s.notifMonitoringCityFormat, state.focusBannerCity)
             else -> s.notifOngoingTitle
-        }
+        } + if (redAlert) s.notifRedDot else ""
 
         val monitorText = when {
             isOfflineNow -> offlineLiveBody(s, offlineMinutes)
@@ -667,7 +670,8 @@ val mappedThreats = registry.allThreats.map { list ->
             retryLabel = if (isOfflineNow) s.offlineRetryAction else null,
             progressMax = if (isOfflineNow) 20 else null,
             progressNow = if (isOfflineNow) offlineMinutes else null,
-            ignoreLabel = if (isOfflineNow && elapsedSinceReconnect >= twentyMinMs) s.offlineIgnoreAction else null
+            ignoreLabel = if (isOfflineNow && elapsedSinceReconnect >= twentyMinMs) s.offlineIgnoreAction else null,
+            red = redAlert
         )
 
         val all = state.threats
@@ -965,10 +969,12 @@ val mappedThreats = registry.allThreats.map { list ->
         retryLabel: String?,
         progressMax: Int? = null,
         progressNow: Int? = null,
-        ignoreLabel: String? = null
+        ignoreLabel: String? = null,
+        red: Boolean = false
     ) {
         if (title == lastMonitorTitle && text == lastMonitorText && retryLabel == lastMonitorRetry &&
-            progressMax == lastMonitorProgressMax && progressNow == lastMonitorProgressNow && ignoreLabel == lastMonitorIgnore
+            progressMax == lastMonitorProgressMax && progressNow == lastMonitorProgressNow && ignoreLabel == lastMonitorIgnore &&
+            red == lastMonitorRed
         ) return
         lastMonitorTitle = title
         lastMonitorText = text
@@ -976,9 +982,10 @@ val mappedThreats = registry.allThreats.map { list ->
         lastMonitorProgressMax = progressMax
         lastMonitorProgressNow = progressNow
         lastMonitorIgnore = ignoreLabel
+        lastMonitorRed = red
         notificationManager.safeNotify(
             NOTIF_MONITOR,
-            notificationManager.buildMonitorNotification(title, text, retryLabel, progressMax, progressNow, ignoreLabel)
+            notificationManager.buildMonitorNotification(title, text, retryLabel, progressMax, progressNow, ignoreLabel, red)
         )
     }
 

@@ -41,6 +41,7 @@ import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.inOblast
 import ua.ukrainedrones.engine.isOblastWide
+import ua.ukrainedrones.engine.raionName
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toEngineString
 import ua.ukrainedrones.engine.toThreatType
@@ -122,11 +123,13 @@ data class UiState(
     val batteryOnboardShown: Boolean = false,
     val threatCardSize: ThreatCardSize = ThreatCardSize.LARGE,
     val iconSet: ThreatIconSet = ThreatIconSet.PHOTO,
+    val overlapMode: OverlapMode = OverlapMode.DEFAULT,
     val showMapScale: Boolean = true,
     val showMediumCities: Boolean = true,
     val showSmallCities: Boolean = true,
     val fillAlertRegions: Boolean = false,
     val alertOblastTokens: Set<String> = emptySet(),
+    val alertRaionKeys: Set<Pair<String, String>> = emptySet(),
     val alertingOblastCount: Int = 0,
     val justFunMasterEnabled: Boolean = false,
     val deathAnimationEnabled: Boolean = true,
@@ -305,6 +308,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val batteryOnboardShown: Boolean,
         val cardSize: ThreatCardSize,
         val iconSet: ThreatIconSet,
+        val overlapMode: OverlapMode,
         val sheltersEnabled: Boolean,
         val sheltersWithKids: Boolean,
         val periodicGps: Boolean,
@@ -360,6 +364,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val batteryOnboardShown: Boolean,
         val cardSize: ThreatCardSize,
         val iconSet: ThreatIconSet,
+        val overlapMode: OverlapMode,
         val showMapScale: Boolean,
         val showMediumCities: Boolean,
         val showSmallCities: Boolean,
@@ -510,21 +515,22 @@ val fastGroupCollapsed: Boolean,
                         prefs.threatCardSize(),
                         prefs.threatIconSet()
                     ) { pinned, wizardDone, batteryShown, card, iconSet ->
-                        PrefsQuad(pinned, wizardDone, batteryShown, card, iconSet, false, true, false, true, true)
+                        PrefsQuad(pinned, wizardDone, batteryShown, card, iconSet, OverlapMode.DEFAULT, false, true, false, true, true)
                     },
-                    prefs.sheltersEnabled()
-                ) { quad, shelters ->
-                    quad.copy(sheltersEnabled = shelters)
+                    prefs.overlapMode()
+                ) { quad, overlap ->
+                    quad.copy(overlapMode = overlap)
                 },
-                prefs.sheltersWithKidsEnabled()
-            ) { quad, kids ->
-                quad.copy(sheltersWithKids = kids)
+                prefs.sheltersEnabled()
+            ) { quad, shelters ->
+                quad.copy(sheltersEnabled = shelters)
             },
-            prefs.periodicGps(),
-            prefs.calmMessagesEnabled(),
-            prefs.hapticsEnabled()
-        ) { quad, periodic, calm, haptics ->
-            quad.copy(periodicGps = periodic, calmMessagesEnabled = calm, hapticsEnabled = haptics)
+                prefs.sheltersWithKidsEnabled(),
+                prefs.periodicGps(),
+                prefs.calmMessagesEnabled(),
+                prefs.hapticsEnabled()
+        ) { quad, kids, periodic, calm, haptics ->
+            quad.copy(sheltersWithKids = kids, periodicGps = periodic, calmMessagesEnabled = calm, hapticsEnabled = haptics)
         },
         combine(
             combine(
@@ -582,6 +588,7 @@ combine(
             batteryOnboardShown = c.batteryOnboardShown,
             cardSize = c.cardSize,
             iconSet = c.iconSet,
+            overlapMode = c.overlapMode,
             showMapScale = b.showMapScale,
             showMediumCities = b.showMediumCities,
             showSmallCities = b.showSmallCities,
@@ -715,7 +722,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             now = now,
             reveal = live.reveal,
             flourish = live.flourish,
-            officialAlertCityScope = prefs.officialAlertCityScope
+            officialAlertCityScope = prefs.officialAlertCityScope,
+            fillAlertRegions = prefs.fillAlertRegions
         ).copy(
             update = updateUi.update,
             needsInstallPermission = updateUi.needsInstallPermission,
@@ -758,6 +766,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             batteryOnboardShown = prefs.batteryOnboardShown,
             threatCardSize = prefs.cardSize,
             iconSet = prefs.iconSet,
+            overlapMode = prefs.overlapMode,
             showMapScale = prefs.showMapScale,
             showMediumCities = prefs.showMediumCities,
             showSmallCities = prefs.showSmallCities,
@@ -787,7 +796,9 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         // — a user away from the phone gets the flyby on notification-tap reveal instead.
         val autoFlyby = AviationFlyby.nextShow(
             uiState.threatsInner, flybyPlayedIds,
-            live.mapVisible && appForegroundFlow.value, flybyTick + 1
+            live.mapVisible && appForegroundFlow.value,
+            prefs.justFunMasterEnabled, prefs.flybyAnimationEnabled,
+            flybyTick + 1
         )
         if (autoFlyby != null) {
             flybyTick++
@@ -905,7 +916,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         now: Long,
         reveal: RevealRequest?,
         flourish: FlourishShow?,
-        officialAlertCityScope: Boolean
+        officialAlertCityScope: Boolean,
+        fillAlertRegions: Boolean
     ): UiState {
         val params = effectiveParams
         val gpsFresh = LocationTracker.isFresh(now)
@@ -921,6 +933,17 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val filledOblastTokens = buildSet {
             for (citiesToken in Cities.cityOblast.values) {
                 if (alerts.any { it.inOblast(citiesToken) && it.isOblastWide() }) add(citiesToken)
+            }
+        }
+        // Raion-level alerts' (oblast stem, raion adjectival) pairs — the red RAION fill. Only
+        // non-wide alerts that name a raion contribute; the polygon lookup happens in MapView.
+        val alertRaionKeys = buildSet {
+            val stems = Cities.cityOblast.values
+            for (alert in alerts) {
+                if (alert.isOblastWide()) continue
+                val raion = alert.raionName() ?: continue
+                val stem = stems.firstOrNull { alert.inOblast(it) } ?: continue
+                add(stem to raion)
             }
         }
         // Distinct oblasts under ANY official alert (whole-oblast or region) — the Logs header count.
@@ -943,6 +966,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             focusToken = focusToken,
             focusCityUa = attribution.bannerCityUa.takeIf { it.isNotBlank() },
             cityScope = officialAlertCityScope,
+            fillRegions = fillAlertRegions,
             lang = language
         )
         val inInner = evaluation.threatsInner
@@ -986,6 +1010,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             gpsFixMissing = focus.gpsFixMissing,
             redCities = redCities,
             alertOblastTokens = filledOblastTokens,
+            alertRaionKeys = alertRaionKeys,
             alertingOblastCount = alertingOblastCount,
             threatLevel = evaluation.threatLevel,
             revealRequest = reveal,
@@ -1321,6 +1346,10 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setThreatIconSet(set) }
     }
 
+    fun setOverlapMode(mode: OverlapMode) {
+        viewModelScope.launch { prefs.setOverlapMode(mode) }
+    }
+
     fun setShowMediumCities(show: Boolean) {
         viewModelScope.launch { prefs.setShowMediumCities(show) }
     }
@@ -1349,8 +1378,9 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setDeathAnimationEnabled(enabled) }
     }
 
-    /** Master "Just Fun" switch: gates visibility of the Just Fun settings panel.
-     *  Does NOT change individual settings — only toggles the panel visibility. */
+    /** Master "Just Fun" switch: a global kill-switch for every flourish. Enforced inside the
+     *  flourish engine (DeathFxController / NeutralizedTally / AviationFlyby gates), so this
+     *  only persists the pref — the engine reacts live and ejects any running show. */
     fun setJustFunEnabled(enabled: Boolean) {
         viewModelScope.launch {
             prefs.setJustFunMasterEnabled(enabled)
@@ -1431,6 +1461,12 @@ fun setAlertsArmed(armed: Boolean) {
         selectThreat(t)
     }
 
+    /** Emergency eject from every playful overlay (currently the MiG flyby): clears it without
+     *  opening the threat card — the user asked to return to a non-fun, safety-first map. */
+    fun ejectAllFun() {
+        flybyFlow.value = null
+    }
+
     /** Treat [id] as neutralized so its card self-destructs (map long-press trigger). */
     fun neutralizeThreat(id: String) {
         neutralizedFlow.value = id
@@ -1478,10 +1514,22 @@ fun setAlertsArmed(armed: Boolean) {
         // and the card only opens when the jet is gone (onFlybyFinished), so selection is
         // deferred here. Marking it played also suppresses the live auto-trigger for the id.
         if (aviation && id != null && threat != null) {
-            flybyPlayedIds.add(id)
-            flybyTick++
-            val durationMs = calculateFlybyDuration(threat)
-            flybyFlow.value = AviationFlybyShow(flybyTick, id, Random.nextDouble(0.0, 360.0), durationMs)
+            val s = uiState.value
+            val show = AviationFlyby.tapShow(
+                justFunEnabled = s.justFunMasterEnabled,
+                flybyEnabled = s.flybyAnimationEnabled,
+                tick = flybyTick + 1,
+                threatId = id,
+                courseDeg = Random.nextDouble(0.0, 360.0),
+                durationMs = calculateFlybyDuration(threat)
+            )
+            if (show != null) {
+                flybyPlayedIds.add(id)
+                flybyTick++
+                flybyFlow.value = show
+            } else if (select) {
+                selectedThreatFlow.value = threat
+            }
         } else if (select && id != null) {
             selectedThreatFlow.value = threat
         }

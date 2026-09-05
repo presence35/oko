@@ -19,6 +19,9 @@ enum class ThreatCardSize { SMALL, LARGE }
 
 enum class ThreatIconSet { PHOTO, ARMY, COMIC, RUSSIAN }
 
+/** How same-coordinate threats render on the map. */
+enum class OverlapMode { DEFAULT, GRID, SPREAD, COUNT }
+
 class UserPrefs(private val context: Context) {
 
     private val keyCache = mutableMapOf<String, Preferences.Key<Boolean>>()
@@ -50,6 +53,7 @@ class UserPrefs(private val context: Context) {
     private val shelterTipRemainingKey = intPreferencesKey("shelter_tip_remaining")
     private val threatCardSizeKey = stringPreferencesKey("threat_card_size")
     private val threatIconSetKey = stringPreferencesKey("threat_icon_set")
+    private val overlapModeKey = stringPreferencesKey("threat_overlap_mode")
     private val showMapScaleKey = booleanPreferencesKey("show_map_scale")
     private val showMediumCitiesKey = booleanPreferencesKey("show_medium_cities")
     private val showSmallCitiesKey = booleanPreferencesKey("show_small_cities")
@@ -335,6 +339,17 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setThreatIconSet(set: ThreatIconSet) {
         context.dataStore.edit { it[threatIconSetKey] = set.name }
+    }
+
+    fun overlapMode(): Flow<OverlapMode> =
+        context.dataStore.data.map { prefs ->
+            prefs[overlapModeKey]?.let { stored ->
+                OverlapMode.values().firstOrNull { it.name == stored }
+            } ?: OverlapMode.DEFAULT
+        }
+
+    suspend fun setOverlapMode(mode: OverlapMode) {
+        context.dataStore.edit { it[overlapModeKey] = mode.name }
     }
 
     fun showMapScale(): Flow<Boolean> =

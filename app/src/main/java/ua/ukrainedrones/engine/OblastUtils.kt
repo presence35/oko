@@ -31,11 +31,13 @@ fun threatBody(t: NormalizedThreat, lang: AppLanguage): String {
 }
 
 /** The alert's region name in the given language: UA keeps the raw server text; EN
- *  transliterates (КМУ №55) so an oblast alert never leaks Cyrillic into the EN path. */
+ *  transliterates (КМУ №55) so an oblast alert never leaks Cyrillic into the EN path, and
+ *  "район" is TRANSLATED to "district" rather than transliterated to "raion". */
 fun alertRegionName(alert: OblastAlert, lang: AppLanguage): String {
     val raw = alert.name.ifBlank { alert.oblast }.ifBlank { alert.key }
-    return if (lang == AppLanguage.UA) raw
-    else Cities.byUa[raw]?.nameEn ?: Transliteration.transliterate(raw)
+    if (lang == AppLanguage.UA) return raw
+    val base = Cities.byUa[raw]?.nameEn ?: Transliteration.transliterate(raw)
+    return base.replace("район", "district").replace("Raion", "district").replace("raion", "district")
 }
 
 fun matchOblast(lat: Double, lon: Double): OblastMatch? {

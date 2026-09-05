@@ -18,31 +18,48 @@ class AviationFlybyTest {
             mig,
             threat(id = "m2", type = ThreatType.AVIATION)
         )
-        val show = AviationFlyby.nextShow(inner, emptySet(), true, tick = 1)
+        val show = AviationFlyby.nextShow(inner, emptySet(), true, true, true, tick = 1)
         assertNotNull(show)
         assertEquals("m1", show!!.threatId)
     }
 
     @Test
     fun `nextShow skips already-played ids`() {
-        assertNull(AviationFlyby.nextShow(listOf(mig), setOf("m1"), true, 1))
+        assertNull(AviationFlyby.nextShow(listOf(mig), setOf("m1"), true, true, true, 1))
     }
 
     @Test
     fun `nextShow ignores non-aviation tiers`() {
         val inner = listOf(threat(id = "s1", type = ThreatType.SHAHED))
-        assertNull(AviationFlyby.nextShow(inner, emptySet(), true, 1))
+        assertNull(AviationFlyby.nextShow(inner, emptySet(), true, true, true, 1))
     }
 
     @Test
     fun `nextShow never plays while the map is hidden or app backgrounded`() {
-        assertNull(AviationFlyby.nextShow(listOf(mig), emptySet(), false, 1))
+        assertNull(AviationFlyby.nextShow(listOf(mig), emptySet(), false, true, true, 1))
+    }
+
+    @Test
+    fun `nextShow never plays while the just-fun master is off`() {
+        assertNull(AviationFlyby.nextShow(listOf(mig), emptySet(), true, false, true, 1))
+    }
+
+    @Test
+    fun `nextShow never plays while the flyby toggle is off`() {
+        assertNull(AviationFlyby.nextShow(listOf(mig), emptySet(), true, true, false, 1))
+    }
+
+    @Test
+    fun `tapShow is gated by the just-fun master and flyby toggle`() {
+        assertNull(AviationFlyby.tapShow(false, true, 1, "m1", 90.0))
+        assertNull(AviationFlyby.tapShow(true, false, 1, "m1", 90.0))
+        assertNotNull(AviationFlyby.tapShow(true, true, 1, "m1", 90.0))
     }
 
     @Test
     fun `course is a fresh random full-circle bearing`() {
         repeat(20) {
-            val show = AviationFlyby.nextShow(listOf(mig), emptySet(), true, 1L + it)
+            val show = AviationFlyby.nextShow(listOf(mig), emptySet(), true, true, true, 1L + it)
             assertNotNull(show)
             assertTrue(show!!.courseDeg in 0.0..360.0)
         }

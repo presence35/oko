@@ -291,6 +291,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onThreatCardSizeChange = { viewModel.setThreatCardSize(it) },
             onNeutralize = { id -> viewModel.neutralizeThreat(id) },
             onFlybyFinished = { id -> viewModel.onFlybyFinished(id) },
+            onEjectAll = viewModel::ejectAllFun,
             showZonesSheet = showZonesSheet,
             onShowZonesSheetChange = { showZonesSheet = it },
             onOpenShelters = {
@@ -416,6 +417,8 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 onDisclaimerShown = { viewModel.onDisclaimerShown() },
                 onThreatCardSizeChange = { viewModel.setThreatCardSize(it) },
                 onIconSetChange = { viewModel.setThreatIconSet(it) },
+                overlapMode = uiState.overlapMode,
+                onOverlapModeChange = { viewModel.setOverlapMode(it) },
                 onShowMapScaleChange = { viewModel.setShowMapScale(it) },
                 onShowMediumCitiesChange = { viewModel.setShowMediumCities(it) },
                 onShowSmallCitiesChange = { viewModel.setShowSmallCities(it) },
@@ -645,6 +648,7 @@ private fun MapScreen(
     onNeutralize: (String) -> Unit,
     onFlourishEjected: () -> Unit,
     onFlybyFinished: (String) -> Unit,
+    onEjectAll: () -> Unit,
     showZonesSheet: Boolean,
     onShowZonesSheetChange: (Boolean) -> Unit,
     onOpenShelters: () -> Unit,
@@ -692,6 +696,9 @@ private fun MapScreen(
     var strikeType by remember { mutableStateOf<ThreatType?>(null) }
     var pendingStrikeCount by remember { mutableStateOf(0) }
     var cancelTick by remember { mutableStateOf(0) }
+    // Emergency eject: one tap cancels the countdown, ejects any in-flight death animation,
+    // stops the replay, and clears the MiG flyby — back to a non-fun, safety-first map.
+    val stopAll: () -> Unit = { cancelTick++; onEjectAll() }
     var footerHeightPx by remember { mutableStateOf(0) }
 
     // Surface shelter-mode to the ViewModel so the resolved-threat flourish/card is
@@ -1018,16 +1025,20 @@ private fun MapScreen(
                 }
             }
 
-            if (countdown != null || autoStrikeActive) {
+            if (countdown != null || autoStrikeActive ||
+                (deathActive && replayProgress == null) || uiState.flyby != null
+            ) {
                 val typeLabel = strikeType?.let { t ->
                     val info = ThreatTypeCatalog.INFO.getValue(t)
                     if (uiState.language == AppLanguage.UA) info.labelUa else info.labelEn
                 }
-                CountdownOverlay(
+                StopLayer(
                     count = countdown,
                     threatTypeLabel = typeLabel,
                     remainingTotal = pendingStrikeCount,
-                    footerHeightPx = footerHeightPx
+                    footerHeightPx = footerHeightPx,
+                    stopLabel = s.stopReplayLabel,
+                    onStop = stopAll
                 )
             }
 
@@ -1302,53 +1313,64 @@ private fun ThreatStripFooter(
             animationSpec = tween(250),
             label = "flourishProgress"
         )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-        ) {
-            Text(
-                resolvingThreatsPhrase(replay.groupSize, language),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFF9A825),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(6.dp))
-            // Slim progress bar: faint track, amber fill easing across the
-            // bottom edge as the show advances.
+        // A replay pans the camera for the whole show, so it needs a way out — the whole footer is
+            // tappable to stop (eject + return home). A compact STOP button sits on the LEFT so it
+            // never covers the "Resolving…" message + progress on the right.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f))
+                    .padding(top = 8.dp)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onReplayStop)
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(barFraction.coerceIn(0f, 1f))
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color(0xFFF9A825))
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF3A2E00),
+                        contentColor = Color(0xFFF9A825),
+                        border = BorderStroke(1.dp, Color(0xFFF9A825).copy(alpha = 0.6f)),
+                        modifier = Modifier.width(76.dp).height(56.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                s.stopReplayLabel,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            resolvingThreatsPhrase(replay.groupSize, language),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFFF9A825),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        // Slim progress bar: faint track, amber fill easing across the
+                        // bottom edge as the show advances.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(barFraction.coerceIn(0f, 1f))
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(Color(0xFFF9A825))
+                            )
+                        }
+                    }
+                }
             }
-            // A replay pans the camera for the whole show, so it needs a way out — an early
-            // stop ejects it and returns the camera home.
-            Spacer(Modifier.height(8.dp))
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0xFF3A2E00),
-                contentColor = Color(0xFFF9A825),
-                border = BorderStroke(1.dp, Color(0xFFF9A825).copy(alpha = 0.6f)),
-                modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onReplayStop)
-            ) {
-                Text(
-                    s.stopReplayLabel,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
-                )
-            }
-        }
     } else if (total == 0) {
         val footerText = when {
             deathActive -> s.neutralizingLabel
@@ -1411,33 +1433,37 @@ private fun ThreatStripFooter(
 }
 
 @Composable
-private fun BoxScope.CountdownOverlay(
+private fun BoxScope.StopLayer(
     count: Int?,
     threatTypeLabel: String?,
     remainingTotal: Int,
-    footerHeightPx: Int
+    footerHeightPx: Int,
+    stopLabel: String,
+    onStop: () -> Unit
 ) {
     val amber = Color(0xFFF9A825)
     val density = LocalDensity.current
     val overlayH = with(density) { (footerHeightPx * 1.5f).toDp().coerceAtLeast(48.dp) }
-    // Auto-strikes fire right where the user is looking, one at a time, and never hijack the
-    // camera — the user can just pan away. So this is a display-only strip (no tap-to-stop).
+    // Emergency-eject strip: visible from the auto-strike countdown through any death animation
+    // (auto or manual long-press) and the MiG flyby. The whole layer is tappable anywhere — the
+    // Stop pill is just the visual affordance.
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .align(Alignment.BottomCenter)
             .height(overlayH)
             .background(if (count != null) Color.Black.copy(alpha = 0.85f) else Color.Transparent)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onStop)
     ) {
-        if (count != null) {
-            // Countdown phase: dark strip with "3 2 1" (the active digit highlighted) and a
-            // thin line naming the target + remaining total. During the death animation the
-            // backdrop is transparent so the footer's "Neutralizing threat…" stays visible.
-            Column(
-                modifier = Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
+        Column(
+            modifier = Modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            if (count != null) {
+                // Countdown phase: dark strip with "3 2 1" (the active digit highlighted) and a
+                // thin line naming the target + remaining total. During the animation the
+                // backdrop is transparent so the footer's "Neutralizing threat…" stays visible.
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -1470,7 +1496,25 @@ private fun BoxScope.CountdownOverlay(
                     )
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            StopPill(stopLabel)
         }
+    }
+}
+
+@Composable
+private fun StopPill(label: String) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = Color(0xFF3A2E00),
+        contentColor = Color(0xFFF9A825),
+        border = BorderStroke(1.dp, Color(0xFFF9A825).copy(alpha = 0.6f))
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
+        )
     }
 }
 

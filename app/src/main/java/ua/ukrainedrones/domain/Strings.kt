@@ -123,6 +123,7 @@ object Strings {
         val yellowZoneAlert: String,
         val notifOngoingTitle: String,
         val notifMonitoringCityFormat: String,
+        val notifRedDot: String,
         val notifChannelName: String,
         val notifChannelDesc: String,
         val notifBodyRegion: String,
@@ -379,6 +380,12 @@ object Strings {
         val neutralizedTallyAllUkraineDesc: String,
         val justFunNote: String,
         val iconSetTitle: String,
+        val overlapModeTitle: String,
+        val overlapModeDesc: String,
+        val overlapDefaultLabel: String,
+        val overlapGridLabel: String,
+        val overlapSpreadLabel: String,
+        val overlapCountLabel: String,
         val iconSetPhotoLabel: String,
         val iconSetArmyLabel: String,
         val iconSetComicLabel: String,
@@ -779,6 +786,7 @@ val tapToCancelLabel: String,
         val yellowZoneAlert: String get() = status.yellowZoneAlert
         val notifOngoingTitle: String get() = status.notifOngoingTitle
         val notifMonitoringCityFormat: String get() = status.notifMonitoringCityFormat
+        val notifRedDot: String get() = status.notifRedDot
         val notifChannelName: String get() = status.notifChannelName
         val notifChannelDesc: String get() = status.notifChannelDesc
         val notifBodyRegion: String get() = status.notifBodyRegion
@@ -1026,6 +1034,12 @@ val tapToCancelLabel: String,
         val neutralizedTallyAllUkraineTitle: String get() = misc.neutralizedTallyAllUkraineTitle
         val neutralizedTallyAllUkraineDesc: String get() = misc.neutralizedTallyAllUkraineDesc
 val iconSetTitle: String get() = misc.iconSetTitle
+        val overlapModeTitle: String get() = misc.overlapModeTitle
+        val overlapModeDesc: String get() = misc.overlapModeDesc
+        val overlapDefaultLabel: String get() = misc.overlapDefaultLabel
+        val overlapGridLabel: String get() = misc.overlapGridLabel
+        val overlapSpreadLabel: String get() = misc.overlapSpreadLabel
+        val overlapCountLabel: String get() = misc.overlapCountLabel
     val iconSetPhotoLabel: String get() = misc.iconSetPhotoLabel
         val iconSetArmyLabel: String get() = misc.iconSetArmyLabel
         val iconSetComicLabel: String get() = misc.iconSetComicLabel
