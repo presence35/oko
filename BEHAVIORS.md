@@ -64,8 +64,11 @@ data class TrailPoint(val lat: Double, val lon: Double, val tMillis: Long?)
 ```
 
 `flying` is derived: `(bearingDeg != null || heading != null) && (confirmedAtMillis != null || updatedAtMillis != null) && status == "active"`.
-Movement additionally needs a resolvable course + speed; [predictPosition](#predictpositionthreat-speedmps-now--dead-reckoning)
-never fabricates a course for a source that reports none, so a plugin's own movement model is never overridden.
+Movement additionally needs a resolvable course + speed; `ThreatEngine.canDrift(t, props, now) =
+!isStale(...) && t.flying` is the single gate both the map glide and [predictPosition](#predictpositionthreat-speedmps-now--dead-reckoning)
+use — dead-reckoning only ever moves a **fresh** track whose **source** reported a course
+(never a client-measured one), so a plugin's own movement model is never overridden and a stale
+or quiet track holds its last reported fix.
 
 ## Type Properties (Plugin-Provided)
 
@@ -160,20 +163,20 @@ Rules:
 
 ```
 Input: NormalizedThreat, speed, timestamp
-Output: LatLng? (null when no heading or no anchor)
+Output: LatLng? (null unless the track is fresh AND server-coursed)
 
-Gates:
-  1. status != "active" → null
-  2. motionHeading() == null → null (source reported no course at all — the track is
-     never made to move; plugin-provided model is respected)
+Gates (canDrift = !isStale && flying):
+  1. isStale(threat, props, now) → null (stale tracks hold their fix)
+  2. no server course (bearingDeg == null && heading == null) → null (the track is
+     never made to move on a client-measured heading; plugin model is respected)
   3. no anchor (updatedAtMillis ?: confirmedAtMillis) → null
 
 Advances from the LATEST fix anchor (updatedAt, or confirmedAt when updatedAt is missing)
-along motionHeading() at speed.
+along bearingDeg ?: heading at speed.
 Capped by ThreatProps.horizonSec and ThreatProps.maxGhostMeters.
 ```
 
-### `motionHeading(threat)` — Unified Heading
+### `motionHeading(threat)` — Unified Heading (icon facing)
 
 ```
 Priority chain:
@@ -181,7 +184,17 @@ Priority chain:
   2. heading (reported heading)
   3. measuredHeading (from speed cache fix track)
 
-Used for BOTH dead-reckoning AND icon facing. They must always agree.
+Used for icon facing (courseDeg) and the map's measured fallback — the dead-reckon in
+predictPosition uses only the server-reported course (steps 1-2).
+```
+
+### `canDrift(threat, props, now)` — Dead-Reckon Gate
+
+```
+The single shared gate for whether a track may drift between server fixes:
+  !isStale(threat, props, now) && threat.flying
+Used by the map glide loop, marker placement, and predictPosition itself, so stale tracks
+freeze at their reported fix and tracks NEPTUN gives no course never move.
 ```
 
 ### `distanceHaversine(lat1, lon1, lat2, lon2)` — Accurate Distance
@@ -277,8 +290,10 @@ Thread-safe. Owned by engine. Not a global singleton.
    New threat types work without engine changes.
 5. **Haversine for distance.** All distance calculations use Haversine, not
    equirectangular.
-6. **Motion heading is shared.** Dead-reckoning and icon facing use the same heading
-   resolution. They must never disagree.
+6. **Motion heading is shared — but only server-reported course drives drift.** Icon facing
+   (`courseDeg`/`motionHeading`) may use the measured fix-track heading as a last resort;
+   dead-reckoning (`predictPosition`) uses only the server-reported course (`bearingDeg`/`heading`)
+   and is gated on `canDrift`, so a marker never moves along a direction the source never gave it.
 7. **Slow tier uses raw fix.** Distance for slow threats is from the confirmed raw fix,
    not the predicted position.
 8. **Fast tier uses predicted position.** Distance for fast threats is from the

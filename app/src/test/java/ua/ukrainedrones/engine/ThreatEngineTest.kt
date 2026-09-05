@@ -156,10 +156,10 @@ class ThreatEngineTest {
     }
 
     @Test
-    fun `predictPosition - measured heading moves a course-less track`() {
+    fun `predictPosition - course-less track never moves (measured fallback dropped)`() {
         val now = System.currentTimeMillis()
-        // No bearingDeg, no heading — but the source's own fix history moved north, so the
-        // measured course drives the dead-reckon without overriding the source's model.
+        // No bearingDeg, no heading — a client-side measured fix track is NOT enough to move a
+        // track the source reports no course for (NEPTUN isn't moving it).
         engine.speedCache.record("glide-measured", now - 10_000, 50.0, 30.0)
         engine.speedCache.record("glide-measured", now, 50.1, 30.0)
         val threat = makeThreat(
@@ -169,10 +169,18 @@ class ThreatEngineTest {
             updatedAtMillis = now - 60_000
         )
         val props = NEPTUN_TYPES["shahed"]!!
-        val pos = engine.predictPosition(threat, 50.0, props, now)
-        assertNotNull(pos)
-        assertTrue(pos!!.lat > 50.1)
-        assertEquals(30.0, pos.lon, 0.01)
+        assertNull(engine.predictPosition(threat, 50.0, props, now))
+    }
+
+    @Test
+    fun `predictPosition - stale track does not move`() {
+        val now = System.currentTimeMillis()
+        val threat = makeThreat(
+            lat = 50.0, lon = 30.0,
+            bearingDeg = 0.0, updatedAtMillis = now - 400_000
+        )
+        val props = NEPTUN_TYPES["shahed"]!!
+        assertNull(engine.predictPosition(threat, 50.0, props, now))
     }
 
     @Test

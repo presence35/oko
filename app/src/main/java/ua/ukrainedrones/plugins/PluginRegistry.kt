@@ -178,7 +178,9 @@ class PluginRegistry {
     private fun ThreatSource.isAuthoritativeAlertSource(): Boolean = when (sourceType) {
         SourceType.WS -> {
             val s = connectionState.value
-            s == PluginConnectionState.CONNECTED || s == PluginConnectionState.DEGRADED
+            // Only a live CONNECTED socket owns the alert feed. DEGRADED (quiet for >30s) is
+            // stale data, not fresh truth — it falls back to the union-hold instead.
+            s == PluginConnectionState.CONNECTED
         }
         SourceType.REST -> {
             val mode = operationalMode.value

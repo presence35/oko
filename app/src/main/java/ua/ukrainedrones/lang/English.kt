@@ -533,6 +533,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
         fakeNeutralizingNote = "Sending signal to HQ…",
         flourishDisabledToastFormat = "Turn on \"%1\$s\" in Settings to replay the show",
         tapToCancelLabel = "Tap to cancel",
+        stopReplayLabel = "Stop",
     ),
     explainers = Strings.ExplainerStrings(
         visualLabel = "How it works",

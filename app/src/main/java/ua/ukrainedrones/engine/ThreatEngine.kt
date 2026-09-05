@@ -129,17 +129,25 @@ class ThreatEngine(
         }
     }
 
+    /** Whether a threat may be dead-reckoned between server fixes: it must be fresh (not stale)
+     *  and the source itself reports a course (server `bearingDeg`/`heading`) with an anchor while
+     *  still active. Client-side measured fix-track heading alone is never enough to move a track
+     *  NEPTUN isn't moving. Shared single source for the map glide and engine prediction. */
+    fun canDrift(t: NormalizedThreat, props: ThreatProps, now: Long): Boolean =
+        !isStale(t, props, now) && t.flying
+
     fun predictPosition(
         t: NormalizedThreat,
         speedMps: Double,
         props: ThreatProps,
         nowMillis: Long
     ): LatLng? {
-        if (t.status != "active") return null
-        // Course priority: authoritative velocity bearing > reported heading > measured from the
-        // source's own fix history. Null when the source reports no course at all — such tracks
-        // hold their raw fix and are never made to move (plugin model is respected).
-        val heading = motionHeading(t) ?: return null
+        // Only drift fresh, server-coursed, active tracks (see canDrift).
+        if (!canDrift(t, props, nowMillis)) return null
+        // Course priority: authoritative velocity bearing > reported heading. The measured
+        // fix-track fallback (motionHeading) is intentionally NOT used here — a source that
+        // reports no course is never made to move (plugin model is respected).
+        val heading = t.bearingDeg ?: t.heading ?: return null
         // Anchor on the LATEST fix: the raw lat/lon is valid as-of updatedAt (or confirmedAt if
         // updatedAt is missing). Gliding from an old confirmedAt would over-extrapolate a track
         // whose position has been refreshed since.

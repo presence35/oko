@@ -1,6 +1,7 @@
 package ua.ukrainedrones
 
 import ua.ukrainedrones.connection.ConnectionHolder
+import ua.ukrainedrones.connection.NeptunConnectionClient
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
@@ -535,6 +536,7 @@ fun NeptunMapView(
     onCountdownChange: (Int?) -> Unit = {},
     onAutoStrikeActiveChange: (Boolean) -> Unit = {},
     onStrikeTypeChange: (ThreatType?) -> Unit = {},
+    onPendingStrikeCountChange: (Int) -> Unit = {},
     onCancelRequestTick: Int = 0,
     onFlourishEjected: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -586,6 +588,10 @@ fun NeptunMapView(
         }
     }
     val lastOverlayKey = remember { mutableStateOf<String?>(null) }
+    // Per-id dedup of server-resolution strikes: NEPTUN re-sends a resolved/remove frame within
+    // ~60s; without this the map re-strikes threats the user already saw (a "random" replay a
+    // minute later). Pruned to the same RECENT_REMOVED_GRACE_MS window the client uses.
+    val struckRemovalAt = remember { HashMap<String, Long>() }
     val lastFitUkraineTick = remember { mutableStateOf(fitUkraineTick) }
     val lastFollow = remember { mutableStateOf<LatLng?>(null) }
     val lastZoomTick = remember { mutableStateOf(-1) }
@@ -594,6 +600,8 @@ fun NeptunMapView(
     val lastFittedYellowKm = remember { mutableStateOf<Int?>(null) }
     val lastRevealTick = remember { mutableStateOf(-1) }
     val lastFlourishTick = remember { mutableStateOf(-1) }
+    // Bumped on every lifecycle RESUME so the pending tally-tap replay is retried actively.
+    val flourishRetryTick = remember { mutableStateOf(0) }
     val newRingState = remember { mutableStateOf<NewRingState?>(null) }
     val didDefaultFit = remember { mutableStateOf(false) }
     val lastPinnedCity = remember { mutableStateOf<String?>(null) }
@@ -668,7 +676,13 @@ fun NeptunMapView(
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> mapViewRef.value?.onResume()
+                Lifecycle.Event.ON_RESUME -> {
+                    mapViewRef.value?.onResume()
+                    // A tally-tap flourish may have arrived while the app was backgrounded —
+                    // bump the retry tick so the pending replay is consumed promptly (Compose
+                    // doesn't observe lifecycle, so nothing else would re-run the tick check).
+                    flourishRetryTick.value++
+                }
                 Lifecycle.Event.ON_PAUSE -> {
                     mapViewRef.value?.onPause()
                     // Backgrounding ejects the flourish too — come back to a clean map.
@@ -738,9 +752,10 @@ fun NeptunMapView(
                 // view never shows neighbouring territory.
                 setScrollableAreaLimitDouble(UA_PAN_LIMITS)
                 controller.setCenter(DEFAULT_CENTER)
-                // Start at a city-level zoom instead of osmdroid's default whole-globe view;
-                // once the first GPS fix lands, didDefaultFit re-zooms to the yellow zone.
-                controller.setZoom(12.0)
+                // Start at a country-level zoom instead of a close city view: the first GPS fix
+                // then zooms IN to the user's yellow zone (didDefaultFit), avoiding the jarring
+                // "fully in, then fully out" dance on every startup.
+                controller.setZoom(6.0)
 
                 // Feed ground meters-per-pixel to the Compose scale bar while panning/zooming.
                     addMapListener(object : MapListener {
@@ -958,12 +973,19 @@ fun NeptunMapView(
                     }
                 }
 
-                // City labels (English names on top of label-free tiles)
-                // In fill mode, suppress red labels (fill replaces them).
+                // City labels (English names on top of label-free tiles). Region-precise red:
+                // in fill mode the wide-oblast fill already covers whole regions, so skip red
+                // labels there; raion-only alerts have no fill, so their covered cities must
+                // still read red via their labels.
+                val redLabels = if (uiState.fillAlertRegions) {
+                    uiState.redCities.filter { c ->
+                        (Cities.cityOblast[c] ?: "") !in uiState.alertOblastTokens
+                    }.toSet()
+                } else uiState.redCities
                 mapView.overlays.add(
                     CityLabelOverlay(
                         context, lang,
-                        redCityNames = if (uiState.fillAlertRegions) emptySet() else uiState.redCities,
+                        redCityNames = redLabels,
                         uiState.showMediumCities, uiState.showSmallCities,
                         forceShowAllProvider = { deathFx.forceShowAllCities.value }
                     )
@@ -1023,8 +1045,9 @@ fun NeptunMapView(
                     // animation loop) so a rebuild never snaps a moving marker back to its raw fix
                     // and returning to the app doesn't flash stale fixes before the loop corrects.
                     val focusPt = uiState.focusLocation
-                    val orbit = shouldOrbitFocus(nt, focusPt, uiState.activeZoneParams.slowYellowKm)
-                    val predicted = if (orbit) null else engine.speedCache.estimate(nt.id, nt, props)?.let {
+                    val drift = engine.canDrift(nt, props, System.currentTimeMillis())
+                    val orbit = drift && shouldOrbitFocus(nt, focusPt, uiState.activeZoneParams.slowYellowKm)
+                    val predicted = if (orbit || !drift) null else engine.speedCache.estimate(nt.id, nt, props)?.let {
                         engine.predictPosition(nt, it, props, System.currentTimeMillis())
                     }
                     val pos = predicted?.let { GeoPoint(it.lat, it.lon) }
@@ -1259,6 +1282,13 @@ fun NeptunMapView(
                     if (!enabled) emptyFlow() else ConnectionHolder.getClient(context).removedThreats
                 }
                 .collect { r ->
+                    // NEPTUN re-sends a resolution within its 60s grace window — strike each
+                    // threat once, so an already-witnessed resolution never re-strikes later
+                    // (which read as a "random" replay ~1 min after the tally tap).
+                    val nowMs = System.currentTimeMillis()
+                    struckRemovalAt.entries.removeIf { nowMs - it.value > NeptunConnectionClient.RECENT_REMOVED_GRACE_MS }
+                    if (struckRemovalAt.containsKey(r.id)) return@collect
+                    struckRemovalAt[r.id] = nowMs
                     // Skip resolutions that arrived while the map wasn't visible (Settings open,
                     // Shelter/Guide covering it, or app backgrounded), while an alert is live, or
                     // while the shelter overlay is up — nothing should grab the user's attention
@@ -1319,7 +1349,10 @@ fun NeptunMapView(
         // ejects it (see the ejection effect below).
         val flourishShow = uiState.flourish
         if (flourishShow != null && flourishShow.tick != lastFlourishTick.value) {
-            val playable = mapViewRef.value != null &&
+            // Reading flourishRetryTick here subscribes this block to lifecycle RESUMEs, so a
+            // pending replay is consumed promptly instead of waiting for a spontaneous
+            // recomposition (Compose doesn't observe lifecycle).
+            val playable = mapViewRef.value != null && (flourishRetryTick.value >= 0) &&
                 mapIsUserFocus(pausedState, mapVisibleState, showNearbySheltersState, lifecycle.currentState)
             if (!playable) {
                 // Transient — retried on a later recomposition; nothing consumed yet.
@@ -1375,6 +1408,12 @@ fun NeptunMapView(
         // Surface the threat type being targeted by the auto-countdown.
         LaunchedEffect(Unit) {
             deathFx.strikeType.collect { type -> onStrikeTypeChange(type) }
+        }
+
+        // Surface how many auto-strikes are pending/in-flight so the countdown strip can show
+        // a real count (N during a wave, never 0 while a strike is actually queued).
+        LaunchedEffect(Unit) {
+            deathFx.pendingStrikeCount.collect { n -> onPendingStrikeCountChange(n) }
         }
 
         // User tapped the footer stop overlay: cancel the countdown, or eject the in-flight
@@ -1474,13 +1513,17 @@ fun NeptunMapView(
                     dirty = true
                 }
                 val focusPt = focusLocationState
-                val orbit = shouldOrbitFocus(nt, focusPt, slowYellowKmState)
+                val drift = engine.canDrift(nt, props, now)
+                val orbit = drift && shouldOrbitFocus(nt, focusPt, slowYellowKmState)
                 val targetPos = if (orbit && focusPt != null) {
                     val angle = (now / ORBIT_PERIOD_MS.toDouble()) * 2.0 * Math.PI + orbitPhase(nt.id)
                     orbitPosition(focusPt, slowYellowKmState * 1000.0, angle)
-                } else {
+                } else if (drift) {
                     val speed = engine.speedCache.estimate(nt.id, nt, props) ?: continue
                     engine.predictPosition(nt, speed, props, now) ?: continue
+                } else {
+                    // Stale or no server course: hold the reported fix (no drift).
+                    LatLng(nt.lat, nt.lon)
                 }
                 val cur = marker.position
                 if (cur != null &&

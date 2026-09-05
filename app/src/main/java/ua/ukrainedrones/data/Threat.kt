@@ -236,7 +236,11 @@ data class OblastAlert(
     val key: String,
     val name: String,
     val oblast: String,
-    val since: String?
+    val since: String?,
+    /** True when this entry covers the whole oblast (NEPTUN's `oblasts` array) rather than a
+     *  single raion/city (`raions` array). Null = unknown (Ubilling/Test fallback sources) —
+     *  falls back to the name heuristic in [isOblastWide]. */
+    val wide: Boolean? = null
 )
 
 /** True when [token] appears in [text] delimited by word boundaries (no regex allocation). */
@@ -269,6 +273,10 @@ fun OblastAlert.inOblast(token: String): Boolean {
  * its parent oblast, so it must never count here.
  */
 fun OblastAlert.isOblastWide(): Boolean {
+    // NEPTUN tags the whole-oblast entries explicitly; fall back to the name heuristic only
+    // for sources that don't tag (Ubilling/Test). Heuristic alone misreads e.g. "Севастополь",
+    // which is oblast-wide but whose name lacks "область"/"республіка".
+    wide?.let { return it }
     val k = key.lowercase()
     val n = name.lowercase()
     return k.contains("область") || n.contains("область") ||

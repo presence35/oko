@@ -67,6 +67,9 @@ class NeptunConnectionClient(
         const val USER_SHOT_GRACE_MS = 3_000L
         const val RECENT_REMOVED_GRACE_MS = 60_000L
         const val NO_NETWORK_RECONNECT_MS = 60_000L
+        // An official-alert clear must persist this long before it goes live — a momentary
+        // empty alerts frame (or takeover blip) would otherwise flip an active alert OFF and back.
+        const val ALERT_CLEAR_CONFIRM_MS = 30_000L
 
         const val NEPTUN_DOMAIN = "neptun.in.ua"
         internal const val NEPTUN_SITE_URL = "https://$NEPTUN_DOMAIN/"
@@ -102,6 +105,11 @@ class NeptunConnectionClient(
 
     private val _alerts = MutableStateFlow<List<OblastAlert>>(emptyList())
     val alerts: StateFlow<List<OblastAlert>> = _alerts.asStateFlow()
+
+    // Pending (debounced) official-alert clear: NEPTUN's list is held while a clear is being
+    // confirmed, so an active alert never flips OFF for a single empty frame.
+    @Volatile private var alertsPendingClear: List<OblastAlert>? = null
+    @Volatile private var alertsPendingClearSince = 0L
 
     private val _removedThreats = MutableSharedFlow<ThreatRemoved>(extraBufferCapacity = 16)
     val removedThreats: SharedFlow<ThreatRemoved> = _removedThreats.asSharedFlow()
@@ -308,6 +316,10 @@ class NeptunConnectionClient(
 
     private fun handleDisconnect(gen: Int, reason: String?) {
         if (isManuallyStopped || connectionGeneration.get() != gen) return
+        // A pre-disconnect pending clear is unconfirmed after reconnect — drop it so a stale
+        // observation can't flush later without fresh data (the held list stays until NEPTUN
+        // re-sends a fresh alerts frame).
+        alertsPendingClear = null
         val now = System.currentTimeMillis()
         val previousState = _connectionState.value
         val offlineSince = previousState.offlineSinceOrNull ?: now
@@ -371,6 +383,15 @@ val gen = connectionGeneration.incrementAndGet()
     private val unknownTypeLastSeen = ConcurrentHashMap<String, Long>()
     private val UNKNOWN_TYPE_TOAST_COOLDOWN_MS = 60_000L
 
+    /** Publish a debounced official-alert clear once it has persisted ALERT_CLEAR_CONFIRM_MS.
+     *  No-op when nothing is pending or the window hasn't elapsed. */
+    private fun flushPendingAlertClear(now: Long) {
+        val pending = alertsPendingClear ?: return
+        if (now - alertsPendingClearSince < ALERT_CLEAR_CONFIRM_MS) return
+        _alerts.value = pending
+        alertsPendingClear = null
+    }
+
     private fun startWatchdog() {
         // Watchdog & Degraded State transition check
         scope.launch {
@@ -378,6 +399,8 @@ val gen = connectionGeneration.incrementAndGet()
                 delay(5_000)
                 if (isManuallyStopped) return@launch
                 val now = System.currentTimeMillis()
+                // Publish a debounced alert clear once it has persisted long enough.
+                flushPendingAlertClear(now)
                 val socketQuietFor = now - _lastSocketFrame.value
                 val threatQuietFor = if (_lastValidThreatUpdate.value > 0L) now - _lastValidThreatUpdate.value else 0L
 
@@ -496,7 +519,10 @@ val gen = connectionGeneration.incrementAndGet()
                 "alerts" -> {
                     val data = env.optJSONObject("data") ?: return
                     val list = mutableListOf<OblastAlert>()
-                    for (arrName in listOf("raions", "oblasts")) {
+                    // NEPTUN splits whole-oblast (`oblasts`) from region/city (`raions`) entries —
+                    // tag each so map coloring is region-precise instead of guessing.
+                    val wideByArray = mapOf("raions" to false, "oblasts" to true)
+                    for ((arrName, wide) in wideByArray) {
                         val arr = data.optJSONArray(arrName) ?: continue
                         for (i in 0 until arr.length()) {
                             val o = arr.getJSONObject(i)
@@ -505,12 +531,25 @@ val gen = connectionGeneration.incrementAndGet()
                                     key = o.optString("key"),
                                     name = o.optString("name"),
                                     oblast = o.optString("oblast"),
-                                    since = o.optString("since", null)
+                                    since = o.optString("since", null),
+                                    wide = wide
                                 )
                             )
                         }
                     }
-                    _alerts.value = list
+                    // A clear (empty list) must be confirmed before it goes live: NEPTUN re-sends
+                    // the alert list regularly, so a momentary empty frame would otherwise flip
+                    // the official alert OFF then back ON. Hold the last-known list until the
+                    // clear persists ALERT_CLEAR_CONFIRM_MS (flushPendingAlertClear).
+                    if (list.isEmpty() && _alerts.value.isNotEmpty()) {
+                        if (alertsPendingClear == null) {
+                            alertsPendingClear = list
+                            alertsPendingClearSince = now
+                        }
+                    } else {
+                        _alerts.value = list
+                        alertsPendingClear = null
+                    }
                 }
                 "heartbeat" -> {
                     // Socket frame keep-alive; does not update threat freshness

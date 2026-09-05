@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.TileSystem
@@ -78,6 +79,11 @@ class DeathFxController(
     private val _strikeType = MutableStateFlow<ThreatType?>(null)
     val strikeType: StateFlow<ThreatType?> = _strikeType.asStateFlow()
 
+    /** Number of auto-strikes currently pending (countdown) or in flight — the count the
+     *  countdown overlay shows next to the type label, so it reads N during a wave, not 0. */
+    private val _pendingStrikeCount = MutableStateFlow(0)
+    val pendingStrikeCount: StateFlow<Int> = _pendingStrikeCount.asStateFlow()
+
     private val _replayProgress = MutableStateFlow<ReplayProgress?>(null)
     /** During the tally-tap replay: per-group position for the footer copy + overall position
      *  for its progress bar. */
@@ -97,16 +103,33 @@ class DeathFxController(
     fun isActiveFor(id: String?): Boolean = overlay.isActiveFor(id)
 
     /** Drop every active death + cancel a pending camera return or running replay instantly —
-     *  a red alert ejects the flourish (safety outranks the playful replay). */
+     *  a red alert ejects the flourish (safety outranks the playful replay). If a strike/replay
+     *  had parked the camera, glide back home FIRST — an early eject must not leave the view
+     *  stuck on the target — then tear everything down behind the scenes. */
     fun clear() {
-        cameraReturnJob?.cancel()
+        // Return-home first: snapshot the pending home, then launch the glide immediately.
+        val home = savedHome
+        val homeZoom = savedHomeZoom
         savedHome = null
+        cameraReturnJob?.cancel()
+        if (home != null) {
+            val mv = mapView()
+            if (mv != null) {
+                cameraReturnJob = scope.launch {
+                    forceShowAllCities.value = true
+                    mv.controller.setZoom(homeZoom)
+                    mv.controller.animateTo(home)
+                    forceShowAllCities.value = false
+                }
+            }
+        }
         replayJob?.cancel()
         replayJob = null
         _replayProgress.value = null
         forceShowAllCities.value = false
         cancelAutoCountdown()
         _autoStrikeActive.value = false
+        _pendingStrikeCount.value = 0
         overlay.clear()
     }
 
@@ -126,19 +149,25 @@ class DeathFxController(
         countdownJob?.cancel()
         pendingAutoStrike = onFire
         _strikeType.value = type
+        _pendingStrikeCount.update { it + 1 }
         countdownJob = scope.launch {
-            for (n in 3 downTo 1) {
-                _countdown.value = n
-                delay(1000L)
+            try {
+                for (n in 3 downTo 1) {
+                    _countdown.value = n
+                    delay(1000L)
+                }
+                _countdown.value = null
+                _strikeType.value = null
+                _autoStrikeActive.value = true
+                pendingAutoStrike?.invoke()
+                pendingAutoStrike = null
+                // Wait for the death animation to finish naturally, then drop the active flag.
+                overlay.active.first { !it }
+                _autoStrikeActive.value = false
+            } finally {
+                // A replaced/cancelled countdown never fired — drop its pending count too.
+                _pendingStrikeCount.update { (it - 1).coerceAtLeast(0) }
             }
-            _countdown.value = null
-            _strikeType.value = null
-            _autoStrikeActive.value = true
-            pendingAutoStrike?.invoke()
-            pendingAutoStrike = null
-            // Wait for the death animation to finish naturally, then drop the active flag.
-            overlay.active.first { !it }
-            _autoStrikeActive.value = false
         }
     }
 
@@ -262,6 +291,11 @@ class DeathFxController(
         // Snapshot — see followStrike; getMapCenter() hands back a live mutable point.
         val preCenter = GeoPoint(mapView.mapCenter.latitude, mapView.mapCenter.longitude)
         val preZoom = mapView.zoomLevelDouble
+        // Remember the home for an early eject (clear) too — not just the natural ending.
+        if (savedHome == null) {
+            savedHome = preCenter
+            savedHomeZoom = preZoom
+        }
         cameraReturnJob?.cancel()
         // A group spans about a third of the current viewport width — zoomed in, groups are
         // tight; zoomed out, everything clusters.
@@ -328,5 +362,6 @@ class DeathFxController(
         val mv = mapView() ?: return
         mv.controller.setZoom(preZoom)
         mv.controller.animateTo(preCenter)
+        savedHome = null
     }
 }

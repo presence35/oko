@@ -533,6 +533,7 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         fakeNeutralizingNote = "Надсилаю сигнал у штаб…",
         flourishDisabledToastFormat = "Увімкніть «%1\$s» у налаштуваннях, щоб повторити шоу",
         tapToCancelLabel = "Tap to cancel",
+        stopReplayLabel = "Stop",
     ),
     explainers = Strings.ExplainerStrings(
         visualLabel = "Як це працює",

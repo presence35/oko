@@ -489,7 +489,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 neptunDown = uiState.neptunDown,
                 degraded = uiState.degraded,
                 threatCount = uiState.mapThreats.size,
-                alertCount = uiState.alertOblastTokens.size,
+                alertCount = uiState.alertingOblastCount,
                 onBack = { screen = Screen.MAP }
             )
         }
@@ -690,6 +690,7 @@ private fun MapScreen(
     var countdown by remember { mutableStateOf<Int?>(null) }
     var autoStrikeActive by remember { mutableStateOf(false) }
     var strikeType by remember { mutableStateOf<ThreatType?>(null) }
+    var pendingStrikeCount by remember { mutableStateOf(0) }
     var cancelTick by remember { mutableStateOf(0) }
     var footerHeightPx by remember { mutableStateOf(0) }
 
@@ -916,6 +917,7 @@ private fun MapScreen(
                         onCountdownChange = { countdown = it },
                         onAutoStrikeActiveChange = { autoStrikeActive = it },
                         onStrikeTypeChange = { strikeType = it },
+                        onPendingStrikeCountChange = { pendingStrikeCount = it },
                         onCancelRequestTick = cancelTick,
                         onFlourishEjected = onFlourishEjected,
                         modifier = Modifier.fillMaxSize()
@@ -1009,7 +1011,8 @@ private fun MapScreen(
                             deathActive = deathActive,
                             replayProgress = replayProgress,
                             s = s,
-                            onThreatStripTap = onThreatStripTap
+                            onThreatStripTap = onThreatStripTap,
+                            onReplayStop = { cancelTick++ }
                         )
                     }
                 }
@@ -1023,10 +1026,8 @@ private fun MapScreen(
                 CountdownOverlay(
                     count = countdown,
                     threatTypeLabel = typeLabel,
-                    remainingTotal = uiState.threatsInner.size + uiState.threatsOuter.size,
-                    tapToCancelLabel = s.tapToCancelLabel,
-                    footerHeightPx = footerHeightPx,
-                    onCancel = { cancelTick++ }
+                    remainingTotal = pendingStrikeCount,
+                    footerHeightPx = footerHeightPx
                 )
             }
 
@@ -1282,7 +1283,8 @@ private fun ThreatStripFooter(
     deathActive: Boolean,
     replayProgress: ReplayProgress?,
     s: Strings.StringSet,
-    onThreatStripTap: (NormalizedThreat) -> Unit
+    onThreatStripTap: (NormalizedThreat) -> Unit,
+    onReplayStop: () -> Unit
 ) {
     val innerCounts = inner.groupingBy { it.type.toThreatType() }.eachCount()
     val outerCounts = outer.groupingBy { it.type.toThreatType() }.eachCount()
@@ -1328,6 +1330,22 @@ private fun ThreatStripFooter(
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(2.dp))
                         .background(Color(0xFFF9A825))
+                )
+            }
+            // A replay pans the camera for the whole show, so it needs a way out — an early
+            // stop ejects it and returns the camera home.
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF3A2E00),
+                contentColor = Color(0xFFF9A825),
+                border = BorderStroke(1.dp, Color(0xFFF9A825).copy(alpha = 0.6f)),
+                modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onReplayStop)
+            ) {
+                Text(
+                    s.stopReplayLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
                 )
             }
         }
@@ -1397,24 +1415,19 @@ private fun BoxScope.CountdownOverlay(
     count: Int?,
     threatTypeLabel: String?,
     remainingTotal: Int,
-    tapToCancelLabel: String,
-    footerHeightPx: Int,
-    onCancel: () -> Unit
+    footerHeightPx: Int
 ) {
     val amber = Color(0xFFF9A825)
     val density = LocalDensity.current
     val overlayH = with(density) { (footerHeightPx * 1.5f).toDp().coerceAtLeast(48.dp) }
+    // Auto-strikes fire right where the user is looking, one at a time, and never hijack the
+    // camera — the user can just pan away. So this is a display-only strip (no tap-to-stop).
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .align(Alignment.BottomCenter)
             .height(overlayH)
             .background(if (count != null) Color.Black.copy(alpha = 0.85f) else Color.Transparent)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onCancel
-            )
     ) {
         if (count != null) {
             // Countdown phase: dark strip with "3 2 1" (the active digit highlighted) and a
@@ -1458,15 +1471,6 @@ private fun BoxScope.CountdownOverlay(
                 }
             }
         }
-        // Edge hint — the whole strip is tappable.
-        Text(
-            text = tapToCancelLabel,
-            color = amber,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 16.dp)
-        )
     }
 }
 

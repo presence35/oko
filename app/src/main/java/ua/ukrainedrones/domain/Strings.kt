@@ -543,7 +543,8 @@ object Strings {
         val fakeNeutralizingLabel: String,
         val fakeNeutralizingNote: String,
         val flourishDisabledToastFormat: String,
-        val tapToCancelLabel: String
+val tapToCancelLabel: String,
+        val stopReplayLabel: String
     )
 
     /** One-time explainer copy. [items] order: threatToggles, officialAlerts, sirenOverride,
@@ -1176,6 +1177,7 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val fakeNeutralizingNote: String get() = guide.fakeNeutralizingNote
         val flourishDisabledToastFormat: String get() = guide.flourishDisabledToastFormat
         val tapToCancelLabel: String get() = guide.tapToCancelLabel
+        val stopReplayLabel: String get() = guide.stopReplayLabel
         val explainerVisualLabel: String get() = explainers.visualLabel
         val explainerScenarioLabel: String get() = explainers.scenarioLabel
         val explainerGotIt: String get() = explainers.gotIt

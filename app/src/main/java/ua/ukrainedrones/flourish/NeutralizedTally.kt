@@ -60,7 +60,9 @@ class NeutralizedTally(
 
     /** The tally notification was swiped away (or its replay consumed in the app) — reset the
      *  count and memory so any later neutralizations start a fresh tally, and drop the
-     *  notification itself. */
+     *  notification itself. The recent-id ring is KEPT: NEPTUN re-sends resolutions within its
+     *  60s grace window, so without it the same threats would re-count and re-post the tally
+     *  (~1 min after the user dismissed it) and the map would replay what was already seen. */
     fun reset() {
         neutralizedCount = 0
         perTypeCounts.clear()

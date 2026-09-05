@@ -124,6 +124,7 @@ data class UiState(
     val showSmallCities: Boolean = true,
     val fillAlertRegions: Boolean = false,
     val alertOblastTokens: Set<String> = emptySet(),
+    val alertingOblastCount: Int = 0,
     val justFunMasterEnabled: Boolean = false,
     val deathAnimationEnabled: Boolean = true,
     val flybyAnimationEnabled: Boolean = true,
@@ -788,8 +789,11 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         if (autoFlyby != null) {
             flybyTick++
             flybyPlayedIds.add(autoFlyby.threatId)
-            val threat = threatsFlow.value[autoFlyby.threatId]!!
-            val durationMs = calculateFlybyDuration(threat)
+            // Read the aviation from the SAME sampled snapshot nextShow scanned — never the live
+            // mutable feed (which can rotate under us on another dispatcher). If it already
+            // vanished from this snapshot, skip the show entirely.
+            val threat = uiState.threatsInner.firstOrNull { it.id == autoFlyby.threatId }
+            val durationMs = threat?.let { calculateFlybyDuration(it) } ?: AVIATION_FLYBY_DURATION_MS
             flybyFlow.value = AviationFlybyShow(autoFlyby.tick, autoFlyby.threatId, autoFlyby.courseDeg, durationMs)
         }
         uiState.copy(flyby = flyby)
@@ -915,21 +919,24 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val focusBannerCity = (
             if (language == AppLanguage.UA) attribution.bannerCityUa else attribution.bannerCityEn
         ).ifBlank { Strings.get(language).unknownLocation }
-        // Oblasts with an official alert: a city label turns red when its oblast is listed.
-        val activeRegionTokens = buildSet {
+        // Oblasts with a whole-oblast official alert (NEPTUN `oblasts`): these alone drive the
+        // red oblast FILL. A region/city alert (NEPTUN `raions`) never shades the whole oblast.
+        val filledOblastTokens = buildSet {
             for (citiesToken in Cities.cityOblast.values) {
-                if (alerts.any { it.inOblast(citiesToken) }) add(citiesToken)
+                if (alerts.any { it.inOblast(citiesToken) && it.isOblastWide() }) add(citiesToken)
             }
         }
-        // Cities shown red on the map/picker. Oblast scope (default): any city in an alerting
-        // oblast. City scope: only the cities the alert actually covers by name — the shared
-        // officialAlertActiveFor gate, so the map agrees with the banner/notifications.
+        // Distinct oblasts under ANY official alert (whole-oblast or region) — the Logs header count.
+        val alertingOblastCount = Cities.cityOblast.values.toSet()
+            .count { citiesToken -> alerts.any { it.inOblast(citiesToken) } }
+        // Cities shown red on the map/picker — always region-precise (mirrors NEPTUN): a
+        // whole-oblast alert covers every city in the region; a raion/city alert covers only the
+        // cities it actually names (coversCity). The City-scope toggle now governs only the
+        // siren/notification scope, not the map labels.
         val redCities = buildSet {
             for (city in Cities.ALL) {
                 val token = Cities.cityOblast[city.nameUa] ?: continue
-                val covered = if (officialAlertCityScope) {
-                    officialAlertActiveFor(alerts, token, city.nameUa, scope = true)
-                } else token in activeRegionTokens
+                val covered = alerts.any { it.inOblast(token) && (it.isOblastWide() || it.coversCity(city.nameUa)) }
                 if (covered) add(city.nameUa)
             }
         }
@@ -985,7 +992,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             focusLocation = focusLocation,
             gpsFixMissing = focus.gpsFixMissing,
             redCities = redCities,
-            alertOblastTokens = activeRegionTokens,
+            alertOblastTokens = filledOblastTokens,
+            alertingOblastCount = alertingOblastCount,
             threatLevel = evaluation.threatLevel,
             revealRequest = reveal,
             flourish = flourish,
@@ -1476,10 +1484,9 @@ fun setAlertsArmed(armed: Boolean) {
         // A MiG-31K tap greets with a full flyby pass — every press, fresh random bearing —
         // and the card only opens when the jet is gone (onFlybyFinished), so selection is
         // deferred here. Marking it played also suppresses the live auto-trigger for the id.
-        if (aviation && id != null) {
+        if (aviation && id != null && threat != null) {
             flybyPlayedIds.add(id)
             flybyTick++
-            val threat = threatsFlow.value[id]!!
             val durationMs = calculateFlybyDuration(threat)
             flybyFlow.value = AviationFlybyShow(flybyTick, id, Random.nextDouble(0.0, 360.0), durationMs)
         } else if (select && id != null) {
