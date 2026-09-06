@@ -1015,6 +1015,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             redCities = redCities,
             alertOblastTokens = evaluation.fillOblastTokens,
             alertRaionKeys = evaluation.fillRaionKeys,
+            fillAlertRegions = fillAlertRegions,
             alertingOblastCount = alertingOblastCount,
             threatLevel = evaluation.threatLevel,
             revealRequest = reveal,

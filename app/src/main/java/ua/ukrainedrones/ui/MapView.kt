@@ -1195,6 +1195,33 @@ fun NeptunMapView(
                     }
                 }
 
+                // DEBUG: outline every region polygon (all oblasts + all raions) so we can see
+                // exactly what boundary data is available. Thin distinct strokes, drawn under the
+                // alert fills/labels. Remove once coverage is verified.
+                val debugStroke = Color.argb(120, 180, 180, 200)
+                for ((_, rings) in OblastBoundaries.byStem) {
+                    for (ring in rings) {
+                        if (ring.size < 3) continue
+                        mapView.overlays.add(Polyline(mapView).apply {
+                            setPoints(ring.map { GeoPoint(it[1], it[0]) })
+                            color = debugStroke
+                            width = 2f
+                        })
+                    }
+                }
+                for ((_, raions) in RaionBoundaries.all) {
+                    for ((_, rings) in raions) {
+                        for (ring in rings) {
+                            if (ring.size < 3) continue
+                            mapView.overlays.add(Polyline(mapView).apply {
+                                setPoints(ring.map { GeoPoint(it[0], it[1]) })
+                                color = debugStroke
+                                width = 1.5f
+                            })
+                        }
+                    }
+                }
+
                 // City labels (English names on top of label-free tiles). Region-precise red:
                 // in fill mode the wide-oblast and raion fills already cover the region, so skip
                 // red labels for cities inside a filled oblast or a filled raion; cities only

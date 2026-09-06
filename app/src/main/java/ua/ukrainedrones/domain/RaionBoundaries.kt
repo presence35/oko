@@ -9,6 +9,36 @@ package ua.ukrainedrones
  * Regenerate with tools/gen_raion_boundaries.py.
  */
 object RaionBoundaries {
+    /** Every raion's rings, keyed by (oblast stem, raion adjectival) — all regions, not just
+     *  alerting ones. Used to draw the full region polygon border lines for debugging. */
+    val all: Map<String, Map<String, List<List<DoubleArray>>>> = mapOf(
+        "Івано-Франківськ" to _Івано_Франківськ(),
+        "Волинськ" to _Волинськ(),
+        "Вінницьк" to _Вінницьк(),
+        "Дніпропетровськ" to _Дніпропетровськ(),
+        "Донецьк" to _Донецьк(),
+        "Житомирськ" to _Житомирськ(),
+        "Закарпатськ" to _Закарпатськ(),
+        "Запорізьк" to _Запорізьк(),
+        "Київськ" to _Київськ(),
+        "Крим" to _Крим(),
+        "Кіровоградськ" to _Кіровоградськ(),
+        "Луганськ" to _Луганськ(),
+        "Львівськ" to _Львівськ(),
+        "Миколаївськ" to _Миколаївськ(),
+        "Одеськ" to _Одеськ(),
+        "Полтавськ" to _Полтавськ(),
+        "Рівненськ" to _Рівненськ(),
+        "Сумськ" to _Сумськ(),
+        "Тернопільськ" to _Тернопільськ(),
+        "Харківськ" to _Харківськ(),
+        "Херсонськ" to _Херсонськ(),
+        "Хмельницьк" to _Хмельницьк(),
+        "Черкаськ" to _Черкаськ(),
+        "Чернівецьк" to _Чернівецьк(),
+        "Чернігівськ" to _Чернігівськ()
+    )
+
     /** Rings for the raion, or null when unknown. [raionName] is case-insensitive.
      *  Each ring is a list of doubleArrayOf(lat, lon) pairs. */
     fun forKey(oblastStem: String, raionName: String): List<List<DoubleArray>>? =
