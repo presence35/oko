@@ -113,7 +113,7 @@ class ThreatEngine(
         // stays in AlertService.
         val focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, cityScope)
         val redCities = computeRedCities(alerts, fillRegions)
-        val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts, fillRegions)
+        val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts, redCities, fillRegions)
         val activeAlert = focusToken?.let { token -> alerts.firstOrNull { it.inOblast(token) } }
         val (officialReason, reasonThreatId) = if (activeAlert != null) {
             deriveOfficialAlertReason(activeAlert, threats, focus, params, lang, now)
@@ -171,16 +171,17 @@ fun computeRedCities(alerts: List<OblastAlert>, fillRegions: Boolean): Set<Strin
         }
     }
 
-    /** Region-fill keys derived DIRECTLY from the alerts (mirrors NEPTUN), so the map shades
-     *  exactly the regions NEPTUN names — no city-list dependency:
+    /** Region-fill keys derived from the alerts AND the red-city coverage they produce (mirrors
+     *  NEPTUN), so the map shades every region under alert AND every red city sits on a fill:
      *  - a whole-oblast alert shades the whole oblast ([fillOblastTokens]);
-     *  - a raion-level alert shades the raion it names ([fillRaionKeys], via [raionName]).
-     *  A red city is always inside one of these filled regions by construction — it only went
-     *  red because its oblast/raion was alerted. Raion keys are emitted only when the raion has
-     *  a boundary polygon, so the fill is real. Empty when the fill is off — broad red labels
-     *  stand in for the missing fill. */
+     *  - a raion-level alert shades the raion it names ([fillRaionKeys], via [raionName]);
+     *  - every red city resolves to its actual raion ([CityRaions]) so a city-level alert (bare
+     *    city name, no "район" suffix) still fills that raion.
+     *  Raion keys are emitted only when the raion has a boundary polygon, so the fill is real.
+     *  Empty when the fill is off — broad red labels stand in for the missing fill. */
     fun computeFillKeys(
         alerts: List<OblastAlert>,
+        redCities: Set<String>,
         fillRegions: Boolean
     ): Pair<Set<String>, Set<Pair<String, String>>> {
         if (!fillRegions || alerts.isEmpty()) return emptySet<String>() to emptySet<Pair<String, String>>()
@@ -191,11 +192,19 @@ fun computeRedCities(alerts: List<OblastAlert>, fillRegions: Boolean): Set<Strin
             }
         }
         val fillRaionKeys = buildSet {
+            // Alerts that name a raion directly (NEPTUN `raions` with "район"/adjectival).
             for (alert in alerts) {
                 if (alert.isOblastWide()) continue
                 val raion = alert.raionName() ?: continue
                 val stem = stems.firstOrNull { alert.inOblast(it) } ?: continue
                 if (RaionBoundaries.forKey(stem, raion) != null) add(stem to raion)
+            }
+            // Every red city resolves to its raion, so a city-level alert fills its district.
+            for (city in redCities) {
+                val token = Cities.cityOblast[city] ?: continue
+                if (token in fillOblastTokens) continue
+                val raion = CityRaions.cityRaion[city] ?: continue
+                if (RaionBoundaries.forKey(token, raion) != null) add(token to raion)
             }
         }
         return fillOblastTokens to fillRaionKeys

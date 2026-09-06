@@ -277,15 +277,65 @@ class PluginRegistryTest {
     }
 
     @Test
-    fun `takeover merge prefers first registered plugin per oblast`() {
+    fun `threat data stale when nothing delivered yet`() {
+        var tick = 1_000_000_000L
+        Monotonic.nowProvider = { tick }
         val registry = PluginRegistry()
-        val a = FakePlugin("a", alertsInit = listOf(OblastAlert("k1", "n1", "Odesa oblast", null)))
-        val b = FakePlugin("b", alertsInit = listOf(OblastAlert("k2", "n2", "Odesa oblast", "123")))
+        assertTrue(registry.isThreatDataStale(tick))
+    }
+
+    @Test
+    fun `threat data fresh right after a source delivers`() {
+        var tick = 1_000_000_000L
+        Monotonic.nowProvider = { tick }
+        val registry = PluginRegistry()
+        val ws = FakePlugin("ws")
+        registry.register(ws, testScope())
+        ws.emitThreats(listOf(threat("t1")))
+        assertTrue(!registry.isThreatDataStale(tick))
+    }
+
+    @Test
+    fun `threat data stale again past the window`() {
+        var tick = 1_000_000_000L
+        Monotonic.nowProvider = { tick }
+        val registry = PluginRegistry()
+        val ws = FakePlugin("ws")
+        registry.register(ws, testScope())
+        ws.emitThreats(listOf(threat("t1")))
+        tick += PluginRegistry.THREAT_DATA_STALE_MS + 1_000L
+        assertTrue(registry.isThreatDataStale(tick))
+    }
+
+    @Test
+    fun `takeover merge prefers first registered plugin per key`() {
+        val registry = PluginRegistry()
+        // Same alert key from both plugins: the first registered owner wins.
+        val a = FakePlugin("a", alertsInit = listOf(OblastAlert("odeska", "Одеська область", "Одеська область", null)))
+        val b = FakePlugin("b", alertsInit = listOf(OblastAlert("odeska", "Одеська область", "Одеська область", "123")))
         registry.register(a, testScope())
         registry.register(b, testScope())
         assertEquals(1, registry.allAlerts.value.size)
-        assertEquals("n1", registry.allAlerts.value[0].name)
+        assertEquals("Одеська область", registry.allAlerts.value[0].name)
         assertEquals("a", registry.activeAlertSource.value)
+    }
+
+    @Test
+    fun `merge keeps multiple regions of the same oblast`() {
+        val registry = PluginRegistry()
+        // A whole-oblast alert AND two raion alerts inside the SAME oblast — all distinct keys.
+        val a = FakePlugin(
+            "a",
+            alertsInit = listOf(
+                OblastAlert("odeska", "Одеська область", "Одеська область", null),
+                OblastAlert("odeskyi", "Одеський район", "Одеська область", null),
+                OblastAlert("bilhorod-dnistrovskyi", "Білгород-Дністровський район", "Одеська область", null)
+            )
+        )
+        registry.register(a, testScope())
+        assertEquals(3, registry.allAlerts.value.size)
+        val keys = registry.allAlerts.value.map { it.key }.toSet()
+        assertEquals(setOf("odeska", "odeskyi", "bilhorod-dnistrovskyi"), keys)
     }
 
     @Test

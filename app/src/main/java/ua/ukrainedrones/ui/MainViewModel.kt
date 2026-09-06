@@ -397,7 +397,6 @@ val fastGroupCollapsed: Boolean,
         val cs: ConnectionState,
         val threats: Map<String, NormalizedThreat>,
         val alerts: List<OblastAlert>,
-        val threatDataStale: Boolean,
         val slowRedKm: Int,
         val slowYellowKm: Int,
         val fastRedMin: Int,
@@ -447,7 +446,6 @@ val fastGroupCollapsed: Boolean,
         zonesFlow,
         LocationTracker.location,
         LocationTracker.lastFixAtMs,
-        client.threatDataStale,
         revealFlow,
         flourishFlow,
         mapVisibleFlow,
@@ -457,13 +455,12 @@ val fastGroupCollapsed: Boolean,
         val radii = values[1] as ZoneParams
         val location = values[2] as LatLng?
         val lastFix = values[3] as Long?
-        val threatDataStale = values[4] as Boolean
-        val reveal = values[5] as RevealRequest?
-        val flourish = values[6] as FlourishShow?
-        val mapVisible = values[7] as Boolean
-        val shelterModeActive = values[8] as Boolean
+        val reveal = values[4] as RevealRequest?
+        val flourish = values[5] as FlourishShow?
+        val mapVisible = values[6] as Boolean
+        val shelterModeActive = values[7] as Boolean
         LiveSnapshot(
-            cs, threats, alerts, threatDataStale,
+            cs, threats, alerts,
             radii.slowRedKm, radii.slowYellowKm, radii.fastRedMin, radii.fastYellowMin,
             location, lastFix != null, reveal, flourish, mapVisible, shelterModeActive
         )
@@ -712,7 +709,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val uiState = buildUiState(
             threats = live.threats,
             alerts = live.alerts,
-            threatDataStale = live.threatDataStale,
             slowRedKm = live.slowRedKm,
             slowYellowKm = live.slowYellowKm,
             fastRedMin = live.fastRedMin,
@@ -920,7 +916,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
     private fun buildUiState(
         threats: Map<String, NormalizedThreat>,
         alerts: List<OblastAlert>,
-        threatDataStale: Boolean,
         slowRedKm: Int,
         slowYellowKm: Int,
         fastRedMin: Int,
@@ -953,6 +948,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val alertingOblastCount = Cities.cityOblast.values.toSet()
             .count { citiesToken -> alerts.any { it.inOblast(citiesToken) } }
 
+        val threatDataStale = registry.isThreatDataStale(nowMono)
         val threatList = if (threatDataStale) emptyList() else threats.values
             .filter { it.type.toThreatType() in mapEnabledTypes }
         val silencedTypeStrings = alertedTypes.map { it.toEngineString() }.toSet()
@@ -1015,7 +1011,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             redCities = redCities,
             alertOblastTokens = evaluation.fillOblastTokens,
             alertRaionKeys = evaluation.fillRaionKeys,
-            fillAlertRegions = fillAlertRegions,
             alertingOblastCount = alertingOblastCount,
             threatLevel = evaluation.threatLevel,
             revealRequest = reveal,

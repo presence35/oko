@@ -74,6 +74,11 @@ class PluginRegistry {
     private val _coveredByFallback = MutableStateFlow(false)
     val coveredByFallback: StateFlow<Boolean> = _coveredByFallback.asStateFlow()
 
+    /** Epoch ms of the last threat update delivered by ANY source (including empty snapshots).
+     *  Drives the source-agnostic threat-data staleness used to gate the map/zone logic. */
+    private val _lastThreatUpdateAt = MutableStateFlow(0L)
+    val lastThreatUpdateAt: StateFlow<Long> = _lastThreatUpdateAt.asStateFlow()
+
     private val _typeCatalog = MutableStateFlow<Map<String, ThreatProps>>(emptyMap())
     val typeCatalog: StateFlow<Map<String, ThreatProps>> = _typeCatalog.asStateFlow()
 
@@ -137,6 +142,7 @@ class PluginRegistry {
     }
 
     private fun remergeThreats() {
+        _lastThreatUpdateAt.value = Monotonic.now()
         val all = ArrayList<NormalizedThreat>()
         for (plugin in _plugins.value) {
             all.addAll(plugin.threats.value)
@@ -164,7 +170,11 @@ class PluginRegistry {
         var owner: String? = null
         for (plugin in ordered) {
             for (alert in plugin.alerts.value) {
-                val key = alert.oblast
+                // Dedup on the alert's OWN key (NEPTUN raion keys like "одеський" vs the
+                // whole-oblast "одеська"), NOT the parent oblast — otherwise every raion inside
+                // an oblast collides with the oblast's wide alert and all but one is dropped,
+                // which silently erased most region fills.
+                val key = alert.key
                 if (key !in owned) {
                     owned[key] = alert
                     if (owner == null) owner = plugin.id
@@ -194,6 +204,10 @@ class PluginRegistry {
          *  to full offline (red + offline notification). Notification-timer concept only — it never
          *  gates the degraded data state. */
         const val OFFLINE_EPISODE_MS = 5 * 60_000L
+
+        /** How long a threat-data update can be absent from ALL sources before the merged feed is
+         *  treated as stale (hides the map/zone logic). */
+        const val THREAT_DATA_STALE_MS = 120_000L
     }
 
     private fun ThreatSource.isAuthoritativeAlertSource(): Boolean = when (sourceType) {
@@ -248,6 +262,12 @@ class PluginRegistry {
         val since = _degradedSince.value ?: return false
         return now - since >= OFFLINE_EPISODE_MS
     }
+
+    /** Threat data is stale only when NO source has delivered an update within the window —
+     *  source-agnostic. A live source (e.g. the Test simulator) delivering fresh threats clears
+     *  it, so its output is never gated behind another source's quiet feed. Monotonic `now`. */
+    fun isThreatDataStale(now: Long): Boolean =
+        now - _lastThreatUpdateAt.value >= THREAT_DATA_STALE_MS
 
     private fun worstPluginState(map: Map<String, PluginConnectionState>): PluginConnectionState =
         _plugins.value.maxByOrNull { map[it.id]?.ordinal ?: PluginConnectionState.DISCONNECTED.ordinal }

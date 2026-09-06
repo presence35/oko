@@ -1314,6 +1314,7 @@ private fun SourcesList(s: Strings.StringSet, now: Long, lang: AppLanguage, icon
             SourceCard(plugin, states[plugin.id] ?: PluginConnectionState.DISCONNECTED, s)
             SourceDataCard(plugin, lang, iconSet, s)
         }
+        MergedAlertsDebugCard(s)
         if (events.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             Text(
@@ -1325,6 +1326,62 @@ private fun SourcesList(s: Strings.StringSet, now: Long, lang: AppLanguage, icon
             events.forEach { ev ->
                 SourceEventRow(ev, s, now)
             }
+        }
+    }
+}
+
+/** Debug: the MERGED alert feed (what the engine actually sees) — every alert with its own key,
+ *  name, parent oblast and wide flag. This is where the old dedup-by-oblast bug showed up: all
+ *  raions of one oblast used to collapse into a single alert. */
+@Composable
+private fun MergedAlertsDebugCard(s: Strings.StringSet) {
+    val registry = AppPluginHolder.registry
+    val alerts by registry.allAlerts.collectAsState()
+    val owner by registry.activeAlertSource.collectAsState()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF1B1B1B))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Merged alerts (${alerts.size}) · owner: ${owner ?: "none"}",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = DebugAmber,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        if (alerts.isEmpty()) {
+            Text(
+                s.logsEmptySources,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        alerts.forEach { a ->
+            val wideTag = if (a.wide == true) "WIDE" else if (a.wide == false) "raion" else "?"
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "· ${a.key}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (a.wide == true) DebugRed else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    wideTag,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (a.wide == true) DebugRed else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                "   ${a.name} · ${a.oblast}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

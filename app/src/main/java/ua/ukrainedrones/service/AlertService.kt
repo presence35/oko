@@ -205,8 +205,7 @@ class AlertService : Service() {
         val focusLocation: LatLng?,
         val gpsFixMissing: Boolean = false,
         val nightActive: Boolean,
-        val enabled: Set<ThreatType>,
-        val threatDataStale: Boolean = false
+        val enabled: Set<ThreatType>
     )
 
     private data class AlertConfig(
@@ -432,7 +431,6 @@ class AlertService : Service() {
                 val cs: ConnectionState,
                 val rawThreats: Map<String, NormalizedThreat>,
                 val alerts: List<OblastAlert>,
-                val threatDataStale: Boolean,
                 val gps: LatLng?,
                 val now: Long
             )
@@ -447,7 +445,6 @@ val mappedThreats = registry.allThreats.map { list ->
                 client.connectionState,
                 mappedThreats,
                 registry.allAlerts,
-                client.threatDataStale,
                 LocationTracker.location,
                 nowFlow
             ) { values: Array<Any?> ->
@@ -456,9 +453,8 @@ val mappedThreats = registry.allThreats.map { list ->
                     cs = values[0] as ConnectionState,
                     rawThreats = values[1] as Map<String, NormalizedThreat>,
                     alerts = values[2] as List<OblastAlert>,
-                    threatDataStale = values[3] as Boolean,
-                    gps = values[4] as LatLng?,
-                    now = values[5] as Long
+                    gps = values[3] as LatLng?,
+                    now = values[4] as Long
                 )
             }
 
@@ -526,7 +522,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     NightSettings(window, zones, ov.first, ov.second)
                 }
             ) { live, dayParams, cfg, tail, night ->
-                val (cs, rawThreats, alerts, threatDataStale, gps, now) = live
+                val (cs, rawThreats, alerts, gps, now) = live
                 val nowMin = nowMinuteOfDay()
                 val nightActive = night.window.enabled && isWithinNight(nowMin, night.window.startMin, night.window.endMin)
                 val params = if (nightActive && night.window.useCustomZones) {
@@ -581,7 +577,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     null to null
                 }
 
-                val zoneThreats = if (focusLoc != null && !threatDataStale) {
+                val zoneThreats = if (focusLoc != null && !registry.isThreatDataStale(Monotonic.now())) {
                     val threatList = threats.values.toList()
                     val engineFocus = LatLng(focusLoc.lat, focusLoc.lon)
                     engine.evaluate(threatList, engineFocus, params, emptySet(), emptySet(), now).zoneThreats
@@ -624,8 +620,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     focusLocation = focusLoc,
                     gpsFixMissing = gpsFixMissing,
                     nightActive = nightActive,
-                    enabled = enabled,
-                    threatDataStale = threatDataStale
+                    enabled = enabled
                 ) to now
             }.collect { (state, now) ->
                 handleState(state, now)
