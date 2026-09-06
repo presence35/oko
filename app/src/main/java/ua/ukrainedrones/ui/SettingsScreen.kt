@@ -1339,7 +1339,8 @@ fun SettingsScreen(
                         checked = fillAlertRegions,
                         onCheckedChange = onFillAlertRegionsChange,
                         icon = painterResource(R.drawable.ic_map_ua),
-                        iconTint = ZoneRedColor
+                        iconTint = ZoneRedColor,
+                        iconSize = 56.dp
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Haptic press feedback
@@ -1870,6 +1871,7 @@ internal fun AlertToggleRow(
     onCheckedChange: (Boolean) -> Unit,
     icon: Painter? = null,
     iconTint: Color? = null,
+    iconSize: Dp = 28.dp,
     iconBadge: String? = null,
     emoji: String? = null,
     note: String? = null,
@@ -1907,7 +1909,7 @@ internal fun AlertToggleRow(
             )
         } else {
             icon?.let {
-                Box(modifier = Modifier.size(28.dp)) {
+                Box(modifier = Modifier.size(iconSize)) {
                     Image(
                         painter = it,
                         contentDescription = null,

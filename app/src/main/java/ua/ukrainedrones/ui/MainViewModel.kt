@@ -671,7 +671,9 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         shelterIndexFlow,
         flybyFlow,
         MonitoringStatus.running,
-        prefs.bootRestartEnabled()
+        prefs.bootRestartEnabled(),
+        registry.degraded,
+        registry.coveredByFallback
     ) { values ->
         val live = values[1] as LiveSnapshot
         val prefs = values[2] as PrefsSnapshot
@@ -706,7 +708,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             nightZones, prefs.night.window.useCustomZones, nightActive
         )
         val uiState = buildUiState(
-            cs = live.cs,
             threats = live.threats,
             alerts = live.alerts,
             threatDataStale = live.threatDataStale,
@@ -805,7 +806,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
                 officialAlertsEnabled = prefs.officialAlertsEnabled,
                 criticalOfflineOverride = prefs.criticalOfflineOverride,
                 silencedTypesCount = (ThreatType.values().toSet() - prefs.alertEnabled).size,
-                neptunOffline = live.cs.isOffline && !registry.coveredByFallback.value
+                neptunOffline = registry.isOffline(now)
             )
         )
         // A fresh INNER AVIATION (bell on) plays one full-size pass across the viewport; the
@@ -914,7 +915,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private fun buildUiState(
-        cs: ConnectionState,
         threats: Map<String, NormalizedThreat>,
         alerts: List<OblastAlert>,
         threatDataStale: Boolean,
@@ -978,19 +978,17 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val activeZone: ThreatZone? = evaluation.activeZone
         val alertActive = activeZone != null || focusOblastAlertActive
 
-        // Short socket blips (drops that recover inside the shared grace window) are invisible
-        // here — the pill and status text stay "online" instead of flashing on every handoff.
-        // The grace is only applied in the connection log; the UI pill immediately reflects
-        // drops so the header and the notification service agree (mirror rule).
-        // A fallback source actively covering (e.g. NEPTUN disabled/silent + Ubilling up) reads
-        // as degraded, not offline — less live data, but the system is still covered.
-        val coveredByFallback = registry.coveredByFallback.value
-        val neptunDown = cs.isOffline && !coveredByFallback
+        // Three-tier connection: green when a WS source delivers its live feed; orange
+        // (degraded) the moment it stops (disabled, silent, or down — a data state, immediate);
+        // red (offline) only after the degraded episode outlasts the grace with no fallback
+        // delivering. Single derivation lives in the registry; the header just mirrors it.
+        val degraded = registry.degraded.value
+        val neptunDown = registry.isOffline(now)
 
         return UiState(
-            connected = cs.isConnected,
+            connected = registry.wsHealthy.value,
             neptunDown = neptunDown,
-            degraded = cs.isDegraded || coveredByFallback,
+            degraded = degraded,
             threatsInner = inInner,
             threatsOuter = inOuter,
             mapThreats = mapThreats,

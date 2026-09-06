@@ -76,6 +76,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -687,6 +688,10 @@ private fun MapScreen(
     var fitZonesTick by remember { mutableStateOf(0) }
     var shelterSelectTick by remember { mutableStateOf(0) }
     var selectedShelter by remember { mutableStateOf<NearestShelter?>(null) }
+    // Measured overlay heights feeding the map's camera framing: the popup card covers the top
+    // of the viewport, the zones sheet the bottom — the map fits/reveals inside the visible band.
+    var popupCoverPx by remember { mutableStateOf(0) }
+    var zonesSheetCoverPx by remember { mutableStateOf(0) }
     var deathActive by remember { mutableStateOf(false) }
     var replayProgress by remember { mutableStateOf<ReplayProgress?>(null) }
     var countdown by remember { mutableStateOf<Int?>(null) }
@@ -757,6 +762,11 @@ private fun MapScreen(
     val openZonesPanel: () -> Unit = {
         onShowZonesSheetChange(true)
         fitZonesTick++
+    }
+
+    // Drop the measured sheet height when it closes so a stale cover never shrinks the framing.
+    LaunchedEffect(showZonesSheet) {
+        if (!showZonesSheet) zonesSheetCoverPx = 0
     }
 
     val openSettings: () -> Unit = {
@@ -929,6 +939,8 @@ private fun MapScreen(
                         zoomTick = zoomTick,
                         fitZonesTick = fitZonesTick,
                         zonesSheetOpen = showZonesSheet,
+                        popupCoverPx = popupCoverPx,
+                        zonesSheetCoverPx = zonesSheetCoverPx,
                         revealRequest = uiState.revealRequest,
                         paused = settingsOpen,
                         mapVisible = mapVisible,
@@ -992,7 +1004,7 @@ private fun MapScreen(
                         Row(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(bottom = 4.dp),
+                                .padding(bottom = 8.dp),
                             verticalAlignment = Alignment.Bottom,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
@@ -1057,9 +1069,9 @@ private fun MapScreen(
                 replayProgress = replayProgress,
                 strikeType = strikeType,
                 pendingStrikeCount = pendingStrikeCount,
+                message = if (autoStrikeActive || deathActive) s.neutralizingLabel else null,
                 stopLabel = s.stopReplayLabel,
                 language = uiState.language,
-                s = s,
                 onStop = stopAll
             )
 
@@ -1082,7 +1094,8 @@ private fun MapScreen(
                 silencedTypes = uiState.silencedTypes,
                 s = s,
                 onDismiss = onDismissPopup,
-                onThreatCardSizeChange = onThreatCardSizeChange
+                onThreatCardSizeChange = onThreatCardSizeChange,
+                onHeightChanged = { popupCoverPx = it }
             )
 
             // Shelter info card: tapping a shelter marker on the map opens it here (the same
@@ -1113,7 +1126,9 @@ private fun MapScreen(
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { zonesSheetCoverPx = it.height },
                     color = if (editingNight) NightSectionBg else Color(0xFF1E1E1E),
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                     border = BorderStroke(
@@ -1203,7 +1218,8 @@ private fun ThreatCardHost(
     silencedTypes: Set<ThreatType>,
     s: Strings.StringSet,
     onDismiss: () -> Unit,
-    onThreatCardSizeChange: (ThreatCardSize) -> Unit
+    onThreatCardSizeChange: (ThreatCardSize) -> Unit,
+    onHeightChanged: (Int) -> Unit = {}
 ) {
     val sel = selection.collectAsState().value
     SideEffect {
@@ -1230,6 +1246,7 @@ private fun ThreatCardHost(
         label = "threatCardSwap",
         modifier = Modifier
             .padding(top = 12.dp, start = 16.dp, end = 16.dp)
+            .onGloballyPositioned { onHeightChanged(it.size.height) }
     ) { state ->
         when (state) {
             1 -> sel.selected?.let { threat ->
@@ -1552,7 +1569,7 @@ internal fun ZoneButtons(
             Spacer(Modifier.height(6.dp))
         }
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             ZoneButton(ThreatZone.INNER, redArmed, s.zoneButtonRed, onZoneTap)

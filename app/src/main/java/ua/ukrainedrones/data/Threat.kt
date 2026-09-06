@@ -283,6 +283,33 @@ fun translateCourseAssessment(text: String?, lang: AppLanguage): String? {
     return courseFallback(text)
 }
 
+/** The heading-to sentence patterns only (a destination, not a source/loiter): a threat that
+ *  "goes toward {X}" orbits {X} on the map, so we need the captured place to resolve it. */
+private val DESTINATION_PATTERNS: List<Regex> = listOf(
+    Regex("^(?:Група|Рій) БпЛА курсом на (.+)$", RegexOption.IGNORE_CASE),
+    Regex("^Шахеди? курсом на (.+)$", RegexOption.IGNORE_CASE),
+    Regex("^БпЛА курсом на (.+)$", RegexOption.IGNORE_CASE),
+    Regex("^(?:Ракета|Крилата ракета) (?:летить |рухається )?(?:у напрямку|в напрямку|на) (.+)$", RegexOption.IGNORE_CASE),
+    Regex("^Швидкісна ціль (?:у напрямку|в напрямку|на|курсом на) (.+)$", RegexOption.IGNORE_CASE),
+    Regex("^КАБи? (?:у напрямку|в напрямку|на|курсом на) (.+)$", RegexOption.IGNORE_CASE),
+    Regex("^БпЛА (?:рухається|прямує) (?:в напрямку|у напрямку|в бік|у бік) (.+)$", RegexOption.IGNORE_CASE),
+    Regex("^Курс на (.+)$", RegexOption.IGNORE_CASE)
+)
+
+/** The destination place named in [text]'s course assessment (e.g. "Шахеди курсом на
+ *  Чорноморськ" → "Чорноморськ"), or null when the text names no heading-to target. Used by the
+ *  map to orbit an approximate-position threat around the city it's heading toward. */
+fun courseTargetPlace(text: String?): String? {
+    if (text.isNullOrBlank()) return null
+    val t = text.trim()
+    for (pattern in DESTINATION_PATTERNS) {
+        val m = pattern.find(t) ?: continue
+        val place = m.groupValues.getOrNull(1)?.trim()?.trimEnd('.', '—', '-') ?: continue
+        if (place.isNotEmpty()) return place
+    }
+    return null
+}
+
 /** Military vocabulary hard-coded for the EN fallback; longest phrases first so "на" never
  *  swallows "у напрямку". Applied as whole words only (Unicode word boundaries). */
 private val COURSE_GLOSSARY: List<Pair<String, String>> = listOf(

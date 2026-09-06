@@ -84,8 +84,8 @@ sealed interface ConnectionState {
     ) : ConnectionState
 
     /**
-     * Connected (socket is open), but no frame has arrived for >= 30 seconds.
-     * Indicates a degraded link / silent stall before the 45s hard watchdog drops it.
+     * Connected (socket is open), but no frame has arrived for >= [DEGRADED_STALE_MS] (30s).
+     * Indicates a degraded link / silent stall before the hard watchdog drops it.
      */
     data class Degraded(
         val generation: Int,

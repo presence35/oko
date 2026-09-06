@@ -60,8 +60,16 @@ class PluginRegistry {
     private val _wsHealthy = MutableStateFlow(false)
     val wsHealthy: StateFlow<Boolean> = _wsHealthy.asStateFlow()
 
-    /** True when the primary WS feed is not delivering but a fallback source is actively
-     *  covering — the app is "degraded" (less live data) rather than fully offline. */
+    /** Feed freshness: no WS source is delivering its live feed (disabled, silent, or down).
+     *  The orange "degraded" tier — a data state, immediate, independent of fallback coverage. */
+    private val _degraded = MutableStateFlow(false)
+    val degraded: StateFlow<Boolean> = _degraded.asStateFlow()
+
+    /** When the current degraded episode began (null = healthy). Drives the offline escalation. */
+    private val _degradedSince = MutableStateFlow<Long?>(null)
+    val degradedSince: StateFlow<Long?> = _degradedSince.asStateFlow()
+
+    /** True when a non-WS fallback source is actually delivering real data (POLLING + CONNECTED). */
     private val _coveredByFallback = MutableStateFlow(false)
     val coveredByFallback: StateFlow<Boolean> = _coveredByFallback.asStateFlow()
 
@@ -180,6 +188,11 @@ class PluginRegistry {
 
     companion object {
         private const val PRIMARY_ID = "neptun"
+
+        /** How long a degraded episode must persist with no fallback coverage before it escalates
+         *  to full offline (red + offline notification). Notification-timer concept only — it never
+         *  gates the degraded data state. */
+        const val OFFLINE_EPISODE_MS = 5 * 60_000L
     }
 
     private fun ThreatSource.isAuthoritativeAlertSource(): Boolean = when (sourceType) {
@@ -200,8 +213,15 @@ class PluginRegistry {
         val map = _plugins.value.associate { it.id to it.connectionState.value }
         _perSourceState.value = map
         _connectionState.value = worstPluginState(map)
-        _wsHealthy.value = _plugins.value.any { it.isWsDelivering(map) }
-        _coveredByFallback.value = computeCoveredByFallback(map)
+        val wsHealthy = _plugins.value.any { it.isWsDelivering(map) }
+        _wsHealthy.value = wsHealthy
+        _degraded.value = !wsHealthy
+        _degradedSince.value = when {
+            wsHealthy -> null
+            _degradedSince.value == null -> System.currentTimeMillis()
+            else -> _degradedSince.value
+        }
+        _coveredByFallback.value = computeCoveredByFallback()
     }
 
     /** A WS source is delivering only when it is enabled AND actually connected. A disabled or
@@ -209,14 +229,21 @@ class PluginRegistry {
     private fun ThreatSource.isWsDelivering(map: Map<String, PluginConnectionState>): Boolean =
         enabled.value && sourceType == SourceType.WS && map[id] == PluginConnectionState.CONNECTED
 
-    /** Degraded (not offline): no WS source is delivering its live feed, but a non-WS fallback
-     *  source is authoritative and actively covering. Offline only when nothing covers. */
-    private fun computeCoveredByFallback(map: Map<String, PluginConnectionState>): Boolean {
-        val wsDelivering = _plugins.value.any { it.isWsDelivering(map) }
-        if (wsDelivering) return false
-        return _plugins.value.any { p ->
-            p.sourceType != SourceType.WS && p.isAuthoritativeAlertSource()
+    /** A fallback covers only when it has actually delivered a snapshot (engaged AND succeeded) —
+     *  a standby or failing poller is not real coverage. */
+    private fun computeCoveredByFallback(): Boolean =
+        _plugins.value.any { p ->
+            p.sourceType != SourceType.WS &&
+                p.operationalMode.value == OperationalMode.POLLING &&
+                p.connectionState.value == PluginConnectionState.CONNECTED
         }
+
+    /** Offline escalation (red + offline notification): degraded past the episode grace with no
+     *  fallback delivering. Consumers pass their own `now` (mirror rule: derivation lives here). */
+    fun isOffline(now: Long): Boolean {
+        if (!_degraded.value || _coveredByFallback.value) return false
+        val since = _degradedSince.value ?: return false
+        return now - since >= OFFLINE_EPISODE_MS
     }
 
     private fun worstPluginState(map: Map<String, PluginConnectionState>): PluginConnectionState =

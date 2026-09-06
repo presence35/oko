@@ -51,9 +51,9 @@ fun BoxScope.FlourishFooter(
     replayProgress: ReplayProgress?,
     strikeType: ThreatType?,
     pendingStrikeCount: Int,
+    message: String?,
     stopLabel: String,
     language: AppLanguage,
-    s: Strings.StringSet,
     onStop: () -> Unit
 ) {
     if (!active) return
@@ -148,9 +148,9 @@ fun BoxScope.FlourishFooter(
                                 .background(amber)
                         )
                     }
-                } else {
+                } else if (message != null) {
                     Text(
-                        s.neutralizingLabel,
+                        message,
                         style = MaterialTheme.typography.bodyMedium,
                         color = amber,
                         textAlign = TextAlign.Center

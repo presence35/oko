@@ -11,6 +11,7 @@ import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.NEPTUN_TYPES
+import ua.ukrainedrones.courseTargetPlace
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -195,19 +196,28 @@ private fun threatIconSizeDp(zoom: Double): Int {
     return (32.0 * scale / 8.0).roundToInt() * 8
 }
 
-/** Position for the "approaching, precision unknown" orbit: a point on the yellow zone
- *  perimeter around [focus], advancing the angle over time so the icon patrols the ring. */
-private fun orbitPosition(focus: LatLng, radiusMeters: Double, angleRad: Double): LatLng {
+/** Position for the "approaching, precision unknown" orbit: a point on the yellow ring around
+ *  [center] (the destination city), advancing the angle over time so the icon patrols the ring. */
+private fun orbitPosition(center: LatLng, radiusMeters: Double, angleRad: Double): LatLng {
     val dLat = (radiusMeters * cos(angleRad)) / 111_320.0
-    val dLon = (radiusMeters * sin(angleRad)) / (111_320.0 * cos(Math.toRadians(focus.lat)))
-    return LatLng(focus.lat + dLat, focus.lon + dLon)
+    val dLon = (radiusMeters * sin(angleRad)) / (111_320.0 * cos(Math.toRadians(center.lat)))
+    return LatLng(center.lat + dLat, center.lon + dLon)
 }
 
-/** An approximate-position threat inside its orbit ring patrols that ring's perimeter instead of
- *  parking on its raw fix (often the city pin, which reads as "0km" / already here). */
-private fun shouldOrbitFocus(nt: NormalizedThreat, focus: LatLng?, ringKm: Int): Boolean {
-    if (focus == null || nt.areaOnly || nt.positionQuality != "approx") return false
-    return distanceFlat(focus.lat, focus.lon, nt.lat, nt.lon) / 1000.0 <= ringKm
+/** The destination city an approximate-position threat is heading toward, resolved from its
+ *  course text (e.g. "Шахеди курсом на Чорноморськ" → Chornomorsk's coords), or null. */
+private fun orbitCenter(nt: NormalizedThreat): LatLng? {
+    if (nt.areaOnly || nt.positionQuality != "approx") return null
+    val place = courseTargetPlace(nt.explanationShort) ?: return null
+    return Cities.findCity(place)?.let { LatLng(it.lat, it.lon) }
+}
+
+/** An approximate-position threat heading toward a known city circles that city's yellow ring
+ *  (precision unknown = warning), but only while it is NOT yet inside the red zone — once it's
+ *  close enough to be spotted, better coordinates exist and it should park on its raw fix. */
+private fun shouldOrbitDestination(nt: NormalizedThreat, destination: LatLng, redKm: Int): Boolean {
+    if (nt.areaOnly || nt.positionQuality != "approx") return false
+    return distanceFlat(destination.lat, destination.lon, nt.lat, nt.lon) / 1000.0 > redKm
 }
 
 /**
@@ -368,7 +378,7 @@ private data class NewRingState(val id: String?, val activeUntilMs: Long)
 private const val NEW_RING_MS = 8_000L
 /** How long the zone-slider camera refit waits after the value stops changing. */
 private const val ZONE_REFIT_DEBOUNCE_MS = 350L
-/** One full orbit of an approximate-position threat around the yellow zone perimeter. */
+/** One full orbit of an approximate-position threat around its destination city's yellow ring. */
 private const val ORBIT_PERIOD_MS = 15_000L
 /** Orbit angle offset keyed by threat id so nearby threats don't patrol in lockstep. */
 private fun orbitPhase(id: String): Double {
@@ -387,16 +397,13 @@ internal fun orbitTangentBearing(angleRad: Double): Double {
     return (deg + 360.0) % 360.0
 }
 
-/** Orbit ring radius: fast threats patrol the tight red ring, slow threats the yellow one. */
-private fun orbitRadiusKm(isFast: Boolean, redKm: Int, yellowKm: Int): Int = if (isFast) redKm else yellowKm
-
 /** How a threat is shown on the map right now. */
 internal enum class ThreatPoseMode { PARKED, ORBIT, DRIFT }
 
 /** Desired on-map pose for a threat: position + compass heading. Parked threats hold their raw
- *  fix with the reported course; orbiting threats follow their ring (tangent heading); drifting
- *  threats dead-reckon along their course. Single source used by both the rebuild and the
- *  animation loop so placement and facing always agree. */
+ *  fix with the reported course; orbiting threats follow the destination city's yellow ring
+ *  (tangent heading); drifting threats dead-reckon along their course. Single source used by both
+ *  the rebuild and the animation loop so placement and facing always agree. */
 internal data class MarkerPose(
     val lat: Double,
     val lon: Double,
@@ -408,17 +415,25 @@ internal fun resolveThreatPose(
     engine: ThreatEngine,
     t: NormalizedThreat,
     props: ThreatProps,
-    focus: LatLng?,
     redKm: Int,
     yellowKm: Int,
     now: Long
 ): MarkerPose {
     val drift = engine.canDrift(t, props, now)
-    val ringKm = orbitRadiusKm(props.isFast, redKm, yellowKm)
-    if (drift && focus != null && shouldOrbitFocus(t, focus, ringKm)) {
-        val angle = orbitAngle(now, t.id)
-        val pos = orbitPosition(focus, ringKm * 1000.0, angle)
-        return MarkerPose(pos.lat, pos.lon, orbitTangentBearing(angle).toFloat(), ThreatPoseMode.ORBIT)
+    // An approximate-position threat heading toward a known city patrols that city's yellow ring
+    // (the warning band where nobody has precise coords yet). The ring is centered on the
+    // destination, not the user's focus, so editing zones never moves the threat to a different
+    // city. Once it reaches the red zone, better coords are presumed and it parks on its fix.
+    val destination = orbitCenter(t)
+    if (destination != null) {
+        if (!shouldOrbitDestination(t, destination, redKm)) {
+            return MarkerPose(t.lat, t.lon, engine.courseDeg(t).toFloat(), ThreatPoseMode.PARKED)
+        }
+        if (drift) {
+            val angle = orbitAngle(now, t.id)
+            val pos = orbitPosition(destination, yellowKm * 1000.0, angle)
+            return MarkerPose(pos.lat, pos.lon, orbitTangentBearing(angle).toFloat(), ThreatPoseMode.ORBIT)
+        }
     }
     if (drift) {
         val predicted = engine.speedCache.estimate(t.id, t, props)
@@ -619,8 +634,16 @@ val strokeW = 2.6f * density
 /** Framing box for a notification reveal: focus near the top, threat near the bottom, with a
  *  clamped span so a huge gap (or a zero gap) still yields a valid, zoomable box. The threat is
  *  always pinned to the bottom fraction regardless of which is further north, so a northern
- *  threat (e.g. Kyiv with the focus on Odesa) never lands underneath the top popup card. */
-private fun buildRevealBoundingBox(threat: LatLng, focus: LatLng?): BoundingBox {
+ *  threat (e.g. Kyiv with the focus on Odesa) never lands underneath the top popup card. When the
+ *  popup card (top) or zones sheet (bottom) has been measured, the fractions shrink to fit the
+ *  actual visible band so the threat never hides under an overlay. */
+private fun buildRevealBoundingBox(
+    threat: LatLng,
+    focus: LatLng?,
+    mapHeightPx: Int,
+    topCoverPx: Int,
+    bottomCoverPx: Int
+): BoundingBox {
     if (focus == null) {
         val span = 0.5
         return BoundingBox(
@@ -628,8 +651,17 @@ private fun buildRevealBoundingBox(threat: LatLng, focus: LatLng?): BoundingBox 
             threat.lat - span, threat.lon - span
         )
     }
-    val ft = 0.28f  // focus vertical fraction from the top
-    val fb = 0.72f  // threat vertical fraction from the top
+    val ft: Float
+    val fb: Float
+    if (mapHeightPx > 0 && (topCoverPx > 0 || bottomCoverPx > 0)) {
+        val topFrac = (topCoverPx.toFloat() / mapHeightPx).coerceIn(0f, 0.45f)
+        val bottomFrac = (bottomCoverPx.toFloat() / mapHeightPx).coerceIn(0f, 0.45f)
+        ft = (topFrac + 0.05f).coerceAtMost(0.45f)
+        fb = (1f - bottomFrac - 0.05f).coerceAtLeast(0.55f)
+    } else {
+        ft = 0.28f  // focus vertical fraction from the top
+        fb = 0.72f  // threat vertical fraction from the top
+    }
     val g = fb - ft
     val gapLat = Math.abs(focus.lat - threat.lat)
     val spanLat = Math.max(gapLat / g, REVEAL_MIN_SPAN_LAT).coerceAtMost(40.0)
@@ -670,6 +702,8 @@ fun NeptunMapView(
     zoomTick: Int = 0,
     fitZonesTick: Int = 0,
     zonesSheetOpen: Boolean = false,
+    popupCoverPx: Int = 0,
+    zonesSheetCoverPx: Int = 0,
     revealRequest: RevealRequest? = null,
     paused: Boolean = false,
     mapVisible: Boolean = true,
@@ -753,6 +787,9 @@ fun NeptunMapView(
     val lastFitZonesTick = remember { mutableStateOf(-1) }
     val lastFittedYellowKm = remember { mutableStateOf<Int?>(null) }
     val lastRevealTick = remember { mutableStateOf(-1) }
+    val lastRevealPos = remember { mutableStateOf<LatLng?>(null) }
+    val lastPopupCoverPx = remember { mutableStateOf(0) }
+    val lastZonesCoverPx = remember { mutableStateOf(0) }
     val lastFlourishTick = remember { mutableStateOf(-1) }
     // Bumped on every lifecycle RESUME so the pending tally-tap replay is retried actively.
     val flourishRetryTick = remember { mutableStateOf(0) }
@@ -849,11 +886,14 @@ fun NeptunMapView(
     }
 
     // Centre + zoom so the whole yellow zone sits in the visible area ABOVE the zones sheet.
-    // The bbox is extended downward so the zone occupies the top 60% of the viewport (the
-    // sheet covers ~40% below).
+    // The bbox is extended downward so the zone occupies the top part of the viewport that is
+    // actually visible above the sheet — measured from the sheet's real height when known,
+    // falling back to a 60% assumption before the sheet has laid out.
     val fitZoneToPanel: (MapView, IGeoPoint) -> Unit = { mv, center ->
         val zone = zoneBoundingBox(center, uiState.activeZoneParams.slowYellowKm.toDouble())
-        val visibleFrac = 0.6f
+        val visibleFrac = if (mv.height > 0 && zonesSheetCoverPx > 0) {
+            (1f - zonesSheetCoverPx / mv.height.toFloat()).coerceIn(0.3f, 1f)
+        } else 0.6f
         val dLat = zone.latNorth - center.latitude
         val southPad = dLat * 2 * ((1f / visibleFrac) - 1f)
         mv.zoomToBoundingBox(
@@ -1037,6 +1077,7 @@ fun NeptunMapView(
             if (reveal != null && reveal.tick != lastRevealTick.value) {
                 lastRevealTick.value = reveal.tick
                 val threat = LatLng(reveal.lat, reveal.lon)
+                lastRevealPos.value = threat
                 newRingState.value = NewRingState(
                     reveal.id, System.currentTimeMillis() + NEW_RING_MS
                 )
@@ -1045,7 +1086,13 @@ fun NeptunMapView(
                     // the composition thread — fall back to a plain centre-on-threat pan.
                     try {
                         mapView.zoomToBoundingBox(
-                            buildRevealBoundingBox(threat, uiState.focusLocation), true
+                            buildRevealBoundingBox(
+                                threat,
+                                uiState.focusLocation,
+                                mapView.height,
+                                popupCoverPx,
+                                zonesSheetCoverPx
+                            ), true
                         )
                     } catch (_: Exception) {
                         mapView.controller.animateTo(GeoPoint(threat.lat, threat.lon))
@@ -1123,7 +1170,8 @@ fun NeptunMapView(
                         val rings = RaionBoundaries.forKey(stem, raion) ?: continue
                         for (ring in rings) {
                             if (ring.size < 3) continue
-                            val points = ring.map { GeoPoint(it[1], it[0]) }
+                            // Rings are stored as (lat, lon); osmdroid GeoPoint is (lat, lon).
+                            val points = ring.map { GeoPoint(it[0], it[1]) }
                             mapView.overlays.add(Polygon(mapView).apply {
                                 this.points = points
                                 fillColor = Color.argb(55, 255, 60, 60)
@@ -1145,7 +1193,7 @@ fun NeptunMapView(
                         val stem = Cities.cityOblast[c] ?: return@filter true
                         if (stem in uiState.alertOblastTokens) return@filter false
                         val raion = CityRaions.cityRaion[c] ?: return@filter true
-                        (stem to raion) !in uiState.alertRaionKeys
+                        (stem to raion.lowercase()) !in uiState.alertRaionKeys
                     }.toSet()
                 } else uiState.redCities
                 mapView.overlays.add(
@@ -1200,7 +1248,7 @@ fun NeptunMapView(
                     uiState.mapThreats.map { t ->
                         val p = engine.propsFor(t.type)
                         val pose = resolveThreatPose(
-                            engine, t, p, uiState.focusLocation,
+                            engine, t, p,
                             uiState.activeZoneParams.slowRedKm, uiState.activeZoneParams.slowYellowKm,
                             System.currentTimeMillis()
                         )
@@ -1224,9 +1272,8 @@ fun NeptunMapView(
                     // Place markers at their from-clock pose straight away (matching the animation loop) so a
                     // rebuild never snaps a moving marker back to its raw fix and returning to the
                     // app doesn't flash stale fixes before the loop corrects.
-                    val focusPt = uiState.focusLocation
                     val pose = resolveThreatPose(
-                        engine, nt, props, focusPt,
+                        engine, nt, props,
                         uiState.activeZoneParams.slowRedKm, uiState.activeZoneParams.slowYellowKm,
                         System.currentTimeMillis()
                     )
@@ -1430,6 +1477,48 @@ fun NeptunMapView(
             mapViewRef.value = null
         }
     )
+
+    // The popup card's height lands a frame AFTER the reveal fires (the card isn't laid out yet
+    // on the same frame). Once it's measured, reframe the revealed threat so it stays visible
+    // below the card. Only reframes on the 0→>0 transition (a card first appearing): a card
+    // already open means the reveal was framed with its height known, and resizing an open card
+    // must not re-pan the camera.
+    LaunchedEffect(popupCoverPx) {
+        if (popupCoverPx <= 0) {
+            lastPopupCoverPx.value = 0
+            return@LaunchedEffect
+        }
+        val prev = lastPopupCoverPx.value
+        lastPopupCoverPx.value = popupCoverPx
+        if (prev != 0) return@LaunchedEffect
+        val pos = lastRevealPos.value ?: return@LaunchedEffect
+        val mv = mapViewRef.value ?: return@LaunchedEffect
+        if (mv.width <= 0 || mv.height <= 0) return@LaunchedEffect
+        val focusPt = focusLocationState ?: return@LaunchedEffect
+        try {
+            mv.zoomToBoundingBox(
+                buildRevealBoundingBox(pos, focusPt, mv.height, popupCoverPx, zonesSheetCoverPx),
+                true
+            )
+        } catch (_: Exception) {}
+    }
+
+    // The zones sheet's height is measured a frame after the sheet opens — the initial fit ran
+    // with the 60% fallback. Once the real height is known, refit so the yellow zone truly sits
+    // in the visible area above the sheet. Only on the 0→>0 transition (sheet first appearing).
+    LaunchedEffect(zonesSheetCoverPx) {
+        if (zonesSheetCoverPx <= 0) {
+            lastZonesCoverPx.value = 0
+            return@LaunchedEffect
+        }
+        val prev = lastZonesCoverPx.value
+        lastZonesCoverPx.value = zonesSheetCoverPx
+        if (prev != 0 || !zonesSheetOpen) return@LaunchedEffect
+        val mv = mapViewRef.value ?: return@LaunchedEffect
+        if (mv.width <= 0 || mv.height <= 0) return@LaunchedEffect
+        val center = focusLocationState?.let { GeoPoint(it.lat, it.lon) } ?: mv.mapCenter
+        fitZoneToPanel(mv, center)
+    }
 
     // Shelter mode: while the overlay is up, unlock deep zoom (street-level shelter detail)
     // and zoom the camera to fit the full nearby-shelter range plus a buffer, so every marker
@@ -1679,14 +1768,13 @@ fun NeptunMapView(
             val now = System.currentTimeMillis()
             var dirty = false
             var moving = false
-            val focusPt = focusLocationState
             // De-overlap the live poses each frame so spread/grid/count stay consistent with the rebuild.
             val stepPx = ((if (threatIconZoomState) threatIconSizeDp(mapView.zoomLevelDouble) else 32) *
                 context.resources.displayMetrics.density).toInt().coerceAtLeast(24)
             val placements = deOverlapThreats(
                 mapThreatsState.map { t ->
                     val p = engine.propsFor(t.type)
-                    val pose = resolveThreatPose(engine, t, p, focusPt, slowRedKmState, slowYellowKmState, now)
+                    val pose = resolveThreatPose(engine, t, p, slowRedKmState, slowYellowKmState, now)
                     Triple(t.id, LatLng(pose.lat, pose.lon), t.type)
                 },
                 mapView, uiState.overlapMode, stepPx
@@ -1704,7 +1792,7 @@ fun NeptunMapView(
                     marker.alpha = targetAlpha
                     dirty = true
                 }
-                val pose = resolveThreatPose(engine, t, props, focusPt, slowRedKmState, slowYellowKmState, now)
+                val pose = resolveThreatPose(engine, t, props, slowRedKmState, slowYellowKmState, now)
                 if (pose.mode != ThreatPoseMode.PARKED) moving = true
                 val targetRot = if (t.areaOnly) 0f else {
                     val base = IconCatalog.baseDeg(t.type.toThreatType(), iconSetState)

@@ -8,7 +8,7 @@ import org.junit.Test
 class UbillingPluginTest {
 
     private val now = 1_000_000L
-    private val since = now - UbillingPlugin.GRACE_MS
+    private val since = now - 10_000L
 
     private fun plugin() = UbillingPlugin(
         primaryHealthy = kotlinx.coroutines.flow.flowOf(true),
@@ -18,44 +18,45 @@ class UbillingPluginTest {
     @Test
     fun `idle when disabled`() {
         val p = plugin()
-        assertNull(p.computeIntervalMs(since, foreground = true, healthy = false, enabled = false, now = now))
+        assertNull(p.computeIntervalMs(since, foreground = true, healthy = false, enabled = false))
     }
 
     @Test
     fun `idle when primary healthy`() {
         val p = plugin()
-        assertNull(p.computeIntervalMs(since, foreground = true, healthy = true, enabled = true, now = now))
+        assertNull(p.computeIntervalMs(since, foreground = true, healthy = true, enabled = true))
     }
 
     @Test
     fun `idle when no outage recorded`() {
         val p = plugin()
-        assertNull(p.computeIntervalMs(null, foreground = true, healthy = false, enabled = true, now = now))
+        assertNull(p.computeIntervalMs(null, foreground = true, healthy = false, enabled = true))
     }
 
     @Test
-    fun `idle during grace period`() {
+    fun `polls immediately on degradation`() {
         val p = plugin()
+        // Primary just dropped (within what used to be the grace window) → poll at once, no wait.
         val recentSince = now - 1_000L
-        assertNull(p.computeIntervalMs(recentSince, foreground = true, healthy = false, enabled = true, now = now))
+        assertEquals(UbillingPlugin.POLL_FAST_MS, p.computeIntervalMs(recentSince, foreground = true, healthy = false, enabled = true))
     }
 
     @Test
-    fun `foreground polls fast after grace`() {
+    fun `foreground polls fast when degraded`() {
         val p = plugin()
-        assertEquals(UbillingPlugin.POLL_FAST_MS, p.computeIntervalMs(since, foreground = true, healthy = false, enabled = true, now = now))
+        assertEquals(UbillingPlugin.POLL_FAST_MS, p.computeIntervalMs(since, foreground = true, healthy = false, enabled = true))
     }
 
     @Test
-    fun `background polls slow after grace`() {
+    fun `background polls slow when degraded`() {
         val p = plugin()
-        assertEquals(UbillingPlugin.POLL_BG_MS, p.computeIntervalMs(since, foreground = false, healthy = false, enabled = true, now = now))
+        assertEquals(UbillingPlugin.POLL_BG_MS, p.computeIntervalMs(since, foreground = false, healthy = false, enabled = true))
     }
 
     @Test
     fun `disabled overrides everything`() {
         val p = plugin()
-        assertNull(p.computeIntervalMs(since, foreground = false, healthy = false, enabled = false, now = now))
+        assertNull(p.computeIntervalMs(since, foreground = false, healthy = false, enabled = false))
     }
 
     @Test

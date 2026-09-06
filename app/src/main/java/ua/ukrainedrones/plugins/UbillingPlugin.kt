@@ -32,10 +32,10 @@ import ua.ukrainedrones.engine.ThreatSource
 import java.util.concurrent.TimeUnit
 
 /**
- * Ubilling aerial-alerts REST source — a siren-capable fallback that activates when the
- * primary WS source is down past a grace period. Battery-aware: it is idle whenever the
- * primary is healthy, and its polling interval adapts to how degraded the primary is and
- * whether the app is in the foreground. See interval table in [computeIntervalMs].
+ * Ubilling aerial-alerts REST source — a siren-capable fallback that engages as soon as the
+ * primary WS source stops delivering (degraded), regardless of the offline-notification grace.
+ * Battery-aware: it is idle whenever the primary is healthy, and its polling interval adapts
+ * to whether the app is in the foreground. See interval table in [computeIntervalMs].
  *
  * Merge policy (takeover): while this plugin is actively polling (primary down past grace),
  * its full oblast snapshot is authoritative for the regions it reports. On recovery it stops
@@ -74,7 +74,7 @@ class UbillingPlugin(
 
     private var pollJob: Job? = null
 
-    /** When the primary last went unhealthy (null = healthy). Drives the grace period. */
+    /** When the primary last went unhealthy (null = healthy). Drives engagement timing. */
     private var offlineSince: Long? = null
 
     /** Exponential backoff applied after consecutive poll failures (2s → 4s → 8s cap). */
@@ -101,8 +101,7 @@ class UbillingPlugin(
                 }
             }
             while (isActive) {
-                val now = System.currentTimeMillis()
-                val interval = computeIntervalMs(offlineSince, foreground, primaryHealthyState, _enabled.value, now)
+                val interval = computeIntervalMs(offlineSince, foreground, primaryHealthyState, _enabled.value)
                 if (interval == null) {
                     // Idle: no polling. Re-evaluate frequently enough to catch a state change.
                     delay(5_000)
@@ -156,20 +155,18 @@ class UbillingPlugin(
 
     /**
      * Interval in ms, or null when the plugin should be idle (no polling).
-     * Primary CONNECTED → idle. Primary OFFLINE short blip → idle (grace). Past grace →
-     * poll; faster in the foreground, and never faster than [POLL_FAST_MS].
+     * Primary CONNECTED → idle. Any degradation (off, silent, down) → poll; faster in the
+     * foreground, and never faster than [POLL_FAST_MS]. The loop's own idle re-check cadence
+     * (~5s) debounces short blips, so no separate grace is needed here.
      */
     internal fun computeIntervalMs(
         offlineSince: Long?,
         foreground: Boolean,
         healthy: Boolean,
-        enabled: Boolean,
-        now: Long = System.currentTimeMillis()
+        enabled: Boolean
     ): Long? {
         if (!enabled) return null
         if (healthy || offlineSince == null) return null
-        val offlineDuration = now - offlineSince
-        if (offlineDuration < GRACE_MS) return null
         return if (foreground) POLL_FAST_MS else POLL_BG_MS
     }
 
@@ -232,7 +229,6 @@ class UbillingPlugin(
     companion object {
         private const val TAG = "UbillingPlugin"
         private const val API_URL = "https://ubilling.net.ua/aerialalerts/"
-        internal const val GRACE_MS = 5 * 60_000L
         internal const val POLL_FAST_MS = 15_000L
         internal const val POLL_BG_MS = 30_000L
         internal const val BACKOFF_INITIAL = 2_000L

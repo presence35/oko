@@ -195,7 +195,7 @@ class AlertService : Service() {
         val zoneSirenOverride: Boolean,
         val officialSirenOverride: Boolean,
         val connectionState: ConnectionState,
-        val coveredByFallback: Boolean = false,
+        val degraded: Boolean = false,
         val threats: Map<String, NormalizedThreat>,
         val alerts: List<OblastAlert>,
         val criticalOfflineOverride: Boolean,
@@ -614,7 +614,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     zoneSirenOverride = zoneSirenOverride,
                     officialSirenOverride = officialSirenOverride,
                     connectionState = cs,
-                    coveredByFallback = registry.coveredByFallback.value,
+                    degraded = registry.degraded.value,
                     threats = threats,
                     alerts = alerts,
                     criticalOfflineOverride = cfg.criticalOfflineOverride,
@@ -640,10 +640,10 @@ val mappedThreats = registry.allThreats.map { list ->
             notificationManager.updateChannels(s)
         }
 
-        val coveredByFallback = state.coveredByFallback
-        val isDegradedNow = state.connectionState.isDegraded || coveredByFallback
-        val isOfflineNow = !state.connectionState.isConnected && !coveredByFallback
-        val offlineSince = state.connectionState.offlineSinceOrNull
+        val registry = AppPluginHolder.registry
+        val isDegradedNow = state.degraded
+        val isOfflineNow = registry.isOffline(now)
+        val offlineSince = registry.degradedSince.value
         val offlineMinutes = if (isOfflineNow && offlineSince != null) {
             ((now - offlineSince) / 60_000L).toInt()
         } else 0
@@ -943,7 +943,7 @@ val mappedThreats = registry.allThreats.map { list ->
         }
 
         hasActiveThreats = state.zoneThreats.isNotEmpty() || state.focusOblastAlertActive
-        isOutage = !state.connectionState.isConnected
+        isOutage = !AppPluginHolder.registry.wsHealthy.value
     }
 
     private fun persistKnownZones() {

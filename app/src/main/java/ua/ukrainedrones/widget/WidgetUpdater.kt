@@ -89,12 +89,11 @@ object WidgetUpdater {
                     Tail(follow, pinned, lang, iconSet, mapEnabled)
                 }
             ) { core, params, tail ->
-                val (cs, threats, alerts) = core.first as Triple<ConnectionState, Map<String, NormalizedThreat>, List<OblastAlert>>
+                val (_, threats, alerts) = core.first as Triple<ConnectionState, Map<String, NormalizedThreat>, List<OblastAlert>>
                 val gps = core.second
                 val now = core.third
                 val focus = resolveFocus(tail.followMe, gps, LocationTracker.isFresh(now), tail.pinned)
                 computeWidgetSnapshot(
-                    cs = cs,
                     threats = threats,
                     alerts = alerts,
                     focus = focus.location,
@@ -102,7 +101,8 @@ object WidgetUpdater {
                     params = params,
                     mapEnabled = tail.mapEnabled,
                     now = now,
-                    coveredByFallback = AppPluginHolder.registry.coveredByFallback.value
+                    degraded = AppPluginHolder.registry.degraded.value,
+                    offline = AppPluginHolder.registry.isOffline(now)
                 ) to Pair(tail.lang, tail.iconSet)
             }.collect { (snapshot, tail) ->
                 persist(context, snapshot, tail.first, tail.second)

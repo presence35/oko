@@ -1,10 +1,5 @@
 package ua.ukrainedrones
 
-import ua.ukrainedrones.connection.ConnectionState
-import ua.ukrainedrones.connection.NeptunConnectionClient
-import ua.ukrainedrones.connection.isDegraded
-import ua.ukrainedrones.connection.isOffline
-import ua.ukrainedrones.connection.offlineSinceOrNull
 import ua.ukrainedrones.engine.NEPTUN_TYPES
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.engine.ThreatZone
@@ -30,7 +25,7 @@ data class WidgetSnapshot(
     val nearestKm: Double? = null,
     val officialAlert: Boolean = false,
     val sourceOnline: Boolean = false,
-    /** Connected but the stream is quiet (orange) — mirrors the app's degraded pill. */
+    /** No WS source delivering (disabled, silent, or down) — mirrors the app's degraded pill. */
     val sourceDegraded: Boolean = false,
     /** The nearest non-stale map-enabled threat (id + position), so the widget can highlight
      *  and reveal it — mirrors the footer strip's nearest-first semantics. */
@@ -59,7 +54,6 @@ data class WidgetThreat(
  * logic lives in the widget layer.
  */
 fun computeWidgetSnapshot(
-    cs: ConnectionState,
     threats: Map<String, NormalizedThreat>,
     alerts: List<OblastAlert>,
     focus: LatLng?,
@@ -67,7 +61,8 @@ fun computeWidgetSnapshot(
     params: ZoneParams,
     mapEnabled: Set<ThreatType>,
     now: Long = System.currentTimeMillis(),
-    coveredByFallback: Boolean = false
+    degraded: Boolean = false,
+    offline: Boolean = false
 ): WidgetSnapshot {
     val threatList = threats.values
         .filter { it.type.toThreatType() in mapEnabled }
@@ -107,12 +102,8 @@ fun computeWidgetSnapshot(
 
     val officialAlert = eval.focusOblastAlertActive
 
-    // Online = the app-pill semantics: not down AND past the shared grace window, so short
-    // socket blips (drops that recover inside OFFLINE_GRACE_MS) don't flicker the badge.
-    // A fallback source actively covering reads as degraded, not offline.
-    val offline = !coveredByFallback && cs.isOffline && (cs.offlineSinceOrNull == null ||
-        now - cs.offlineSinceOrNull!! >= NeptunConnectionClient.OFFLINE_GRACE_MS)
-
+    // Three-tier, mirroring the app pill: green when a WS source delivers, orange when degraded,
+    // red only on the offline escalation. Caller (WidgetUpdater) derives these from the registry.
     return WidgetSnapshot(
         threatCount = count,
         typeCounts = typeCounts,
@@ -120,7 +111,7 @@ fun computeWidgetSnapshot(
         nearestKm = nearestKm,
         officialAlert = officialAlert,
         sourceOnline = !offline,
-        sourceDegraded = !offline && (cs.isDegraded || coveredByFallback),
+        sourceDegraded = degraded,
         primaryThreat = primaryThreat,
         updatedAtMs = now
     )

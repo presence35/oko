@@ -249,7 +249,7 @@ def main():
         " */",
         "object RaionBoundaries {",
         "    /** Rings for the raion, or null when unknown. [raionName] is case-insensitive.",
-        "     *  Each ring is a list of doubleArrayOf(lon, lat) pairs. */",
+        "     *  Each ring is a list of doubleArrayOf(lat, lon) pairs. */",
         "    fun forKey(oblastStem: String, raionName: String): List<List<DoubleArray>>? =",
         "        when (oblastStem) {",
     ]

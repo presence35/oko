@@ -182,14 +182,14 @@ class PluginRegistryTest {
     }
 
     @Test
-    fun `coveredByFallback false when WS delivering`() {
+    fun `coveredByFallback true when REST delivers`() {
         val registry = PluginRegistry()
         registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.CONNECTED), testScope())
         val rest = FakePlugin("rest", sourceType = SourceType.REST)
         registry.register(rest, testScope())
         rest.emitOperationalMode(OperationalMode.POLLING)
         rest.emitConnection(PluginConnectionState.CONNECTED)
-        assertTrue(!registry.coveredByFallback.value)
+        assertTrue(registry.coveredByFallback.value)
     }
 
     @Test
@@ -198,8 +198,68 @@ class PluginRegistryTest {
         registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
         val rest = FakePlugin("rest", sourceType = SourceType.REST)
         registry.register(rest, testScope())
-        // REST standby (never fetched) → not authoritative → offline, not degraded.
+        // REST standby (never fetched) → no real coverage.
         assertTrue(!registry.coveredByFallback.value)
+    }
+
+    @Test
+    fun `degraded false when WS delivering`() {
+        val registry = PluginRegistry()
+        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.CONNECTED), testScope())
+        assertTrue(!registry.degraded.value)
+        assertTrue(registry.wsHealthy.value)
+    }
+
+    @Test
+    fun `degraded true when WS offline`() {
+        val registry = PluginRegistry()
+        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
+        assertTrue(registry.degraded.value)
+    }
+
+    @Test
+    fun `degraded true when WS disabled`() {
+        val registry = PluginRegistry()
+        val ws = FakePlugin("ws", connectionInit = PluginConnectionState.CONNECTED)
+        registry.register(ws, testScope())
+        registry.setEnabled(ws, false)
+        assertTrue(registry.degraded.value)
+    }
+
+    @Test
+    fun `degraded true when WS silent`() {
+        val registry = PluginRegistry()
+        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.DEGRADED), testScope())
+        assertTrue(registry.degraded.value)
+    }
+
+    @Test
+    fun `isOffline false within episode grace`() {
+        val registry = PluginRegistry()
+        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
+        val since = registry.degradedSince.value
+        assertTrue(!registry.isOffline((since ?: 0L) + 1_000L))
+    }
+
+    @Test
+    fun `isOffline true past episode grace with no fallback`() {
+        val registry = PluginRegistry()
+        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
+        val since = registry.degradedSince.value!!
+        assertTrue(registry.isOffline(since + PluginRegistry.OFFLINE_EPISODE_MS + 1_000L))
+    }
+
+    @Test
+    fun `isOffline false past grace when fallback covers`() {
+        val registry = PluginRegistry()
+        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
+        val rest = FakePlugin("rest", sourceType = SourceType.REST)
+        registry.register(rest, testScope())
+        rest.emitOperationalMode(OperationalMode.POLLING)
+        rest.emitConnection(PluginConnectionState.CONNECTED)
+        val since = registry.degradedSince.value!!
+        assertTrue(registry.coveredByFallback.value)
+        assertTrue(!registry.isOffline(since + PluginRegistry.OFFLINE_EPISODE_MS + 1_000L))
     }
 
     @Test

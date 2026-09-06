@@ -1,6 +1,5 @@
 package ua.ukrainedrones
 
-import ua.ukrainedrones.connection.ConnectionState
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.OblastAlert
@@ -24,7 +23,7 @@ class WidgetSnapshotTest {
 
     @Test
     fun `empty state yields zero threats and no zone`() {
-        val snap = computeWidgetSnapshot(ConnectionState.Disconnected, state(), emptyList(), focus, "odesa", params, allTypes, now)
+        val snap = computeWidgetSnapshot( state(), emptyList(), focus, "odesa", params, allTypes, now)
         assertEquals(0, snap.threatCount)
         assertNull(snap.activeZone)
         assertNull(snap.nearestKm)
@@ -40,7 +39,7 @@ class WidgetSnapshotTest {
             threat(id = "d", areaOnly = true, updatedAtMillis = now),
             threat(id = "e", type = ThreatType.RECON, updatedAtMillis = now)
         )
-        val snap = computeWidgetSnapshot(ConnectionState.Disconnected, s, emptyList(), focus, "Одеськ", params, allTypes, now)
+        val snap = computeWidgetSnapshot( s, emptyList(), focus, "Одеськ", params, allTypes, now)
         assertEquals(3, snap.threatCount)
         assertEquals(2, snap.typeCounts[ThreatType.SHAHED])
         assertEquals(1, snap.typeCounts[ThreatType.RECON])
@@ -53,7 +52,7 @@ class WidgetSnapshotTest {
             threat(id = "a2", updatedAtMillis = now),
             threat(id = "a3", type = ThreatType.CRUISE_MISSILE, updatedAtMillis = now)
         )
-        val snap = computeWidgetSnapshot(ConnectionState.Disconnected, s, emptyList(), focus, "Одеськ", params, allTypes, now)
+        val snap = computeWidgetSnapshot( s, emptyList(), focus, "Одеськ", params, allTypes, now)
         assertEquals(2, snap.typeCounts[ThreatType.SHAHED])
         assertEquals(1, snap.typeCounts[ThreatType.CRUISE_MISSILE])
         assertEquals(3, snap.threatCount)
@@ -65,7 +64,7 @@ class WidgetSnapshotTest {
             threat(id = "near", lat = 46.48, lon = 30.80, updatedAtMillis = now),
             threat(id = "far", lat = 47.0, lon = 31.0, updatedAtMillis = now)
         )
-        val snap = computeWidgetSnapshot(ConnectionState.Disconnected, s, emptyList(), focus, "odesa", params, allTypes, now)
+        val snap = computeWidgetSnapshot( s, emptyList(), focus, "odesa", params, allTypes, now)
         assertTrue(snap.nearestKm!! < 10.0)
         assertTrue(snap.nearestKm!! > 0.0)
     }
@@ -73,23 +72,28 @@ class WidgetSnapshotTest {
     @Test
     fun `inner threat yields inner zone`() {
         val s = state(threat(id = "a", lat = 46.49, lon = 30.74, updatedAtMillis = now))
-        val snap = computeWidgetSnapshot(ConnectionState.Disconnected, s, emptyList(), focus, "odesa", params, allTypes, now)
+        val snap = computeWidgetSnapshot( s, emptyList(), focus, "odesa", params, allTypes, now)
         assertEquals(ThreatZone.INNER, snap.activeZone)
     }
 
     @Test
     fun `official alert matches the focus oblast token`() {
         val alert = OblastAlert(key = "k", name = "Одеська область", oblast = "Одеська", since = "x")
-        assertTrue(computeWidgetSnapshot(ConnectionState.Disconnected, state(), listOf(alert), focus, "Одеськ", params, allTypes, now).officialAlert)
-        assertFalse(computeWidgetSnapshot(ConnectionState.Disconnected, state(), listOf(alert), focus, "Київськ", params, allTypes, now).officialAlert)
+        assertTrue(computeWidgetSnapshot( state(), listOf(alert), focus, "Одеськ", params, allTypes, now).officialAlert)
+        assertFalse(computeWidgetSnapshot( state(), listOf(alert), focus, "Київськ", params, allTypes, now).officialAlert)
     }
 
-    @Test
+@Test
     fun `source flag reflects connectivity`() {
-        val online = computeWidgetSnapshot(ConnectionState.Connected(generation = 1, openedAtMs = now, lastFrameAtMs = now), state(), emptyList(), focus, null, params, allTypes, now)
+        val online = computeWidgetSnapshot(state(), emptyList(), focus, null, params, allTypes, now)
         assertTrue(online.sourceOnline)
+        assertFalse(online.sourceDegraded)
 
-        val offline = computeWidgetSnapshot(ConnectionState.Disconnected, state(), emptyList(), focus, null, params, allTypes, now)
+        val degraded = computeWidgetSnapshot(state(), emptyList(), focus, null, params, allTypes, now, degraded = true)
+        assertTrue(degraded.sourceOnline)
+        assertTrue(degraded.sourceDegraded)
+
+        val offline = computeWidgetSnapshot(state(), emptyList(), focus, null, params, allTypes, now, offline = true)
         assertFalse(offline.sourceOnline)
     }
 
@@ -99,14 +103,14 @@ class WidgetSnapshotTest {
             threat(id = "near", lat = 46.48, lon = 30.80, updatedAtMillis = now),
             threat(id = "far", lat = 47.0, lon = 31.0, updatedAtMillis = now)
         )
-        val snap = computeWidgetSnapshot(ConnectionState.Disconnected, s, emptyList(), focus, "odesa", params, allTypes, now)
+        val snap = computeWidgetSnapshot( s, emptyList(), focus, "odesa", params, allTypes, now)
         assertEquals("near", snap.primaryThreat?.id)
         assertEquals(ThreatType.SHAHED, snap.primaryThreat?.type)
     }
 
     @Test
     fun `primary threat is null when nothing is live`() {
-        val snap = computeWidgetSnapshot(ConnectionState.Disconnected, state(), emptyList(), focus, "odesa", params, allTypes, now)
+        val snap = computeWidgetSnapshot( state(), emptyList(), focus, "odesa", params, allTypes, now)
         assertNull(snap.primaryThreat)
     }
 }
