@@ -1408,7 +1408,7 @@ fun SettingsScreen(
                                 description = s.flybyAnimationDesc,
                                 checked = flybyAnimationEnabled,
                                 onCheckedChange = onFlybyAnimationChange,
-                                icon = painterResource(R.drawable.ic_airplay),
+                                icon = painterResource(R.drawable.ic_mig),
                                 iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
