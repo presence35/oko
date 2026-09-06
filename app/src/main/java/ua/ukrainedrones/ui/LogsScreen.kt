@@ -1412,6 +1412,19 @@ private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: St
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (plugin.id == "test") {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        s.simulationLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = DebugAmber,
+                        modifier = Modifier
+                            .background(DebugAmber.copy(alpha = 0.08f), RoundedCornerShape(50))
+                            .border(1.dp, DebugAmber.copy(alpha = 0.55f), RoundedCornerShape(50))
+                            .padding(horizontal = 7.dp, vertical = 1.dp)
+                    )
+                }
             }
             Spacer(Modifier.height(3.dp))
             Text(

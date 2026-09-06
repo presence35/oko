@@ -32,7 +32,11 @@ data class NormalizedThreat(
     val confirmedAtMillis: Long?,
     val updatedAtMillis: Long?,
     val trail: List<TrailPoint>,
-    val sourceMeta: Map<String, Any> = emptyMap()
+    val sourceMeta: Map<String, Any> = emptyMap(),
+    /** True when this track is emitted by a simulator (Test source), not a live feed — the UI
+     *  watermarks it so a fake threat is never mistaken for a real one. Pure metadata: the engine
+     *  treats simulated and live threats identically. */
+    val simulated: Boolean = false
 ) {
     /** A track is dead-reckonable when the source gave it a course (authoritative velocity
      *  `bearingDeg` or reported `heading`) and an anchor (`confirmedAt`, or `updatedAt` when the

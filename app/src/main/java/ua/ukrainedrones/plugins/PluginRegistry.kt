@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ua.ukrainedrones.connection.Monotonic
 import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.OperationalMode
@@ -218,7 +219,7 @@ class PluginRegistry {
         _degraded.value = !wsHealthy
         _degradedSince.value = when {
             wsHealthy -> null
-            _degradedSince.value == null -> System.currentTimeMillis()
+            _degradedSince.value == null -> Monotonic.now()
             else -> _degradedSince.value
         }
         _coveredByFallback.value = computeCoveredByFallback()
@@ -239,7 +240,9 @@ class PluginRegistry {
         }
 
     /** Offline escalation (red + offline notification): degraded past the episode grace with no
-     *  fallback delivering. Consumers pass their own `now` (mirror rule: derivation lives here). */
+     *  fallback delivering. Consumers pass a monotonic `now` (mirror rule: derivation lives here)
+     *  — [degradedSince] is stamped on the monotonic clock so a wall-clock jump can't trigger or
+     *  stall the escalation. */
     fun isOffline(now: Long): Boolean {
         if (!_degraded.value || _coveredByFallback.value) return false
         val since = _degradedSince.value ?: return false

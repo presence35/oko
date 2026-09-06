@@ -26,7 +26,9 @@ class SpeedCache {
     @Synchronized
     fun estimateWithSource(id: String, t: NormalizedThreat, props: ThreatProps): Pair<Double, SpeedSource>? {
         val serverSpeed = t.speedKmh
-        if (serverSpeed != null && serverSpeed >= 5.0) {
+        // Trust the server field only inside a sane envelope; anything beyond it is a corrupt
+        // value that would fabricate a near-zero ETA, so fall through to trail/nominal speed.
+        if (serverSpeed != null && serverSpeed in 5.0..20_000.0) {
             return serverSpeed / 3.6 to SpeedSource.RECORDED
         }
         val q = fixes[id]

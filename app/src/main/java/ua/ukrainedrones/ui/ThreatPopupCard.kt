@@ -107,6 +107,23 @@ internal fun AlertsOffChip(s: Strings.StringSet) {
     }
 }
 
+/** Amber "SIMULATION" tag shown on cards for threats emitted by the Test simulator. */
+@Composable
+private fun SimulationChip(s: Strings.StringSet) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = AdvisoryAmber.copy(alpha = 0.18f),
+        border = BorderStroke(1.dp, AdvisoryAmber.copy(alpha = 0.6f))
+    ) {
+        Text(
+            s.simulationLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = AdvisoryAmber,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+        )
+    }
+}
+
 /** System font scale, capped so extreme accessibility sizes can't break the layout. */
 @Composable
 private fun fontScale(): Float = min(LocalDensity.current.fontScale, 1.5f)
@@ -390,6 +407,10 @@ fun ThreatPopupCard(
                             if (alertsOff) {
                                 AlertsOffChip(s)
                             }
+                            if (threat.simulated) {
+                                Spacer(Modifier.width(6.dp))
+                                SimulationChip(s)
+                            }
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
@@ -434,6 +455,10 @@ fun ThreatPopupCard(
                                     Spacer(Modifier.width(6.dp))
                                     AlertsOffChip(s)
                                 }
+                                    if (threat.simulated) {
+                                        Spacer(Modifier.width(6.dp))
+                                        SimulationChip(s)
+                                    }
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(

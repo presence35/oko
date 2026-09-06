@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import ua.ukrainedrones.AppLanguage
 import ua.ukrainedrones.resolveFocus
+import ua.ukrainedrones.connection.Monotonic
 import ua.ukrainedrones.connection.ConnEventKind
 import ua.ukrainedrones.connection.ConnectionState
 import ua.ukrainedrones.plugins.SourceEventKind
@@ -642,15 +643,18 @@ val mappedThreats = registry.allThreats.map { list ->
 
         val registry = AppPluginHolder.registry
         val isDegradedNow = state.degraded
-        val isOfflineNow = registry.isOffline(now)
+        // Offline escalation and its age are measured on the monotonic clock (see PluginRegistry);
+        // the wall `now` is still used for engine staleness and display stamps below.
+        val nowMono = Monotonic.now()
+        val isOfflineNow = registry.isOffline(nowMono)
         val offlineSince = registry.degradedSince.value
         val offlineMinutes = if (isOfflineNow && offlineSince != null) {
-            ((now - offlineSince) / 60_000L).toInt()
+            ((nowMono - offlineSince) / 60_000L).toInt()
         } else 0
 
         val twentyMinMs = 20 * 60 * 1000L
         val elapsedSinceReconnect = if (isOfflineNow && offlineSince != null) {
-            now - offlineSince
+            nowMono - offlineSince
         } else 0L
 
         val redAlert = (state.officialAlertsEnabled && state.focusOblastAlertActive) ||

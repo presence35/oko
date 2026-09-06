@@ -75,6 +75,26 @@ class ThreatTest {
     }
 
     @Test
+    fun `fromJson - lat out of range returns null`() {
+        val json = org.json.JSONObject().apply {
+            put("id", "test-1")
+            put("lat", 95.0)
+            put("lon", 30.0)
+        }
+        assertNull(normalizedThreatFromJson(json))
+    }
+
+    @Test
+    fun `fromJson - lon out of range returns null`() {
+        val json = org.json.JSONObject().apply {
+            put("id", "test-1")
+            put("lat", 50.0)
+            put("lon", 181.0)
+        }
+        assertNull(normalizedThreatFromJson(json))
+    }
+
+    @Test
     fun `fromJson - minimal valid threat parses`() {
         val json = org.json.JSONObject().apply {
             put("id", "shahed-001")

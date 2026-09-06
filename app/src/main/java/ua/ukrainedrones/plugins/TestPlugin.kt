@@ -239,7 +239,8 @@ class TestPlugin : ThreatSource {
                 positionQuality = "confirmed",
                 confirmedAtMillis = now,
                 updatedAtMillis = now,
-                trail = emptyList()
+                trail = emptyList(),
+                simulated = true
             )
         }
         _threats.update { it + spawned }
@@ -278,7 +279,8 @@ class TestPlugin : ThreatSource {
                 positionQuality = "confirmed",
                 confirmedAtMillis = now,
                 updatedAtMillis = now,
-                trail = emptyList()
+                trail = emptyList(),
+                simulated = true
             )
         }
     }
@@ -332,7 +334,8 @@ class TestPlugin : ThreatSource {
                     positionQuality = o.optString("positionQuality", "confirmed"),
                     confirmedAtMillis = now,
                     updatedAtMillis = now,
-                    trail = emptyList()
+                    trail = emptyList(),
+                    simulated = true
                 )
             )
             if (path != null && path.size > 1) {

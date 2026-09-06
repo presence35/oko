@@ -140,6 +140,7 @@ fun normalizedThreatFromJson(o: JSONObject): NormalizedThreat? {
     val lat = o.optDouble("lat", Double.NaN)
     val lon = o.optDouble("lon", Double.NaN)
     if (lat.isNaN() || lon.isNaN()) return null
+    if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return null
     if (o.optString("id").isBlank()) return null
 
     fun optNullable(key: String): String? =

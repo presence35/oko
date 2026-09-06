@@ -147,6 +147,7 @@ object Strings {
         val reliabilityLabel: String,
         val reliabilityShort: String,
         val alertsOffLabel: String,
+        val simulationLabel: String,
         val speedUnit: String,
         val groupLabel: String,
         val uncertaintyLabel: String,
@@ -816,6 +817,7 @@ val tapToCancelLabel: String,
         val reliabilityLabel: String get() = status.reliabilityLabel
         val reliabilityShort: String get() = status.reliabilityShort
         val alertsOffLabel: String get() = status.alertsOffLabel
+        val simulationLabel: String get() = status.simulationLabel
         val speedUnit: String get() = status.speedUnit
         val groupLabel: String get() = status.groupLabel
         val uncertaintyLabel: String get() = status.uncertaintyLabel

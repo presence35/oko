@@ -32,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import ua.ukrainedrones.connection.ConnectionHolder
 import ua.ukrainedrones.connection.ConnectionState
+import ua.ukrainedrones.connection.Monotonic
 import ua.ukrainedrones.connection.isConnected
 import ua.ukrainedrones.connection.isDegraded
 import ua.ukrainedrones.connection.isOffline
@@ -686,6 +687,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         // here. Per-second visuals (staleness dimming, marker motion) live in MapView's own
         // 1s loop; ghost/night freshness re-arms on the next frame or pref change.
         val now = System.currentTimeMillis()
+        val nowMono = Monotonic.now()
         val nightActive = isNightActive(
             NightConfig(prefs.night.window.enabled, prefs.night.window.startMin, prefs.night.window.endMin),
             now
@@ -726,6 +728,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
                 Cities.byUa[name]
             },
             now = now,
+            nowMono = nowMono,
             reveal = live.reveal,
             flourish = live.flourish,
             officialAlertCityScope = prefs.officialAlertCityScope,
@@ -806,7 +809,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
                 officialAlertsEnabled = prefs.officialAlertsEnabled,
                 criticalOfflineOverride = prefs.criticalOfflineOverride,
                 silencedTypesCount = (ThreatType.values().toSet() - prefs.alertEnabled).size,
-                neptunOffline = registry.isOffline(now)
+                neptunOffline = registry.isOffline(nowMono)
             )
         )
         // A fresh INNER AVIATION (bell on) plays one full-size pass across the viewport; the
@@ -931,6 +934,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         followMe: Boolean,
         pinnedCity: City?,
         now: Long,
+        nowMono: Long,
         reveal: RevealRequest?,
         flourish: FlourishShow?,
         officialAlertCityScope: Boolean,
@@ -983,7 +987,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         // red (offline) only after the degraded episode outlasts the grace with no fallback
         // delivering. Single derivation lives in the registry; the header just mirrors it.
         val degraded = registry.degraded.value
-        val neptunDown = registry.isOffline(now)
+        val neptunDown = registry.isOffline(nowMono)
 
         return UiState(
             connected = registry.wsHealthy.value,

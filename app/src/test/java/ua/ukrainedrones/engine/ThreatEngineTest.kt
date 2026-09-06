@@ -270,6 +270,16 @@ class ThreatEngineTest {
     }
 
     @Test
+    fun `speedCache - absurd server speed is ignored, not trusted`() {
+        val threat = makeThreat(id = "t-crazy", speedKmh = 1_000_000.0)
+        val props = NEPTUN_TYPES["shahed"]!!
+        val result = engine.speedCache.estimateWithSource("t-crazy", threat, props)
+        assertNotNull(result)
+        // A corrupt field must not yield a near-zero ETA: fall through to the typical speed.
+        assertEquals(SpeedSource.TYPICAL, result!!.second)
+    }
+
+    @Test
     fun `speedCache - falls back to nominal when no data`() {
         val threat = makeThreat(id = "t3", speedKmh = null)
         val props = NEPTUN_TYPES["shahed"]!!

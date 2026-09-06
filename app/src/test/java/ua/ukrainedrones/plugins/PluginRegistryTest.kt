@@ -8,8 +8,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 import kotlinx.coroutines.launch
+import ua.ukrainedrones.connection.Monotonic
 import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.NEPTUN_TYPES
 import ua.ukrainedrones.engine.NormalizedThreat
@@ -52,6 +55,17 @@ private class FakePlugin(
 }
 
 class PluginRegistryTest {
+
+    @Before
+    fun setUp() {
+        // JVM has no SystemClock.elapsedRealtime; give the registry a JVM-safe monotonic source.
+        Monotonic.nowProvider = { System.nanoTime() }
+    }
+
+    @After
+    fun tearDown() {
+        Monotonic.nowProvider = { 0L }
+    }
 
     private fun testScope() = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
 

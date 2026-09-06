@@ -94,7 +94,7 @@ class NeptunConnectionClient(
 
     // Generation counter for all socket instances
     private val connectionGeneration = AtomicInteger(0)
-    private var activeWebSocket: WebSocket? = null
+    @Volatile private var activeWebSocket: WebSocket? = null
 
     // State Flows
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
@@ -127,6 +127,12 @@ class NeptunConnectionClient(
     private val _lastValidSnapshot = MutableStateFlow(0L)
     val lastValidSnapshot: StateFlow<Long> = _lastValidSnapshot.asStateFlow()
 
+    // Monotonic mirrors of the freshness stamps, used only by the in-process watchdog gates so a
+    // wall-clock jump can't stall the degraded/watchdog timers. The public StateFlows above stay
+    // wall-clock (NeptunPlugin renders them against a wall `now` for the Sources tab).
+    @Volatile private var lastSocketFrameMono = 0L
+    @Volatile private var lastValidThreatUpdateMono = 0L
+
     private val _threatDataStale = MutableStateFlow(false)
     val threatDataStale: StateFlow<Boolean> = _threatDataStale.asStateFlow()
 
@@ -136,6 +142,9 @@ class NeptunConnectionClient(
     private var reconnectAttempt = 0
     private var reconnectJob: Job? = null
     private var isManuallyStopped = false
+    /** Last generation whose disconnect was already handled — onClosed and onFailure can both
+     *  fire for the same socket, and only the first should run [handleDisconnect]. */
+    private val disconnectHandledGen = AtomicInteger(-1)
 
     // User-shot grace tracking and recently removed tombstone tracking
     private val userShotAt = ConcurrentHashMap<String, Long>()
@@ -194,7 +203,7 @@ class NeptunConnectionClient(
 
     fun wasUserShotRecently(threatId: String): Boolean {
         val shotAt = userShotAt[threatId] ?: return false
-        return System.currentTimeMillis() - shotAt <= USER_SHOT_GRACE_MS
+        return Monotonic.now() - shotAt <= USER_SHOT_GRACE_MS
     }
 
     fun stop() {
@@ -227,7 +236,7 @@ class NeptunConnectionClient(
 
     fun markUserShot(id: String) {
         if (id.isNotBlank()) {
-            userShotAt[id] = System.currentTimeMillis()
+            userShotAt[id] = Monotonic.now()
         }
     }
 
@@ -252,7 +261,7 @@ class NeptunConnectionClient(
     fun isIgnoringPause(): Boolean = System.currentTimeMillis() < ignoreUntilMs
 
     fun registerUserShot(threatId: String) {
-        userShotAt[threatId] = System.currentTimeMillis()
+        userShotAt[threatId] = Monotonic.now()
     }
 
     private fun connect(gen: Int = connectionGeneration.incrementAndGet()) {
@@ -267,10 +276,12 @@ class NeptunConnectionClient(
                 }
                 activeWebSocket = webSocket
                 val now = System.currentTimeMillis()
+                val nowMono = Monotonic.now()
                 reconnectAttempt = 0
-                openedAtMs = now
+                openedAtMs = nowMono
                 lastFrameAtMs = now
                 _lastSocketFrame.value = now
+                lastSocketFrameMono = nowMono
                 persistedReconnectStartMs = 0L
                 _lastError.value = null
                 _connectionState.value = ConnectionState.Connected(
@@ -285,6 +296,7 @@ class NeptunConnectionClient(
                 val now = System.currentTimeMillis()
                 lastFrameAtMs = now
                 _lastSocketFrame.value = now
+                lastSocketFrameMono = Monotonic.now()
 
                 if (_connectionState.value is ConnectionState.Degraded) {
                     _connectionState.value = ConnectionState.Connected(
@@ -307,7 +319,7 @@ class NeptunConnectionClient(
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 if (connectionGeneration.get() != gen) return
-                activeWebSocket?.close(1001, t.message)
+                webSocket.close(1001, t.message)
                 _lastError.value = t.message
                 handleDisconnect(gen, reason = t.message)
             }
@@ -316,6 +328,9 @@ class NeptunConnectionClient(
 
     private fun handleDisconnect(gen: Int, reason: String?) {
         if (isManuallyStopped || connectionGeneration.get() != gen) return
+        // One-shot per socket generation: onClosed and onFailure can both fire for the same
+        // socket, and only the first disconnect handling may run regardless of timing.
+        if (disconnectHandledGen.getAndSet(gen) == gen) return
         // A pre-disconnect pending clear is unconfirmed after reconnect — drop it so a stale
         // observation can't flush later without fresh data (the held list stays until NEPTUN
         // re-sends a fresh alerts frame).
@@ -342,7 +357,7 @@ class NeptunConnectionClient(
 
     private fun scheduleReconnect() {
         if (isManuallyStopped || isIgnoringPause()) return
-        if (openedAtMs > 0L && System.currentTimeMillis() - openedAtMs > 60_000L) {
+        if (openedAtMs > 0L && Monotonic.now() - openedAtMs > 60_000L) {
             reconnectAttempt = reconnectAttempt.coerceAtMost(2)
         }
         reconnectAttempt++
@@ -384,7 +399,7 @@ val gen = connectionGeneration.incrementAndGet()
     private val UNKNOWN_TYPE_TOAST_COOLDOWN_MS = 60_000L
 
     /** Publish a debounced official-alert clear once it has persisted ALERT_CLEAR_CONFIRM_MS.
-     *  No-op when nothing is pending or the window hasn't elapsed. */
+     *  No-op when nothing is pending or the window hasn't elapsed. [now] is a monotonic stamp. */
     private fun flushPendingAlertClear(now: Long) {
         val pending = alertsPendingClear ?: return
         if (now - alertsPendingClearSince < ALERT_CLEAR_CONFIRM_MS) return
@@ -398,14 +413,14 @@ val gen = connectionGeneration.incrementAndGet()
             while (isActive) {
                 delay(5_000)
                 if (isManuallyStopped) return@launch
-                val now = System.currentTimeMillis()
+                val nowMono = Monotonic.now()
                 // Publish a debounced alert clear once it has persisted long enough.
-                flushPendingAlertClear(now)
-                val socketQuietFor = now - _lastSocketFrame.value
-                val threatQuietFor = if (_lastValidThreatUpdate.value > 0L) now - _lastValidThreatUpdate.value else 0L
+                flushPendingAlertClear(nowMono)
+                val socketQuietFor = if (lastSocketFrameMono > 0L) nowMono - lastSocketFrameMono else 0L
+                val threatQuietFor = if (lastValidThreatUpdateMono > 0L) nowMono - lastValidThreatUpdateMono else 0L
 
                 val currentState = _connectionState.value
-                if (currentState.isConnected && _lastSocketFrame.value > 0L && socketQuietFor > DEGRADED_STALE_MS && currentState !is ConnectionState.Degraded) {
+                if (currentState.isConnected && lastSocketFrameMono > 0L && socketQuietFor > DEGRADED_STALE_MS && currentState !is ConnectionState.Degraded) {
                     _connectionState.value = ConnectionState.Degraded(
                         generation = (currentState as? ConnectionState.Connected)?.generation ?: 0,
                         openedAtMs = openedAtMs,
@@ -414,13 +429,13 @@ val gen = connectionGeneration.incrementAndGet()
                     )
                 }
 
-                if (currentState.isConnected && _lastValidThreatUpdate.value > 0L && threatQuietFor >= THREAT_DATA_STALE_MS) {
+                if (currentState.isConnected && lastValidThreatUpdateMono > 0L && threatQuietFor >= THREAT_DATA_STALE_MS) {
                     _threatDataStale.value = true
                 } else if (!currentState.isConnected) {
                     _threatDataStale.value = false
                 }
 
-                if (currentState.isConnected && _lastSocketFrame.value > 0L && socketQuietFor > WATCHDOG_STALE_MS) {
+                if (currentState.isConnected && lastSocketFrameMono > 0L && socketQuietFor > WATCHDOG_STALE_MS) {
                     // Trigger watchdog reconnect
                     activeWebSocket?.close(1001, "watchdog stale")
                 }
@@ -433,6 +448,7 @@ val gen = connectionGeneration.incrementAndGet()
             val env = JSONObject(text)
             val frameType = env.optString("type")
             val now = System.currentTimeMillis()
+            val nowMono = Monotonic.now()
 
             when (frameType) {
                 "snapshot" -> {
@@ -458,15 +474,16 @@ val gen = connectionGeneration.incrementAndGet()
                         for (id in prev.keys) {
                             if (id in map) continue
                             val shotAt = userShotAt[id] ?: continue
-                            if (now - shotAt <= USER_SHOT_GRACE_MS) {
+                            if (nowMono - shotAt <= USER_SHOT_GRACE_MS) {
                                 map[id] = prev.getValue(id)
                             }
                         }
-                        userShotAt.entries.removeIf { now - it.value > USER_SHOT_GRACE_MS }
-                        recentlyRemovedThreats.entries.removeIf { now - it.value > RECENT_REMOVED_GRACE_MS }
+                        userShotAt.entries.removeIf { nowMono - it.value > USER_SHOT_GRACE_MS }
+                        recentlyRemovedThreats.entries.removeIf { nowMono - it.value > RECENT_REMOVED_GRACE_MS }
 
                         _threats.value = map
                         _lastValidThreatUpdate.value = now
+                        lastValidThreatUpdateMono = nowMono
                         _lastValidSnapshot.value = now
                         _threatDataStale.value = false
                     }
@@ -481,7 +498,7 @@ val gen = connectionGeneration.incrementAndGet()
                     threatsMutex.withLock {
                         val updated = _threats.value.toMutableMap()
                         if (t.status == "resolved") {
-                            recentlyRemovedThreats[t.id] = now
+                            recentlyRemovedThreats[t.id] = nowMono
                             _removedThreats.tryEmit(
                                 ThreatRemoved(t.id, t.lat, t.lon, t.type.toThreatType(), t.bearingDeg ?: t.heading ?: fallbackCourse(t.id), t.region, t.district, t.locality)
                             )
@@ -489,7 +506,7 @@ val gen = connectionGeneration.incrementAndGet()
                         } else {
                             val existing = updated[t.id]
                             val existingTime = existing?.updatedAtMillis ?: existing?.confirmedAtMillis ?: 0L
-                            val newTime = t.updatedAtMillis ?: t.confirmedAtMillis ?: now
+                            val newTime = t.updatedAtMillis ?: t.confirmedAtMillis ?: 0L
                             if (existing == null || newTime >= existingTime) {
                                 updated[t.id] = t
                                 recentlyRemovedThreats.remove(t.id)
@@ -497,6 +514,7 @@ val gen = connectionGeneration.incrementAndGet()
                         }
                         _threats.value = updated
                         _lastValidThreatUpdate.value = now
+                        lastValidThreatUpdateMono = nowMono
                         _threatDataStale.value = false
                     }
                 }
@@ -505,7 +523,7 @@ val gen = connectionGeneration.incrementAndGet()
                     val id = data.optString("id")
                     threatsMutex.withLock {
                         val updated = _threats.value.toMutableMap()
-                        recentlyRemovedThreats[id] = now
+                        recentlyRemovedThreats[id] = nowMono
                         updated.remove(id)?.let { gone ->
                             _removedThreats.tryEmit(
                                 ThreatRemoved(gone.id, gone.lat, gone.lon, gone.type.toThreatType(), gone.bearingDeg ?: gone.heading ?: fallbackCourse(gone.id), gone.region, gone.district, gone.locality)
@@ -513,6 +531,7 @@ val gen = connectionGeneration.incrementAndGet()
                         }
                         _threats.value = updated
                         _lastValidThreatUpdate.value = now
+                        lastValidThreatUpdateMono = nowMono
                         _threatDataStale.value = false
                     }
                 }
@@ -544,7 +563,7 @@ val gen = connectionGeneration.incrementAndGet()
                     if (list.isEmpty() && _alerts.value.isNotEmpty()) {
                         if (alertsPendingClear == null) {
                             alertsPendingClear = list
-                            alertsPendingClearSince = now
+                            alertsPendingClearSince = nowMono
                         }
                     } else {
                         _alerts.value = list
@@ -566,13 +585,13 @@ val gen = connectionGeneration.incrementAndGet()
     }
 
     private fun recordUnknownType(rawType: String) {
-        val now = System.currentTimeMillis()
+        val nowMono = Monotonic.now()
         val lastSeen = unknownTypeLastSeen[rawType] ?: 0L
-        if (now - lastSeen > UNKNOWN_TYPE_TOAST_COOLDOWN_MS) {
-            unknownTypeLastSeen[rawType] = now
+        if (nowMono - lastSeen > UNKNOWN_TYPE_TOAST_COOLDOWN_MS) {
+            unknownTypeLastSeen[rawType] = nowMono
             showToast("New threat type reported: $rawType")
             ApiMonitor.record(SystemEntry(
-                atMillis = now,
+                atMillis = System.currentTimeMillis(),
                 kind = SystemEntryKind.UNKNOWN_TYPE_DETECTED,
                 detail = rawType
             ))

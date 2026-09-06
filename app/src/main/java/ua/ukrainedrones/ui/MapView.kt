@@ -450,6 +450,17 @@ internal fun resolveThreatPose(
  *  caption for representatives. */
 private data class ThreatPlacement(val pos: GeoPoint?, val chip: String?)
 
+/** Sub-description chip for a threat marker: the de-overlap count, prefixed with a SIM tag when
+ *  the track is simulated so a fake threat is never mistaken for a live one. */
+private fun chipLabel(t: NormalizedThreat, chip: String?): String? {
+    val sim = if (t.simulated) "SIM" else null
+    return when {
+        sim != null && chip != null -> "$sim · $chip"
+        sim != null -> sim
+        else -> chip
+    }
+}
+
 /** Deterministic screen-space de-overlap for threats sharing a coordinate: GRID spreads them on
  *  a small 2D grid, SPREAD fans them in a half-overlapping staggered row, COUNT collapses
  *  same-type stacks into one counted representative (mixed types auto-grid so each stays
@@ -1285,6 +1296,9 @@ fun NeptunMapView(
                         position = pos
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         placement.chip?.let { setSubDescription(it) }
+                        if (t.simulated) {
+                            setSubDescription(chipLabel(t, placement.chip))
+                        }
                         icon = threatIconFor(
                             context, t.type.toThreatType(), iconSet, revealed = revealed, areaOnly = t.areaOnly,
                             sizeDp = if (uiState.threatIconZoom) threatIconSizeDp(mapView.zoomLevelDouble) else 32
@@ -1802,8 +1816,8 @@ fun NeptunMapView(
                     marker.rotation = targetRot
                     dirty = true
                 }
-                if (placement.chip != marker.subDescription) {
-                    marker.setSubDescription(placement.chip)
+                if (chipLabel(t, placement.chip) != marker.subDescription) {
+                    marker.setSubDescription(chipLabel(t, placement.chip))
                     dirty = true
                 }
                 val cur = marker.position

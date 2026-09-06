@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import ua.ukrainedrones.connection.ConnectionHolder
 import ua.ukrainedrones.connection.ConnectionState
+import ua.ukrainedrones.connection.Monotonic
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.ZoneParams
 import ua.ukrainedrones.engine.NormalizedThreat
@@ -102,7 +103,7 @@ object WidgetUpdater {
                     mapEnabled = tail.mapEnabled,
                     now = now,
                     degraded = AppPluginHolder.registry.degraded.value,
-                    offline = AppPluginHolder.registry.isOffline(now)
+                    offline = AppPluginHolder.registry.isOffline(Monotonic.now())
                 ) to Pair(tail.lang, tail.iconSet)
             }.collect { (snapshot, tail) ->
                 persist(context, snapshot, tail.first, tail.second)
