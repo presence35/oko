@@ -805,7 +805,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
                 officialAlertsEnabled = prefs.officialAlertsEnabled,
                 criticalOfflineOverride = prefs.criticalOfflineOverride,
                 silencedTypesCount = (ThreatType.values().toSet() - prefs.alertEnabled).size,
-                neptunOffline = live.cs.isOffline
+                neptunOffline = live.cs.isOffline && !registry.coveredByFallback.value
             )
         )
         // A fresh INNER AVIATION (bell on) plays one full-size pass across the viewport; the
@@ -982,12 +982,15 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         // here — the pill and status text stay "online" instead of flashing on every handoff.
         // The grace is only applied in the connection log; the UI pill immediately reflects
         // drops so the header and the notification service agree (mirror rule).
-        val neptunDown = cs.isOffline
+        // A fallback source actively covering (e.g. NEPTUN disabled/silent + Ubilling up) reads
+        // as degraded, not offline — less live data, but the system is still covered.
+        val coveredByFallback = registry.coveredByFallback.value
+        val neptunDown = cs.isOffline && !coveredByFallback
 
         return UiState(
             connected = cs.isConnected,
             neptunDown = neptunDown,
-            degraded = cs.isDegraded,
+            degraded = cs.isDegraded || coveredByFallback,
             threatsInner = inInner,
             threatsOuter = inOuter,
             mapThreats = mapThreats,

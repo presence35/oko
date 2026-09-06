@@ -164,6 +164,45 @@ class PluginRegistryTest {
     }
 
     @Test
+    fun `degraded WS source is not healthy - backup engages`() {
+        val registry = PluginRegistry()
+        registry.register(FakePlugin("a", connectionInit = PluginConnectionState.DEGRADED), testScope())
+        assertTrue(!registry.wsHealthy.value)
+    }
+
+    @Test
+    fun `coveredByFallback true when WS down but REST authoritative`() {
+        val registry = PluginRegistry()
+        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
+        val rest = FakePlugin("rest", sourceType = SourceType.REST)
+        registry.register(rest, testScope())
+        rest.emitOperationalMode(OperationalMode.POLLING)
+        rest.emitConnection(PluginConnectionState.CONNECTED)
+        assertTrue(registry.coveredByFallback.value)
+    }
+
+    @Test
+    fun `coveredByFallback false when WS delivering`() {
+        val registry = PluginRegistry()
+        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.CONNECTED), testScope())
+        val rest = FakePlugin("rest", sourceType = SourceType.REST)
+        registry.register(rest, testScope())
+        rest.emitOperationalMode(OperationalMode.POLLING)
+        rest.emitConnection(PluginConnectionState.CONNECTED)
+        assertTrue(!registry.coveredByFallback.value)
+    }
+
+    @Test
+    fun `coveredByFallback false when nothing covers`() {
+        val registry = PluginRegistry()
+        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
+        val rest = FakePlugin("rest", sourceType = SourceType.REST)
+        registry.register(rest, testScope())
+        // REST standby (never fetched) → not authoritative → offline, not degraded.
+        assertTrue(!registry.coveredByFallback.value)
+    }
+
+    @Test
     fun `takeover merge prefers first registered plugin per oblast`() {
         val registry = PluginRegistry()
         val a = FakePlugin("a", alertsInit = listOf(OblastAlert("k1", "n1", "Odesa oblast", null)))

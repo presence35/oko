@@ -115,6 +115,7 @@ import kotlinx.coroutines.launch
 import ua.ukrainedrones.AppPluginHolder
 import ua.ukrainedrones.engine.OperationalMode
 import ua.ukrainedrones.engine.PluginConnectionState
+import ua.ukrainedrones.engine.SourceTestResult
 import ua.ukrainedrones.engine.SourceType
 import ua.ukrainedrones.engine.ThreatSource
 import ua.ukrainedrones.plugins.SourceEvent
@@ -1367,6 +1368,9 @@ private fun SourceEventRow(ev: SourceEvent, s: Strings.StringSet, now: Long) {
 private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: Strings.StringSet) {
     val mode by plugin.operationalMode.collectAsState()
     val enabled by plugin.enabled.collectAsState()
+    val scope = rememberCoroutineScope()
+    var testing by remember { mutableStateOf(false) }
+    var testResult by remember { mutableStateOf<SourceTestResult?>(null) }
     val connLabel = when (state) {
         PluginConnectionState.CONNECTED -> s.connOnline
         PluginConnectionState.DEGRADED -> s.connDegraded
@@ -1415,6 +1419,26 @@ private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: St
                 style = MaterialTheme.typography.bodySmall,
                 color = statusColor
             )
+            testResult?.let { r ->
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    r.summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (r.ok) DebugGreen else DebugRed
+                )
+            }
+        }
+        TextButton(
+            enabled = !testing,
+            onClick = {
+                scope.launch {
+                    testing = true
+                    testResult = plugin.testConnection()
+                    testing = false
+                }
+            }
+        ) {
+            Text(s.sourceTestLabel)
         }
         Switch(
             checked = enabled,

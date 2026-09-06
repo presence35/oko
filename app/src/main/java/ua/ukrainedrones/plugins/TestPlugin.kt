@@ -69,6 +69,9 @@ class TestPlugin : ThreatSource {
     private var scriptJob: Job? = null
     private var lastError: String? = null
 
+    /** Active path-movers keyed by threat id, so a resolve/clear can cancel just the right ones. */
+    private val movers = mutableMapOf<String, Job>()
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
@@ -82,6 +85,7 @@ class TestPlugin : ThreatSource {
         scope = null
         scriptJob?.cancel()
         scriptJob = null
+        cancelAllMovers()
         _enabled.value = false
         _threats.value = emptyList()
         _alerts.value = emptyList()
@@ -99,6 +103,7 @@ class TestPlugin : ThreatSource {
         } else {
             scriptJob?.cancel()
             scriptJob = null
+            cancelAllMovers()
             _threats.value = emptyList()
             _alerts.value = emptyList()
             _connectionState.value = PluginConnectionState.DISCONNECTED
@@ -136,11 +141,16 @@ class TestPlugin : ThreatSource {
                 val remaining = atMs - (System.currentTimeMillis() - start)
                 if (remaining > 0) delay(remaining)
                 if (!coroutineContext.isActive || !_enabled.value) return
-                action()
+                try {
+                    action()
+                } catch (e: Exception) {
+                    lastError = "event $index failed: ${e.message}"
+                }
                 index++
             }
         } finally {
             if (!_enabled.value) {
+                cancelAllMovers()
                 _threats.value = emptyList()
                 _alerts.value = emptyList()
                 _connectionState.value = PluginConnectionState.DISCONNECTED
@@ -183,7 +193,8 @@ class TestPlugin : ThreatSource {
         if (ev.has("aviation")) return { spawnAviation(ev.getJSONObject("aviation")) }
         if (ev.has("alerts")) return { spawnAlerts(ev.getJSONArray("alerts")) }
         if (ev.has("threats")) return { spawnExplicitThreats(ev.getJSONArray("threats")) }
-        if (ev.optBoolean("clearThreats", false)) return { _threats.value = emptyList() }
+        if (ev.has("resolve")) return { resolveThreats(ev.get("resolve")) }
+        if (ev.optBoolean("clearThreats", false)) return { clearThreats() }
         if (ev.optBoolean("clearAlerts", false)) return { _alerts.value = emptyList() }
         return null
     }
@@ -236,9 +247,13 @@ class TestPlugin : ThreatSource {
 
     private fun spawnAviation(spec: JSONObject) {
         val km = spec.optDouble("km", 150.0)
+        val minKm = spec.optDouble("minKm", -1.0)
+        val maxKm = spec.optDouble("maxKm", -1.0)
+        val lo = if (minKm >= 0.0) minKm else km
+        val hi = if (maxKm >= 0.0) maxKm else km
         val now = System.currentTimeMillis()
         val focus = focusOrNull()
-        val (lat, lon) = pointAtDistance(focus, km, km)
+        val (lat, lon) = pointAtDistance(focus, lo, hi)
         _threats.update {
             it + NormalizedThreat(
                 id = nextId("av"),
@@ -290,35 +305,113 @@ class TestPlugin : ThreatSource {
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
             val type = o.optString("type", "shahed")
+            val id = nextId("x")
+            val path = parsePath(o.optJSONArray("path"))
+            val pathPoint = path?.firstOrNull()
             list.add(
                 NormalizedThreat(
-                    id = nextId("x"),
+                    id = id,
                     type = type,
-                    title = "Test $type",
+                    title = o.optString("title", "Test $type"),
                     region = o.optString("region").takeIf { it.isNotBlank() },
                     district = o.optString("district").takeIf { it.isNotBlank() },
                     locality = o.optString("locality").takeIf { it.isNotBlank() },
-                    lat = o.getDouble("lat"),
-                    lon = o.getDouble("lon"),
-                    heading = null,
+                    lat = pathPoint?.lat ?: o.getDouble("lat"),
+                    lon = pathPoint?.lon ?: o.getDouble("lon"),
+                    heading = if (o.has("heading")) o.getDouble("heading") else null,
                     bearingDeg = if (o.has("bearing")) o.getDouble("bearing") else null,
-                    status = "active",
-                    advisory = false,
-                    areaOnly = false,
-                    confirmations = 1,
-                    reliability = "high",
-                    count = 1,
+                    status = o.optString("status", "active"),
+                    advisory = o.optBoolean("advisory", false),
+                    areaOnly = o.optBoolean("areaOnly", false),
+                    confirmations = o.optInt("confirmations", 1),
+                    reliability = o.optString("reliability", "high"),
+                    count = o.optInt("count", 1),
                     explanationShort = null,
                     speedKmh = if (o.has("speedKmh")) o.getDouble("speedKmh") else speedFor(type),
-                    uncertaintyKm = null,
-                    positionQuality = "confirmed",
+                    uncertaintyKm = if (o.has("uncertaintyKm")) o.getDouble("uncertaintyKm") else null,
+                    positionQuality = o.optString("positionQuality", "confirmed"),
                     confirmedAtMillis = now,
                     updatedAtMillis = now,
                     trail = emptyList()
                 )
             )
+            if (path != null && path.size > 1) {
+                launchMover(id, path, o.optLong("stepMs", 2_000L))
+            }
         }
         _threats.update { it + list }
+    }
+
+    /** A waypoint for a moving test threat. */
+    private data class PathPoint(val lat: Double, val lon: Double, val speedKmh: Double?)
+
+    private fun parsePath(arr: JSONArray?): List<PathPoint>? {
+        if (arr == null || arr.length() < 2) return null
+        return (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            PathPoint(
+                lat = o.getDouble("lat"),
+                lon = o.getDouble("lon"),
+                speedKmh = if (o.has("speedKmh")) o.getDouble("speedKmh") else null
+            )
+        }
+    }
+
+    private fun cancelMover(id: String) {
+        movers.remove(id)?.cancel()
+    }
+
+    private fun cancelAllMovers() {
+        movers.values.forEach { it.cancel() }
+        movers.clear()
+    }
+
+    /** Steps [id] along [path], updating position/bearing/`updatedAtMillis` so the engine sees
+     *  real movement (marker glide, dead-reckon, zone enter/exit). */
+    private fun launchMover(id: String, path: List<PathPoint>, stepMs: Long) {
+        val activeScope = scope ?: return
+        cancelMover(id)
+        movers[id] = activeScope.launch {
+            for (i in 1 until path.size) {
+                delay(stepMs)
+                if (!isActive) return@launch
+                val from = path[i - 1]
+                val to = path[i]
+                val bearing = bearingHaversine(from.lat, from.lon, to.lat, to.lon)
+                _threats.update { list ->
+                    list.map { t ->
+                        if (t.id != id) t else t.copy(
+                            lat = to.lat,
+                            lon = to.lon,
+                            bearingDeg = bearing,
+                            heading = bearing,
+                            speedKmh = to.speedKmh ?: t.speedKmh,
+                            updatedAtMillis = System.currentTimeMillis()
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /** Server-side removal of threats (ids or "all") — simulates a track ending on the feed. */
+    private fun resolveThreats(spec: Any?) {
+        val ids = when (spec) {
+            is JSONArray -> (0 until spec.length()).map { spec.getString(it) }.toSet()
+            is String -> if (spec == "all") null else setOf(spec)
+            else -> null
+        }
+        if (ids == null) {
+            clearThreats()
+            return
+        }
+        ids.forEach { cancelMover(it) }
+        _threats.update { list -> list.filter { it.id !in ids } }
+    }
+
+    private fun clearThreats() {
+        cancelAllMovers()
+        _threats.value = emptyList()
     }
 
     private fun focusOrNull(): LatLng? = LocationTracker.location.value
@@ -332,7 +425,9 @@ class TestPlugin : ThreatSource {
             return lat to lon
         }
         val bearingRad = Math.toRadians(rnd.nextDouble(0.0, 360.0))
-        val distKm = rnd.nextDouble(minKm.coerceAtLeast(1.0), maxKm.coerceAtLeast(minKm))
+        val lo = minKm.coerceAtLeast(1.0)
+        val hi = maxKm.coerceAtLeast(lo).let { if (it > lo) it else lo + 0.001 }
+        val distKm = rnd.nextDouble(lo, hi)
         val dLat = distKm / 111.0
         val dLon = distKm / (111.0 * kotlin.math.cos(Math.toRadians(focus.lat)).coerceAtLeast(0.01))
         return (focus.lat + dLat * kotlin.math.sin(bearingRad)) to

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- When NEPTUN is disabled or silent but the Ubilling fallback is actively polling, the header, notification and widget now show "degraded" instead of "offline" — the backup REST source also engages as soon as any WS source stops delivering / When NEPTUN is disabled or silent but the Ubilling fallback is actively polling, the header, notification and widget now show "degraded" instead of "offline" — the backup REST source also engages as soon as any WS source stops delivering
+- Fixed Test source crash ~10s after enabling: the MiG-31K event spawned a threat at an equal min/max distance, which made the random-distance picker throw and kill the app — the simulator now tolerates degenerate ranges, and a bad script event can no longer crash the app / Fixed Test source crash ~10s after enabling: the MiG-31K event spawned a threat at an equal min/max distance, which made the random-distance picker throw and kill the app — the simulator now tolerates degenerate ranges, and a bad script event can no longer crash the app
+- Logs → Sources: each source now has a Test button that runs a live check and shows the result inline / Logs → Sources: each source now has a Test button that runs a live check and shows the result inline
+- Test source is now a full-capability simulator: moving threats along paths, resolve/remove events, advisory, uncertainty, area-only, wave counts, raion-level alerts, aviation distance ranges — with a much richer scenario script covering all types, all tiers, the MiG flyby, locality coverage and alert clears / Test source is now a full-capability simulator: moving threats along paths, resolve/remove events, advisory, uncertainty, area-only, wave counts, raion-level alerts, aviation distance ranges — with a much richer scenario script covering all types, all tiers, the MiG flyby, locality coverage and alert clears
+
 - Unified protection status in the header: "Reduced" chip when notifications are off, every alert channel is silenced, official alerts are off, or the critical-offline override is off — no more silently degraded monitoring / Єдиний статус захисту в шапці: чип "Reduced", коли сповіщення вимкнені, всі канали тривог вимкнено, офіційні оповіщення вимкнено або вимкнено критичний офлайн-режим — більше немає тихого зниженого захисту
 - WorkManager watchdog restarts the monitoring service if the process kills it while the app is alive / Вартовий WorkManager перезапускає службу моніторингу, якщо процес було вбито системою, поки застосунок живий
 - Persistent "Monitoring paused after reboot" notification when auto-restart is disabled / Постійне сповіщення "Моніторинг призупинено після перезавантаження", коли автоперезапуск вимкнено
@@ -9,6 +14,8 @@
 - "Night zone settings active" banner in the zones sheet when night mode overrides the day toggles / Банер "Активні нічні налаштування зон" у панелі зон, коли нічний режим перевизначає денні перемикачі
 
 - Remove Tests tab from Logs (the Test source's data is already visible on Sources) / Видалити вкладку Тести з Журналу (дані Test джерела вже видно на Sources)
+- Startup now actively requests a location fix when none is fresh, so the map's blue dot appears promptly on a fresh install / Startup now actively requests a location fix when none is fresh, so the map's blue dot appears promptly on a fresh install
+- Precise location refresh now falls back to approximate (network) fix when only coarse permission is granted / Precise location refresh now falls back to approximate (network) fix when only coarse permission is granted
 - Live received-data card below each source in Sources tab — shows current threats by type and alerts by oblast, updating in real time / Картка отриманих даних під кожним джерелом на вкладці Sources — показує поточні загрози за типами та оповіщення за областями в реальному часі
 - Fix Test source badge: WS → JSON / Виправити мітку Test джерела: WS → JSON
 - Clean up Logs header: single row with NEPTUN icon, domain, status word and counts / Очистити заголовок Журналу: один рядок з іконкою NEPTUN, доменом, статусом та лічильниками

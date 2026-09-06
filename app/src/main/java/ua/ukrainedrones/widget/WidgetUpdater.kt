@@ -101,7 +101,8 @@ object WidgetUpdater {
                     token = focus.attribution.token,
                     params = params,
                     mapEnabled = tail.mapEnabled,
-                    now = now
+                    now = now,
+                    coveredByFallback = AppPluginHolder.registry.coveredByFallback.value
                 ) to Pair(tail.lang, tail.iconSet)
             }.collect { (snapshot, tail) ->
                 persist(context, snapshot, tail.first, tail.second)

@@ -66,7 +66,8 @@ fun computeWidgetSnapshot(
     token: String?,
     params: ZoneParams,
     mapEnabled: Set<ThreatType>,
-    now: Long = System.currentTimeMillis()
+    now: Long = System.currentTimeMillis(),
+    coveredByFallback: Boolean = false
 ): WidgetSnapshot {
     val threatList = threats.values
         .filter { it.type.toThreatType() in mapEnabled }
@@ -108,7 +109,8 @@ fun computeWidgetSnapshot(
 
     // Online = the app-pill semantics: not down AND past the shared grace window, so short
     // socket blips (drops that recover inside OFFLINE_GRACE_MS) don't flicker the badge.
-    val offline = cs.isOffline && (cs.offlineSinceOrNull == null ||
+    // A fallback source actively covering reads as degraded, not offline.
+    val offline = !coveredByFallback && cs.isOffline && (cs.offlineSinceOrNull == null ||
         now - cs.offlineSinceOrNull!! >= NeptunConnectionClient.OFFLINE_GRACE_MS)
 
     return WidgetSnapshot(
@@ -118,7 +120,7 @@ fun computeWidgetSnapshot(
         nearestKm = nearestKm,
         officialAlert = officialAlert,
         sourceOnline = !offline,
-        sourceDegraded = !offline && cs.isDegraded,
+        sourceDegraded = !offline && (cs.isDegraded || coveredByFallback),
         primaryThreat = primaryThreat,
         updatedAtMs = now
     )

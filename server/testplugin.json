@@ -1,10 +1,45 @@
 {
   "script": [
-    { "at": 0, "burst": { "types": ["shahed", "cruise"], "count": 3, "minKm": 60, "maxKm": 250, "aimAtFocus": true } },
-    { "at": 5000, "aviation": { "km": 150 } },
-    { "at": 20000, "burst": { "types": ["recon", "fpv"], "count": 4, "minKm": 20, "maxKm": 90, "aimAtFocus": true } },
-    { "at": 40000, "alerts": [ { "key": "луганська", "name": "Луганська область", "oblast": "Луганська область" } ] },
-    { "at": 60000, "burst": { "types": ["ballistic"], "count": 1, "minKm": 200, "maxKm": 400, "aimAtFocus": false } },
-    { "at": 90000, "clearAlerts": true }
+    { "at": 0, "burst": { "types": ["shahed", "fpv"], "count": 5, "minKm": 30, "maxKm": 80, "aimAtFocus": true } },
+    { "at": 4000, "burst": { "types": ["recon"], "count": 2, "minKm": 90, "maxKm": 140, "aimAtFocus": true } },
+    { "at": 8000, "aviation": { "minKm": 250, "maxKm": 350 } },
+    { "at": 12000, "burst": { "types": ["cruise"], "count": 3, "minKm": 120, "maxKm": 280, "aimAtFocus": false } },
+    { "at": 18000, "threats": [
+      { "type": "shahed", "title": "Wave over Kyiv region", "lat": 50.4, "lon": 30.9, "region": "Київська область", "district": "Бориспільський район", "locality": "Бориспіль", "bearing": 265.0, "speedKmh": 180, "count": 3 },
+      { "type": "cruise", "title": "Cruise near Dnipro", "lat": 48.47, "lon": 35.04, "region": "Дніпропетровська область", "district": "Дніпровський район", "locality": "Дніпро", "bearing": 300.0, "speedKmh": 850, "count": 2 }
+    ] },
+    { "at": 26000, "threats": [
+      { "type": "shahed", "title": "Moving track", "speedKmh": 180, "stepMs": 2000, "path": [
+        { "lat": 49.6, "lon": 34.5 },
+        { "lat": 49.4, "lon": 34.0 },
+        { "lat": 49.2, "lon": 33.5 },
+        { "lat": 49.0, "lon": 33.0 }
+      ] }
+    ] },
+    { "at": 35000, "alerts": [
+      { "key": "луганська", "name": "Луганська область", "oblast": "Луганська область" },
+      { "key": "дніпропетровська", "name": "Дніпропетровська область", "oblast": "Дніпропетровська область" },
+      { "key": "крим", "name": "Автономна Республіка Крим", "oblast": "Автономна Республіка Крим" }
+    ] },
+    { "at": 45000, "alerts": [
+      { "key": "бориспільський район", "name": "Бориспільський район", "oblast": "Київська область", "since": "2026-01-01T00:00:00Z" }
+    ] },
+    { "at": 55000, "threats": [
+      { "type": "shahed", "title": "Advisory scout", "lat": 49.0, "lon": 30.0, "advisory": true, "uncertaintyKm": 12, "count": 3, "speedKmh": 180, "reliability": "medium" }
+    ] },
+    { "at": 60000, "burst": { "types": ["ballistic"], "count": 1, "minKm": 700, "maxKm": 1200, "aimAtFocus": false } },
+    { "at": 62000, "burst": { "types": ["kab"], "count": 2, "minKm": 40, "maxKm": 70, "aimAtFocus": true } },
+    { "at": 68000, "clearAlerts": true },
+    { "at": 74000, "resolve": ["test-x-2"] },
+    { "at": 76000, "clearThreats": true },
+    { "at": 80000, "burst": { "types": ["shahed"], "count": 1, "minKm": 50, "maxKm": 50, "aimAtFocus": false } },
+    { "at": 85000, "alerts": [
+      { "key": "дніпропетровська", "name": "Дніпропетровська область", "oblast": "Дніпропетровська область" },
+      { "key": "полтавська", "name": "Полтавська область", "oblast": "Полтавська область" }
+    ] },
+    { "at": 95000, "aviation": { "minKm": 100, "maxKm": 120 } },
+    { "at": 100000, "burst": { "types": ["fpv", "recon"], "count": 3, "minKm": 10, "maxKm": 25, "aimAtFocus": true } },
+    { "at": 110000, "clearAlerts": true },
+    { "at": 115000, "clearThreats": true }
   ]
 }

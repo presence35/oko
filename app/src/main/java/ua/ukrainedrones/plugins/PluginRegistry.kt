@@ -54,9 +54,16 @@ class PluginRegistry {
     private val _perSourceState = MutableStateFlow<Map<String, PluginConnectionState>>(emptyMap())
     val perSourceState: StateFlow<Map<String, PluginConnectionState>> = _perSourceState.asStateFlow()
 
-    /** True when any WS source is CONNECTED or DEGRADED. REST sources poll while this is false. */
+    /** True when a WS source is actually delivering its live feed (CONNECTED). REST sources
+     *  poll while this is false — a silent (DEGRADED) or disabled WS source is not delivering,
+     *  so the backup engages. */
     private val _wsHealthy = MutableStateFlow(false)
     val wsHealthy: StateFlow<Boolean> = _wsHealthy.asStateFlow()
+
+    /** True when the primary WS feed is not delivering but a fallback source is actively
+     *  covering — the app is "degraded" (less live data) rather than fully offline. */
+    private val _coveredByFallback = MutableStateFlow(false)
+    val coveredByFallback: StateFlow<Boolean> = _coveredByFallback.asStateFlow()
 
     private val _typeCatalog = MutableStateFlow<Map<String, ThreatProps>>(emptyMap())
     val typeCatalog: StateFlow<Map<String, ThreatProps>> = _typeCatalog.asStateFlow()
@@ -83,7 +90,7 @@ class PluginRegistry {
             plugin.connectionState.collect { recheckConnection() }
         }
         scope.launch {
-            plugin.operationalMode.collect { remergeAlerts() }
+            plugin.operationalMode.collect { remergeAlerts(); recheckConnection() }
         }
         recheckConnection()
     }
@@ -193,11 +200,22 @@ class PluginRegistry {
         val map = _plugins.value.associate { it.id to it.connectionState.value }
         _perSourceState.value = map
         _connectionState.value = worstPluginState(map)
-        _wsHealthy.value = _plugins.value.any { p ->
-            p.sourceType == SourceType.WS && {
-                val s = map[p.id] ?: PluginConnectionState.DISCONNECTED
-                s == PluginConnectionState.CONNECTED || s == PluginConnectionState.DEGRADED
-            }()
+        _wsHealthy.value = _plugins.value.any { it.isWsDelivering(map) }
+        _coveredByFallback.value = computeCoveredByFallback(map)
+    }
+
+    /** A WS source is delivering only when it is enabled AND actually connected. A disabled or
+     *  silent (DEGRADED) source is not delivering its live feed. */
+    private fun ThreatSource.isWsDelivering(map: Map<String, PluginConnectionState>): Boolean =
+        enabled.value && sourceType == SourceType.WS && map[id] == PluginConnectionState.CONNECTED
+
+    /** Degraded (not offline): no WS source is delivering its live feed, but a non-WS fallback
+     *  source is authoritative and actively covering. Offline only when nothing covers. */
+    private fun computeCoveredByFallback(map: Map<String, PluginConnectionState>): Boolean {
+        val wsDelivering = _plugins.value.any { it.isWsDelivering(map) }
+        if (wsDelivering) return false
+        return _plugins.value.any { p ->
+            p.sourceType != SourceType.WS && p.isAuthoritativeAlertSource()
         }
     }
 

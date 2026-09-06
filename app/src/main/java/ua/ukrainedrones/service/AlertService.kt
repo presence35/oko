@@ -195,6 +195,7 @@ class AlertService : Service() {
         val zoneSirenOverride: Boolean,
         val officialSirenOverride: Boolean,
         val connectionState: ConnectionState,
+        val coveredByFallback: Boolean = false,
         val threats: Map<String, NormalizedThreat>,
         val alerts: List<OblastAlert>,
         val criticalOfflineOverride: Boolean,
@@ -613,6 +614,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     zoneSirenOverride = zoneSirenOverride,
                     officialSirenOverride = officialSirenOverride,
                     connectionState = cs,
+                    coveredByFallback = registry.coveredByFallback.value,
                     threats = threats,
                     alerts = alerts,
                     criticalOfflineOverride = cfg.criticalOfflineOverride,
@@ -638,7 +640,9 @@ val mappedThreats = registry.allThreats.map { list ->
             notificationManager.updateChannels(s)
         }
 
-        val isOfflineNow = !state.connectionState.isConnected
+        val coveredByFallback = state.coveredByFallback
+        val isDegradedNow = state.connectionState.isDegraded || coveredByFallback
+        val isOfflineNow = !state.connectionState.isConnected && !coveredByFallback
         val offlineSince = state.connectionState.offlineSinceOrNull
         val offlineMinutes = if (isOfflineNow && offlineSince != null) {
             ((now - offlineSince) / 60_000L).toInt()
@@ -660,7 +664,7 @@ val mappedThreats = registry.allThreats.map { list ->
         val monitorText = when {
             isOfflineNow -> offlineLiveBody(s, offlineMinutes)
             state.gpsFixMissing -> s.gpsUnavailableFollowMe
-            state.connectionState.isDegraded -> s.connDegradedBody
+            isDegradedNow -> s.connDegradedBody
             else -> ""
         }
 
