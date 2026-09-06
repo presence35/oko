@@ -39,6 +39,8 @@ interface ThreatSource {
      *  its alerts; true restarts it. Default no-op for sources without a user-facing switch. */
     val enabled: StateFlow<Boolean>
     fun setEnabled(enabled: Boolean)
+    /** Optional override badge label shown in the Sources tab instead of the WS/REST badge. */
+    val badgeLabel: String? get() = null
     /** One-shot live check for the Sources tab Test button. REST sources perform a real fetch;
      *  WS sources report their current connection + data freshness. */
     suspend fun testConnection(): SourceTestResult =

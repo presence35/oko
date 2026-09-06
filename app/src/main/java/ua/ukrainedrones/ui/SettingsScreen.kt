@@ -69,7 +69,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
@@ -77,9 +76,6 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.graphics.StrokeCap
@@ -1329,11 +1325,20 @@ fun SettingsScreen(
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertToggleRow(
+                        title = s.threatIconZoomTitle,
+                        description = s.threatIconZoomDesc,
+                        checked = threatIconZoom,
+                        onCheckedChange = onThreatIconZoomChange,
+                        icon = rememberVectorPainter(Icons.Default.ZoomIn),
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AlertToggleRow(
                         title = s.fillAlertRegionsTitle,
                         description = s.fillAlertRegionsDesc,
                         checked = fillAlertRegions,
                         onCheckedChange = onFillAlertRegionsChange,
-                        icon = remember { UkraineSilhouettePainter() },
+                        icon = painterResource(R.drawable.ic_map_ua),
                         iconTint = ZoneRedColor
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1449,15 +1454,6 @@ fun SettingsScreen(
                                     )
                                 }
                             }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            AlertToggleRow(
-                                title = s.threatIconZoomTitle,
-                                description = s.threatIconZoomDesc,
-                                checked = threatIconZoom,
-                                onCheckedChange = onThreatIconZoomChange,
-                                icon = rememberVectorPainter(Icons.Default.ZoomIn),
-                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -2546,59 +2542,7 @@ private val IconTileSlot = 60.dp
 /** Gap between icon slots in a tile's swipeable row. */
 private val IconTileSpacing = 10.dp
 
-/**
- * A filled Ukraine silhouette drawn from [UKRAINE_BORDER], normalized to a unit
- * path. The settings row tints it red via `ColorFilter`, so the "Fill alerting
- * regions" toggle reads as a red map of the country.
- */
-private class UkraineSilhouettePainter : Painter() {
-    private val aspect: Float
-    private val unitPath: Path
 
-    init {
-        var minLat = Double.MAX_VALUE
-        var maxLat = -Double.MAX_VALUE
-        var minLon = Double.MAX_VALUE
-        var maxLon = -Double.MAX_VALUE
-        for (p in UKRAINE_BORDER) {
-            if (p.latitude < minLat) minLat = p.latitude
-            if (p.latitude > maxLat) maxLat = p.latitude
-            if (p.longitude < minLon) minLon = p.longitude
-            if (p.longitude > maxLon) maxLon = p.longitude
-        }
-        val lonSpan = maxLon - minLon
-        val latSpan = maxLat - minLat
-        aspect = (latSpan / lonSpan).toFloat()
-        unitPath = Path().apply {
-            var first = true
-            for (p in UKRAINE_BORDER) {
-                val x = ((p.longitude - minLon) / lonSpan).toFloat()
-                val y = ((1.0 - (p.latitude - minLat) / latSpan) * (latSpan / lonSpan)).toFloat()
-                if (first) {
-                    moveTo(x, y)
-                    first = false
-                } else {
-                    lineTo(x, y)
-                }
-            }
-            close()
-        }
-    }
-
-    override val intrinsicSize: Size get() = Size(1f, aspect)
-
-    override fun DrawScope.onDraw() {
-        val scale = minOf(size.width, size.height / aspect)
-        val dx = (size.width - scale) / 2f
-        val dy = (size.height - scale * aspect) / 2f
-        withTransform({
-            translate(dx, dy)
-            scale(scale, scale)
-        }) {
-            drawPath(unitPath, Color.White)
-        }
-    }
-}
 
 /** One chip of the overlapping-threats mode selector. */
 @Composable
@@ -2632,10 +2576,8 @@ private fun OverlapModeChip(
     }
 }
 
-/** Icon-style picker: four stacked full-width rows (one per real set — Photos,
- *  Army, Comic, Russian). Each row is a horizontally swipeable strip of enlarged icons whose
- *  right-most icon half-peeks as a "more" affordance; the pack name sits as a subtle badge in
- *  the row's top-right corner. */
+/** Icon-style picker: four stacked full-width rows (one per real set — Photo,
+ *  Army, Comic, Russian). Each row is a horizontally swipeable strip of enlarged icons. */
 @Composable
 internal fun IconSetSelector(
     lang: AppLanguage,

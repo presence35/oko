@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -107,6 +108,22 @@ class DeathFxController(
     /** During the tally-tap replay: per-group position for the footer copy + overall position
      *  for its progress bar. */
     val replayProgress: StateFlow<ReplayProgress?> = _replayProgress.asStateFlow()
+
+    /** Derived: true when any flourish phase is in progress (countdown, auto-strike, death
+     *  animation, tally replay, or MiG flyby). The FlourishFooter uses this to gate the
+     *  floating icons and own the entire bottom region. */
+    private val _flourishActive = MutableStateFlow(false)
+    val flourishActive: StateFlow<Boolean> = _flourishActive.asStateFlow()
+
+    init {
+        scope.launch {
+            combine(
+                _countdown, _autoStrikeActive, overlay.active, _replayProgress
+            ) { cd, auto, death, replay ->
+                cd != null || auto || death || replay != null
+            }.collect { _flourishActive.value = it }
+        }
+    }
 
     /** When true, city labels should show all tiers regardless of user settings — toggled
      *  during death animations so the projectile has geographic context. */

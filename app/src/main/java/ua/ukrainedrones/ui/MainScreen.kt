@@ -76,7 +76,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -84,7 +83,6 @@ import androidx.compose.ui.semantics.contentDescription as semanticsContentDescr
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -696,10 +694,11 @@ private fun MapScreen(
     var strikeType by remember { mutableStateOf<ThreatType?>(null) }
     var pendingStrikeCount by remember { mutableStateOf(0) }
     var cancelTick by remember { mutableStateOf(0) }
+    val flourishActive = countdown != null || autoStrikeActive || deathActive ||
+        replayProgress != null || uiState.flyby != null
     // Emergency eject: one tap cancels the countdown, ejects any in-flight death animation,
     // stops the replay, and clears the MiG flyby — back to a non-fun, safety-first map.
     val stopAll: () -> Unit = { cancelTick++; onEjectAll() }
-    var footerHeightPx by remember { mutableStateOf(0) }
 
     // Surface shelter-mode to the ViewModel so the resolved-threat flourish/card is
     // suppressed while the shelter overlay is up.
@@ -797,7 +796,13 @@ private fun MapScreen(
                     else -> s.appTitle
                 }
             }
-            if (uiState.monitoringRunning) {
+            when (uiState.protectionState) {
+                ProtectionState.OFFLINE -> MonitoringOffBanner(
+                    text = s.serviceOfflineBanner,
+                    onClick = onReactivateMonitoring,
+                    onHeightChange = onHeaderHeightChange
+                )
+                else -> {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -846,6 +851,34 @@ private fun MapScreen(
                     s = s,
                     modifier = Modifier.padding(end = 4.dp)
                 )
+                if (uiState.protectionState == ProtectionState.REDUCED) {
+                    Surface(
+                        color = Color(0xFFFFF3E0),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Text(
+                            text = s.protectionReduced,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFE65100)
+                        )
+                    }
+                }
+                if (activeZone == ThreatZone.INNER && !uiState.sirenOverride) {
+                    Surface(
+                        color = Color(0xFFFFF3E0),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Text(
+                            text = s.sirenOverrideWarning,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFE65100)
+                        )
+                    }
+                }
                 val gearButtonInteraction = remember { MutableInteractionSource() }
                 IconButton(
                     onClick = openSettings,
@@ -869,12 +902,7 @@ private fun MapScreen(
                     )
                 }
             }
-            } else {
-                MonitoringOffBanner(
-                    text = s.serviceOfflineBanner,
-                    onClick = onReactivateMonitoring,
-                    onHeightChange = onHeaderHeightChange
-                )
+            }
             }
         }
     ) { padding ->
@@ -960,7 +988,7 @@ private fun MapScreen(
                             .align(Alignment.BottomEnd)
                             .padding(end = 12.dp, bottom = 4.dp)
                     )
-                    if (countdown == null && !autoStrikeActive) {
+                    if (!flourishActive) {
                         Row(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
@@ -1001,46 +1029,39 @@ private fun MapScreen(
                     }
                 }
 
-                Box {
-                    Surface(
-                        modifier = Modifier.onSizeChanged { footerHeightPx = it.height },
-                        tonalElevation = 2.dp
-                    ) {
-                        ThreatStripFooter(
-                            inner = uiState.threatsInner,
-                            outer = uiState.threatsOuter,
-                            hiddenTypes = uiState.hiddenTypes,
-                            silencedTypes = uiState.silencedTypes,
-                            focusLocation = uiState.focusLocation,
-                            iconSet = uiState.iconSet,
-                            language = uiState.language,
-                            calmMessagesEnabled = uiState.calmMessagesEnabled,
-                            deathActive = deathActive,
-                            replayProgress = replayProgress,
-                            s = s,
-                            onThreatStripTap = onThreatStripTap,
-                            onReplayStop = { cancelTick++ }
-                        )
+                if (!flourishActive) {
+                    Box {
+                        Surface(
+                            tonalElevation = 2.dp
+                        ) {
+                            ThreatStripFooter(
+                                inner = uiState.threatsInner,
+                                outer = uiState.threatsOuter,
+                                hiddenTypes = uiState.hiddenTypes,
+                                silencedTypes = uiState.silencedTypes,
+                                focusLocation = uiState.focusLocation,
+                                iconSet = uiState.iconSet,
+                                calmMessage = remember(uiState.language, uiState.calmMessagesEnabled) {
+                                    noThreatsMessage(uiState.language, uiState.calmMessagesEnabled)
+                                },
+                                onThreatStripTap = onThreatStripTap
+                            )
+                        }
                     }
                 }
             }
 
-            if (countdown != null || autoStrikeActive ||
-                (deathActive && replayProgress == null) || uiState.flyby != null
-            ) {
-                val typeLabel = strikeType?.let { t ->
-                    val info = ThreatTypeCatalog.INFO.getValue(t)
-                    if (uiState.language == AppLanguage.UA) info.labelUa else info.labelEn
-                }
-                StopLayer(
-                    count = countdown,
-                    threatTypeLabel = typeLabel,
-                    remainingTotal = pendingStrikeCount,
-                    footerHeightPx = footerHeightPx,
-                    stopLabel = s.stopReplayLabel,
-                    onStop = stopAll
-                )
-            }
+            FlourishFooter(
+                active = flourishActive,
+                countdown = countdown,
+                replayProgress = replayProgress,
+                strikeType = strikeType,
+                pendingStrikeCount = pendingStrikeCount,
+                stopLabel = s.stopReplayLabel,
+                language = uiState.language,
+                s = s,
+                onStop = stopAll
+            )
 
             // Threat popup: the full interactive card while a threat is selected, crossfading
             // into the compact neutralized card the instant it resolves (so the popup never pops
@@ -1279,8 +1300,9 @@ private fun ThreatCardHost(
     }
 }
 
-/** Footer strip / calm message / replay progress bar. Owns its per-type cycle state so
- *  unrelated recompositions of the surrounding scope don't re-run grouping or sorting. */
+/** Footer strip: threat icons, or the calm "no threats" message when nothing is active.
+ *  Pure threat display — knows nothing about flourish phases. Owns its per-type cycle state
+ *  so unrelated recompositions of the surrounding scope don't re-run grouping or sorting. */
 @Composable
 private fun ThreatStripFooter(
     inner: List<NormalizedThreat>,
@@ -1289,97 +1311,19 @@ private fun ThreatStripFooter(
     silencedTypes: Set<ThreatType>,
     focusLocation: LatLng?,
     iconSet: ThreatIconSet,
-    language: AppLanguage,
-    calmMessagesEnabled: Boolean,
-    deathActive: Boolean,
-    replayProgress: ReplayProgress?,
-    s: Strings.StringSet,
-    onThreatStripTap: (NormalizedThreat) -> Unit,
-    onReplayStop: () -> Unit
+    calmMessage: String,
+    onThreatStripTap: (NormalizedThreat) -> Unit
 ) {
     val innerCounts = inner.groupingBy { it.type.toThreatType() }.eachCount()
     val outerCounts = outer.groupingBy { it.type.toThreatType() }.eachCount()
     val total = ThreatType.values().sumOf {
         (innerCounts[it] ?: 0) + (outerCounts[it] ?: 0)
     }
-    val replay = replayProgress
-    if (replay != null) {
-        // A tally replay owns the whole footer while it runs — the per-group
-        // "Resolving threat X of N" replaces even the threat strip, with a
-        // slim overall-progress bar along the footer's bottom edge; the strip
-        // returns the moment the show ends.
-        val barFraction by animateFloatAsState(
-            targetValue = replay.fraction,
-            animationSpec = tween(250),
-            label = "flourishProgress"
-        )
-        // A replay pans the camera for the whole show, so it needs a way out — the whole footer is
-            // tappable to stop (eject + return home). A compact STOP button sits on the LEFT so it
-            // never covers the "Resolving…" message + progress on the right.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onReplayStop)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF3A2E00),
-                        contentColor = Color(0xFFF9A825),
-                        border = BorderStroke(1.dp, Color(0xFFF9A825).copy(alpha = 0.6f)),
-                        modifier = Modifier.width(76.dp).height(56.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                s.stopReplayLabel,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            resolvingThreatsPhrase(replay.groupSize, language),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFFF9A825),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        // Slim progress bar: faint track, amber fill easing across the
-                        // bottom edge as the show advances.
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(3.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(barFraction.coerceIn(0f, 1f))
-                                    .fillMaxHeight()
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(Color(0xFFF9A825))
-                            )
-                        }
-                    }
-                }
-            }
-    } else if (total == 0) {
-        val footerText = when {
-            deathActive -> s.neutralizingLabel
-            else -> remember(calmMessagesEnabled, language) { noThreatsMessage(language, calmMessagesEnabled) }
-        }
+    if (total == 0) {
         Text(
-            footerText,
+            calmMessage,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (deathActive) Color(0xFFF9A825) else Color(0xFF4CAF50),
+            color = Color(0xFF4CAF50),
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
@@ -1429,92 +1373,6 @@ private fun ThreatStripFooter(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun BoxScope.StopLayer(
-    count: Int?,
-    threatTypeLabel: String?,
-    remainingTotal: Int,
-    footerHeightPx: Int,
-    stopLabel: String,
-    onStop: () -> Unit
-) {
-    val amber = Color(0xFFF9A825)
-    val density = LocalDensity.current
-    val overlayH = with(density) { (footerHeightPx * 1.5f).toDp().coerceAtLeast(48.dp) }
-    // Emergency-eject strip: visible from the auto-strike countdown through any death animation
-    // (auto or manual long-press) and the MiG flyby. The whole layer is tappable anywhere — the
-    // Stop pill is just the visual affordance.
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .align(Alignment.BottomCenter)
-            .height(overlayH)
-            .background(if (count != null) Color.Black.copy(alpha = 0.85f) else Color.Transparent)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onStop)
-    ) {
-        Column(
-            modifier = Modifier.align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            if (count != null) {
-                // Countdown phase: dark strip with "3 2 1" (the active digit highlighted) and a
-                // thin line naming the target + remaining total. During the animation the
-                // backdrop is transparent so the footer's "Neutralizing threat…" stays visible.
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    for (n in 3 downTo 1) {
-                        val active = n == count
-                        val dim by animateFloatAsState(
-                            if (active) 1f else 0.35f,
-                            tween(200), label = "cdDim$n"
-                        )
-                        val grow by animateFloatAsState(
-                            if (active) 1f else 0.8f,
-                            tween(200), label = "cdGrow$n"
-                        )
-                        Text(
-                            text = "$n",
-                            color = amber.copy(alpha = dim),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.graphicsLayer { scaleX = grow; scaleY = grow }
-                        )
-                    }
-                }
-                if (threatTypeLabel != null) {
-                    Text(
-                        text = "$threatTypeLabel · $remainingTotal",
-                        color = Color.White.copy(alpha = 0.75f),
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            StopPill(stopLabel)
-        }
-    }
-}
-
-@Composable
-private fun StopPill(label: String) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF3A2E00),
-        contentColor = Color(0xFFF9A825),
-        border = BorderStroke(1.dp, Color(0xFFF9A825).copy(alpha = 0.6f))
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
-        )
     }
 }
 

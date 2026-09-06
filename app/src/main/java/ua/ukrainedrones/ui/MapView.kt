@@ -713,6 +713,7 @@ fun NeptunMapView(
         uiState.showMediumCities,
         uiState.showSmallCities,
         uiState.fillAlertRegions,
+        uiState.alertOblastTokens,
         uiState.alertRaionKeys,
         showNearbyShelters,
         selectedShelter?.shelter?.id,
@@ -730,6 +731,7 @@ fun NeptunMapView(
             append('M').append(uiState.showMediumCities)
             append('N').append(uiState.showSmallCities)
             append('K').append(uiState.fillAlertRegions)
+            for (stem in uiState.alertOblastTokens) append('W').append(stem).append(';')
             for ((stem, raion) in uiState.alertRaionKeys) append('J').append(stem).append('=').append(raion).append(';')
             append('S').append(showNearbyShelters)
             if (showNearbyShelters) {
@@ -1096,11 +1098,6 @@ fun NeptunMapView(
                 // Oblast region fill: when fillAlertRegions is on, shade alerting oblasts
                 // with a subtle red fill instead of coloring city labels red.
                 if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
-                    val fillPaint = Paint().apply {
-                        isAntiAlias = true
-                        color = Color.argb(55, 255, 60, 60)
-                        style = Paint.Style.FILL
-                    }
                     for (stem in uiState.alertOblastTokens) {
                         val rings = OblastBoundaries.byStem[stem] ?: continue
                         for (ring in rings) {
@@ -1119,8 +1116,8 @@ fun NeptunMapView(
                     }
                 }
 
-                // Raion region fill: a raion/city alert (NEPTUN `raions`) that names a raion
-                // shades that raion's polygon instead of only tinting its cities' labels.
+                // Raion region fill: the engine derives (stem, raion) keys from the same alert→city
+                // coverage as the red cities, so every filled raion backs red city labels.
                 if (uiState.fillAlertRegions && uiState.alertRaionKeys.isNotEmpty()) {
                     for ((stem, raion) in uiState.alertRaionKeys) {
                         val rings = RaionBoundaries.forKey(stem, raion) ?: continue

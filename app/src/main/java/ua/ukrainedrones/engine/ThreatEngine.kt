@@ -3,6 +3,7 @@ package ua.ukrainedrones.engine
 import ua.ukrainedrones.AppLanguage
 import ua.ukrainedrones.Cities
 import ua.ukrainedrones.CityRaions
+import ua.ukrainedrones.RaionBoundaries
 import kotlin.math.*
 
 enum class ThreatZone { INNER, OUTER }
@@ -15,6 +16,8 @@ data class ThreatEvaluationResult(
     val threatScores: List<Double> = emptyList(),
     val activeZone: ThreatZone? = null,
     val redCities: Set<String> = emptySet(),
+    val fillOblastTokens: Set<String> = emptySet(),
+    val fillRaionKeys: Set<Pair<String, String>> = emptySet(),
     val focusOblastAlertActive: Boolean = false,
     val officialReason: String? = null,
     val reasonThreatId: String? = null,
@@ -110,6 +113,7 @@ class ThreatEngine(
         // stays in AlertService.
         val focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, cityScope)
         val redCities = computeRedCities(alerts, fillRegions)
+        val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts, redCities, fillRegions)
         val activeAlert = focusToken?.let { token -> alerts.firstOrNull { it.inOblast(token) } }
         val (officialReason, reasonThreatId) = if (activeAlert != null) {
             deriveOfficialAlertReason(activeAlert, threats, focus, params, lang, now)
@@ -125,6 +129,8 @@ class ThreatEngine(
             threatScores = threatScores,
             activeZone = activeZone,
             redCities = redCities,
+            fillOblastTokens = fillOblastTokens,
+            fillRaionKeys = fillRaionKeys,
             focusOblastAlertActive = focusOblastAlertActive,
             officialReason = officialReason,
             reasonThreatId = reasonThreatId,
@@ -163,6 +169,34 @@ fun computeRedCities(alerts: List<OblastAlert>, fillRegions: Boolean): Set<Strin
                 }
             }
         }
+    }
+
+    /** Region-fill keys derived from the SAME alert→city coverage as [computeRedCities], so a
+     *  red city always sits on a filled polygon when the fill is on:
+     *  - a whole-oblast alert shades the whole oblast ([fillOblastTokens]);
+     *  - a raion/city alert shades the raion each covered city belongs to ([CityRaions]).
+     *  Raion keys are emitted only when the raion has a boundary polygon, so the fill is real.
+     *  Empty when the fill is off — broad red labels stand in for the missing fill. */
+    fun computeFillKeys(
+        alerts: List<OblastAlert>,
+        redCities: Set<String>,
+        fillRegions: Boolean
+    ): Pair<Set<String>, Set<Pair<String, String>>> {
+        if (!fillRegions || alerts.isEmpty()) return emptySet<String>() to emptySet<Pair<String, String>>()
+        val fillOblastTokens = buildSet {
+            for (token in Cities.cityOblast.values) {
+                if (alerts.any { it.inOblast(token) && it.isOblastWide() }) add(token)
+            }
+        }
+        val fillRaionKeys = buildSet {
+            for (city in redCities) {
+                val token = Cities.cityOblast[city] ?: continue
+                if (token in fillOblastTokens) continue
+                val raion = CityRaions.cityRaion[city] ?: continue
+                if (RaionBoundaries.forKey(token, raion) != null) add(token to raion)
+            }
+        }
+        return fillOblastTokens to fillRaionKeys
     }
 
     /** True when the alert's raion key/name matches this city's raion ([CityRaions]). */

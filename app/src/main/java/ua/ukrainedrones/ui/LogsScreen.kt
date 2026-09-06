@@ -2,6 +2,7 @@ package ua.ukrainedrones
 
 import android.os.Build
 import ua.ukrainedrones.engine.ThreatZone
+import ua.ukrainedrones.engine.toThreatType
 import android.content.Intent
 import android.net.Uri
 import ua.ukrainedrones.connection.ConnectionHolder
@@ -106,7 +107,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -115,7 +115,6 @@ import kotlinx.coroutines.launch
 import ua.ukrainedrones.AppPluginHolder
 import ua.ukrainedrones.engine.OperationalMode
 import ua.ukrainedrones.engine.PluginConnectionState
-import ua.ukrainedrones.engine.SourceTestResult
 import ua.ukrainedrones.engine.SourceType
 import ua.ukrainedrones.engine.ThreatSource
 import ua.ukrainedrones.plugins.SourceEvent
@@ -131,7 +130,7 @@ private const val VISIBLE_INITIAL = 25
 private const val VISIBLE_STEP = 50
 
 /** Which data source to show. */
-private enum class LogsFilter { DECISIONS, CONNECTIONS, SOURCES, SYSTEM, TESTS }
+private enum class LogsFilter { DECISIONS, CONNECTIONS, SOURCES, SYSTEM }
 
 /** How to group decision rows. */
 private enum class GroupBy { TIMELINE, PROXIMITY, TYPE }
@@ -219,10 +218,9 @@ fun LogsDropDownSheet(
     val window = entries.filter { now - it.atMillis < DebugLog.AUTO_CLEAR_AGE_MS }
     val isDecisions = filter == LogsFilter.DECISIONS
     val isSystem = filter == LogsFilter.SYSTEM
-    val isTests = filter == LogsFilter.TESTS
     val isSources = filter == LogsFilter.SOURCES
     val rows: List<LogRow> = if (isSources) emptyList() else
-        buildRows(window, connEntries, systemEntries, now, isDecisions, isSystem, isTests, newestFirst, shownOnly, showFlourish)
+        buildRows(window, connEntries, systemEntries, now, isDecisions, isSystem, newestFirst, shownOnly, showFlourish)
     val visible = rows.take(visibleCount)
     val hasMore = visibleCount < rows.size
     val groups = if (isDecisions) buildGroups(visible.filterIsInstance<DecisionRow>().map { it.entry }, groupBy, showFlourish, proximitySort, newestFirst) else emptyList()
@@ -246,12 +244,11 @@ fun LogsDropDownSheet(
             .fillMaxHeight(0.85f)
             .background(Color(0xFF1E1E1E))
     ) {
-        // Top Header Bar — overall-health readout: title, then the NEPTUN mark tinted by the
-        // live aggregate connection state plus a status word and live threat/alert counts.
+        // Top Header Bar — clean single-row: title, then NEPTUN mark + domain + status + counts.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -265,33 +262,30 @@ fun LogsDropDownSheet(
                 painter = painterResource(R.drawable.neptun),
                 contentDescription = s.attributionText,
                 colorFilter = ColorFilter.tint(connColor),
-                modifier = Modifier.height(18.dp)
+                modifier = Modifier.height(16.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                NeptunConnectionClient.NEPTUN_DOMAIN,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.clickable {
+                    context.startActivity(
+                        Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse(NeptunConnectionClient.NEPTUN_SITE_URL)
+                        )
+                    )
+                }
             )
             Spacer(Modifier.width(8.dp))
-            Column {
-                Text(
-                    NeptunConnectionClient.NEPTUN_DOMAIN,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF90CAF9),
-                    textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.clickable {
-                        context.startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse(NeptunConnectionClient.NEPTUN_SITE_URL)
-                            )
-                        )
-                    }
-                )
-                Text(
-                    healthWord,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = connColor
-                )
-            }
-            Spacer(Modifier.width(10.dp))
+            Text(
+                healthWord,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = connColor
+            )
+            Spacer(Modifier.width(8.dp))
             Text(
                 healthCounts,
                 style = MaterialTheme.typography.labelSmall,
@@ -300,8 +294,8 @@ fun LogsDropDownSheet(
         }
 
         // Tabs
-        val tabFilters = listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES, LogsFilter.SYSTEM, LogsFilter.TESTS)
-        val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources, s.logsFilterSystem, s.logsFilterTests)
+        val tabFilters = listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES, LogsFilter.SYSTEM)
+        val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources, s.logsFilterSystem)
         ScrollableTabRow(
             selectedTabIndex = tabFilters.indexOf(filter),
             containerColor = Color(0xFF252525),
@@ -382,12 +376,7 @@ fun LogsDropDownSheet(
             }
             if (filter == LogsFilter.SOURCES) {
                 item(key = "sources") {
-                    SourcesList(s, now)
-                }
-            }
-            if (filter == LogsFilter.TESTS) {
-                item(key = "tests") {
-                    SourceTestsList(s, now)
+                    SourcesList(s, now, lang, iconSet)
                 }
             }
             if (filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty()) {
@@ -395,7 +384,7 @@ fun LogsDropDownSheet(
                     RetryLogCard(connEvents, connRetry, s, now) { ConnectionHolder.getSupervisor(context).dismissLogCard() }
                 }
             }
-            if (visible.isEmpty() && filter != LogsFilter.SOURCES && filter != LogsFilter.TESTS
+            if (visible.isEmpty() && filter != LogsFilter.SOURCES
                 && !(filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty())) {
                 item {
                     Text(
@@ -535,12 +524,10 @@ private fun buildRows(
     now: Long,
     isDecisions: Boolean,
     isSystem: Boolean,
-    isTests: Boolean,
     newestFirst: Boolean,
     shownOnly: Boolean,
     showFlourish: Boolean
 ): List<LogRow> {
-    if (isTests) return emptyList()
     if (isSystem) {
         val sysRows = systemEntries.map { SystemRow(it) }
         return if (newestFirst) sysRows.sortedByDescending { it.atMillis } else sysRows.sortedBy { it.atMillis }
@@ -1303,7 +1290,7 @@ private fun ConnectionCard(entry: ConnLogEntry, s: Strings.StringSet, lang: AppL
 }
 
 @Composable
-private fun SourcesList(s: Strings.StringSet, now: Long) {
+private fun SourcesList(s: Strings.StringSet, now: Long, lang: AppLanguage, iconSet: ThreatIconSet) {
     val registry = AppPluginHolder.registry
     val plugins by registry.plugins.collectAsState()
     val states by registry.perSourceState.collectAsState()
@@ -1324,6 +1311,7 @@ private fun SourcesList(s: Strings.StringSet, now: Long) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         plugins.forEach { plugin ->
             SourceCard(plugin, states[plugin.id] ?: PluginConnectionState.DISCONNECTED, s)
+            SourceDataCard(plugin, lang, iconSet, s)
         }
         if (events.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
@@ -1335,97 +1323,6 @@ private fun SourcesList(s: Strings.StringSet, now: Long) {
             )
             events.forEach { ev ->
                 SourceEventRow(ev, s, now)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SourceTestsList(s: Strings.StringSet, now: Long) {
-    val registry = AppPluginHolder.registry
-    val plugins by registry.plugins.collectAsState()
-    val scope = rememberCoroutineScope()
-    val results = remember { mutableStateMapOf<String, Pair<Long, SourceTestResult>>() }
-    val running = remember { mutableStateMapOf<String, Boolean>() }
-
-    fun run(plugin: ThreatSource) {
-        if (running[plugin.id] == true) return
-        running[plugin.id] = true
-        scope.launch {
-            val r = plugin.testConnection()
-            results[plugin.id] = System.currentTimeMillis() to r
-            running[plugin.id] = false
-        }
-    }
-
-    LaunchedEffect(plugins) {
-        plugins.forEach { run(it) }
-    }
-
-    if (plugins.isEmpty()) {
-        Text(
-            s.logsEmptySources,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp, horizontal = 24.dp)
-        )
-        return
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        plugins.forEach { plugin ->
-            val result = results[plugin.id]
-            val busy = running[plugin.id] == true
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF252525))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        plugin.name,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(Modifier.height(3.dp))
-                    when {
-                        busy -> Text(
-                            s.sourceTestRunning,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        result != null -> {
-                            Text(
-                                result.second.summary,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (result.second.ok) DebugGreen else DebugRed
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                formatAlertAge(now, result.first, s),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        else -> Text(
-                            "…",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                TextButton(
-                    onClick = { run(plugin) },
-                    enabled = !busy
-                ) {
-                    Text(if (busy) "…" else s.sourceTestLabel)
-                }
             }
         }
     }
@@ -1488,10 +1385,7 @@ private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: St
         state == PluginConnectionState.CONNECTED -> DebugGreen
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val typeLabel = if (plugin.sourceType == SourceType.WS) s.sourceTypeWs else s.sourceTypeRest
-    var testing by remember { mutableStateOf(false) }
-    var testResult by remember { mutableStateOf<SourceTestResult?>(null) }
-    val scope = rememberCoroutineScope()
+    val typeLabel = plugin.badgeLabel ?: if (plugin.sourceType == SourceType.WS) s.sourceTypeWs else s.sourceTypeRest
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1521,27 +1415,6 @@ private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: St
                 style = MaterialTheme.typography.bodySmall,
                 color = statusColor
             )
-            testResult?.let { r ->
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    r.summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (r.ok) DebugGreen else DebugRed
-                )
-            }
-        }
-        TextButton(
-            onClick = {
-                testing = true
-                scope.launch {
-                    testResult = plugin.testConnection()
-                    testing = false
-                }
-            },
-            enabled = !testing
-        ) {
-            Text(if (testing) "…" else s.sourceTestLabel)
         }
         Switch(
             checked = enabled,
@@ -1549,6 +1422,77 @@ private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: St
                 AppPluginHolder.registry.setEnabled(plugin, newEnabled)
             }
         )
+    }
+}
+
+@Composable
+private fun SourceDataCard(
+    plugin: ThreatSource,
+    lang: AppLanguage,
+    iconSet: ThreatIconSet,
+    s: Strings.StringSet
+) {
+    val threats by plugin.threats.collectAsState()
+    val alerts by plugin.alerts.collectAsState()
+    val grouped = threats.groupBy { it.type }
+    val isEmpty = threats.isEmpty() && alerts.isEmpty()
+    if (isEmpty) return
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF252525))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        if (grouped.isNotEmpty()) {
+            Text(
+                s.connActiveLabel,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            grouped.entries.sortedByDescending { it.value.size }.forEach { (typeStr, list) ->
+                val type = typeStr.toThreatType()
+                val info = ThreatTypeCatalog.INFO.getValue(type)
+                val label = if (lang == AppLanguage.UA) info.labelUa else info.labelEn
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ThreatIcon(type = type, set = iconSet, size = 16.dp, contentDescription = label)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        "×${list.size}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+        if (alerts.isNotEmpty()) {
+            if (grouped.isNotEmpty()) Spacer(Modifier.height(2.dp))
+            val oblasts = alerts.map { it.oblast }.distinct()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = DebugAmber,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    oblasts.joinToString(", "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2
+                )
+            }
+        }
     }
 }
 

@@ -47,6 +47,7 @@ class TestPlugin : ThreatSource {
     override val id = "test"
     override val name = "Test"
     override val sourceType = SourceType.WS
+    override val badgeLabel: String? get() = "JSON"
     override val typeCatalog: Map<String, ThreatProps> = emptyMap()
 
     private val _operationalMode = MutableStateFlow(OperationalMode.STANDBY)

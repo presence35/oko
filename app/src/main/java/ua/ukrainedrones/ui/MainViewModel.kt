@@ -40,8 +40,6 @@ import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.inOblast
-import ua.ukrainedrones.engine.isOblastWide
-import ua.ukrainedrones.engine.raionName
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toEngineString
 import ua.ukrainedrones.engine.toThreatType
@@ -52,6 +50,12 @@ import ua.ukrainedrones.service.MonitoringStatus
 import org.osmdroid.util.GeoPoint
 import kotlin.math.roundToLong
 import kotlin.random.Random
+
+enum class ProtectionState {
+    ACTIVE,
+    REDUCED,
+    OFFLINE
+}
 
 @Immutable
 data class UiState(
@@ -150,7 +154,8 @@ data class UiState(
     val shelterOverlayUp: Boolean = false,   // the shelter overlay is showing (suppresses flourish)
     val alertActive: Boolean = false,        // any threat or official alert live right now
     val threatDataStale: Boolean = false,
-    val notificationsDisabledBySystem: Boolean = false
+    val notificationsDisabledBySystem: Boolean = false,
+    val protectionState: ProtectionState = ProtectionState.ACTIVE
 )
 
 /**
@@ -783,13 +788,25 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             sheltersEnabled = prefs.sheltersEnabled,
             sheltersWithKids = prefs.sheltersWithKids,
             periodicGps = prefs.periodicGps,
-            calmMessagesEnabled = prefs.calmMessagesEnabled,
+            calmMessagesEnabled = prefs.justFunMasterEnabled && prefs.calmMessagesEnabled,
             hapticsEnabled = resolveHaptics(prefs.hapticsEnabled),
             shelterIndex = shelterIndex,
             shelterOverlayUp = live.shelterModeActive,
             notificationsDisabledBySystem = !AlertNotificationManager.areNotificationsEnabled(app),
             monitoringRunning = monitoringRunning,
-            bootRestartEnabled = bootRestartEnabled
+            bootRestartEnabled = bootRestartEnabled,
+            protectionState = deriveProtectionState(
+                monitoringRunning = monitoringRunning,
+                notificationsDisabledBySystem = !AlertNotificationManager.areNotificationsEnabled(app),
+                activeSlowRedArmed = activeArmed.slowRed,
+                activeFastRedArmed = activeArmed.fastRed,
+                activeSlowYellowArmed = activeArmed.slowYellow,
+                activeFastYellowArmed = activeArmed.fastYellow,
+                officialAlertsEnabled = prefs.officialAlertsEnabled,
+                criticalOfflineOverride = prefs.criticalOfflineOverride,
+                silencedTypesCount = (ThreatType.values().toSet() - prefs.alertEnabled).size,
+                neptunOffline = live.cs.isOffline
+            )
         )
         // A fresh INNER AVIATION (bell on) plays one full-size pass across the viewport; the
         // threat card opens when it lands (onFlybyFinished). Only while genuinely foregrounded
@@ -928,24 +945,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val focusBannerCity = (
             if (language == AppLanguage.UA) attribution.bannerCityUa else attribution.bannerCityEn
         ).ifBlank { Strings.get(language).unknownLocation }
-        // Oblasts with a whole-oblast official alert (NEPTUN `oblasts`): these alone drive the
-        // red oblast FILL. A region/city alert (NEPTUN `raions`) never shades the whole oblast.
-        val filledOblastTokens = buildSet {
-            for (citiesToken in Cities.cityOblast.values) {
-                if (alerts.any { it.inOblast(citiesToken) && it.isOblastWide() }) add(citiesToken)
-            }
-        }
-        // Raion-level alerts' (oblast stem, raion adjectival) pairs — the red RAION fill. Only
-        // non-wide alerts that name a raion contribute; the polygon lookup happens in MapView.
-        val alertRaionKeys = buildSet {
-            val stems = Cities.cityOblast.values
-            for (alert in alerts) {
-                if (alert.isOblastWide()) continue
-                val raion = alert.raionName() ?: continue
-                val stem = stems.firstOrNull { alert.inOblast(it) } ?: continue
-                add(stem to raion)
-            }
-        }
         // Distinct oblasts under ANY official alert (whole-oblast or region) — the Logs header count.
         val alertingOblastCount = Cities.cityOblast.values.toSet()
             .count { citiesToken -> alerts.any { it.inOblast(citiesToken) } }
@@ -1009,8 +1008,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             focusLocation = focusLocation,
             gpsFixMissing = focus.gpsFixMissing,
             redCities = redCities,
-            alertOblastTokens = filledOblastTokens,
-            alertRaionKeys = alertRaionKeys,
+            alertOblastTokens = evaluation.fillOblastTokens,
+            alertRaionKeys = evaluation.fillRaionKeys,
             alertingOblastCount = alertingOblastCount,
             threatLevel = evaluation.threatLevel,
             revealRequest = reveal,
@@ -1674,4 +1673,26 @@ fun setAlertsArmed(armed: Boolean) {
     fun dismissUpdate() {
         updateStateFlow.value = UpdateState.Idle
     }
+}
+
+private fun deriveProtectionState(
+    monitoringRunning: Boolean,
+    notificationsDisabledBySystem: Boolean,
+    activeSlowRedArmed: Boolean,
+    activeFastRedArmed: Boolean,
+    activeSlowYellowArmed: Boolean,
+    activeFastYellowArmed: Boolean,
+    officialAlertsEnabled: Boolean,
+    criticalOfflineOverride: Boolean,
+    silencedTypesCount: Int,
+    neptunOffline: Boolean
+): ProtectionState {
+    if (!monitoringRunning) return ProtectionState.OFFLINE
+    val anyZoneArmed = activeSlowRedArmed || activeFastRedArmed || activeSlowYellowArmed || activeFastYellowArmed
+    val allChannelsOff = !anyZoneArmed && !officialAlertsEnabled
+    val reduced = notificationsDisabledBySystem ||
+        allChannelsOff ||
+        silencedTypesCount == ThreatType.values().size ||
+        (!criticalOfflineOverride && neptunOffline)
+    return if (reduced) ProtectionState.REDUCED else ProtectionState.ACTIVE
 }

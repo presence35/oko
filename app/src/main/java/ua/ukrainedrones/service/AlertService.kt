@@ -655,7 +655,7 @@ val mappedThreats = registry.allThreats.map { list ->
             isOfflineNow -> s.offlineStatusTitle
             state.focusPinned -> String.format(s.notifMonitoringCityFormat, state.focusBannerCity)
             else -> s.notifOngoingTitle
-        } + if (redAlert) s.notifRedDot else ""
+        }
 
         val monitorText = when {
             isOfflineNow -> offlineLiveBody(s, offlineMinutes)

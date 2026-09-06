@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
         // Monitoring is always-on: "Stop Monitoring & Exit" is a session-only stop, so a
         // cold start (re)arms the service before the first frame — no silent dead state.
         AlertService.start(this@MainActivity)
+        ua.ukrainedrones.service.AlertWatchdog.schedule(applicationContext)
         setContent {
             // Cap the system font scale so extreme accessibility sizes can't break the layout;
             // the popup/banner still wrap and scroll up to this ceiling.

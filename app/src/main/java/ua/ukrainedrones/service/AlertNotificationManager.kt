@@ -33,6 +33,7 @@ import ua.ukrainedrones.NeutralizedTally
 class AlertNotificationManager(private val context: Context) {
 
     companion object {
+        private val NotifRed = Color.parseColor("#E53935")
         const val ACTION_RETRY = "ua.ukrainedrones.RETRY"
         const val ACTION_IGNORE_RETRY = "ua.ukrainedrones.IGNORE_RETRY"
         const val EXTRA_REVEAL_ID = "reveal_threat_id"
@@ -185,11 +186,7 @@ class AlertNotificationManager(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(openAppIntent())
         if (red) {
-            // Red-tint the icon + colorize the whole card on supported devices (Android 12+);
-            // older versions show the red large icon instead. setColorized needs the large icon.
-            b.setColor(Color.RED)
             b.setLargeIcon(redIconBitmap())
-            b.setColorized(true)
         }
 
         if (retryLabel != null) {
@@ -211,7 +208,7 @@ class AlertNotificationManager(private val context: Context) {
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         if (drawable != null) {
-            drawable.setTint(Color.RED)
+            drawable.setTint(NotifRed)
             drawable.setBounds(0, 0, size, size)
             drawable.draw(canvas)
         }

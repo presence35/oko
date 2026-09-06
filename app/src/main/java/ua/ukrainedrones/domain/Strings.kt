@@ -123,7 +123,6 @@ object Strings {
         val yellowZoneAlert: String,
         val notifOngoingTitle: String,
         val notifMonitoringCityFormat: String,
-        val notifRedDot: String,
         val notifChannelName: String,
         val notifChannelDesc: String,
         val notifBodyRegion: String,
@@ -159,7 +158,11 @@ object Strings {
         val daysAgoSuffix: String,
         val mixedTimeFormat: String,
         val noThreatsMessage: String,
-        val serviceOfflineBanner: String
+        val serviceOfflineBanner: String,
+        val protectionReduced: String,
+        val sirenOverrideWarning: String,
+        val nightModeActiveBanner: String,
+        val bootRestartPaused: String
     )
 
     data class Updates(
@@ -310,7 +313,6 @@ object Strings {
         val sourceFallbackLabel: String,
         val sourceEnabledLabel: String,
         val sourceTestLabel: String,
-        val sourceTestRunning: String,
         val sourceActivityLabel: String,
         val debugLogSoundOverride: String,
         val debugLogSoundFollows: String,
@@ -435,8 +437,7 @@ object Strings {
         val apiSdkViewManifest: String,
         val apiUnknownType: String,
         val apiUbillingSchemaChanged: String,
-        val logsLegend: String,
-        val logsFilterTests: String
+        val logsLegend: String
     )
 
     data class Widget(
@@ -786,7 +787,6 @@ val tapToCancelLabel: String,
         val yellowZoneAlert: String get() = status.yellowZoneAlert
         val notifOngoingTitle: String get() = status.notifOngoingTitle
         val notifMonitoringCityFormat: String get() = status.notifMonitoringCityFormat
-        val notifRedDot: String get() = status.notifRedDot
         val notifChannelName: String get() = status.notifChannelName
         val notifChannelDesc: String get() = status.notifChannelDesc
         val notifBodyRegion: String get() = status.notifBodyRegion
@@ -802,6 +802,10 @@ val tapToCancelLabel: String,
         val connOff: String get() = status.connOff
         val connOffline: String get() = status.connOffline
         val serviceOfflineBanner: String get() = status.serviceOfflineBanner
+        val protectionReduced: String get() = status.protectionReduced
+        val sirenOverrideWarning: String get() = status.sirenOverrideWarning
+        val nightModeActiveBanner: String get() = status.nightModeActiveBanner
+        val bootRestartPaused: String get() = status.bootRestartPaused
         val connDegraded: String get() = status.connDegraded
         val connDegradedBody: String get() = status.connDegradedBody
         val connActiveLabel: String get() = status.connActiveLabel
@@ -964,7 +968,6 @@ val tapToCancelLabel: String,
         val sourceFallbackLabel: String get() = misc.sourceFallbackLabel
         val sourceEnabledLabel: String get() = misc.sourceEnabledLabel
         val sourceTestLabel: String get() = misc.sourceTestLabel
-        val sourceTestRunning: String get() = misc.sourceTestRunning
         val sourceActivityLabel: String get() = misc.sourceActivityLabel
         val debugLogSoundOverride: String get() = misc.debugLogSoundOverride
         val debugLogSoundFollows: String get() = misc.debugLogSoundFollows
@@ -1090,7 +1093,6 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val apiUnknownType: String get() = misc.apiUnknownType
         val apiUbillingSchemaChanged: String get() = misc.apiUbillingSchemaChanged
         val logsLegend: String get() = misc.logsLegend
-        val logsFilterTests: String get() = misc.logsFilterTests
         val guideTitle: String get() = guide.guideTitle
         val guideSettingsButton: String get() = guide.guideSettingsButton
         val guideCategoryMap: String get() = guide.guideCategoryMap

@@ -508,6 +508,36 @@ class ThreatEngineTest {
     }
 
     @Test
+    fun `computeFillKeys - bare city alert fills the city's raion`() {
+        val alert = OblastAlert(key = "berdyansk", name = "Бердянськ", oblast = "Запорізька область", since = null)
+        val redCities = engine.computeRedCities(listOf(alert), fillRegions = true)
+        assertTrue("Бердянськ" in redCities)
+        val (oblastTokens, raionKeys) = engine.computeFillKeys(listOf(alert), redCities, fillRegions = true)
+        assertTrue(oblastTokens.isEmpty())
+        assertTrue(("Запорізьк" to "Бердянський") in raionKeys)
+    }
+
+    @Test
+    fun `computeFillKeys - fill off leaves no region keys`() {
+        val alert = OblastAlert(key = "berdyansk", name = "Бердянський район", oblast = "Запорізька область", since = null)
+        val redCities = engine.computeRedCities(listOf(alert), fillRegions = false)
+        assertTrue(redCities.isNotEmpty())
+        val (oblastTokens, raionKeys) = engine.computeFillKeys(listOf(alert), redCities, fillRegions = false)
+        assertTrue(oblastTokens.isEmpty())
+        assertTrue(raionKeys.isEmpty())
+    }
+
+    @Test
+    fun `computeFillKeys - wide alert fills the whole oblast`() {
+        val alert = OblastAlert(key = "odesa", name = "Одеська область", oblast = "Одеська", since = "x")
+        val redCities = engine.computeRedCities(listOf(alert), fillRegions = true)
+        assertTrue("Одеса" in redCities)
+        val (oblastTokens, raionKeys) = engine.computeFillKeys(listOf(alert), redCities, fillRegions = true)
+        assertTrue("Одеськ" in oblastTokens)
+        assertTrue(raionKeys.isEmpty())
+    }
+
+    @Test
     fun `evaluate - city scope narrows a raion alert away from the seat`() {
         val raion = OblastAlert(key = "бердянський", name = "Бердянський район", oblast = "Запорізька область", since = null)
         val scoped = engine.evaluate(
