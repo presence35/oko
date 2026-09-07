@@ -1,6 +1,11 @@
 package ua.ukrainedrones
 
 import android.os.Build
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.media.AudioAttributes
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import android.content.Intent
@@ -131,7 +136,7 @@ private const val VISIBLE_INITIAL = 25
 private const val VISIBLE_STEP = 50
 
 /** Which data source to show. */
-private enum class LogsFilter { DECISIONS, CONNECTIONS, SOURCES, SYSTEM }
+private enum class LogsFilter { DECISIONS, CONNECTIONS, SOURCES, SYSTEM, CHANNELS }
 
 /** How to group decision rows. */
 private enum class GroupBy { TIMELINE, PROXIMITY, TYPE }
@@ -295,8 +300,8 @@ fun LogsDropDownSheet(
         }
 
         // Tabs
-        val tabFilters = listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES, LogsFilter.SYSTEM)
-        val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources, s.logsFilterSystem)
+        val tabFilters = listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES, LogsFilter.SYSTEM, LogsFilter.CHANNELS)
+        val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources, s.logsFilterSystem, s.logsFilterChannels)
         ScrollableTabRow(
             selectedTabIndex = tabFilters.indexOf(filter),
             containerColor = Color(0xFF252525),
@@ -380,12 +385,17 @@ fun LogsDropDownSheet(
                     SourcesList(s, now, lang, iconSet)
                 }
             }
+            if (filter == LogsFilter.CHANNELS) {
+                item(key = "channels") {
+                    ChannelTestContent(context)
+                }
+            }
             if (filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty()) {
                 item(key = "retrylog") {
                     RetryLogCard(connEvents, connRetry, s, now) { ConnectionHolder.getSupervisor(context).dismissLogCard() }
                 }
             }
-            if (visible.isEmpty() && filter != LogsFilter.SOURCES
+            if (visible.isEmpty() && filter != LogsFilter.SOURCES && filter != LogsFilter.CHANNELS
                 && !(filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty())) {
                 item {
                     Text(
@@ -449,6 +459,10 @@ fun LogsDropDownSheet(
                         }
                     }
                 }
+            }
+        }
+
+        // Swipe-up drag handle to dismiss
             }
         }
 

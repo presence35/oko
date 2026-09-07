@@ -424,6 +424,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
         shelterTypeMobile = "Mobile shelter",
         shelterTypeBunker = "Civil defense bunker (CDPS)",
         logsFilterSystem = "System",
+        logsFilterChannels = "Channels",
         apiSdkChanged = "SDK changed",
         apiSdkCheckFailed = "SDK check failed",
         apiSystemEmpty = "No system changes recorded",

@@ -424,6 +424,7 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         shelterTypeMobile = "Мобільне укриття",
         shelterTypeBunker = "Бомбосховище (ЗСЦЗ)",
         logsFilterSystem = "Система",
+        logsFilterChannels = "Канали",
         apiSdkChanged = "SDK змінено",
         apiSdkCheckFailed = "Перевірка SDK не вдалася",
         apiSystemEmpty = "Змін системи не зафіксовано",
