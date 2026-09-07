@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed "Always sound" alerts being silent on vibrate — the explicit vibration pattern on the notification builder was overriding the channel's USAGE_ALARM audio routing, so alarm-channel notifications lost their sound when the phone was in vibrate mode / Виправлено беззвучність сповіщень "Завжди зі звуком" у вібромі явний патерн вібрації на builder перезаписував аудіомаршрутизацію USAGE_ALARM каналу, тому сповіщення втрачали звук у вібромі
 - Added "Show borders" toggle in Display settings — draw oblast and district outlines on the map / Додано перемикач "Показати кордони" в налаштуваннях дисплею — малювати контури областей і районів на карті
 - Fixed "Fill alerting regions" icon sizing — the Ukraine silhouette now fits its natural aspect ratio instead of being squished into a square / Виправлено розмір іконки "Заливка областей" — силует України тепер відповідає своєму співвідношенню сторін замість стискання в квадрат
 

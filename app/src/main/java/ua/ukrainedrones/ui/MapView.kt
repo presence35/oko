@@ -13,6 +13,7 @@ import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.NEPTUN_TYPES
 import ua.ukrainedrones.courseTargetPlace
 import ua.ukrainedrones.community.CompactOblastBoundaries
+import ua.ukrainedrones.community.CompactPolygon
 import ua.ukrainedrones.community.CompactRaionBoundaries
 
 import android.content.Context
@@ -760,7 +761,7 @@ fun NeptunMapView(
         uiState.showMediumCities,
         uiState.showSmallCities,
         uiState.fillAlertRegions,
-        uiState.alertOblastTokens,
+        uiState.showBorders,
         uiState.alertRaionKeys,
         showNearbyShelters,
         selectedShelter?.shelter?.id,
@@ -778,6 +779,7 @@ fun NeptunMapView(
             append('M').append(uiState.showMediumCities)
             append('N').append(uiState.showSmallCities)
             append('K').append(uiState.fillAlertRegions)
+            append('B').append(uiState.showBorders)
             for (stem in uiState.alertOblastTokens) append('W').append(stem).append(';')
             for ((stem, raion) in uiState.alertRaionKeys) append('J').append(stem).append('=').append(raion).append(';')
             append('S').append(showNearbyShelters)
@@ -1163,10 +1165,10 @@ fun NeptunMapView(
                         if (ring.pointCount < 3) continue
                         val points = ring.toPoints().map { GeoPoint(it.lat, it.lon) }
                         mapView.overlays.add(Polygon(mapView).apply {
-                            this.points = points
-                            fillColor = Color.argb(55, 255, 60, 60)
-                            strokeColor = Color.argb(30, 255, 80, 80)
-                            strokeWidth = 1f
+                                this.points = points
+                                fillColor = Color.argb(55, 255, 60, 60)
+                                strokeColor = Color.TRANSPARENT
+                                strokeWidth = 0f
                             title = ""
                             setInfoWindow(null)
                         })
@@ -1177,39 +1179,34 @@ fun NeptunMapView(
                 // coverage as the red cities, so every filled raion backs red city labels.
                 if (uiState.fillAlertRegions && uiState.alertRaionKeys.isNotEmpty()) {
                     for ((stem, raion) in uiState.alertRaionKeys) {
-                        val ring = CompactRaionBoundaries.forKey(stem, raion) ?: continue
-                        if (ring.pointCount < 3) continue
-                        val points = ring.toPoints().map { GeoPoint(it.lat, it.lon) }
-                        mapView.overlays.add(Polygon(mapView).apply {
-                            this.points = points
-                            fillColor = Color.argb(55, 255, 60, 60)
-                            strokeColor = Color.argb(30, 255, 80, 80)
-                            strokeWidth = 1f
-                            title = ""
-                            setInfoWindow(null)
-                        })
+                        val polygon = CompactRaionBoundaries.forKey(stem, raion) ?: continue
+                        for (ring in polygon.rings) {
+                            if (ring.pointCount < 3) continue
+                            val points = ring.toPoints().map { pt -> GeoPoint(pt.lat, pt.lon) }
+                            mapView.overlays.add(Polygon(mapView).apply {
+                                this.points = points
+                                fillColor = Color.argb(55, 255, 60, 60)
+                                strokeColor = Color.TRANSPARENT
+                                strokeWidth = 0f
+                                title = ""
+                                setInfoWindow(null)
+                            })
+                        }
                     }
                 }
 
                 // Oblast + raion boundary outlines — controlled by the "Show borders" toggle.
                 if (uiState.showBorders) {
                     val borderStroke = Color.argb(120, 180, 180, 200)
-                    for (stem in CompactOblastBoundaries.allStems) {
-                        val ring = CompactOblastBoundaries.get(stem) ?: continue
-                        if (ring.pointCount < 3) continue
-                        mapView.overlays.add(Polyline(mapView).apply {
-                            setPoints(ring.toPoints().map { GeoPoint(it.lat, it.lon) })
-                            color = borderStroke
-                            width = 2f
-                        })
-                    }
                     for ((_, ring) in CompactRaionBoundaries.all) {
-                        if (ring.pointCount < 3) continue
-                        mapView.overlays.add(Polyline(mapView).apply {
-                            setPoints(ring.toPoints().map { GeoPoint(it.lat, it.lon) })
-                            color = borderStroke
-                            width = 1.5f
-                        })
+                        for (r in ring.rings) {
+                            if (r.pointCount < 3) continue
+                            mapView.overlays.add(Polyline(mapView).apply {
+                                setPoints(r.toPoints().map { pt -> GeoPoint(pt.lat, pt.lon) })
+                                color = borderStroke
+                                width = 2f
+                            })
+                        }
                     }
                 }
 

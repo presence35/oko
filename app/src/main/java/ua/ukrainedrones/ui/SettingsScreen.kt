@@ -52,6 +52,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.outlined.CropFree
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -1343,10 +1345,8 @@ fun SettingsScreen(
                         description = s.fillAlertRegionsDesc,
                         checked = fillAlertRegions,
                         onCheckedChange = onFillAlertRegionsChange,
-                        icon = painterResource(R.drawable.ic_map_ua),
-                        iconTint = ZoneRedColor,
-                        iconSize = 48.dp,
-                        iconHeight = 22.dp
+                        icon = rememberVectorPainter(Icons.Filled.Map),
+                        iconTint = ZoneRedColor
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertToggleRow(
@@ -1354,7 +1354,7 @@ fun SettingsScreen(
                         description = s.showBordersDesc,
                         checked = showBorders,
                         onCheckedChange = onShowBordersChange,
-                        icon = rememberVectorPainter(Icons.Default.Map),
+                        icon = rememberVectorPainter(Icons.Outlined.CropFree),
                         iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1887,7 +1887,6 @@ internal fun AlertToggleRow(
     icon: Painter? = null,
     iconTint: Color? = null,
     iconSize: Dp = 28.dp,
-    iconHeight: Dp = iconSize,
     iconBadge: String? = null,
     emoji: String? = null,
     note: String? = null,
@@ -1925,7 +1924,7 @@ internal fun AlertToggleRow(
             )
         } else {
             icon?.let {
-                Box(modifier = Modifier.size(width = iconSize, height = iconHeight)) {
+                Box(modifier = Modifier.size(iconSize)) {
                     Image(
                         painter = it,
                         contentDescription = null,

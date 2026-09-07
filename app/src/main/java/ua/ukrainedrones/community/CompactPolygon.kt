@@ -91,6 +91,8 @@ data class CompactPolygon(
 ) {
     constructor(singleRing: ScaledRing) : this(listOf(singleRing))
 
+    val pointCount: Int get() = rings.sumOf { it.pointCount }
+
     fun contains(lat: Double, lon: Double, scale: Double = 1000.0): Boolean {
         for (ring in rings) {
             if (ring.contains(lat, lon, scale)) return true

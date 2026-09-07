@@ -1,6 +1,7 @@
 package ua.ukrainedrones
 
 import ua.ukrainedrones.community.CompactOblastBoundaries
+import ua.ukrainedrones.community.CompactPolygon
 import ua.ukrainedrones.community.CompactRaionBoundaries
 import ua.ukrainedrones.engine.LatLng
 
@@ -42,11 +43,9 @@ object AdminHierarchy {
     ) {
         /** Boundary polygon rings for this raion in normalized [LatLng] order (lat, lon). */
         fun polygon(): List<List<LatLng>>? {
-            val ring = CompactRaionBoundaries.forKey(oblastStem, key)
+            val polygon = CompactRaionBoundaries.forKey(oblastStem, key)
                 ?: fallbackRaionLookup(key)
-            return ring?.let { r ->
-                listOf(r.toPoints().map { LatLng(lat = it.lat, lon = it.lon) })
-            }
+            return polygon?.toPoints()?.map { ring -> ring.map { LatLng(lat = it.lat, lon = it.lon) } }
         }
 
         /** All cities cataloged in this raion. */
@@ -182,7 +181,7 @@ object AdminHierarchy {
      * Fallback lookup if a raion was misattributed to an adjacent function in [CompactRaionBoundaries]
      * (e.g. Odesa raions inside _Миколаївськ).
      */
-    private fun fallbackRaionLookup(raionKey: String): ua.ukrainedrones.community.ScaledRing? {
+    private fun fallbackRaionLookup(raionKey: String): CompactPolygon? {
         val allStems = CompactOblastBoundaries.allStems
         for (stem in allStems) {
             val found = CompactRaionBoundaries.forKey(stem, raionKey)

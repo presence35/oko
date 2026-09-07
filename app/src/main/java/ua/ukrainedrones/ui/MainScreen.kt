@@ -894,7 +894,7 @@ private fun MapScreen(
                 val gearButtonInteraction = remember { MutableInteractionSource() }
                 IconButton(
                     onClick = openSettings,
-                    modifier = Modifier.size(32.dp).pressTick(gearButtonInteraction),
+                    modifier = Modifier.size(48.dp).pressTick(gearButtonInteraction),
                     interactionSource = gearButtonInteraction
                 ) {
                     Icon(
