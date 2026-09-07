@@ -12,6 +12,8 @@ import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.NEPTUN_TYPES
 import ua.ukrainedrones.courseTargetPlace
+import ua.ukrainedrones.community.CompactOblastBoundaries
+import ua.ukrainedrones.community.CompactRaionBoundaries
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -1157,20 +1159,17 @@ fun NeptunMapView(
                 // with a subtle red fill instead of coloring city labels red.
                 if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
                     for (stem in uiState.alertOblastTokens) {
-                        val rings = OblastBoundaries.byStem[stem] ?: continue
-                        for (ring in rings) {
-                            if (ring.size < 3) continue
-                            // Rings are stored as (lon, lat); osmdroid GeoPoint is (lat, lon).
-                            val points = ring.map { GeoPoint(it[1], it[0]) }
-                            mapView.overlays.add(Polygon(mapView).apply {
-                                this.points = points
-                                fillColor = Color.argb(55, 255, 60, 60)
-                                strokeColor = Color.argb(30, 255, 80, 80)
-                                strokeWidth = 1f
-                                title = ""
-                                setInfoWindow(null)
-                            })
-                        }
+                        val ring = CompactOblastBoundaries.get(stem) ?: continue
+                        if (ring.pointCount < 3) continue
+                        val points = ring.toPoints().map { GeoPoint(it.lat, it.lon) }
+                        mapView.overlays.add(Polygon(mapView).apply {
+                            this.points = points
+                            fillColor = Color.argb(55, 255, 60, 60)
+                            strokeColor = Color.argb(30, 255, 80, 80)
+                            strokeWidth = 1f
+                            title = ""
+                            setInfoWindow(null)
+                        })
                     }
                 }
 
@@ -1178,20 +1177,17 @@ fun NeptunMapView(
                 // coverage as the red cities, so every filled raion backs red city labels.
                 if (uiState.fillAlertRegions && uiState.alertRaionKeys.isNotEmpty()) {
                     for ((stem, raion) in uiState.alertRaionKeys) {
-                        val rings = RaionBoundaries.forKey(stem, raion) ?: continue
-                        for (ring in rings) {
-                            if (ring.size < 3) continue
-                            // Rings are stored as (lat, lon); osmdroid GeoPoint is (lat, lon).
-                            val points = ring.map { GeoPoint(it[0], it[1]) }
-                            mapView.overlays.add(Polygon(mapView).apply {
-                                this.points = points
-                                fillColor = Color.argb(55, 255, 60, 60)
-                                strokeColor = Color.argb(30, 255, 80, 80)
-                                strokeWidth = 1f
-                                title = ""
-                                setInfoWindow(null)
-                            })
-                        }
+                        val ring = CompactRaionBoundaries.forKey(stem, raion) ?: continue
+                        if (ring.pointCount < 3) continue
+                        val points = ring.toPoints().map { GeoPoint(it.lat, it.lon) }
+                        mapView.overlays.add(Polygon(mapView).apply {
+                            this.points = points
+                            fillColor = Color.argb(55, 255, 60, 60)
+                            strokeColor = Color.argb(30, 255, 80, 80)
+                            strokeWidth = 1f
+                            title = ""
+                            setInfoWindow(null)
+                        })
                     }
                 }
 
@@ -1199,27 +1195,22 @@ fun NeptunMapView(
                 // exactly what boundary data is available. Thin distinct strokes, drawn under the
                 // alert fills/labels. Remove once coverage is verified.
                 val debugStroke = Color.argb(120, 180, 180, 200)
-                for ((_, rings) in OblastBoundaries.byStem) {
-                    for (ring in rings) {
-                        if (ring.size < 3) continue
-                        mapView.overlays.add(Polyline(mapView).apply {
-                            setPoints(ring.map { GeoPoint(it[1], it[0]) })
-                            color = debugStroke
-                            width = 2f
-                        })
-                    }
+                for (stem in CompactOblastBoundaries.allStems) {
+                    val ring = CompactOblastBoundaries.get(stem) ?: continue
+                    if (ring.pointCount < 3) continue
+                    mapView.overlays.add(Polyline(mapView).apply {
+                        setPoints(ring.toPoints().map { GeoPoint(it.lat, it.lon) })
+                        color = debugStroke
+                        width = 2f
+                    })
                 }
-                for ((_, raions) in RaionBoundaries.all) {
-                    for ((_, rings) in raions) {
-                        for (ring in rings) {
-                            if (ring.size < 3) continue
-                            mapView.overlays.add(Polyline(mapView).apply {
-                                setPoints(ring.map { GeoPoint(it[0], it[1]) })
-                                color = debugStroke
-                                width = 1.5f
-                            })
-                        }
-                    }
+                for ((_, ring) in CompactRaionBoundaries.all) {
+                    if (ring.pointCount < 3) continue
+                    mapView.overlays.add(Polyline(mapView).apply {
+                        setPoints(ring.toPoints().map { GeoPoint(it.lat, it.lon) })
+                        color = debugStroke
+                        width = 1.5f
+                    })
                 }
 
                 // City labels (English names on top of label-free tiles). Region-precise red:

@@ -4,7 +4,7 @@ import org.osmdroid.util.GeoPoint
 
 /**
  * Simplified outline of Ukraine (incl. Crimea): the closed outer hull of the oblast
- * boundary polygons (OblastBoundaries.kt) — same source (EugeneBorshch/ukraine_geojson),
+ * boundary polygons (CompactOblastBoundaries.kt) — same source (EugeneBorshch/ukraine_geojson),
  * same simplification — so the silhouette coincides with the combined red oblast fills.
  * Regenerate with tools/gen_ukraine_border.py. Values are (lat, lon) GeoPoints.
  */

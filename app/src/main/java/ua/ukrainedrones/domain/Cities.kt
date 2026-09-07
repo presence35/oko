@@ -48,9 +48,9 @@ data class City(
 object Cities {
 
     /** One oblast region: [stem] is matched against the alert oblast name; [cities] its places. */
-    private data class Region(val stem: String, val cities: List<City>)
+    internal data class Region(val stem: String, val cities: List<City>)
 
-    private val REGIONS: List<Region> = listOf(
+    internal val REGIONS: List<Region> = listOf(
         Region("Київськ", listOf(
             City("Київ", 50.4501, 30.5234, CityTier.MAJOR, reveal = MajorReveal.OVERVIEW),
             City("Біла Церква", 49.7954, 30.1167, CityTier.MEDIUM),
