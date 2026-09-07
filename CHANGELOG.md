@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Added "Show borders" toggle in Display settings — draw oblast and district outlines on the map / Додано перемикач "Показати кордони" в налаштуваннях дисплею — малювати контури областей і районів на карті
+- Fixed "Fill alerting regions" icon sizing — the Ukraine silhouette now fits its natural aspect ratio instead of being squished into a square / Виправлено розмір іконки "Заливка областей" — силует України тепер відповідає своєму співвідношенню сторін замість стискання в квадрат
+
 - Fixed the merged alert feed dropping all but one alert per oblast: the registry deduped on the parent oblast name, so a whole-oblast alert and every raion inside it collapsed into a single entry and most region fills silently vanished — dedup is now on each alert's own key / Fixed the merged alert feed dropping all but one alert per oblast: the registry deduped on the parent oblast name, so a whole-oblast alert and every raion inside it collapsed into a single entry and most region fills silently vanished — dedup is now on each alert's own key
 - Logs → Sources now shows the merged alert feed with each alert's key, name, oblast and wide/raion tag, so the region data is inspectable against NEPTUN's live map / Logs → Sources now shows the merged alert feed with each alert's key, name, oblast and wide/raion tag, so the region data is inspectable against NEPTUN's live map
 - "Fill alerting regions" now fills a city-level alert's district too: every red city resolves to its actual raion, so a bare-city alert (no "район" in the name) shades that raion instead of leaving the red label floating on empty tiles / "Fill alerting regions" now fills a city-level alert's district too: every red city resolves to its actual raion, so a bare-city alert (no "район" in the name) shades that raion instead of leaving the red label floating on empty tiles

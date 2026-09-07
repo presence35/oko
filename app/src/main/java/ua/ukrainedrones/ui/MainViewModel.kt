@@ -133,6 +133,7 @@ data class UiState(
     val showMediumCities: Boolean = true,
     val showSmallCities: Boolean = true,
     val fillAlertRegions: Boolean = false,
+    val showBorders: Boolean = true,
     val alertOblastTokens: Set<String> = emptySet(),
     val alertRaionKeys: Set<Pair<String, String>> = emptySet(),
     val alertingOblastCount: Int = 0,
@@ -375,6 +376,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val showMediumCities: Boolean,
         val showSmallCities: Boolean,
         val fillAlertRegions: Boolean,
+        val showBorders: Boolean,
         val justFunMasterEnabled: Boolean,
         val deathAnimationEnabled: Boolean,
         val flybyAnimationEnabled: Boolean,
@@ -438,7 +440,8 @@ val fastGroupCollapsed: Boolean,
         val criticalOfflineBypassSilent: Boolean,
         val flybyAnimationEnabled: Boolean,
         val justFunMasterEnabled: Boolean,
-        val fillAlertRegions: Boolean
+        val fillAlertRegions: Boolean,
+        val showBorders: Boolean
     )
 
     private val liveSnapshot = combine(
@@ -499,13 +502,14 @@ val fastGroupCollapsed: Boolean,
             prefs.criticalOfflineBypassSilent(),
             prefs.flybyAnimationEnabled(),
             prefs.justFunMasterEnabled(),
-            prefs.fillAlertRegions()
+            prefs.fillAlertRegions(),
+            prefs.showBorders()
         ) { flags: Array<Boolean> ->
             AlertConfig(
                 flags[0], flags[1], flags[2], flags[3], flags[4], flags[5],
                 flags[6], flags[7], flags[8], flags[9], flags[10], flags[11], flags[12],
                 flags[13], flags[14], flags[15], flags[16], flags[17], flags[18], flags[19],
-                flags[20], flags[21], flags[22]
+                flags[20], flags[21], flags[22], flags[23]
             )
         },
         combine(
@@ -596,6 +600,7 @@ combine(
             showMediumCities = b.showMediumCities,
             showSmallCities = b.showSmallCities,
             fillAlertRegions = b.fillAlertRegions,
+            showBorders = b.showBorders,
             justFunMasterEnabled = b.justFunMasterEnabled,
             deathAnimationEnabled = b.deathAnimationEnabled,
             flybyAnimationEnabled = b.flybyAnimationEnabled,
@@ -657,6 +662,7 @@ combine(
         prefs.nightOfficialSirenOverride().first()
         prefs.deathAnimationEnabled().first()
         prefs.followBullet().first()
+        prefs.showBorders().first()
         prefs.bootRestartEnabled().first()
         emit(Unit)
     }.flowOn(Dispatchers.IO)
@@ -728,7 +734,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             reveal = live.reveal,
             flourish = live.flourish,
             officialAlertCityScope = prefs.officialAlertCityScope,
-            fillAlertRegions = prefs.fillAlertRegions
+            fillAlertRegions = prefs.fillAlertRegions,
+            showBorders = prefs.showBorders
         ).copy(
             update = updateUi.update,
             needsInstallPermission = updateUi.needsInstallPermission,
@@ -776,6 +783,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             showMediumCities = prefs.showMediumCities,
             showSmallCities = prefs.showSmallCities,
             fillAlertRegions = prefs.fillAlertRegions,
+            showBorders = prefs.showBorders,
             justFunMasterEnabled = prefs.justFunMasterEnabled,
             deathAnimationEnabled = prefs.deathAnimationEnabled,
             flybyAnimationEnabled = prefs.flybyAnimationEnabled,
@@ -933,7 +941,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         reveal: RevealRequest?,
         flourish: FlourishShow?,
         officialAlertCityScope: Boolean,
-        fillAlertRegions: Boolean
+        fillAlertRegions: Boolean,
+        showBorders: Boolean
     ): UiState {
         val params = effectiveParams
         val gpsFresh = LocationTracker.isFresh(now)
@@ -1016,7 +1025,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             revealRequest = reveal,
             flourish = flourish,
             alertActive = alertActive,
-            threatDataStale = threatDataStale
+            threatDataStale = threatDataStale,
+            showBorders = showBorders
         )
     }
 
@@ -1360,6 +1370,10 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setFillAlertRegions(enabled: Boolean) {
         viewModelScope.launch { prefs.setFillAlertRegions(enabled) }
+    }
+
+    fun setShowBorders(enabled: Boolean) {
+        viewModelScope.launch { prefs.setShowBorders(enabled) }
     }
 
     fun setFastGroupCollapsed(collapsed: Boolean) {

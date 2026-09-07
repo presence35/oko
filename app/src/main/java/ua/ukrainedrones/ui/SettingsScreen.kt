@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
@@ -270,9 +271,11 @@ private fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
             "system", "display", "interface", "language", "ukrainian", "english", "icon", "icons",
             "card", "cards", "size", "scale", "battery", "exempt",
             "fill", "region", "regions", "oblast", "oblasts", "alert fill", "region fill",
+            "border", "borders", "outline", "boundaries",
             "система", "інтерфейс", "дисплей", "мова", "українськ", "англійськ", "іконка", "іконки",
             "картка", "картки", "розмір", "масштаб", "батарея",
             "заливка", "область", "області", "заливка областей", "заливка регіонів",
+            "кордон", "кордони", "межа", "межі", "контури",
             "енерг", "звільнення"
         )
     )
@@ -388,6 +391,7 @@ fun SettingsScreen(
     showMediumCities: Boolean,
     showSmallCities: Boolean,
     fillAlertRegions: Boolean,
+    showBorders: Boolean,
     sheltersEnabled: Boolean,
     periodicGps: Boolean,
     calmMessagesEnabled: Boolean,
@@ -449,6 +453,7 @@ fun SettingsScreen(
     onShowMediumCitiesChange: (Boolean) -> Unit,
     onShowSmallCitiesChange: (Boolean) -> Unit,
     onFillAlertRegionsChange: (Boolean) -> Unit,
+    onShowBordersChange: (Boolean) -> Unit,
     onSheltersEnabledChange: (Boolean) -> Unit,
     onOpenShelterList: () -> Unit = {},
     onJustFunMasterChange: (Boolean) -> Unit,
@@ -1340,7 +1345,17 @@ fun SettingsScreen(
                         onCheckedChange = onFillAlertRegionsChange,
                         icon = painterResource(R.drawable.ic_map_ua),
                         iconTint = ZoneRedColor,
-                        iconSize = 56.dp
+                        iconSize = 48.dp,
+                        iconHeight = 22.dp
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AlertToggleRow(
+                        title = s.showBordersTitle,
+                        description = s.showBordersDesc,
+                        checked = showBorders,
+                        onCheckedChange = onShowBordersChange,
+                        icon = rememberVectorPainter(Icons.Default.Map),
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Haptic press feedback
@@ -1872,6 +1887,7 @@ internal fun AlertToggleRow(
     icon: Painter? = null,
     iconTint: Color? = null,
     iconSize: Dp = 28.dp,
+    iconHeight: Dp = iconSize,
     iconBadge: String? = null,
     emoji: String? = null,
     note: String? = null,
@@ -1909,7 +1925,7 @@ internal fun AlertToggleRow(
             )
         } else {
             icon?.let {
-                Box(modifier = Modifier.size(iconSize)) {
+                Box(modifier = Modifier.size(width = iconSize, height = iconHeight)) {
                     Image(
                         painter = it,
                         contentDescription = null,

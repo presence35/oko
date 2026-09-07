@@ -1191,26 +1191,26 @@ fun NeptunMapView(
                     }
                 }
 
-                // DEBUG: outline every region polygon (all oblasts + all raions) so we can see
-                // exactly what boundary data is available. Thin distinct strokes, drawn under the
-                // alert fills/labels. Remove once coverage is verified.
-                val debugStroke = Color.argb(120, 180, 180, 200)
-                for (stem in CompactOblastBoundaries.allStems) {
-                    val ring = CompactOblastBoundaries.get(stem) ?: continue
-                    if (ring.pointCount < 3) continue
-                    mapView.overlays.add(Polyline(mapView).apply {
-                        setPoints(ring.toPoints().map { GeoPoint(it.lat, it.lon) })
-                        color = debugStroke
-                        width = 2f
-                    })
-                }
-                for ((_, ring) in CompactRaionBoundaries.all) {
-                    if (ring.pointCount < 3) continue
-                    mapView.overlays.add(Polyline(mapView).apply {
-                        setPoints(ring.toPoints().map { GeoPoint(it.lat, it.lon) })
-                        color = debugStroke
-                        width = 1.5f
-                    })
+                // Oblast + raion boundary outlines — controlled by the "Show borders" toggle.
+                if (uiState.showBorders) {
+                    val borderStroke = Color.argb(120, 180, 180, 200)
+                    for (stem in CompactOblastBoundaries.allStems) {
+                        val ring = CompactOblastBoundaries.get(stem) ?: continue
+                        if (ring.pointCount < 3) continue
+                        mapView.overlays.add(Polyline(mapView).apply {
+                            setPoints(ring.toPoints().map { GeoPoint(it.lat, it.lon) })
+                            color = borderStroke
+                            width = 2f
+                        })
+                    }
+                    for ((_, ring) in CompactRaionBoundaries.all) {
+                        if (ring.pointCount < 3) continue
+                        mapView.overlays.add(Polyline(mapView).apply {
+                            setPoints(ring.toPoints().map { GeoPoint(it.lat, it.lon) })
+                            color = borderStroke
+                            width = 1.5f
+                        })
+                    }
                 }
 
                 // City labels (English names on top of label-free tiles). Region-precise red:
