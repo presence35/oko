@@ -6,8 +6,10 @@ import android.content.res.Configuration
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -234,6 +236,11 @@ class MainActivity : ComponentActivity() {
         if (requestCode == REQUEST_LOCATION) {
             if (grantResults.isNotEmpty() && grantResults.any { it == PackageManager.PERMISSION_GRANTED }) {
                 LocationTracker.start(this)
+            } else if (!ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION)) {
+                // Denied with "Don't ask again" — the system won't show the dialog anymore; route to Settings.
+                startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+                )
             }
             requestNotificationPermission()
         }

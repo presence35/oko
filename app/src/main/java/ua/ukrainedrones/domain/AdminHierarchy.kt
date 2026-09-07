@@ -60,8 +60,8 @@ object AdminHierarchy {
     ) {
         /** Boundary polygon rings for this oblast in normalized [LatLng] order (lat, lon). */
         fun polygon(): List<List<LatLng>>? {
-            val ring = CompactOblastBoundaries.get(stem) ?: return null
-            return listOf(ring.toPoints().map { LatLng(lat = it.lat, lon = it.lon) })
+            val polygon = CompactOblastBoundaries.get(stem) ?: return null
+            return polygon.toPoints().map { ring -> ring.map { LatLng(lat = it.lat, lon = it.lon) } }
         }
 
         /** All raions belonging to this oblast. */

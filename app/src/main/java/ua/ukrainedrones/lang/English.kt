@@ -156,7 +156,6 @@ internal val English: Strings.StringSet = Strings.StringSet(
         serviceOfflineBanner = "SERVICE OFFLINE — tap to reactivate",
         protectionReduced = "Reduced",
         sirenOverrideWarning = "Siren follows system volume — enable Sirens always sound for alarm-level volume",
-        nightModeActiveBanner = "Night zone settings active",
         bootRestartPaused = "Monitoring paused after reboot — tap to start",
     ),
     updates = Strings.Updates(

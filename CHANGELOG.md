@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Fixed "off means off" for Sources: a disabled source no longer feeds threats/alerts or triggers the fallback — turning the primary off no longer keeps red zones/sirens alive or engages the backup, and no degraded/offline alarm fires with every source switched off / Fixed "off means off" for Sources: a disabled source no longer feeds threats/alerts or triggers the fallback — turning the primary off no longer keeps red zones/sirens alive or engages the backup, and no degraded/offline alarm fires with every source switched off
+- Fixed Sources toggles: a disabled source no longer feeds threats/alerts or owns the feed — turning off the primary now clears red zones/sirens and drops the fallback instead of leaving stale data and a "Fallback active" state behind / Fixed Sources toggles: a disabled source no longer feeds threats/alerts or owns the feed — turning off the primary now clears red zones/sirens and drops the fallback instead of leaving stale data and a "Fallback active" state behind
 
 - "Show borders" now draws oblast outlines, with a nested "Regions" sub-setting that adds thinner, lighter district outlines / "Показати кордони" тепер малює контури областей, з підналаштуванням "Regions", що додає тонші контури районів
 - City labels now have a "Large" chip too, so you can hide every city label (zero labels) / Підписи міст тепер мають чіп "Large", тож можна приховати всі підписи міст
@@ -37,11 +37,11 @@
 - WorkManager watchdog restarts the monitoring service if the process kills it while the app is alive / Вартовий WorkManager перезапускає службу моніторингу, якщо процес було вбито системою, поки застосунок живий
 - Persistent "Monitoring paused after reboot" notification when auto-restart is disabled / Постійне сповіщення "Моніторинг призупинено після перезавантаження", коли автоперезапуск вимкнено
 - Amber "siren follows system volume" note in the header during a live red alert when the siren override is off / Помаранчева позначка "сирена за системною гучністю" в шапці під час активної червоної тривоги, коли примусову сирену вимкнено
-- "Night zone settings active" banner in the zones sheet when night mode overrides the day toggles / Банер "Активні нічні налаштування зон" у панелі зон, коли нічний режим перевизначає денні перемикачі
 
 - Remove Tests tab from Logs (the Test source's data is already visible on Sources) / Видалити вкладку Тести з Журналу (дані Test джерела вже видно на Sources)
-- When following GPS with no fresh fix, startup now actively requests a precise fix so the location dot appears promptly on a fresh install / When following GPS with no fresh fix, startup now actively requests a precise fix so the location dot appears promptly on a fresh install
-- Precise location refresh now falls back to approximate (network) fix when only coarse permission is granted / Precise location refresh now falls back to approximate (network) fix when only coarse permission is granted
+- When following GPS with no fresh fix, startup now seeds a fast cell-tower fix and retries a precise GPS fix, so the location dot appears promptly on a fresh install / When following GPS with no fresh fix, startup now seeds a fast cell-tower fix and retries a precise GPS fix, so the location dot appears promptly on a fresh install
+- Precise location refresh now retries GPS a few times before falling back to approximate (network) fix, and works when only coarse permission is granted / Precise location refresh now retries GPS a few times before falling back to approximate (network) fix, and works when only coarse permission is granted
+- Denying the location permission with "Don't ask again" now routes you to the app's settings screen / Denying the location permission with "Don't ask again" now routes you to the app's settings screen
 - Live received-data card below each source in Sources tab — shows current threats by type and alerts by oblast, updating in real time / Картка отриманих даних під кожним джерелом на вкладці Sources — показує поточні загрози за типами та оповіщення за областями в реальному часі
 - Fix Test source badge: WS → JSON / Виправити мітку Test джерела: WS → JSON
 - Clean up Logs header: single row with NEPTUN icon, domain, status word and counts / Очистити заголовок Журналу: один рядок з іконкою NEPTUN, доменом, статусом та лічильниками

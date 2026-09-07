@@ -114,21 +114,6 @@ fun ZonesPanel(
             }
         }
         Spacer(Modifier.height(6.dp))
-        if (nightActive && useNightZones) {
-            Surface(
-                color = Color(0xFFFFF3E0),
-                shape = RoundedCornerShape(4.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = s.nightModeActiveBanner,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFFE65100)
-                )
-            }
-            Spacer(Modifier.height(6.dp))
-        }
         ZoneGroup(
             caption = s.slowSectionLabel,
             leadingIcon = R.drawable.ic_turtle,

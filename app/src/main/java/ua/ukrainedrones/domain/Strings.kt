@@ -162,7 +162,6 @@ object Strings {
         val serviceOfflineBanner: String,
         val protectionReduced: String,
         val sirenOverrideWarning: String,
-        val nightModeActiveBanner: String,
         val bootRestartPaused: String
     )
 
@@ -811,7 +810,6 @@ val tapToCancelLabel: String,
         val serviceOfflineBanner: String get() = status.serviceOfflineBanner
         val protectionReduced: String get() = status.protectionReduced
         val sirenOverrideWarning: String get() = status.sirenOverrideWarning
-        val nightModeActiveBanner: String get() = status.nightModeActiveBanner
         val bootRestartPaused: String get() = status.bootRestartPaused
         val connDegraded: String get() = status.connDegraded
         val connDegradedBody: String get() = status.connDegradedBody

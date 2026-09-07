@@ -38,6 +38,9 @@ object LocationTracker {
     private const val UPDATE_INTERVAL_MS = 120_000L
     private const val MIN_DISTANCE_METERS = 250f
     private const val PERIODIC_GPS_INTERVAL_MS = 15 * 60 * 1000L // 15 minutes
+    private const val GPS_ATTEMPT_MS = 8_000L
+    private const val MAX_GPS_ATTEMPTS = 3
+    private const val NETWORK_FALLBACK_MS = 6_000L
     const val MAX_LOCATION_AGE_MS = 15 * 60 * 1000L // 15 minutes freshness threshold
 
     private val _location = MutableStateFlow<LatLng?>(null)
@@ -97,10 +100,11 @@ object LocationTracker {
                 started = true
             }
 
-            // No fresh fix while following GPS → kick the same precise one-shot as the manual
-            // "request fix" (GPS, network fallback) so the location dot arrives promptly on a
-            // fresh install instead of waiting on the passive cell-tower listener.
+            // No fresh fix → seed a fast cell-tower baseline (cheap, no GPS) so the dot shows as
+            // soon as the network provider is warm, and while following kick the precise GPS
+            // retry so the fix upgrades once satellites lock.
             if (!isFresh()) {
+                requestNetworkFix(app)
                 scope.launch {
                     if (UserPrefs(app).followMe().first()) forceRefresh()
                 }
@@ -124,6 +128,31 @@ object LocationTracker {
                         forceRefresh()
                     }
                 }
+            }
+        }
+    }
+
+    /** Cheap network one-shot for a fast baseline fix at start (no GPS, coarse is plenty). */
+    private fun requestNetworkFix(app: Context) {
+        val lm = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val cs = CancellationSignal()
+                lm.getCurrentLocation(
+                    LocationManager.NETWORK_PROVIDER,
+                    cs,
+                    ContextCompat.getMainExecutor(app)
+                ) { loc ->
+                    if (loc != null) recordFix(loc)
+                }
+                scope.launch {
+                    delay(NETWORK_FALLBACK_MS)
+                    cs.cancel()
+                }
+            } else {
+                lm.requestSingleUpdate(LocationManager.NETWORK_PROVIDER, object : LocationListener {
+                    override fun onLocationChanged(loc: Location) { recordFix(loc) }
+                }, Looper.getMainLooper())
             }
         }
     }
@@ -176,41 +205,45 @@ object LocationTracker {
         }
 
         if (fine) {
-            // Safety timeout for GPS (8s), falling back to network (4s)
+            // GPS gets a few patient attempts before falling back to network — a single short
+            // one-shot often misses on a cold/poor signal, but re-armed attempts lock.
             scope.launch {
-                delay(8_000L)
+                var attempt = 0
+                var signal: CancellationSignal? = null
+                while (!completed.get() && attempt < MAX_GPS_ATTEMPTS) {
+                    attempt++
+                    signal?.cancel()
+                    signal = CancellationSignal()
+                    runCatching {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            lm.getCurrentLocation(
+                                LocationManager.GPS_PROVIDER,
+                                signal,
+                                ContextCompat.getMainExecutor(ctx)
+                            ) { loc ->
+                                if (loc != null) finish(loc)
+                            }
+                        } else {
+                            lm.requestSingleUpdate(LocationManager.GPS_PROVIDER, object : LocationListener {
+                                override fun onLocationChanged(loc: Location) { finish(loc) }
+                                override fun onProviderDisabled(provider: String) { }
+                            }, Looper.getMainLooper())
+                        }
+                    }
+                    delay(GPS_ATTEMPT_MS)
+                }
+                signal?.cancel()
                 if (!completed.get()) {
                     tryNetworkFallback()
-                    delay(4_000L)
-                    finish(null)
+                    delay(NETWORK_FALLBACK_MS)
+                    if (!completed.get()) finish(null)
                 }
-            }
-
-            val requestedGps = runCatching {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    lm.getCurrentLocation(
-                        LocationManager.GPS_PROVIDER,
-                        CancellationSignal(),
-                        ContextCompat.getMainExecutor(ctx)
-                    ) { loc ->
-                        if (loc != null) finish(loc) else tryNetworkFallback()
-                    }
-                } else {
-                    lm.requestSingleUpdate(LocationManager.GPS_PROVIDER, object : LocationListener {
-                        override fun onLocationChanged(loc: Location) { finish(loc) }
-                        override fun onProviderDisabled(provider: String) { tryNetworkFallback() }
-                    }, Looper.getMainLooper())
-                }
-            }
-
-            if (requestedGps.isFailure) {
-                tryNetworkFallback()
             }
         } else {
             // Coarse-only: straight to the network one-shot, single timeout
             tryNetworkFallback()
             scope.launch {
-                delay(4_000L)
+                delay(NETWORK_FALLBACK_MS)
                 if (!completed.get()) finish(null)
             }
         }

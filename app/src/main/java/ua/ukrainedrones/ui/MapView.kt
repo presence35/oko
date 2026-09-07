@@ -1163,19 +1163,21 @@ fun NeptunMapView(
 
                 // Oblast region fill: when fillAlertRegions is on, shade alerting oblasts
                 // with a subtle red fill instead of coloring city labels red.
-                if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
+if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
                     for (stem in uiState.alertOblastTokens) {
-                        val ring = CompactOblastBoundaries.get(stem) ?: continue
-                        if (ring.pointCount < 3) continue
-                        val points = ring.toPoints().map { GeoPoint(it.lat, it.lon) }
-                        mapView.overlays.add(Polygon(mapView).apply {
+                        val polygon = CompactOblastBoundaries.get(stem) ?: continue
+                        for (ring in polygon.rings) {
+                            if (ring.pointCount < 3) continue
+                            val points = ring.toPoints().map { pt -> GeoPoint(pt.lat, pt.lon) }
+                            mapView.overlays.add(Polygon(mapView).apply {
                                 this.points = points
                                 fillColor = Color.argb(55, 255, 60, 60)
                                 strokeColor = Color.TRANSPARENT
                                 strokeWidth = 0f
-                            title = ""
-                            setInfoWindow(null)
-                        })
+                                title = ""
+                                setInfoWindow(null)
+                            })
+                        }
                     }
                 }
 
@@ -1203,13 +1205,15 @@ fun NeptunMapView(
                 if (uiState.showBorders) {
                     val oblastStroke = Color.argb(120, 180, 180, 200)
                     for (stem in CompactOblastBoundaries.allStems) {
-                        val ring = CompactOblastBoundaries.get(stem) ?: continue
-                        if (ring.pointCount < 3) continue
-                        mapView.overlays.add(Polyline(mapView).apply {
-                            setPoints(ring.toPoints().map { pt -> GeoPoint(pt.lat, pt.lon) })
-                            color = oblastStroke
-                            width = 2f
-                        })
+                        val polygon = CompactOblastBoundaries.get(stem) ?: continue
+                        for (ring in polygon.rings) {
+                            if (ring.pointCount < 3) continue
+                            mapView.overlays.add(Polyline(mapView).apply {
+                                setPoints(ring.toPoints().map { pt -> GeoPoint(pt.lat, pt.lon) })
+                                color = oblastStroke
+                                width = 2f
+                            })
+                        }
                     }
                 }
 

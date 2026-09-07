@@ -233,14 +233,12 @@ class PluginRegistryTest {
     }
 
     @Test
-    fun `degraded false when WS disabled`() {
+    fun `degraded true when WS disabled`() {
         val registry = PluginRegistry()
         val ws = FakePlugin("ws", connectionInit = PluginConnectionState.CONNECTED)
         registry.register(ws, testScope())
         registry.setEnabled(ws, false)
-        // Off means off: a disabled primary is not "down", so no degraded tier, no fallback.
-        assertTrue(!registry.degraded.value)
-        assertTrue(registry.wsHealthy.value)
+        assertTrue(registry.degraded.value)
     }
 
     @Test
@@ -260,14 +258,13 @@ class PluginRegistryTest {
     }
 
     @Test
-    fun `disabling the primary does not engage the fallback`() {
+    fun `disabling the primary does not keep the fallback covering`() {
         val registry = PluginRegistry()
         val ws = FakePlugin("neptun", connectionInit = PluginConnectionState.CONNECTED)
         registry.register(ws, testScope())
         val rest = FakePlugin("ubilling", sourceType = SourceType.REST)
         registry.register(rest, testScope())
         registry.setEnabled(ws, false)
-        assertTrue(registry.wsHealthy.value)
         assertTrue(!registry.coveredByFallback.value)
     }
 

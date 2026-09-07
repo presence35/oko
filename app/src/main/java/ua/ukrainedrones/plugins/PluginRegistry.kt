@@ -233,12 +233,8 @@ class PluginRegistry {
         _connectionState.value = active.mapNotNull { map[it.id] }
             .maxByOrNull { it.ordinal }
             ?: PluginConnectionState.DISCONNECTED
-        val wsRegistered = _plugins.value.any { it.sourceType == SourceType.WS }
-        val wsEnabled = active.any { it.sourceType == SourceType.WS }
         val wsDelivering = active.any { it.sourceType == SourceType.WS && map[it.id] == PluginConnectionState.CONNECTED }
-        // Healthy when a primary is delivering, or when it is simply switched off — off ≠ down,
-        // so disabling the primary keeps the feed calm and never engages the fallback.
-        _wsHealthy.value = wsDelivering || (wsRegistered && !wsEnabled)
+        _wsHealthy.value = wsDelivering
         _degraded.value = !_wsHealthy.value
         _degradedSince.value = when {
             _wsHealthy.value -> null
