@@ -77,6 +77,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -92,6 +93,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import android.content.res.Configuration
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -1007,42 +1009,77 @@ private fun MapScreen(
                             .padding(end = 12.dp, bottom = 4.dp)
                     )
                     if (!flourishActive) {
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 8.dp),
-                            verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            val shelterFocus = uiState.focusLocation
-                            val shelterIndex = uiState.shelterIndex
-                            if (uiState.sheltersEnabled && shelterIndex != null && shelterFocus != null &&
-                                shelterIndex.withinRegion(shelterFocus.lat, shelterFocus.lon)
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Box(modifier = Modifier.size(width = 16.dp, height = 18.dp))
-                                    ShelterCircle(
-                                        alertActive = uiState.focusOblastAlertActive,
-                                        active = showNearbyShelters,
-                                        contentDescription = s.shelterButtonLabel,
-                                        onClick = onToggleShelters,
-                                        onLongClick = onOpenShelters
-                                    )
-                                }
+                        val shelterFocus = uiState.focusLocation
+                        val shelterIndex = uiState.shelterIndex
+                        val landscape = LocalConfiguration.current.orientation ==
+                            Configuration.ORIENTATION_LANDSCAPE
+                        val shelterColumn: @Composable () -> Unit = {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(modifier = Modifier.size(width = 16.dp, height = 18.dp))
+                                ShelterCircle(
+                                    alertActive = uiState.focusOblastAlertActive,
+                                    active = showNearbyShelters,
+                                    contentDescription = s.shelterButtonLabel,
+                                    onClick = onToggleShelters,
+                                    onLongClick = onOpenShelters
+                                )
                             }
-                            ZoneButtons(
-                                redArmed = uiState.activeSlowRedArmed || uiState.activeFastRedArmed,
-                                yellowArmed = uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
-                                lang = uiState.language,
-                                notificationsDisabled = uiState.notificationsDisabledBySystem,
-                                onZoneTap = { zone ->
-                                    onShowNearbySheltersChange(false)
-                                    selectedShelter = null
-                                    zoomZone = zone
-                                    zoomTick++
-                                },
-                                onEditZones = openZonesPanel
-                            )
+                        }
+                        if (landscape) {
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                if (uiState.sheltersEnabled && shelterIndex != null && shelterFocus != null &&
+                                    shelterIndex.withinRegion(shelterFocus.lat, shelterFocus.lon)
+                                ) {
+                                    shelterColumn()
+                                }
+                                ZoneButtons(
+                                    redArmed = uiState.activeSlowRedArmed || uiState.activeFastRedArmed,
+                                    yellowArmed = uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
+                                    lang = uiState.language,
+                                    notificationsDisabled = uiState.notificationsDisabledBySystem,
+                                    vertical = true,
+                                    onZoneTap = { zone ->
+                                        onShowNearbySheltersChange(false)
+                                        selectedShelter = null
+                                        zoomZone = zone
+                                        zoomTick++
+                                    },
+                                    onEditZones = openZonesPanel
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 8.dp),
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                if (uiState.sheltersEnabled && shelterIndex != null && shelterFocus != null &&
+                                    shelterIndex.withinRegion(shelterFocus.lat, shelterFocus.lon)
+                                ) {
+                                    shelterColumn()
+                                }
+                                ZoneButtons(
+                                    redArmed = uiState.activeSlowRedArmed || uiState.activeFastRedArmed,
+                                    yellowArmed = uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
+                                    lang = uiState.language,
+                                    notificationsDisabled = uiState.notificationsDisabledBySystem,
+                                    onZoneTap = { zone ->
+                                        onShowNearbySheltersChange(false)
+                                        selectedShelter = null
+                                        zoomZone = zone
+                                        zoomTick++
+                                    },
+                                    onEditZones = openZonesPanel
+                                )
+                            }
                         }
                     }
                 }
@@ -1558,6 +1595,7 @@ internal fun ZoneButtons(
     yellowArmed: Boolean,
     lang: AppLanguage,
     notificationsDisabled: Boolean = false,
+    vertical: Boolean = false,
     onZoneTap: (ThreatZone) -> Unit,
     onEditZones: () -> Unit,
     modifier: Modifier = Modifier
@@ -1574,44 +1612,60 @@ internal fun ZoneButtons(
             AllAlertsOffWarning(label = s.notificationsDisabledLabel, onClick = onEditZones)
             Spacer(Modifier.height(6.dp))
         }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            ZoneButton(ThreatZone.INNER, redArmed, s.zoneButtonRed, onZoneTap)
-            ZoneButton(ThreatZone.OUTER, yellowArmed, s.zoneButtonYellow, onZoneTap)
-            val gearInteraction = remember { MutableInteractionSource() }
-            val gearPressed by gearInteraction.collectIsPressedAsState()
-            val gearRotation = animateFloatAsState(
-                targetValue = if (gearPressed) -15f else 0f,
-                animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
-                label = "gearRotation"
-            )
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                    .semantics { semanticsContentDescription = s.editZonesLabel }
-                    .pressTick(gearInteraction)
-                    .clickable(
-                        interactionSource = gearInteraction,
-                        indication = null,
-                        onClick = onEditZones
-                    ),
-                contentAlignment = Alignment.Center
+        if (vertical) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .graphicsLayer { rotationZ = gearRotation.value }
-                )
+                ZoneButton(ThreatZone.INNER, redArmed, s.zoneButtonRed, onZoneTap)
+                ZoneButton(ThreatZone.OUTER, yellowArmed, s.zoneButtonYellow, onZoneTap)
+                ZoneGearButton(onClick = onEditZones, label = s.editZonesLabel)
+            }
+        } else {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                ZoneButton(ThreatZone.INNER, redArmed, s.zoneButtonRed, onZoneTap)
+                ZoneButton(ThreatZone.OUTER, yellowArmed, s.zoneButtonYellow, onZoneTap)
+                ZoneGearButton(onClick = onEditZones, label = s.editZonesLabel)
             }
         }
+    }
+}
+
+@Composable
+private fun ZoneGearButton(onClick: () -> Unit, label: String) {
+    val gearInteraction = remember { MutableInteractionSource() }
+    val gearPressed by gearInteraction.collectIsPressedAsState()
+    val gearRotation = animateFloatAsState(
+        targetValue = if (gearPressed) -15f else 0f,
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+        label = "gearRotation"
+    )
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+            .semantics { semanticsContentDescription = label }
+            .pressTick(gearInteraction)
+            .clickable(
+                interactionSource = gearInteraction,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Settings,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .size(20.dp)
+                .graphicsLayer { rotationZ = gearRotation.value }
+        )
     }
 }
 

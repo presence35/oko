@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- In landscape, the zone/red & yellow alert pills, edit-zones gear and shelter button now stack vertically on the map's right edge instead of sitting bottom-center, so they stay out of the map's way on wide screens / In landscape, the zone/red & yellow alert pills, edit-zones gear and shelter button now stack vertically on the map's right edge instead of sitting bottom-center, so they stay out of the map's way on wide screens
+
 - Fixed Sources toggles: a disabled source no longer feeds threats/alerts or owns the feed — turning off the primary now clears red zones/sirens and drops the fallback instead of leaving stale data and a "Fallback active" state behind / Fixed Sources toggles: a disabled source no longer feeds threats/alerts or owns the feed — turning off the primary now clears red zones/sirens and drops the fallback instead of leaving stale data and a "Fallback active" state behind
 
 - "Show borders" now draws oblast outlines, with a nested "Regions" sub-setting that adds thinner, lighter district outlines / "Показати кордони" тепер малює контури областей, з підналаштуванням "Regions", що додає тонші контури районів

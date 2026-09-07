@@ -1,7 +1,6 @@
 package ua.ukrainedrones
 
 import ua.ukrainedrones.community.CompactOblastBoundaries
-import ua.ukrainedrones.community.CompactPolygon
 import ua.ukrainedrones.community.CompactRaionBoundaries
 import ua.ukrainedrones.engine.LatLng
 
@@ -43,9 +42,8 @@ object AdminHierarchy {
     ) {
         /** Boundary polygon rings for this raion in normalized [LatLng] order (lat, lon). */
         fun polygon(): List<List<LatLng>>? {
-            val polygon = CompactRaionBoundaries.forKey(oblastStem, key)
-                ?: fallbackRaionLookup(key)
-            return polygon?.toPoints()?.map { ring -> ring.map { LatLng(lat = it.lat, lon = it.lon) } }
+            val polygon = CompactRaionBoundaries.forKey(oblastStem, key) ?: return null
+            return polygon.toPoints().map { ring -> ring.map { LatLng(lat = it.lat, lon = it.lon) } }
         }
 
         /** All cities cataloged in this raion. */
@@ -176,19 +174,6 @@ object AdminHierarchy {
 
     /** Direct map of city name (UA) to its parent Oblast stem (e.g. "Одеса" -> "Одеськ"). */
     fun cityToOblast(cityName: String): String? = Cities.cityOblast[cityName]
-
-    /**
-     * Fallback lookup if a raion was misattributed to an adjacent function in [CompactRaionBoundaries]
-     * (e.g. Odesa raions inside _Миколаївськ).
-     */
-    private fun fallbackRaionLookup(raionKey: String): CompactPolygon? {
-        val allStems = CompactOblastBoundaries.allStems
-        for (stem in allStems) {
-            val found = CompactRaionBoundaries.forKey(stem, raionKey)
-            if (found != null) return found
-        }
-        return null
-    }
 
     private val OBLAST_NAMES: Map<String, Pair<String, String>> = mapOf(
         "Вінницьк" to ("Вінницька область" to "Vinnytska oblast"),
