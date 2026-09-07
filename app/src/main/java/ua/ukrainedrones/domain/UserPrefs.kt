@@ -92,6 +92,8 @@ class UserPrefs(private val context: Context) {
     private val bootRestartEnabledKey = booleanPreferencesKey("boot_restart_enabled")
     private val fillAlertRegionsKey = booleanPreferencesKey("fill_alert_regions")
     private val showBordersKey = booleanPreferencesKey("show_borders")
+    private val showRegionBordersKey = booleanPreferencesKey("show_region_borders")
+    private val showLargeCitiesKey = booleanPreferencesKey("show_large_cities")
 
     fun slowRedKm(): Flow<Int> =
         context.dataStore.data.map { prefs -> prefs[slowRedKmKey] ?: 20 }
@@ -447,6 +449,20 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setShowBorders(enabled: Boolean) {
         context.dataStore.edit { it[showBordersKey] = enabled }
+    }
+
+    fun showRegionBorders(): Flow<Boolean> =
+        context.dataStore.data.map { prefs -> prefs[showRegionBordersKey] ?: false }
+
+    suspend fun setShowRegionBorders(enabled: Boolean) {
+        context.dataStore.edit { it[showRegionBordersKey] = enabled }
+    }
+
+    fun showLargeCities(): Flow<Boolean> =
+        context.dataStore.data.map { prefs -> prefs[showLargeCitiesKey] ?: true }
+
+    suspend fun setShowLargeCities(show: Boolean) {
+        context.dataStore.edit { it[showLargeCitiesKey] = show }
     }
 
     fun deathAnimationEnabled(): Flow<Boolean> =

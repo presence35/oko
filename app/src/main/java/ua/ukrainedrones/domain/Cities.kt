@@ -705,14 +705,15 @@ fun resolveFocus(
 
 /** Draws city names in the current language, sized to zoom level. MAJOR labels reveal
  *  progressively by [MajorReveal]: the top-5 overview set shows from the country view, MID
- *  majors from mid-zoom, the rest up close. MEDIUM/MINOR respect the Settings toggles
- *  ([showMediumCities] / [showSmallCities], both on by default). Cities in [redCityNames]
- *  (by Ukrainian name) are drawn red — the set already respects the official-alert scope
- *  (whole oblast by default, city-level when the City scope is on). */
+ *  majors from mid-zoom, the rest up close. MAJOR/MEDIUM/MINOR respect the Settings toggles
+ *  ([showLargeCities] / [showMediumCities] / [showSmallCities], all on by default). Cities
+ *  in [redCityNames] (by Ukrainian name) are drawn red — the set already respects the
+ *  official-alert scope (whole oblast by default, city-level when the City scope is on). */
 class CityLabelOverlay(
     context: Context,
     private val lang: AppLanguage,
     private val redCityNames: Set<String> = emptySet(),
+    private val showLargeCities: Boolean = true,
     private val showMediumCities: Boolean = true,
     private val showSmallCities: Boolean = true,
     private val forceShowAllProvider: () -> Boolean = { false }
@@ -734,7 +735,9 @@ class CityLabelOverlay(
         val forceAll = forceShowAllProvider()
         for (c in Cities.ALL) {
             val minZoom = when (c.tier) {
-                CityTier.MAJOR -> if (forceAll) 4.0 else when (c.reveal) {
+                CityTier.MAJOR -> if (forceAll || !showLargeCities) {
+                    if (forceAll) 4.0 else Double.MAX_VALUE
+                } else when (c.reveal) {
                     MajorReveal.OVERVIEW -> 4.0
                     MajorReveal.MID -> 7.5
                     MajorReveal.LATE -> 9.0

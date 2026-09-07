@@ -274,6 +274,7 @@ private fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
             "card", "cards", "size", "scale", "battery", "exempt",
             "fill", "region", "regions", "oblast", "oblasts", "alert fill", "region fill",
             "border", "borders", "outline", "boundaries",
+            "region", "raion", "district", "large", "big", "city labels",
             "система", "інтерфейс", "дисплей", "мова", "українськ", "англійськ", "іконка", "іконки",
             "картка", "картки", "розмір", "масштаб", "батарея",
             "заливка", "область", "області", "заливка областей", "заливка регіонів",
@@ -392,8 +393,10 @@ fun SettingsScreen(
     showMapScale: Boolean,
     showMediumCities: Boolean,
     showSmallCities: Boolean,
+    showLargeCities: Boolean,
     fillAlertRegions: Boolean,
     showBorders: Boolean,
+    showRegionBorders: Boolean,
     sheltersEnabled: Boolean,
     periodicGps: Boolean,
     calmMessagesEnabled: Boolean,
@@ -454,8 +457,10 @@ fun SettingsScreen(
     onShowMapScaleChange: (Boolean) -> Unit,
     onShowMediumCitiesChange: (Boolean) -> Unit,
     onShowSmallCitiesChange: (Boolean) -> Unit,
+    onShowLargeCitiesChange: (Boolean) -> Unit,
     onFillAlertRegionsChange: (Boolean) -> Unit,
     onShowBordersChange: (Boolean) -> Unit,
+    onShowRegionBordersChange: (Boolean) -> Unit,
     onSheltersEnabledChange: (Boolean) -> Unit,
     onOpenShelterList: () -> Unit = {},
     onJustFunMasterChange: (Boolean) -> Unit,
@@ -1323,10 +1328,13 @@ fun SettingsScreen(
                     CityLabelTogglesRow(
                         title = s.cityLabelsTitle,
                         description = s.cityLabelsDesc,
+                        largeChecked = showLargeCities,
                         mediumChecked = showMediumCities,
                         smallChecked = showSmallCities,
+                        largeLabel = s.largeCitiesChip,
                         mediumLabel = s.mediumCitiesChip,
                         smallLabel = s.smallCitiesChip,
+                        onLargeChange = onShowLargeCitiesChange,
                         onMediumChange = onShowMediumCitiesChange,
                         onSmallChange = onShowSmallCitiesChange
                     )
@@ -1357,6 +1365,19 @@ fun SettingsScreen(
                         icon = rememberVectorPainter(Icons.Outlined.CropFree),
                         iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    AnimatedVisibility(visible = showBorders) {
+                        Box(modifier = Modifier.padding(start = 40.dp)) {
+                            AlertToggleRow(
+                                title = s.showRegionBordersTitle,
+                                description = s.showRegionBordersDesc,
+                                checked = showRegionBorders,
+                                onCheckedChange = onShowRegionBordersChange,
+                                icon = rememberVectorPainter(Icons.Outlined.CropFree),
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                iconSize = 24.dp
+                            )
+                        }
+                    }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Haptic press feedback
                     AlertToggleRow(
@@ -1996,27 +2017,28 @@ internal fun AlertToggleRow(
     }
 }
 
-/** City-labels row: title/description with two independent FilterChips (medium / small towns),
- *  each acting as its own on/off toggle. Both default on. */
+/** City-labels row: title/description with three independent FilterChips (large / medium /
+ *  small towns), each acting as its own on/off toggle. All default on. */
 @Composable
 private fun CityLabelTogglesRow(
     title: String,
     description: String,
+    largeChecked: Boolean,
     mediumChecked: Boolean,
     smallChecked: Boolean,
+    largeLabel: String,
     mediumLabel: String,
     smallLabel: String,
+    onLargeChange: (Boolean) -> Unit,
     onMediumChange: (Boolean) -> Unit,
     onSmallChange: (Boolean) -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column {
             Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(3.dp))
             Text(
@@ -2025,32 +2047,54 @@ private fun CityLabelTogglesRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        FilterChip(
-            selected = mediumChecked,
-            onClick = { onMediumChange(!mediumChecked) },
-            label = { Text(mediumLabel, style = MaterialTheme.typography.labelLarge) },
-            leadingIcon = {
-                Icon(
-                    painter = painterResource(R.drawable.ic_city),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-            },
-            colors = CityChipColors(selected = mediumChecked)
-        )
-        FilterChip(
-            selected = smallChecked,
-            onClick = { onSmallChange(!smallChecked) },
-            label = { Text(smallLabel, style = MaterialTheme.typography.labelLarge) },
-            leadingIcon = {
-                Icon(
-                    painter = painterResource(R.drawable.ic_house),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-            },
-            colors = CityChipColors(selected = smallChecked)
-        )
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = largeChecked,
+                onClick = { onLargeChange(!largeChecked) },
+                label = { Text(largeLabel, style = MaterialTheme.typography.labelLarge) },
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_city),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                colors = CityChipColors(selected = largeChecked),
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = mediumChecked,
+                onClick = { onMediumChange(!mediumChecked) },
+                label = { Text(mediumLabel, style = MaterialTheme.typography.labelLarge) },
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_city),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                colors = CityChipColors(selected = mediumChecked),
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = smallChecked,
+                onClick = { onSmallChange(!smallChecked) },
+                label = { Text(smallLabel, style = MaterialTheme.typography.labelLarge) },
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_house),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                colors = CityChipColors(selected = smallChecked),
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 

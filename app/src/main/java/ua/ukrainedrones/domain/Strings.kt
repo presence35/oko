@@ -367,10 +367,13 @@ object Strings {
         val cityLabelsDesc: String,
         val mediumCitiesChip: String,
         val smallCitiesChip: String,
+        val largeCitiesChip: String,
         val fillAlertRegionsTitle: String,
         val fillAlertRegionsDesc: String,
         val showBordersTitle: String,
         val showBordersDesc: String,
+        val showRegionBordersTitle: String,
+        val showRegionBordersDesc: String,
         val calmMessagesTitle: String,
         val calmMessagesDesc: String,
         val threatIconZoomTitle: String,
@@ -1026,10 +1029,13 @@ val tapToCancelLabel: String,
         val cityLabelsDesc: String get() = misc.cityLabelsDesc
         val mediumCitiesChip: String get() = misc.mediumCitiesChip
         val smallCitiesChip: String get() = misc.smallCitiesChip
+        val largeCitiesChip: String get() = misc.largeCitiesChip
         val fillAlertRegionsTitle: String get() = misc.fillAlertRegionsTitle
         val fillAlertRegionsDesc: String get() = misc.fillAlertRegionsDesc
         val showBordersTitle: String get() = misc.showBordersTitle
         val showBordersDesc: String get() = misc.showBordersDesc
+        val showRegionBordersTitle: String get() = misc.showRegionBordersTitle
+        val showRegionBordersDesc: String get() = misc.showRegionBordersDesc
         val calmMessagesTitle: String get() = misc.calmMessagesTitle
         val calmMessagesDesc: String get() = misc.calmMessagesDesc
         val threatIconZoomTitle: String get() = misc.threatIconZoomTitle

@@ -760,8 +760,10 @@ fun NeptunMapView(
         uiState.focusOblastAlertActive,
         uiState.showMediumCities,
         uiState.showSmallCities,
+        uiState.showLargeCities,
         uiState.fillAlertRegions,
         uiState.showBorders,
+        uiState.showRegionBorders,
         uiState.alertRaionKeys,
         showNearbyShelters,
         selectedShelter?.shelter?.id,
@@ -778,8 +780,10 @@ fun NeptunMapView(
             append('O').append(uiState.focusOblastAlertActive)
             append('M').append(uiState.showMediumCities)
             append('N').append(uiState.showSmallCities)
+            append('L').append(uiState.showLargeCities)
             append('K').append(uiState.fillAlertRegions)
             append('B').append(uiState.showBorders)
+            append('R').append(uiState.showRegionBorders)
             for (stem in uiState.alertOblastTokens) append('W').append(stem).append(';')
             for ((stem, raion) in uiState.alertRaionKeys) append('J').append(stem).append('=').append(raion).append(';')
             append('S').append(showNearbyShelters)
@@ -1195,16 +1199,31 @@ fun NeptunMapView(
                     }
                 }
 
-                // Oblast + raion boundary outlines — controlled by the "Show borders" toggle.
+                // Oblast boundary outlines — controlled by the "Show borders" toggle.
                 if (uiState.showBorders) {
-                    val borderStroke = Color.argb(120, 180, 180, 200)
+                    val oblastStroke = Color.argb(120, 180, 180, 200)
+                    for (stem in CompactOblastBoundaries.allStems) {
+                        val ring = CompactOblastBoundaries.get(stem) ?: continue
+                        if (ring.pointCount < 3) continue
+                        mapView.overlays.add(Polyline(mapView).apply {
+                            setPoints(ring.toPoints().map { pt -> GeoPoint(pt.lat, pt.lon) })
+                            color = oblastStroke
+                            width = 2f
+                        })
+                    }
+                }
+
+                // Raion (district) boundary outlines — sub-setting under "Show borders", drawn
+                // thinner and lighter than the oblast borders.
+                if (uiState.showBorders && uiState.showRegionBorders) {
+                    val raionStroke = Color.argb(70, 180, 180, 200)
                     for ((_, ring) in CompactRaionBoundaries.all) {
                         for (r in ring.rings) {
                             if (r.pointCount < 3) continue
                             mapView.overlays.add(Polyline(mapView).apply {
                                 setPoints(r.toPoints().map { pt -> GeoPoint(pt.lat, pt.lon) })
-                                color = borderStroke
-                                width = 2f
+                                color = raionStroke
+                                width = 1f
                             })
                         }
                     }
@@ -1226,7 +1245,7 @@ fun NeptunMapView(
                     CityLabelOverlay(
                         context, lang,
                         redCityNames = redLabels,
-                        uiState.showMediumCities, uiState.showSmallCities,
+                        uiState.showLargeCities, uiState.showMediumCities, uiState.showSmallCities,
                         forceShowAllProvider = { deathFx.forceShowAllCities.value }
                     )
                 )

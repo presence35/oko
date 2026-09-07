@@ -2,8 +2,10 @@
 
 ## [Unreleased]
 
-- Fixed "Always sound" alerts being silent on vibrate — the explicit vibration pattern on the notification builder was overriding the channel's USAGE_ALARM audio routing, so alarm-channel notifications lost their sound when the phone was in vibrate mode / Виправлено беззвучність сповіщень "Завжди зі звуком" у вібромі явний патерн вібрації на builder перезаписував аудіомаршрутизацію USAGE_ALARM каналу, тому сповіщення втрачали звук у вібромі
-- Added "Show borders" toggle in Display settings — draw oblast and district outlines on the map / Додано перемикач "Показати кордони" в налаштуваннях дисплею — малювати контури областей і районів на карті
+- Fixed "off means off" for Sources: a disabled source no longer feeds threats/alerts or triggers the fallback — turning the primary off no longer keeps red zones/sirens alive or engages the backup, and no degraded/offline alarm fires with every source switched off / Fixed "off means off" for Sources: a disabled source no longer feeds threats/alerts or triggers the fallback — turning the primary off no longer keeps red zones/sirens alive or engages the backup, and no degraded/offline alarm fires with every source switched off
+
+- "Show borders" now draws oblast outlines, with a nested "Regions" sub-setting that adds thinner, lighter district outlines / "Показати кордони" тепер малює контури областей, з підналаштуванням "Regions", що додає тонші контури районів
+- City labels now have a "Large" chip too, so you can hide every city label (zero labels) / Підписи міст тепер мають чіп "Large", тож можна приховати всі підписи міст
 - Fixed "Fill alerting regions" icon sizing — the Ukraine silhouette now fits its natural aspect ratio instead of being squished into a square / Виправлено розмір іконки "Заливка областей" — силует України тепер відповідає своєму співвідношенню сторін замість стискання в квадрат
 
 - Fixed the merged alert feed dropping all but one alert per oblast: the registry deduped on the parent oblast name, so a whole-oblast alert and every raion inside it collapsed into a single entry and most region fills silently vanished — dedup is now on each alert's own key / Fixed the merged alert feed dropping all but one alert per oblast: the registry deduped on the parent oblast name, so a whole-oblast alert and every raion inside it collapsed into a single entry and most region fills silently vanished — dedup is now on each alert's own key
@@ -38,7 +40,7 @@
 - "Night zone settings active" banner in the zones sheet when night mode overrides the day toggles / Банер "Активні нічні налаштування зон" у панелі зон, коли нічний режим перевизначає денні перемикачі
 
 - Remove Tests tab from Logs (the Test source's data is already visible on Sources) / Видалити вкладку Тести з Журналу (дані Test джерела вже видно на Sources)
-- Startup now actively requests a location fix when none is fresh, so the map's blue dot appears promptly on a fresh install / Startup now actively requests a location fix when none is fresh, so the map's blue dot appears promptly on a fresh install
+- When following GPS with no fresh fix, startup now actively requests a precise fix so the location dot appears promptly on a fresh install / When following GPS with no fresh fix, startup now actively requests a precise fix so the location dot appears promptly on a fresh install
 - Precise location refresh now falls back to approximate (network) fix when only coarse permission is granted / Precise location refresh now falls back to approximate (network) fix when only coarse permission is granted
 - Live received-data card below each source in Sources tab — shows current threats by type and alerts by oblast, updating in real time / Картка отриманих даних під кожним джерелом на вкладці Sources — показує поточні загрози за типами та оповіщення за областями в реальному часі
 - Fix Test source badge: WS → JSON / Виправити мітку Test джерела: WS → JSON

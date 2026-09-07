@@ -463,10 +463,6 @@ fun LogsDropDownSheet(
         }
 
         // Swipe-up drag handle to dismiss
-            }
-        }
-
-        // Swipe-up drag handle to dismiss
         val density = LocalDensity.current
         val dismissThresholdPx = with(density) { 60.dp.toPx() }
         var dragAccum by remember { mutableFloatStateOf(0f) }
@@ -1686,6 +1682,114 @@ private fun SystemCard(entry: SystemEntry, s: Strings.StringSet, lang: AppLangua
                     }
                 )
             }
+        }
+    }
+}
+
+// ── Channel Test (temporary diagnostic — easy to remove) ─────────────────────
+
+private val testChannelIds = listOf(
+    "test_alarm_vtrue", "test_alarm_vfalse",
+    "test_notif_vfalse", "test_fresh_alarm"
+)
+
+@Composable
+private fun ChannelTestContent(context: android.content.Context) {
+    var refreshKey by remember { mutableIntStateOf(0) }
+    val nm = remember { context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as NotificationManager }
+
+    @Suppress("DEPRECATION")
+    val allChannels = remember(refreshKey) {
+        nm.notificationChannels.map { ch ->
+            ch.id to buildString {
+                append("imp=${ch.importance}")
+                if (ch.sound != null) append(" sound=yes")
+                if (ch.shouldVibrate()) append(" vibrate=yes")
+                ch.audioAttributes?.usage?.let { append(" usage=$it") }
+            }
+        }.sortedBy { it.first }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Current channels", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        allChannels.forEach { (id, info) ->
+            Text("$id  —  $info", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        Spacer(Modifier.height(1.dp).fillMaxWidth().background(MaterialTheme.colorScheme.outlineVariant))
+
+        Text("Actions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+
+        Button(onClick = {
+            nm.notificationChannels.forEach { nm.deleteNotificationChannel(it.id) }
+            refreshKey++
+        }, modifier = Modifier.fillMaxWidth()) { Text("Delete all channels") }
+
+        Button(onClick = {
+            AlertNotificationManager(context).createChannels()
+            refreshKey++
+        }, modifier = Modifier.fillMaxWidth()) { Text("Recreate production channels") }
+
+        Button(onClick = {
+            testChannelIds.forEach { nm.deleteNotificationChannel(it) }
+            refreshKey++
+        }, modifier = Modifier.fillMaxWidth()) { Text("Delete test channels") }
+
+        Spacer(Modifier.height(1.dp).fillMaxWidth().background(MaterialTheme.colorScheme.outlineVariant))
+
+        Text("Sound tests (vibrate mode)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text("Post each in vibrate mode — note which produce sound.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        TestChannelButton(nm, "A: Alarm + vibrate", "test_alarm_vtrue", true, AudioAttributes.USAGE_ALARM)
+        TestChannelButton(nm, "B: Alarm, no vibrate", "test_alarm_vfalse", false, AudioAttributes.USAGE_ALARM)
+        TestChannelButton(nm, "C: Notification, no vibrate", "test_notif_vfalse", false, AudioAttributes.USAGE_NOTIFICATION)
+        TestChannelButton(nm, "D: Fresh ID, alarm + vibrate", "test_fresh_alarm", true, AudioAttributes.USAGE_ALARM)
+    }
+}
+
+@Composable
+private fun TestChannelButton(
+    nm: NotificationManager,
+    label: String,
+    channelId: String,
+    vibrate: Boolean,
+    usage: Int
+) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Button(onClick = {
+            @Suppress("DEPRECATION")
+            val ch = NotificationChannel(channelId, label, NotificationManager.IMPORTANCE_HIGH).apply {
+                enableVibration(vibrate)
+                setSound(
+                    Uri.parse("android.resource://${context.packageName}/${R.raw.air_raid_siren}"),
+                    AudioAttributes.Builder().setUsage(usage).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+                )
+            }
+            nm.createNotificationChannel(ch)
+            val notif = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.drawable.ic_trident)
+                .setContentTitle(label)
+                .setContentText("Does this make sound?")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .build()
+            @Suppress("MissingPermission")
+            NotificationManagerCompat.from(context).notify(9000 + channelId.hashCode() % 1000, notif)
+        }, modifier = Modifier.weight(1f)) {
+            Text("Post: $label", maxLines = 1)
+        }
+        IconButton(onClick = { nm.deleteNotificationChannel(channelId) }) {
+            Icon(Icons.Filled.Close, contentDescription = "Delete test channel", modifier = Modifier.size(18.dp))
         }
     }
 }

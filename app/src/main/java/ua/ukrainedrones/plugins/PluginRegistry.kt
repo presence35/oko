@@ -120,6 +120,7 @@ class PluginRegistry {
 
     fun setEnabled(plugin: ThreatSource, enabled: Boolean) {
         plugin.setEnabled(enabled)
+        remergeThreats()
         remergeAlerts()
         recheckConnection()
         _sourceEvents.tryEmit(
@@ -141,13 +142,14 @@ class PluginRegistry {
         _typeCatalog.value = merged
     }
 
+    /** Sources the user has switched on — every merge/health derivation reads this view, never
+     *  the raw registration list, so a disabled source can't feed, own, or degrade anything. */
+    private val enabledPlugins: List<ThreatSource>
+        get() = _plugins.value.filter { it.enabled.value }
+
     private fun remergeThreats() {
         _lastThreatUpdateAt.value = Monotonic.now()
-        val all = ArrayList<NormalizedThreat>()
-        for (plugin in _plugins.value) {
-            all.addAll(plugin.threats.value)
-        }
-        _allThreats.value = all
+        _allThreats.value = enabledPlugins.flatMap { it.threats.value }
     }
 
     /**
@@ -163,9 +165,9 @@ class PluginRegistry {
      * empty snapshot doesn't wipe the held last-known feed mid-takeover).
      */
     private fun remergeAlerts() {
-        val authoritative = _plugins.value.filter { it.isAuthoritativeAlertSource() }
-        val ordered = if (authoritative.isNotEmpty()) authoritative
-        else _plugins.value
+        val active = enabledPlugins
+        val authoritative = active.filter { it.isAuthoritativeAlertSource() }
+        val ordered = if (authoritative.isNotEmpty()) authoritative else active
         val owned = LinkedHashMap<String, OblastAlert>()
         var owner: String? = null
         for (plugin in ordered) {
@@ -227,31 +229,28 @@ class PluginRegistry {
     private fun recheckConnection() {
         val map = _plugins.value.associate { it.id to it.connectionState.value }
         _perSourceState.value = map
-        _connectionState.value = worstPluginState(map)
-        val wsHealthy = _plugins.value.any { it.isWsDelivering(map) }
-        _wsHealthy.value = wsHealthy
-        _degraded.value = !wsHealthy
+        val active = enabledPlugins
+        _connectionState.value = active.mapNotNull { map[it.id] }
+            .maxByOrNull { it.ordinal }
+            ?: PluginConnectionState.DISCONNECTED
+        val wsRegistered = _plugins.value.any { it.sourceType == SourceType.WS }
+        val wsEnabled = active.any { it.sourceType == SourceType.WS }
+        val wsDelivering = active.any { it.sourceType == SourceType.WS && map[it.id] == PluginConnectionState.CONNECTED }
+        // Healthy when a primary is delivering, or when it is simply switched off — off ≠ down,
+        // so disabling the primary keeps the feed calm and never engages the fallback.
+        _wsHealthy.value = wsDelivering || (wsRegistered && !wsEnabled)
+        _degraded.value = !_wsHealthy.value
         _degradedSince.value = when {
-            wsHealthy -> null
+            _wsHealthy.value -> null
             _degradedSince.value == null -> Monotonic.now()
             else -> _degradedSince.value
         }
-        _coveredByFallback.value = computeCoveredByFallback()
-    }
-
-    /** A WS source is delivering only when it is enabled AND actually connected. A disabled or
-     *  silent (DEGRADED) source is not delivering its live feed. */
-    private fun ThreatSource.isWsDelivering(map: Map<String, PluginConnectionState>): Boolean =
-        enabled.value && sourceType == SourceType.WS && map[id] == PluginConnectionState.CONNECTED
-
-    /** A fallback covers only when it has actually delivered a snapshot (engaged AND succeeded) —
-     *  a standby or failing poller is not real coverage. */
-    private fun computeCoveredByFallback(): Boolean =
-        _plugins.value.any { p ->
-            p.sourceType != SourceType.WS &&
-                p.operationalMode.value == OperationalMode.POLLING &&
-                p.connectionState.value == PluginConnectionState.CONNECTED
+        _coveredByFallback.value = active.any {
+            it.sourceType != SourceType.WS &&
+                it.operationalMode.value == OperationalMode.POLLING &&
+                map[it.id] == PluginConnectionState.CONNECTED
         }
+    }
 
     /** Offline escalation (red + offline notification): degraded past the episode grace with no
      *  fallback delivering. Consumers pass a monotonic `now` (mirror rule: derivation lives here)
@@ -268,9 +267,4 @@ class PluginRegistry {
      *  it, so its output is never gated behind another source's quiet feed. Monotonic `now`. */
     fun isThreatDataStale(now: Long): Boolean =
         now - _lastThreatUpdateAt.value >= THREAT_DATA_STALE_MS
-
-    private fun worstPluginState(map: Map<String, PluginConnectionState>): PluginConnectionState =
-        _plugins.value.maxByOrNull { map[it.id]?.ordinal ?: PluginConnectionState.DISCONNECTED.ordinal }
-            ?.let { map[it.id] }
-            ?: PluginConnectionState.DISCONNECTED
 }

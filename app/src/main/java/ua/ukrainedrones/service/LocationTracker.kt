@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -96,10 +97,13 @@ object LocationTracker {
                 started = true
             }
 
-            // No fresh fix → actively ask the network once so the first fix (and the map's blue
-            // dot) arrives promptly on a fresh install instead of waiting on the passive listener.
+            // No fresh fix while following GPS → kick the same precise one-shot as the manual
+            // "request fix" (GPS, network fallback) so the location dot arrives promptly on a
+            // fresh install instead of waiting on the passive cell-tower listener.
             if (!isFresh()) {
-                requestInitialNetworkFix(app)
+                scope.launch {
+                    if (UserPrefs(app).followMe().first()) forceRefresh()
+                }
             }
 
             // Periodic 15-min GPS sync loop when user enabled it
@@ -120,30 +124,6 @@ object LocationTracker {
                         forceRefresh()
                     }
                 }
-            }
-        }
-    }
-
-    /** One-shot active network request for the first fix at startup (coarse is plenty, no GPS wake). */
-    private fun requestInitialNetworkFix(app: Context) {
-        val l = listener ?: return
-        val lm = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val cs = CancellationSignal()
-                lm.getCurrentLocation(
-                    LocationManager.NETWORK_PROVIDER,
-                    cs,
-                    ContextCompat.getMainExecutor(app)
-                ) { loc ->
-                    if (loc != null) recordFix(loc)
-                }
-                scope.launch {
-                    delay(10_000L)
-                    cs.cancel()
-                }
-            } else {
-                lm.requestSingleUpdate(LocationManager.NETWORK_PROVIDER, l, Looper.getMainLooper())
             }
         }
     }

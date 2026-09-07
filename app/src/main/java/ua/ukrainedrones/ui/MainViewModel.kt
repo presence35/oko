@@ -132,8 +132,10 @@ data class UiState(
     val showMapScale: Boolean = true,
     val showMediumCities: Boolean = true,
     val showSmallCities: Boolean = true,
+    val showLargeCities: Boolean = true,
     val fillAlertRegions: Boolean = false,
     val showBorders: Boolean = true,
+    val showRegionBorders: Boolean = false,
     val alertOblastTokens: Set<String> = emptySet(),
     val alertRaionKeys: Set<Pair<String, String>> = emptySet(),
     val alertingOblastCount: Int = 0,
@@ -375,8 +377,10 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val showMapScale: Boolean,
         val showMediumCities: Boolean,
         val showSmallCities: Boolean,
+        val showLargeCities: Boolean,
         val fillAlertRegions: Boolean,
         val showBorders: Boolean,
+        val showRegionBorders: Boolean,
         val justFunMasterEnabled: Boolean,
         val deathAnimationEnabled: Boolean,
         val flybyAnimationEnabled: Boolean,
@@ -429,6 +433,7 @@ val fastGroupCollapsed: Boolean,
         val showMapScale: Boolean,
         val showMediumCities: Boolean,
         val showSmallCities: Boolean,
+        val showLargeCities: Boolean,
         val deathAnimationEnabled: Boolean,
         val followBullet: Boolean,
         val neutralizedTallyEnabled: Boolean,
@@ -441,7 +446,8 @@ val fastGroupCollapsed: Boolean,
         val flybyAnimationEnabled: Boolean,
         val justFunMasterEnabled: Boolean,
         val fillAlertRegions: Boolean,
-        val showBorders: Boolean
+        val showBorders: Boolean,
+        val showRegionBorders: Boolean
     )
 
     private val liveSnapshot = combine(
@@ -491,6 +497,7 @@ val fastGroupCollapsed: Boolean,
             prefs.showMapScale(),
             prefs.showMediumCities(),
             prefs.showSmallCities(),
+            prefs.showLargeCities(),
             prefs.deathAnimationEnabled(),
             prefs.followBullet(),
             prefs.neutralizedTallyEnabled(),
@@ -503,13 +510,14 @@ val fastGroupCollapsed: Boolean,
             prefs.flybyAnimationEnabled(),
             prefs.justFunMasterEnabled(),
             prefs.fillAlertRegions(),
-            prefs.showBorders()
+            prefs.showBorders(),
+            prefs.showRegionBorders()
         ) { flags: Array<Boolean> ->
             AlertConfig(
                 flags[0], flags[1], flags[2], flags[3], flags[4], flags[5],
                 flags[6], flags[7], flags[8], flags[9], flags[10], flags[11], flags[12],
                 flags[13], flags[14], flags[15], flags[16], flags[17], flags[18], flags[19],
-                flags[20], flags[21], flags[22], flags[23]
+                flags[20], flags[21], flags[22], flags[23], flags[24], flags[25]
             )
         },
         combine(
@@ -599,8 +607,10 @@ combine(
             showMapScale = b.showMapScale,
             showMediumCities = b.showMediumCities,
             showSmallCities = b.showSmallCities,
+            showLargeCities = b.showLargeCities,
             fillAlertRegions = b.fillAlertRegions,
             showBorders = b.showBorders,
+            showRegionBorders = b.showRegionBorders,
             justFunMasterEnabled = b.justFunMasterEnabled,
             deathAnimationEnabled = b.deathAnimationEnabled,
             flybyAnimationEnabled = b.flybyAnimationEnabled,
@@ -663,6 +673,7 @@ combine(
         prefs.deathAnimationEnabled().first()
         prefs.followBullet().first()
         prefs.showBorders().first()
+        prefs.showRegionBorders().first()
         prefs.bootRestartEnabled().first()
         emit(Unit)
     }.flowOn(Dispatchers.IO)
@@ -735,7 +746,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             flourish = live.flourish,
             officialAlertCityScope = prefs.officialAlertCityScope,
             fillAlertRegions = prefs.fillAlertRegions,
-            showBorders = prefs.showBorders
+showBorders = prefs.showBorders,
+            showRegionBorders = prefs.showRegionBorders
         ).copy(
             update = updateUi.update,
             needsInstallPermission = updateUi.needsInstallPermission,
@@ -782,8 +794,10 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             showMapScale = prefs.showMapScale,
             showMediumCities = prefs.showMediumCities,
             showSmallCities = prefs.showSmallCities,
+            showLargeCities = prefs.showLargeCities,
             fillAlertRegions = prefs.fillAlertRegions,
-            showBorders = prefs.showBorders,
+showBorders = prefs.showBorders,
+            showRegionBorders = prefs.showRegionBorders,
             justFunMasterEnabled = prefs.justFunMasterEnabled,
             deathAnimationEnabled = prefs.deathAnimationEnabled,
             flybyAnimationEnabled = prefs.flybyAnimationEnabled,
@@ -942,7 +956,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         flourish: FlourishShow?,
         officialAlertCityScope: Boolean,
         fillAlertRegions: Boolean,
-        showBorders: Boolean
+        showBorders: Boolean,
+        showRegionBorders: Boolean
     ): UiState {
         val params = effectiveParams
         val gpsFresh = LocationTracker.isFresh(now)
@@ -1026,7 +1041,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             flourish = flourish,
             alertActive = alertActive,
             threatDataStale = threatDataStale,
-            showBorders = showBorders
+            showBorders = showBorders,
+            showRegionBorders = showRegionBorders
         )
     }
 
@@ -1368,12 +1384,20 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setShowSmallCities(show) }
     }
 
+    fun setShowLargeCities(show: Boolean) {
+        viewModelScope.launch { prefs.setShowLargeCities(show) }
+    }
+
     fun setFillAlertRegions(enabled: Boolean) {
         viewModelScope.launch { prefs.setFillAlertRegions(enabled) }
     }
 
     fun setShowBorders(enabled: Boolean) {
         viewModelScope.launch { prefs.setShowBorders(enabled) }
+    }
+
+    fun setShowRegionBorders(enabled: Boolean) {
+        viewModelScope.launch { prefs.setShowRegionBorders(enabled) }
     }
 
     fun setFastGroupCollapsed(collapsed: Boolean) {

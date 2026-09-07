@@ -21,6 +21,7 @@ import ua.ukrainedrones.engine.PluginConnectionState
 import ua.ukrainedrones.engine.SourceType
 import ua.ukrainedrones.engine.ThreatProps
 import ua.ukrainedrones.engine.ThreatSource
+import ua.ukrainedrones.threat
 
 private class FakePlugin(
     override val id: String,
@@ -232,12 +233,42 @@ class PluginRegistryTest {
     }
 
     @Test
-    fun `degraded true when WS disabled`() {
+    fun `degraded false when WS disabled`() {
         val registry = PluginRegistry()
         val ws = FakePlugin("ws", connectionInit = PluginConnectionState.CONNECTED)
         registry.register(ws, testScope())
         registry.setEnabled(ws, false)
-        assertTrue(registry.degraded.value)
+        // Off means off: a disabled primary is not "down", so no degraded tier, no fallback.
+        assertTrue(!registry.degraded.value)
+        assertTrue(registry.wsHealthy.value)
+    }
+
+    @Test
+    fun `disabled source alerts and threats are not merged`() {
+        val registry = PluginRegistry()
+        val ws = FakePlugin(
+            "ws",
+            threatsInit = listOf(threat(id = "t1")),
+            alertsInit = listOf(OblastAlert("k1", "n1", "Odesa oblast", null))
+        )
+        registry.register(ws, testScope())
+        assertTrue(registry.allThreats.value.isNotEmpty())
+        assertTrue(registry.allAlerts.value.isNotEmpty())
+        registry.setEnabled(ws, false)
+        assertTrue(registry.allThreats.value.isEmpty())
+        assertTrue(registry.allAlerts.value.isEmpty())
+    }
+
+    @Test
+    fun `disabling the primary does not engage the fallback`() {
+        val registry = PluginRegistry()
+        val ws = FakePlugin("neptun", connectionInit = PluginConnectionState.CONNECTED)
+        registry.register(ws, testScope())
+        val rest = FakePlugin("ubilling", sourceType = SourceType.REST)
+        registry.register(rest, testScope())
+        registry.setEnabled(ws, false)
+        assertTrue(registry.wsHealthy.value)
+        assertTrue(!registry.coveredByFallback.value)
     }
 
     @Test
