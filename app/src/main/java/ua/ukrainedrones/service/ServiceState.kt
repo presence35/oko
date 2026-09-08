@@ -30,7 +30,6 @@ class ServiceState(private val context: Context) {
     private val lastUpdateCheckKey = longPreferencesKey("last_update_check")
     private val lastNotifiedUpdateCodeKey = longPreferencesKey("last_notified_update_code")
     private val lastSdkManifestHashKey = stringPreferencesKey("last_sdk_manifest_hash")
-    private val lastUbillingSchemaHashKey = stringPreferencesKey("last_ubilling_schema_hash")
     private val systemLogKey = stringPreferencesKey("system_log")
 
     fun connLog(): Flow<String> =
@@ -129,13 +128,6 @@ class ServiceState(private val context: Context) {
 
     suspend fun setLastSdkManifestHash(hash: String) {
         context.dataStore.edit { it[lastSdkManifestHashKey] = hash }
-    }
-
-    fun lastUbillingSchemaHash(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[lastUbillingSchemaHashKey] ?: "" }
-
-    suspend fun setLastUbillingSchemaHash(hash: String) {
-        context.dataStore.edit { it[lastUbillingSchemaHashKey] = hash }
     }
 
     fun systemLog(): Flow<String> =

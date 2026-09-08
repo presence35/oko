@@ -551,7 +551,8 @@ val gen = connectionGeneration.incrementAndGet()
                                     name = o.optString("name"),
                                     oblast = o.optString("oblast"),
                                     since = o.optString("since", null),
-                                    wide = wide
+                                    wide = wide,
+                                    level = o.optString("level", "red")
                                 )
                             )
                         }

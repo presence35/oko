@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Removed Ubilling fallback — JSON was serving 1–2d stale sentinel data (`1970-01-01`) while `?webalerts` HTML showed fresh raion alerts; multi-source arch kept (NEPTUN WS + Test) / Видалено резерв Ubilling — JSON віддавав застарілі дані на 1–2д (`1970-01-01`), тоді як HTML `?webalerts` показував свіжі райони; мульти-архітектуру збережено (NEPTUN WS + Test)
+
 - In landscape, the zone/red & yellow alert pills, edit-zones gear and shelter button now stack vertically on the map's right edge instead of sitting bottom-center, so they stay out of the map's way on wide screens / In landscape, the zone/red & yellow alert pills, edit-zones gear and shelter button now stack vertically on the map's right edge instead of sitting bottom-center, so they stay out of the map's way on wide screens
 
 - Fixed Sources toggles: a disabled source no longer feeds threats/alerts or owns the feed — turning off the primary now clears red zones/sirens and drops the fallback instead of leaving stale data and a "Fallback active" state behind / Fixed Sources toggles: a disabled source no longer feeds threats/alerts or owns the feed — turning off the primary now clears red zones/sirens and drops the fallback instead of leaving stale data and a "Fallback active" state behind

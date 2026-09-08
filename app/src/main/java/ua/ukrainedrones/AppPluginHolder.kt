@@ -11,7 +11,6 @@ import ua.ukrainedrones.connection.ConnectionHolder
 import ua.ukrainedrones.plugins.NeptunPlugin
 import ua.ukrainedrones.plugins.PluginRegistry
 import ua.ukrainedrones.plugins.TestPlugin
-import ua.ukrainedrones.plugins.UbillingPlugin
 
 object AppPluginHolder {
     private var _registry: PluginRegistry? = null
@@ -30,12 +29,6 @@ object AppPluginHolder {
         val client = ConnectionHolder.getClient(context)
         val neptun = NeptunPlugin(client)
         val registry = PluginRegistry().also { it.register(neptun, scope) }
-        val ubilling = UbillingPlugin(
-            context = context.applicationContext,
-            primaryHealthy = registry.wsHealthy,
-            appForeground = _appForeground
-        )
-        registry.register(ubilling, scope)
         registry.register(TestPlugin(), scope)
         _registry = registry
     }

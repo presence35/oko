@@ -433,7 +433,6 @@ internal val English: Strings.StringSet = Strings.StringSet(
         apiMalformedFrame = "Malformed frame",
         apiSdkViewManifest = "View manifest →",
         apiUnknownType = "Unknown type: %s",
-        apiUbillingSchemaChanged = "Ubilling schema changed",
         logsLegend = "Legend",
     ),
     widget = Strings.Widget(

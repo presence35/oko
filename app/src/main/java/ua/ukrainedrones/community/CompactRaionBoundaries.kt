@@ -1,2258 +1,5272 @@
 package ua.ukrainedrones.community
 
 /**
- * Post-2020 raion boundary polygons for all districts in Ukraine.
+ * Complete post-2020 raion boundary polygons for all 136 districts in Ukraine.
  *
- * Normalized strictly to [LAT, LON] order.
- * Stored as flat primitive IntArrays scaled by 1000 (~70m resolution, 3 decimal places).
+ * Normalized strictly to [LAT, LON] order, scaled integers (x1000).
  * Zero-allocation Ray-Casting point-in-polygon support via [ScaledRing].
- *
- * Multi-ring raions (exclaves) use [CompactPolygon] with separate [ScaledRing]s per part.
+ * Indexed primarily by canonical NEPTUN raion keys (e.g. izmailskyi, bilyayivskyi),
+ * with fallback support for Cyrillic names, stems, and legacy (stem, raion) lookups.
  */
 object CompactRaionBoundaries {
 
+    // Canonical raion lookup table: canonical key -> polygon getter
+    private val BY_KEY: Map<String, () -> CompactPolygon> = mapOf(
+        "kremenchutskyi" to ::_r_kremenchutskyi,
+        "poltavskyi" to ::_r_poltavskyi,
+        "myrhorodskyi" to ::_r_myrhorodskyi,
+        "lubenskyi" to ::_r_lubenskyi,
+        "berehivskyi" to ::_r_berehivskyi,
+        "volodymyr-volynskyi" to ::_r_volodymyr_volynskyi,
+        "kovelskyi" to ::_r_kovelskyi,
+        "lutskyi" to ::_r_lutskyi,
+        "kamin-kashyrskyi" to ::_r_kamin_kashyrskyi,
+        "vasylivskyi" to ::_r_vasylivskyi,
+        "berdianskyi" to ::_r_berdianskyi,
+        "melitopolskyi" to ::_r_melitopolskyi,
+        "polohivskyi" to ::_r_polohivskyi,
+        "zaporizkyi" to ::_r_zaporizkyi,
+        "zvenyhorodskyi" to ::_r_zvenyhorodskyi,
+        "umanskyi" to ::_r_umanskyi,
+        "zolotoniskyi" to ::_r_zolotoniskyi,
+        "cherkaskyi" to ::_r_cherkaskyi,
+        "nizhynskyi" to ::_r_nizhynskyi,
+        "prylutskyi" to ::_r_prylutskyi,
+        "koriukivskyi" to ::_r_koriukivskyi,
+        "novhorod-siverskyi" to ::_r_novhorod_siverskyi,
+        "chernihivskyi" to ::_r_chernihivskyi,
+        "boryspilskyi" to ::_r_boryspilskyi,
+        "bilotserkivskyi" to ::_r_bilotserkivskyi,
+        "vyshhorodskyi" to ::_r_vyshhorodskyi,
+        "obukhivskyi" to ::_r_obukhivskyi,
+        "brovarskyi" to ::_r_brovarskyi,
+        "buchanskyi" to ::_r_buchanskyi,
+        "fastivskyi" to ::_r_fastivskyi,
+        "dnistrovskyi" to ::_r_dnistrovskyi,
+        "chernivetskyi" to ::_r_chernivetskyi,
+        "vyzhnytskyi" to ::_r_vyzhnytskyi,
+        "kup'yanskyi" to ::_r_kupyanskyi,
+        "chuhuivskyi" to ::_r_chuhuivskyi,
+        "bohodukhivskyi" to ::_r_bohodukhivskyi,
+        "lozivskyi" to ::_r_lozivskyi,
+        "krasnohradskyi" to ::_r_krasnohradskyi,
+        "iziumskyi" to ::_r_iziumskyi,
+        "kharkivskyi" to ::_r_kharkivskyi,
+        "synelnykivskyi" to ::_r_synelnykivskyi,
+        "dniprovskyi" to ::_r_dniprovskyi,
+        "novomoskovskyi" to ::_r_novomoskovskyi,
+        "kryvorizkyi" to ::_r_kryvorizkyi,
+        "nikopolskyi" to ::_r_nikopolskyi,
+        "kam'yanskyi" to ::_r_kamyanskyi,
+        "pavlohradskyi" to ::_r_pavlohradskyi,
+        "beryslavskyi" to ::_r_beryslavskyi,
+        "dzhankoiskyi" to ::_r_dzhankoiskyi,
+        "mariupolskyi" to ::_r_mariupolskyi,
+        "donetskyi" to ::_r_donetskyi,
+        "kramatorskyi" to ::_r_kramatorskyi,
+        "pokrovskyi" to ::_r_pokrovskyi,
+        "volnovaskyi" to ::_r_volnovaskyi,
+        "bakhmutskyi" to ::_r_bakhmutskyi,
+        "horlivskyi" to ::_r_horlivskyi,
+        "kalmiuskyi" to ::_r_kalmiuskyi,
+        "sievierodonetskyi" to ::_r_sievierodonetskyi,
+        "luhanskyi" to ::_r_luhanskyi,
+        "starobilskyi" to ::_r_starobilskyi,
+        "svativskyi" to ::_r_svativskyi,
+        "rovenkivskyi" to ::_r_rovenkivskyi,
+        "shchastynskyi" to ::_r_shchastynskyi,
+        "dovzhanskyi" to ::_r_dovzhanskyi,
+        "alchevskyi" to ::_r_alchevskyi,
+        "zolochivskyi" to ::_r_zolochivskyi,
+        "sambirskyi" to ::_r_sambirskyi,
+        "drohobytskyi" to ::_r_drohobytskyi,
+        "lvivskyi" to ::_r_lvivskyi,
+        "stryiskyi" to ::_r_stryiskyi,
+        "chervonohradskyi" to ::_r_chervonohradskyi,
+        "yavorivskyi" to ::_r_yavorivskyi,
+        "nadvirnianskyi" to ::_r_nadvirnianskyi,
+        "kaluskyi" to ::_r_kaluskyi,
+        "ivano-frankivskyi" to ::_r_ivano_frankivskyi,
+        "verkhovynskyi" to ::_r_verkhovynskyi,
+        "uzhhorodskyi" to ::_r_uzhhorodskyi,
+        "khersonskyi" to ::_r_khersonskyi,
+        "henicheskyi" to ::_r_henicheskyi,
+        "simferopolskyi" to ::_r_simferopolskyi,
+        "feodosiiskyi" to ::_r_feodosiiskyi,
+        "perekopskyi" to ::_r_perekopskyi,
+        "bilohirskyi" to ::_r_bilohirskyi,
+        "yevpatoriiskyi" to ::_r_yevpatoriiskyi,
+        "kerchenskyi" to ::_r_kerchenskyi,
+        "skadovskyi" to ::_r_skadovskyi,
+        "kakhovskyi" to ::_r_kakhovskyi,
+        "khmelnytskyi" to ::_r_khmelnytskyi,
+        "kam'yanets-podilskyi" to ::_r_kamyanets_podilskyi,
+        "kurmanskyi" to ::_r_kurmanskyi,
+        "shepetivskyi" to ::_r_shepetivskyi,
+        "holovanivskyi" to ::_r_holovanivskyi,
+        "oleksandriiskyi" to ::_r_oleksandriiskyi,
+        "novoukrainskyi" to ::_r_novoukrainskyi,
+        "kropyvnytskyi" to ::_r_kropyvnytskyi,
+        "voznesenskyi" to ::_r_voznesenskyi,
+        "bashtanskyi" to ::_r_bashtanskyi,
+        "pervomaiskyi" to ::_r_pervomaiskyi,
+        "mykolaivskyi" to ::_r_mykolaivskyi,
+        "podilskyi" to ::_r_podilskyi,
+        "bolhradskyi" to ::_r_bolhradskyi,
+        "berezivskyi" to ::_r_berezivskyi,
+        "izmailskyi" to ::_r_izmailskyi,
+        "odeskyi" to ::_r_odeskyi,
+        "bilhorod-dnistrovskyi" to ::_r_bilhorod_dnistrovskyi,
+        "romenskyi" to ::_r_romenskyi,
+        "sumskyi" to ::_r_sumskyi,
+        "berdychivskyi" to ::_r_berdychivskyi,
+        "zhytomyrskyi" to ::_r_zhytomyrskyi,
+        "korostenskyi" to ::_r_korostenskyi,
+        "novohrad-volynskyi" to ::_r_novohrad_volynskyi,
+        "kremenetskyi" to ::_r_kremenetskyi,
+        "chortkivskyi" to ::_r_chortkivskyi,
+        "ternopilskyi" to ::_r_ternopilskyi,
+        "mohyliv-podilskyi" to ::_r_mohyliv_podilskyi,
+        "haisynskyi" to ::_r_haisynskyi,
+        "vinnytskyi" to ::_r_vinnytskyi,
+        "zhmerynskyi" to ::_r_zhmerynskyi,
+        "kosivskyi" to ::_r_kosivskyi,
+        "kolomyiskyi" to ::_r_kolomyiskyi,
+        "khustskyi" to ::_r_khustskyi,
+        "rakhivskyi" to ::_r_rakhivskyi,
+        "mukachivskyi" to ::_r_mukachivskyi,
+        "tiachivskyi" to ::_r_tiachivskyi,
+        "khmilnytskyi" to ::_r_khmilnytskyi,
+        "tulchynskyi" to ::_r_tulchynskyi,
+        "bakhchysaraiskyi" to ::_r_bakhchysaraiskyi,
+        "yaltynskyi" to ::_r_yaltynskyi,
+        "rozdilnianskyi" to ::_r_rozdilnianskyi,
+        "dubenskyi" to ::_r_dubenskyi,
+        "sarnenskyi" to ::_r_sarnenskyi,
+        "varaskyi" to ::_r_varaskyi,
+        "rivnenskyi" to ::_r_rivnenskyi,
+        "okhtyrskyi" to ::_r_okhtyrskyi,
+        "konotopskyi" to ::_r_konotopskyi,
+        "shostkynskyi" to ::_r_shostkynskyi,
+    )
+
+    // Alias table mapping Cyrillic names, full names, and transliterated variants to canonical key
+    private val ALIAS_TO_KEY: Map<String, String> = mapOf(
+        "alchevsky" to "alchevskyi",
+        "bakhchysaraisky" to "bakhchysaraiskyi",
+        "bakhmutsky" to "bakhmutskyi",
+        "bashtansky" to "bashtanskyi",
+        "berdiansky" to "berdianskyi",
+        "berdychivsky" to "berdychivskyi",
+        "berehivsky" to "berehivskyi",
+        "berezivsky" to "berezivskyi",
+        "beryslavsky" to "beryslavskyi",
+        "bilhorod-dnistrovsky" to "bilhorod-dnistrovskyi",
+        "bilohirsky" to "bilohirskyi",
+        "bilotserkivsky" to "bilotserkivskyi",
+        "bilyaivskyi" to "biliaivskyi",
+        "bilyayevskyi" to "biliaivskyi",
+        "bilyayivskyi" to "biliaivskyi",
+        "bohodukhivsky" to "bohodukhivskyi",
+        "bolhradsky" to "bolhradskyi",
+        "boryspilsky" to "boryspilskyi",
+        "brovarsky" to "brovarskyi",
+        "buchansky" to "buchanskyi",
+        "cherkasky" to "cherkaskyi",
+        "chernihivsky" to "chernihivskyi",
+        "chernivetsky" to "chernivetskyi",
+        "chervonohradsky" to "chervonohradskyi",
+        "chortkivsky" to "chortkivskyi",
+        "chuhuivsky" to "chuhuivskyi",
+        "dniprovsky" to "dniprovskyi",
+        "dnistrovsky" to "dnistrovskyi",
+        "donetsky" to "donetskyi",
+        "dovzhansky" to "dovzhanskyi",
+        "drohobytsky" to "drohobytskyi",
+        "dubensky" to "dubenskyi",
+        "dzhankoisky" to "dzhankoiskyi",
+        "fastivsky" to "fastivskyi",
+        "feodosiisky" to "feodosiiskyi",
+        "haisynsky" to "haisynskyi",
+        "henichesky" to "henicheskyi",
+        "holovanivsky" to "holovanivskyi",
+        "horlivsky" to "horlivskyi",
+        "ivano-frankivsky" to "ivano-frankivskyi",
+        "iziumsky" to "iziumskyi",
+        "izmailsky" to "izmailskyi",
+        "izmailskyi" to "izmailskyi",
+        "kakhovsky" to "kakhovskyi",
+        "kalmiusky" to "kalmiuskyi",
+        "kalusky" to "kaluskyi",
+        "kam'yanets-podilsky" to "kam'yanets-podilskyi",
+        "kam'yansky" to "kam'yanskyi",
+        "kamin-kashyrsky" to "kamin-kashyrskyi",
+        "kerchensky" to "kerchenskyi",
+        "kharkivsky" to "kharkivskyi",
+        "khersonsky" to "khersonskyi",
+        "khmelnytsky" to "khmelnytskyi",
+        "khmilnytsky" to "khmilnytskyi",
+        "khustsky" to "khustskyi",
+        "kolomyisky" to "kolomyiskyi",
+        "konotopsky" to "konotopskyi",
+        "koriukivsky" to "koriukivskyi",
+        "korostensky" to "korostenskyi",
+        "kosivsky" to "kosivskyi",
+        "kovelsky" to "kovelskyi",
+        "kramatorsky" to "kramatorskyi",
+        "krasnohradsky" to "krasnohradskyi",
+        "kremenchutsky" to "kremenchutskyi",
+        "kremenetsky" to "kremenetskyi",
+        "kropyvnytsky" to "kropyvnytskyi",
+        "kup'yansky" to "kup'yanskyi",
+        "kurmansky" to "kurmanskyi",
+        "lozivsky" to "lozivskyi",
+        "lubensky" to "lubenskyi",
+        "luhansky" to "luhanskyi",
+        "lutsky" to "lutskyi",
+        "lvivsky" to "lvivskyi",
+        "mariupolsky" to "mariupolskyi",
+        "melitopolsky" to "melitopolskyi",
+        "mohyliv-podilsky" to "mohyliv-podilskyi",
+        "mukachivsky" to "mukachivskyi",
+        "mykolaivsky" to "mykolaivskyi",
+        "myrhorodsky" to "myrhorodskyi",
+        "nadvirniansky" to "nadvirnianskyi",
+        "nikopolsky" to "nikopolskyi",
+        "nizhynsky" to "nizhynskyi",
+        "novhorod-siversky" to "novhorod-siverskyi",
+        "novohrad-volynsky" to "novohrad-volynskyi",
+        "novomoskovsky" to "novomoskovskyi",
+        "novoukrainsky" to "novoukrainskyi",
+        "obukhivsky" to "obukhivskyi",
+        "odesky" to "odeskyi",
+        "okhtyrsky" to "okhtyrskyi",
+        "oleksandriisky" to "oleksandriiskyi",
+        "pavlohradsky" to "pavlohradskyi",
+        "perekopsky" to "perekopskyi",
+        "pervomaisky" to "pervomaiskyi",
+        "podilsky" to "podilskyi",
+        "pokrovsky" to "pokrovskyi",
+        "polohivsky" to "polohivskyi",
+        "poltavsky" to "poltavskyi",
+        "prylutsky" to "prylutskyi",
+        "rakhivsky" to "rakhivskyi",
+        "rivnensky" to "rivnenskyi",
+        "romensky" to "romenskyi",
+        "rovenkivsky" to "rovenkivskyi",
+        "rozdilniansky" to "rozdilnianskyi",
+        "sambirsky" to "sambirskyi",
+        "sarnensky" to "sarnenskyi",
+        "shchastynsky" to "shchastynskyi",
+        "shepetivsky" to "shepetivskyi",
+        "shostkynsky" to "shostkynskyi",
+        "sievierodonetsky" to "sievierodonetskyi",
+        "simferopolsky" to "simferopolskyi",
+        "skadovsky" to "skadovskyi",
+        "starobilsky" to "starobilskyi",
+        "stryisky" to "stryiskyi",
+        "sumsky" to "sumskyi",
+        "svativsky" to "svativskyi",
+        "synelnykivsky" to "synelnykivskyi",
+        "ternopilsky" to "ternopilskyi",
+        "tiachivsky" to "tiachivskyi",
+        "tulchynsky" to "tulchynskyi",
+        "ubilling:алчевський" to "alchevskyi",
+        "ubilling:алчевський район" to "alchevskyi",
+        "ubilling:бахмутський" to "bakhmutskyi",
+        "ubilling:бахмутський район" to "bakhmutskyi",
+        "ubilling:бахчисарайський" to "bakhchysaraiskyi",
+        "ubilling:бахчисарайський район" to "bakhchysaraiskyi",
+        "ubilling:баштанський" to "bashtanskyi",
+        "ubilling:баштанський район" to "bashtanskyi",
+        "ubilling:бердичівський" to "berdychivskyi",
+        "ubilling:бердичівський район" to "berdychivskyi",
+        "ubilling:бердянський" to "berdianskyi",
+        "ubilling:бердянський район" to "berdianskyi",
+        "ubilling:берегівський" to "berehivskyi",
+        "ubilling:берегівський район" to "berehivskyi",
+        "ubilling:березівський" to "berezivskyi",
+        "ubilling:березівський район" to "berezivskyi",
+        "ubilling:бериславський" to "beryslavskyi",
+        "ubilling:бериславський район" to "beryslavskyi",
+        "ubilling:богодухівський" to "bohodukhivskyi",
+        "ubilling:богодухівський район" to "bohodukhivskyi",
+        "ubilling:болградський" to "bolhradskyi",
+        "ubilling:болградський район" to "bolhradskyi",
+        "ubilling:бориспільський" to "boryspilskyi",
+        "ubilling:бориспільський район" to "boryspilskyi",
+        "ubilling:броварський" to "brovarskyi",
+        "ubilling:броварський район" to "brovarskyi",
+        "ubilling:бучанський" to "buchanskyi",
+        "ubilling:бучанський район" to "buchanskyi",
+        "ubilling:білгород-дністровський" to "bilhorod-dnistrovskyi",
+        "ubilling:білгород-дністровський район" to "bilhorod-dnistrovskyi",
+        "ubilling:білогірський" to "bilohirskyi",
+        "ubilling:білогірський район" to "bilohirskyi",
+        "ubilling:білоцерківський" to "bilotserkivskyi",
+        "ubilling:білоцерківський район" to "bilotserkivskyi",
+        "ubilling:вараський" to "varaskyi",
+        "ubilling:вараський район" to "varaskyi",
+        "ubilling:василівський" to "vasylivskyi",
+        "ubilling:василівський район" to "vasylivskyi",
+        "ubilling:верховинський" to "verkhovynskyi",
+        "ubilling:верховинський район" to "verkhovynskyi",
+        "ubilling:вижницький" to "vyzhnytskyi",
+        "ubilling:вижницький район" to "vyzhnytskyi",
+        "ubilling:вишгородський" to "vyshhorodskyi",
+        "ubilling:вишгородський район" to "vyshhorodskyi",
+        "ubilling:вознесенський" to "voznesenskyi",
+        "ubilling:вознесенський район" to "voznesenskyi",
+        "ubilling:волноваський" to "volnovaskyi",
+        "ubilling:волноваський район" to "volnovaskyi",
+        "ubilling:володимир-волинський" to "volodymyr-volynskyi",
+        "ubilling:володимир-волинський район" to "volodymyr-volynskyi",
+        "ubilling:вінницький" to "vinnytskyi",
+        "ubilling:вінницький район" to "vinnytskyi",
+        "ubilling:гайсинський" to "haisynskyi",
+        "ubilling:гайсинський район" to "haisynskyi",
+        "ubilling:генічеський" to "henicheskyi",
+        "ubilling:генічеський район" to "henicheskyi",
+        "ubilling:голованівський" to "holovanivskyi",
+        "ubilling:голованівський район" to "holovanivskyi",
+        "ubilling:горлівський" to "horlivskyi",
+        "ubilling:горлівський район" to "horlivskyi",
+        "ubilling:джанкойський" to "dzhankoiskyi",
+        "ubilling:джанкойський район" to "dzhankoiskyi",
+        "ubilling:дніпровський" to "dniprovskyi",
+        "ubilling:дніпровський район" to "dniprovskyi",
+        "ubilling:дністровський" to "dnistrovskyi",
+        "ubilling:дністровський район" to "dnistrovskyi",
+        "ubilling:довжанський" to "dovzhanskyi",
+        "ubilling:довжанський район" to "dovzhanskyi",
+        "ubilling:донецький" to "donetskyi",
+        "ubilling:донецький район" to "donetskyi",
+        "ubilling:дрогобицький" to "drohobytskyi",
+        "ubilling:дрогобицький район" to "drohobytskyi",
+        "ubilling:дубенський" to "dubenskyi",
+        "ubilling:дубенський район" to "dubenskyi",
+        "ubilling:житомирський" to "zhytomyrskyi",
+        "ubilling:житомирський район" to "zhytomyrskyi",
+        "ubilling:жмеринський" to "zhmerynskyi",
+        "ubilling:жмеринський район" to "zhmerynskyi",
+        "ubilling:запорізький" to "zaporizkyi",
+        "ubilling:запорізький район" to "zaporizkyi",
+        "ubilling:звенигородський" to "zvenyhorodskyi",
+        "ubilling:звенигородський район" to "zvenyhorodskyi",
+        "ubilling:золотоніський" to "zolotoniskyi",
+        "ubilling:золотоніський район" to "zolotoniskyi",
+        "ubilling:золочівський" to "zolochivskyi",
+        "ubilling:золочівський район" to "zolochivskyi",
+        "ubilling:калуський" to "kaluskyi",
+        "ubilling:калуський район" to "kaluskyi",
+        "ubilling:кальміуський" to "kalmiuskyi",
+        "ubilling:кальміуський район" to "kalmiuskyi",
+        "ubilling:кам'янець-подільський" to "kam'yanets-podilskyi",
+        "ubilling:кам'янець-подільський район" to "kam'yanets-podilskyi",
+        "ubilling:кам'янський" to "kam'yanskyi",
+        "ubilling:кам'янський район" to "kam'yanskyi",
+        "ubilling:камінь-каширський" to "kamin-kashyrskyi",
+        "ubilling:камінь-каширський район" to "kamin-kashyrskyi",
+        "ubilling:каховський" to "kakhovskyi",
+        "ubilling:каховський район" to "kakhovskyi",
+        "ubilling:керченський" to "kerchenskyi",
+        "ubilling:керченський район" to "kerchenskyi",
+        "ubilling:ковельський" to "kovelskyi",
+        "ubilling:ковельський район" to "kovelskyi",
+        "ubilling:коломийський" to "kolomyiskyi",
+        "ubilling:коломийський район" to "kolomyiskyi",
+        "ubilling:конотопський" to "konotopskyi",
+        "ubilling:конотопський район" to "konotopskyi",
+        "ubilling:коростенський" to "korostenskyi",
+        "ubilling:коростенський район" to "korostenskyi",
+        "ubilling:корюківський" to "koriukivskyi",
+        "ubilling:корюківський район" to "koriukivskyi",
+        "ubilling:косівський" to "kosivskyi",
+        "ubilling:косівський район" to "kosivskyi",
+        "ubilling:краматорський" to "kramatorskyi",
+        "ubilling:краматорський район" to "kramatorskyi",
+        "ubilling:красноградський" to "krasnohradskyi",
+        "ubilling:красноградський район" to "krasnohradskyi",
+        "ubilling:кременецький" to "kremenetskyi",
+        "ubilling:кременецький район" to "kremenetskyi",
+        "ubilling:кременчуцький" to "kremenchutskyi",
+        "ubilling:кременчуцький район" to "kremenchutskyi",
+        "ubilling:криворізький" to "kryvorizkyi",
+        "ubilling:криворізький район" to "kryvorizkyi",
+        "ubilling:кропивницький" to "kropyvnytskyi",
+        "ubilling:кропивницький район" to "kropyvnytskyi",
+        "ubilling:куп'янський" to "kup'yanskyi",
+        "ubilling:куп'янський район" to "kup'yanskyi",
+        "ubilling:курманський" to "kurmanskyi",
+        "ubilling:курманський район" to "kurmanskyi",
+        "ubilling:лозівський" to "lozivskyi",
+        "ubilling:лозівський район" to "lozivskyi",
+        "ubilling:лубенський" to "lubenskyi",
+        "ubilling:лубенський район" to "lubenskyi",
+        "ubilling:луганський" to "luhanskyi",
+        "ubilling:луганський район" to "luhanskyi",
+        "ubilling:луцький" to "lutskyi",
+        "ubilling:луцький район" to "lutskyi",
+        "ubilling:львівський" to "lvivskyi",
+        "ubilling:львівський район" to "lvivskyi",
+        "ubilling:маріупольський" to "mariupolskyi",
+        "ubilling:маріупольський район" to "mariupolskyi",
+        "ubilling:мелітопольський" to "melitopolskyi",
+        "ubilling:мелітопольський район" to "melitopolskyi",
+        "ubilling:миколаївський" to "mykolaivskyi",
+        "ubilling:миколаївський район" to "mykolaivskyi",
+        "ubilling:миргородський" to "myrhorodskyi",
+        "ubilling:миргородський район" to "myrhorodskyi",
+        "ubilling:могилів-подільський" to "mohyliv-podilskyi",
+        "ubilling:могилів-подільський район" to "mohyliv-podilskyi",
+        "ubilling:мукачівський" to "mukachivskyi",
+        "ubilling:мукачівський район" to "mukachivskyi",
+        "ubilling:надвірнянський" to "nadvirnianskyi",
+        "ubilling:надвірнянський район" to "nadvirnianskyi",
+        "ubilling:новгород-сіверський" to "novhorod-siverskyi",
+        "ubilling:новгород-сіверський район" to "novhorod-siverskyi",
+        "ubilling:новоград-волинський" to "novohrad-volynskyi",
+        "ubilling:новоград-волинський район" to "novohrad-volynskyi",
+        "ubilling:новомосковський" to "novomoskovskyi",
+        "ubilling:новомосковський район" to "novomoskovskyi",
+        "ubilling:новоукраїнський" to "novoukrainskyi",
+        "ubilling:новоукраїнський район" to "novoukrainskyi",
+        "ubilling:ніжинський" to "nizhynskyi",
+        "ubilling:ніжинський район" to "nizhynskyi",
+        "ubilling:нікопольський" to "nikopolskyi",
+        "ubilling:нікопольський район" to "nikopolskyi",
+        "ubilling:обухівський" to "obukhivskyi",
+        "ubilling:обухівський район" to "obukhivskyi",
+        "ubilling:одеський" to "odeskyi",
+        "ubilling:одеський район" to "odeskyi",
+        "ubilling:олександрійський" to "oleksandriiskyi",
+        "ubilling:олександрійський район" to "oleksandriiskyi",
+        "ubilling:охтирський" to "okhtyrskyi",
+        "ubilling:охтирський район" to "okhtyrskyi",
+        "ubilling:павлоградський" to "pavlohradskyi",
+        "ubilling:павлоградський район" to "pavlohradskyi",
+        "ubilling:первомайський" to "pervomaiskyi",
+        "ubilling:первомайський район" to "pervomaiskyi",
+        "ubilling:перекопський" to "perekopskyi",
+        "ubilling:перекопський район" to "perekopskyi",
+        "ubilling:подільський" to "podilskyi",
+        "ubilling:подільський район" to "podilskyi",
+        "ubilling:покровський" to "pokrovskyi",
+        "ubilling:покровський район" to "pokrovskyi",
+        "ubilling:пологівський" to "polohivskyi",
+        "ubilling:пологівський район" to "polohivskyi",
+        "ubilling:полтавський" to "poltavskyi",
+        "ubilling:полтавський район" to "poltavskyi",
+        "ubilling:прилуцький" to "prylutskyi",
+        "ubilling:прилуцький район" to "prylutskyi",
+        "ubilling:рахівський" to "rakhivskyi",
+        "ubilling:рахівський район" to "rakhivskyi",
+        "ubilling:ровеньківський" to "rovenkivskyi",
+        "ubilling:ровеньківський район" to "rovenkivskyi",
+        "ubilling:роздільнянський" to "rozdilnianskyi",
+        "ubilling:роздільнянський район" to "rozdilnianskyi",
+        "ubilling:роменський" to "romenskyi",
+        "ubilling:роменський район" to "romenskyi",
+        "ubilling:рівненський" to "rivnenskyi",
+        "ubilling:рівненський район" to "rivnenskyi",
+        "ubilling:самбірський" to "sambirskyi",
+        "ubilling:самбірський район" to "sambirskyi",
+        "ubilling:сарненський" to "sarnenskyi",
+        "ubilling:сарненський район" to "sarnenskyi",
+        "ubilling:сватівський" to "svativskyi",
+        "ubilling:сватівський район" to "svativskyi",
+        "ubilling:синельниківський" to "synelnykivskyi",
+        "ubilling:синельниківський район" to "synelnykivskyi",
+        "ubilling:скадовський" to "skadovskyi",
+        "ubilling:скадовський район" to "skadovskyi",
+        "ubilling:старобільський" to "starobilskyi",
+        "ubilling:старобільський район" to "starobilskyi",
+        "ubilling:стрийський" to "stryiskyi",
+        "ubilling:стрийський район" to "stryiskyi",
+        "ubilling:сумський" to "sumskyi",
+        "ubilling:сумський район" to "sumskyi",
+        "ubilling:сєвєродонецький" to "sievierodonetskyi",
+        "ubilling:сєвєродонецький район" to "sievierodonetskyi",
+        "ubilling:сімферопольський" to "simferopolskyi",
+        "ubilling:сімферопольський район" to "simferopolskyi",
+        "ubilling:тернопільський" to "ternopilskyi",
+        "ubilling:тернопільський район" to "ternopilskyi",
+        "ubilling:тульчинський" to "tulchynskyi",
+        "ubilling:тульчинський район" to "tulchynskyi",
+        "ubilling:тячівський" to "tiachivskyi",
+        "ubilling:тячівський район" to "tiachivskyi",
+        "ubilling:ужгородський" to "uzhhorodskyi",
+        "ubilling:ужгородський район" to "uzhhorodskyi",
+        "ubilling:уманський" to "umanskyi",
+        "ubilling:уманський район" to "umanskyi",
+        "ubilling:фастівський" to "fastivskyi",
+        "ubilling:фастівський район" to "fastivskyi",
+        "ubilling:феодосійський" to "feodosiiskyi",
+        "ubilling:феодосійський район" to "feodosiiskyi",
+        "ubilling:харківський" to "kharkivskyi",
+        "ubilling:харківський район" to "kharkivskyi",
+        "ubilling:херсонський" to "khersonskyi",
+        "ubilling:херсонський район" to "khersonskyi",
+        "ubilling:хмельницький" to "khmelnytskyi",
+        "ubilling:хмельницький район" to "khmelnytskyi",
+        "ubilling:хмільницький" to "khmilnytskyi",
+        "ubilling:хмільницький район" to "khmilnytskyi",
+        "ubilling:хустський" to "khustskyi",
+        "ubilling:хустський район" to "khustskyi",
+        "ubilling:червоноградський" to "chervonohradskyi",
+        "ubilling:червоноградський район" to "chervonohradskyi",
+        "ubilling:черкаський" to "cherkaskyi",
+        "ubilling:черкаський район" to "cherkaskyi",
+        "ubilling:чернівецький" to "chernivetskyi",
+        "ubilling:чернівецький район" to "chernivetskyi",
+        "ubilling:чернігівський" to "chernihivskyi",
+        "ubilling:чернігівський район" to "chernihivskyi",
+        "ubilling:чортківський" to "chortkivskyi",
+        "ubilling:чортківський район" to "chortkivskyi",
+        "ubilling:чугуївський" to "chuhuivskyi",
+        "ubilling:чугуївський район" to "chuhuivskyi",
+        "ubilling:шепетівський" to "shepetivskyi",
+        "ubilling:шепетівський район" to "shepetivskyi",
+        "ubilling:шосткинський" to "shostkynskyi",
+        "ubilling:шосткинський район" to "shostkynskyi",
+        "ubilling:щастинський" to "shchastynskyi",
+        "ubilling:щастинський район" to "shchastynskyi",
+        "ubilling:яворівський" to "yavorivskyi",
+        "ubilling:яворівський район" to "yavorivskyi",
+        "ubilling:ялтинський" to "yaltynskyi",
+        "ubilling:ялтинський район" to "yaltynskyi",
+        "ubilling:євпаторійський" to "yevpatoriiskyi",
+        "ubilling:євпаторійський район" to "yevpatoriiskyi",
+        "ubilling:івано-франківський" to "ivano-frankivskyi",
+        "ubilling:івано-франківський район" to "ivano-frankivskyi",
+        "ubilling:ізмаїльський" to "izmailskyi",
+        "ubilling:ізмаїльський район" to "izmailskyi",
+        "ubilling:ізюмський" to "iziumskyi",
+        "ubilling:ізюмський район" to "iziumskyi",
+        "umansky" to "umanskyi",
+        "uzhhorodsky" to "uzhhorodskyi",
+        "varasky" to "varaskyi",
+        "vasylivsky" to "vasylivskyi",
+        "verkhovynsky" to "verkhovynskyi",
+        "vinnytsky" to "vinnytskyi",
+        "volnovasky" to "volnovaskyi",
+        "volodymyr-volynsky" to "volodymyr-volynskyi",
+        "voznesensky" to "voznesenskyi",
+        "vyshhorodsky" to "vyshhorodskyi",
+        "vyzhnytsky" to "vyzhnytskyi",
+        "yaltynsky" to "yaltynskyi",
+        "yavorivsky" to "yavorivskyi",
+        "yevpatoriisky" to "yevpatoriiskyi",
+        "zhmerynsky" to "zhmerynskyi",
+        "zhytomyrsky" to "zhytomyrskyi",
+        "zolochivsky" to "zolochivskyi",
+        "zolotonisky" to "zolotoniskyi",
+        "zvenyhorodsky" to "zvenyhorodskyi",
+        "алчевськ" to "alchevskyi",
+        "алчевський" to "alchevskyi",
+        "алчевський район" to "alchevskyi",
+        "бахмутськ" to "bakhmutskyi",
+        "бахмутський" to "bakhmutskyi",
+        "бахмутський район" to "bakhmutskyi",
+        "бахчисарайськ" to "bakhchysaraiskyi",
+        "бахчисарайський" to "bakhchysaraiskyi",
+        "бахчисарайський район" to "bakhchysaraiskyi",
+        "баштанськ" to "bashtanskyi",
+        "баштанський" to "bashtanskyi",
+        "баштанський район" to "bashtanskyi",
+        "бердичівськ" to "berdychivskyi",
+        "бердичівський" to "berdychivskyi",
+        "бердичівський район" to "berdychivskyi",
+        "бердянськ" to "berdianskyi",
+        "бердянський" to "berdianskyi",
+        "бердянський район" to "berdianskyi",
+        "берегівськ" to "berehivskyi",
+        "берегівський" to "berehivskyi",
+        "берегівський район" to "berehivskyi",
+        "березівськ" to "berezivskyi",
+        "березівський" to "berezivskyi",
+        "березівський район" to "berezivskyi",
+        "бериславськ" to "beryslavskyi",
+        "бериславський" to "beryslavskyi",
+        "бериславський район" to "beryslavskyi",
+        "богодухівськ" to "bohodukhivskyi",
+        "богодухівський" to "bohodukhivskyi",
+        "богодухівський район" to "bohodukhivskyi",
+        "болградськ" to "bolhradskyi",
+        "болградський" to "bolhradskyi",
+        "болградський район" to "bolhradskyi",
+        "бориспільськ" to "boryspilskyi",
+        "бориспільський" to "boryspilskyi",
+        "бориспільський район" to "boryspilskyi",
+        "броварськ" to "brovarskyi",
+        "броварський" to "brovarskyi",
+        "броварський район" to "brovarskyi",
+        "бучанськ" to "buchanskyi",
+        "бучанський" to "buchanskyi",
+        "бучанський район" to "buchanskyi",
+        "білгород-дністровськ" to "bilhorod-dnistrovskyi",
+        "білгород-дністровський" to "bilhorod-dnistrovskyi",
+        "білгород-дністровський район" to "bilhorod-dnistrovskyi",
+        "білогірськ" to "bilohirskyi",
+        "білогірський" to "bilohirskyi",
+        "білогірський район" to "bilohirskyi",
+        "білоцерківськ" to "bilotserkivskyi",
+        "білоцерківський" to "bilotserkivskyi",
+        "білоцерківський район" to "bilotserkivskyi",
+        "вараськ" to "varaskyi",
+        "вараський" to "varaskyi",
+        "вараський район" to "varaskyi",
+        "василівськ" to "vasylivskyi",
+        "василівський" to "vasylivskyi",
+        "василівський район" to "vasylivskyi",
+        "верховинськ" to "verkhovynskyi",
+        "верховинський" to "verkhovynskyi",
+        "верховинський район" to "verkhovynskyi",
+        "вижницьк" to "vyzhnytskyi",
+        "вижницький" to "vyzhnytskyi",
+        "вижницький район" to "vyzhnytskyi",
+        "вишгородськ" to "vyshhorodskyi",
+        "вишгородський" to "vyshhorodskyi",
+        "вишгородський район" to "vyshhorodskyi",
+        "вознесенськ" to "voznesenskyi",
+        "вознесенський" to "voznesenskyi",
+        "вознесенський район" to "voznesenskyi",
+        "волноваськ" to "volnovaskyi",
+        "волноваський" to "volnovaskyi",
+        "волноваський район" to "volnovaskyi",
+        "володимир-волинськ" to "volodymyr-volynskyi",
+        "володимир-волинський" to "volodymyr-volynskyi",
+        "володимир-волинський район" to "volodymyr-volynskyi",
+        "вінницьк" to "vinnytskyi",
+        "вінницький" to "vinnytskyi",
+        "вінницький район" to "vinnytskyi",
+        "гайсинськ" to "haisynskyi",
+        "гайсинський" to "haisynskyi",
+        "гайсинський район" to "haisynskyi",
+        "генічеськ" to "henicheskyi",
+        "генічеський" to "henicheskyi",
+        "генічеський район" to "henicheskyi",
+        "голованівськ" to "holovanivskyi",
+        "голованівський" to "holovanivskyi",
+        "голованівський район" to "holovanivskyi",
+        "горлівськ" to "horlivskyi",
+        "горлівський" to "horlivskyi",
+        "горлівський район" to "horlivskyi",
+        "джанкойськ" to "dzhankoiskyi",
+        "джанкойський" to "dzhankoiskyi",
+        "джанкойський район" to "dzhankoiskyi",
+        "дніпровськ" to "dniprovskyi",
+        "дніпровський" to "dniprovskyi",
+        "дніпровський район" to "dniprovskyi",
+        "дністровськ" to "dnistrovskyi",
+        "дністровський" to "dnistrovskyi",
+        "дністровський район" to "dnistrovskyi",
+        "довжанськ" to "dovzhanskyi",
+        "довжанський" to "dovzhanskyi",
+        "довжанський район" to "dovzhanskyi",
+        "донецьк" to "donetskyi",
+        "донецький" to "donetskyi",
+        "донецький район" to "donetskyi",
+        "дрогобицьк" to "drohobytskyi",
+        "дрогобицький" to "drohobytskyi",
+        "дрогобицький район" to "drohobytskyi",
+        "дубенськ" to "dubenskyi",
+        "дубенський" to "dubenskyi",
+        "дубенський район" to "dubenskyi",
+        "житомирськ" to "zhytomyrskyi",
+        "житомирський" to "zhytomyrskyi",
+        "житомирський район" to "zhytomyrskyi",
+        "жмеринськ" to "zhmerynskyi",
+        "жмеринський" to "zhmerynskyi",
+        "жмеринський район" to "zhmerynskyi",
+        "запорізьк" to "zaporizkyi",
+        "запорізький" to "zaporizkyi",
+        "запорізький район" to "zaporizkyi",
+        "звенигородськ" to "zvenyhorodskyi",
+        "звенигородський" to "zvenyhorodskyi",
+        "звенигородський район" to "zvenyhorodskyi",
+        "золотоніськ" to "zolotoniskyi",
+        "золотоніський" to "zolotoniskyi",
+        "золотоніський район" to "zolotoniskyi",
+        "золочівськ" to "zolochivskyi",
+        "золочівський" to "zolochivskyi",
+        "золочівський район" to "zolochivskyi",
+        "калуськ" to "kaluskyi",
+        "калуський" to "kaluskyi",
+        "калуський район" to "kaluskyi",
+        "кальміуськ" to "kalmiuskyi",
+        "кальміуський" to "kalmiuskyi",
+        "кальміуський район" to "kalmiuskyi",
+        "кам'янець-подільськ" to "kam'yanets-podilskyi",
+        "кам'янець-подільський" to "kam'yanets-podilskyi",
+        "кам'янець-подільський район" to "kam'yanets-podilskyi",
+        "кам'янськ" to "kam'yanskyi",
+        "кам'янський" to "kam'yanskyi",
+        "кам'янський район" to "kam'yanskyi",
+        "камінь-каширськ" to "kamin-kashyrskyi",
+        "камінь-каширський" to "kamin-kashyrskyi",
+        "камінь-каширський район" to "kamin-kashyrskyi",
+        "каховськ" to "kakhovskyi",
+        "каховський" to "kakhovskyi",
+        "каховський район" to "kakhovskyi",
+        "керченськ" to "kerchenskyi",
+        "керченський" to "kerchenskyi",
+        "керченський район" to "kerchenskyi",
+        "ковельськ" to "kovelskyi",
+        "ковельський" to "kovelskyi",
+        "ковельський район" to "kovelskyi",
+        "коломийськ" to "kolomyiskyi",
+        "коломийський" to "kolomyiskyi",
+        "коломийський район" to "kolomyiskyi",
+        "конотопськ" to "konotopskyi",
+        "конотопський" to "konotopskyi",
+        "конотопський район" to "konotopskyi",
+        "коростенськ" to "korostenskyi",
+        "коростенський" to "korostenskyi",
+        "коростенський район" to "korostenskyi",
+        "корюківськ" to "koriukivskyi",
+        "корюківський" to "koriukivskyi",
+        "корюківський район" to "koriukivskyi",
+        "косівськ" to "kosivskyi",
+        "косівський" to "kosivskyi",
+        "косівський район" to "kosivskyi",
+        "краматорськ" to "kramatorskyi",
+        "краматорський" to "kramatorskyi",
+        "краматорський район" to "kramatorskyi",
+        "красноградськ" to "krasnohradskyi",
+        "красноградський" to "krasnohradskyi",
+        "красноградський район" to "krasnohradskyi",
+        "кременецьк" to "kremenetskyi",
+        "кременецький" to "kremenetskyi",
+        "кременецький район" to "kremenetskyi",
+        "кременчуцьк" to "kremenchutskyi",
+        "кременчуцький" to "kremenchutskyi",
+        "кременчуцький район" to "kremenchutskyi",
+        "криворізьк" to "kryvorizkyi",
+        "криворізький" to "kryvorizkyi",
+        "криворізький район" to "kryvorizkyi",
+        "кропивницьк" to "kropyvnytskyi",
+        "кропивницький" to "kropyvnytskyi",
+        "кропивницький район" to "kropyvnytskyi",
+        "куп'янськ" to "kup'yanskyi",
+        "куп'янський" to "kup'yanskyi",
+        "куп'янський район" to "kup'yanskyi",
+        "курманськ" to "kurmanskyi",
+        "курманський" to "kurmanskyi",
+        "курманський район" to "kurmanskyi",
+        "лозівськ" to "lozivskyi",
+        "лозівський" to "lozivskyi",
+        "лозівський район" to "lozivskyi",
+        "лубенськ" to "lubenskyi",
+        "лубенський" to "lubenskyi",
+        "лубенський район" to "lubenskyi",
+        "луганськ" to "luhanskyi",
+        "луганський" to "luhanskyi",
+        "луганський район" to "luhanskyi",
+        "луцьк" to "lutskyi",
+        "луцький" to "lutskyi",
+        "луцький район" to "lutskyi",
+        "львівськ" to "lvivskyi",
+        "львівський" to "lvivskyi",
+        "львівський район" to "lvivskyi",
+        "маріупольськ" to "mariupolskyi",
+        "маріупольський" to "mariupolskyi",
+        "маріупольський район" to "mariupolskyi",
+        "мелітопольськ" to "melitopolskyi",
+        "мелітопольський" to "melitopolskyi",
+        "мелітопольський район" to "melitopolskyi",
+        "миколаївськ" to "mykolaivskyi",
+        "миколаївський" to "mykolaivskyi",
+        "миколаївський район" to "mykolaivskyi",
+        "миргородськ" to "myrhorodskyi",
+        "миргородський" to "myrhorodskyi",
+        "миргородський район" to "myrhorodskyi",
+        "могилів-подільськ" to "mohyliv-podilskyi",
+        "могилів-подільський" to "mohyliv-podilskyi",
+        "могилів-подільський район" to "mohyliv-podilskyi",
+        "мукачівськ" to "mukachivskyi",
+        "мукачівський" to "mukachivskyi",
+        "мукачівський район" to "mukachivskyi",
+        "надвірнянськ" to "nadvirnianskyi",
+        "надвірнянський" to "nadvirnianskyi",
+        "надвірнянський район" to "nadvirnianskyi",
+        "новгород-сіверськ" to "novhorod-siverskyi",
+        "новгород-сіверський" to "novhorod-siverskyi",
+        "новгород-сіверський район" to "novhorod-siverskyi",
+        "новоград-волинськ" to "novohrad-volynskyi",
+        "новоград-волинський" to "novohrad-volynskyi",
+        "новоград-волинський район" to "novohrad-volynskyi",
+        "новомосковськ" to "novomoskovskyi",
+        "новомосковський" to "novomoskovskyi",
+        "новомосковський район" to "novomoskovskyi",
+        "новоукраїнськ" to "novoukrainskyi",
+        "новоукраїнський" to "novoukrainskyi",
+        "новоукраїнський район" to "novoukrainskyi",
+        "ніжинськ" to "nizhynskyi",
+        "ніжинський" to "nizhynskyi",
+        "ніжинський район" to "nizhynskyi",
+        "нікопольськ" to "nikopolskyi",
+        "нікопольський" to "nikopolskyi",
+        "нікопольський район" to "nikopolskyi",
+        "обухівськ" to "obukhivskyi",
+        "обухівський" to "obukhivskyi",
+        "обухівський район" to "obukhivskyi",
+        "одеськ" to "odeskyi",
+        "одеський" to "odeskyi",
+        "одеський район" to "odeskyi",
+        "олександрійськ" to "oleksandriiskyi",
+        "олександрійський" to "oleksandriiskyi",
+        "олександрійський район" to "oleksandriiskyi",
+        "охтирськ" to "okhtyrskyi",
+        "охтирський" to "okhtyrskyi",
+        "охтирський район" to "okhtyrskyi",
+        "павлоградськ" to "pavlohradskyi",
+        "павлоградський" to "pavlohradskyi",
+        "павлоградський район" to "pavlohradskyi",
+        "первомайськ" to "pervomaiskyi",
+        "первомайський" to "pervomaiskyi",
+        "первомайський район" to "pervomaiskyi",
+        "перекопськ" to "perekopskyi",
+        "перекопський" to "perekopskyi",
+        "перекопський район" to "perekopskyi",
+        "подільськ" to "podilskyi",
+        "подільський" to "podilskyi",
+        "подільський район" to "podilskyi",
+        "покровськ" to "pokrovskyi",
+        "покровський" to "pokrovskyi",
+        "покровський район" to "pokrovskyi",
+        "пологівськ" to "polohivskyi",
+        "пологівський" to "polohivskyi",
+        "пологівський район" to "polohivskyi",
+        "полтавськ" to "poltavskyi",
+        "полтавський" to "poltavskyi",
+        "полтавський район" to "poltavskyi",
+        "прилуцьк" to "prylutskyi",
+        "прилуцький" to "prylutskyi",
+        "прилуцький район" to "prylutskyi",
+        "рахівськ" to "rakhivskyi",
+        "рахівський" to "rakhivskyi",
+        "рахівський район" to "rakhivskyi",
+        "ровеньківськ" to "rovenkivskyi",
+        "ровеньківський" to "rovenkivskyi",
+        "ровеньківський район" to "rovenkivskyi",
+        "роздільнянськ" to "rozdilnianskyi",
+        "роздільнянський" to "rozdilnianskyi",
+        "роздільнянський район" to "rozdilnianskyi",
+        "роменськ" to "romenskyi",
+        "роменський" to "romenskyi",
+        "роменський район" to "romenskyi",
+        "рівненськ" to "rivnenskyi",
+        "рівненський" to "rivnenskyi",
+        "рівненський район" to "rivnenskyi",
+        "самбірськ" to "sambirskyi",
+        "самбірський" to "sambirskyi",
+        "самбірський район" to "sambirskyi",
+        "сарненськ" to "sarnenskyi",
+        "сарненський" to "sarnenskyi",
+        "сарненський район" to "sarnenskyi",
+        "сватівськ" to "svativskyi",
+        "сватівський" to "svativskyi",
+        "сватівський район" to "svativskyi",
+        "синельниківськ" to "synelnykivskyi",
+        "синельниківський" to "synelnykivskyi",
+        "синельниківський район" to "synelnykivskyi",
+        "скадовськ" to "skadovskyi",
+        "скадовський" to "skadovskyi",
+        "скадовський район" to "skadovskyi",
+        "старобільськ" to "starobilskyi",
+        "старобільський" to "starobilskyi",
+        "старобільський район" to "starobilskyi",
+        "стрийськ" to "stryiskyi",
+        "стрийський" to "stryiskyi",
+        "стрийський район" to "stryiskyi",
+        "сумськ" to "sumskyi",
+        "сумський" to "sumskyi",
+        "сумський район" to "sumskyi",
+        "сєвєродонецьк" to "sievierodonetskyi",
+        "сєвєродонецький" to "sievierodonetskyi",
+        "сєвєродонецький район" to "sievierodonetskyi",
+        "сімферопольськ" to "simferopolskyi",
+        "сімферопольський" to "simferopolskyi",
+        "сімферопольський район" to "simferopolskyi",
+        "тернопільськ" to "ternopilskyi",
+        "тернопільський" to "ternopilskyi",
+        "тернопільський район" to "ternopilskyi",
+        "тульчинськ" to "tulchynskyi",
+        "тульчинський" to "tulchynskyi",
+        "тульчинський район" to "tulchynskyi",
+        "тячівськ" to "tiachivskyi",
+        "тячівський" to "tiachivskyi",
+        "тячівський район" to "tiachivskyi",
+        "ужгородськ" to "uzhhorodskyi",
+        "ужгородський" to "uzhhorodskyi",
+        "ужгородський район" to "uzhhorodskyi",
+        "уманськ" to "umanskyi",
+        "уманський" to "umanskyi",
+        "уманський район" to "umanskyi",
+        "фастівськ" to "fastivskyi",
+        "фастівський" to "fastivskyi",
+        "фастівський район" to "fastivskyi",
+        "феодосійськ" to "feodosiiskyi",
+        "феодосійський" to "feodosiiskyi",
+        "феодосійський район" to "feodosiiskyi",
+        "харківськ" to "kharkivskyi",
+        "харківський" to "kharkivskyi",
+        "харківський район" to "kharkivskyi",
+        "херсонськ" to "khersonskyi",
+        "херсонський" to "khersonskyi",
+        "херсонський район" to "khersonskyi",
+        "хмельницьк" to "khmelnytskyi",
+        "хмельницький" to "khmelnytskyi",
+        "хмельницький район" to "khmelnytskyi",
+        "хмільницьк" to "khmilnytskyi",
+        "хмільницький" to "khmilnytskyi",
+        "хмільницький район" to "khmilnytskyi",
+        "хустськ" to "khustskyi",
+        "хустський" to "khustskyi",
+        "хустський район" to "khustskyi",
+        "червоноградськ" to "chervonohradskyi",
+        "червоноградський" to "chervonohradskyi",
+        "червоноградський район" to "chervonohradskyi",
+        "черкаськ" to "cherkaskyi",
+        "черкаський" to "cherkaskyi",
+        "черкаський район" to "cherkaskyi",
+        "чернівецьк" to "chernivetskyi",
+        "чернівецький" to "chernivetskyi",
+        "чернівецький район" to "chernivetskyi",
+        "чернігівськ" to "chernihivskyi",
+        "чернігівський" to "chernihivskyi",
+        "чернігівський район" to "chernihivskyi",
+        "чортківськ" to "chortkivskyi",
+        "чортківський" to "chortkivskyi",
+        "чортківський район" to "chortkivskyi",
+        "чугуївськ" to "chuhuivskyi",
+        "чугуївський" to "chuhuivskyi",
+        "чугуївський район" to "chuhuivskyi",
+        "шепетівськ" to "shepetivskyi",
+        "шепетівський" to "shepetivskyi",
+        "шепетівський район" to "shepetivskyi",
+        "шосткинськ" to "shostkynskyi",
+        "шосткинський" to "shostkynskyi",
+        "шосткинський район" to "shostkynskyi",
+        "щастинськ" to "shchastynskyi",
+        "щастинський" to "shchastynskyi",
+        "щастинський район" to "shchastynskyi",
+        "яворівськ" to "yavorivskyi",
+        "яворівський" to "yavorivskyi",
+        "яворівський район" to "yavorivskyi",
+        "ялтинськ" to "yaltynskyi",
+        "ялтинський" to "yaltynskyi",
+        "ялтинський район" to "yaltynskyi",
+        "євпаторійськ" to "yevpatoriiskyi",
+        "євпаторійський" to "yevpatoriiskyi",
+        "євпаторійський район" to "yevpatoriiskyi",
+        "івано-франківськ" to "ivano-frankivskyi",
+        "івано-франківський" to "ivano-frankivskyi",
+        "івано-франківський район" to "ivano-frankivskyi",
+        "ізмаїльськ" to "izmailskyi",
+        "ізмаїльський" to "izmailskyi",
+        "ізмаїльський район" to "izmailskyi",
+        "ізюмськ" to "iziumskyi",
+        "ізюмський" to "iziumskyi",
+        "ізюмський район" to "iziumskyi",
+    )
+
+    /** Cached catalog of all raion polygons indexed by canonical key. */
+    val all: Map<String, CompactPolygon> by lazy {
+        BY_KEY.mapValues { it.value() }
+    }
+
     /**
-     * Resolves the boundary polygon for a raion.
-     * @param oblastStem The parent oblast stem (e.g. "Одеськ", "Київськ").
-     * @param raionName Adjectival raion name (e.g. "нікопольський"), case-insensitive.
+     * Primary lookup: resolves a raion boundary by its key (e.g. "izmailskyi", "ізмаїльський").
+     */
+    fun get(key: String): CompactPolygon? {
+        val needle = key.trim().lowercase()
+        if (needle.isEmpty()) return null
+        val direct = BY_KEY[needle]
+        if (direct != null) return direct()
+        val mapped = ALIAS_TO_KEY[needle]
+        if (mapped != null) return BY_KEY[mapped]?.invoke()
+        // Suffix/prefix fallback
+        val clean = needle.substringBefore(" район").substringBefore(" р-н").trim()
+        val mappedClean = ALIAS_TO_KEY[clean]
+        if (mappedClean != null) return BY_KEY[mappedClean]?.invoke()
+        return null
+    }
+
+    /**
+     * Backwards-compatible lookup by parent oblast stem and raion name.
      */
     fun forKey(oblastStem: String, raionName: String): CompactPolygon? {
-        val stem = oblastStem.trim().lowercase()
-        val raion = raionName.trim().lowercase()
-        val fn = STEM_DISPATCH[stem] ?: STEM_DISPATCH.entries.firstOrNull { stem.contains(it.key) }?.value
-        return fn?.invoke()?.get(raion)
+        return get(raionName) ?: get(oblastStem)
     }
 
-    /**
-     * Full catalog of all raion boundaries indexed by Pair(oblastStem, raionName).
-     * Useful for map layers that shade alerting raions.
-     */
-    val all: Map<Pair<String, String>, CompactPolygon> by lazy {
-        val map = HashMap<Pair<String, String>, CompactPolygon>(160)
-        for ((stem, fn) in STEM_MAP_CANONICAL) {
-            for ((raion, polygon) in fn()) {
-                map[Pair(stem, raion)] = polygon
-            }
-        }
-        map
-    }
-
-    private val STEM_DISPATCH: Map<String, () -> Map<String, CompactPolygon>> = mapOf(
-        "івано-франківськ" to ::_Івано_Франківськ,
-        "волинськ" to ::_Волинськ,
-        "вінницьк" to ::_Вінницьк,
-        "дніпропетровськ" to ::_Дніпропетровськ,
-        "донецьк" to ::_Донецьк,
-        "житомирськ" to ::_Житомирськ,
-        "закарпатськ" to ::_Закарпатськ,
-        "запорізьк" to ::_Запорізьк,
-        "київськ" to ::_Київськ,
-        "крим" to ::_Крим,
-        "кіровоградськ" to ::_Кіровоградськ,
-        "луганськ" to ::_Луганськ,
-        "львівськ" to ::_Львівськ,
-        "миколаївськ" to ::_Миколаївськ,
-        "одеськ" to ::_Одеськ,
-        "полтавськ" to ::_Полтавськ,
-        "рівненськ" to ::_Рівненськ,
-        "сумськ" to ::_Сумськ,
-        "тернопільськ" to ::_Тернопільськ,
-        "харківськ" to ::_Харківськ,
-        "херсонськ" to ::_Херсонськ,
-        "хмельницьк" to ::_Хмельницьк,
-        "черкаськ" to ::_Черкаськ,
-        "чернівецьк" to ::_Чернівецьк,
-        "чернігівськ" to ::_Чернігівськ,
+    private fun _r_kremenchutskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49235, 32886, 49233, 32929, 49245, 32972, 49238, 32985, 49228, 32988, 49216, 32983, 49204, 32992, 49198, 33021, 49186, 33032, 49185, 33057,
+            49188, 33079, 49183, 33090, 49182, 33108, 49165, 33120, 49160, 33129, 49128, 33157, 49123, 33150, 49113, 33156, 49102, 33153, 49096, 33163,
+            49098, 33184, 49088, 33197, 49082, 33190, 49074, 33204, 49077, 33223, 49085, 33227, 49079, 33242, 49085, 33244, 49146, 33244, 49164, 33236,
+            49165, 33242, 49149, 33262, 49132, 33267, 49135, 33275, 49124, 33288, 49119, 33302, 49097, 33289, 49098, 33274, 49092, 33265, 49082, 33279,
+            49084, 33289, 49079, 33308, 49066, 33299, 49054, 33314, 49027, 33332, 49010, 33300, 48992, 33304, 48961, 33326, 48957, 33314, 48949, 33320,
+            48948, 33333, 48953, 33348, 48949, 33353, 48927, 33401, 48952, 33399, 48961, 33408, 48957, 33424, 48952, 33477, 48940, 33473, 48934, 33479,
+            48915, 33475, 48916, 33484, 48926, 33498, 48931, 33537, 48913, 33547, 48912, 33572, 48919, 33567, 48917, 33589, 48938, 33611, 48943, 33599,
+            48948, 33613, 48962, 33634, 48974, 33637, 48979, 33664, 48969, 33669, 48948, 33695, 48940, 33717, 48941, 33739, 48946, 33758, 48941, 33778,
+            48938, 33808, 48931, 33835, 48914, 33862, 48903, 33892, 48880, 33927, 48880, 33931, 48920, 33989, 48933, 34012, 48946, 33999, 48957, 33978,
+            48979, 33927, 48987, 33928, 48989, 33882, 49014, 33883, 49014, 33930, 49023, 33964, 49020, 33987, 49033, 33992, 49035, 33982, 49049, 33989,
+            49052, 33974, 49083, 33987, 49075, 34048, 49105, 34053, 49112, 34057, 49113, 34088, 49163, 34099, 49165, 34089, 49177, 34094, 49185, 34044,
+            49237, 34031, 49252, 34007, 49260, 34005, 49276, 34028, 49285, 34029, 49294, 34014, 49313, 34004, 49312, 33990, 49369, 33979, 49366, 33967,
+            49371, 33927, 49365, 33914, 49377, 33892, 49383, 33900, 49398, 33900, 49402, 33893, 49406, 33902, 49408, 33886, 49400, 33881, 49396, 33887,
+            49396, 33871, 49414, 33866, 49408, 33838, 49419, 33816, 49412, 33820, 49411, 33807, 49421, 33804, 49424, 33797, 49437, 33799, 49444, 33790,
+            49452, 33798, 49462, 33796, 49462, 33809, 49476, 33805, 49473, 33786, 49475, 33772, 49481, 33772, 49491, 33753, 49489, 33743, 49501, 33727,
+            49503, 33704, 49516, 33692, 49522, 33649, 49536, 33636, 49576, 33618, 49586, 33579, 49592, 33538, 49596, 33537, 49598, 33521, 49608, 33490,
+            49613, 33495, 49615, 33461, 49625, 33440, 49636, 33445, 49644, 33408, 49657, 33382, 49649, 33366, 49654, 33363, 49648, 33349, 49649, 33321,
+            49637, 33309, 49644, 33294, 49639, 33282, 49651, 33258, 49660, 33258, 49661, 33224, 49665, 33191, 49646, 33187, 49648, 33173, 49660, 33142,
+            49673, 33155, 49680, 33139, 49692, 33150, 49701, 33130, 49696, 33118, 49715, 33060, 49728, 33046, 49731, 33051, 49754, 33019, 49749, 33012,
+            49757, 32990, 49748, 32973, 49752, 32967, 49761, 32974, 49773, 32925, 49795, 32914, 49794, 32878, 49802, 32875, 49806, 32864, 49803, 32859,
+            49798, 32860, 49794, 32837, 49784, 32834, 49786, 32825, 49785, 32819, 49782, 32816, 49776, 32816, 49770, 32806, 49762, 32817, 49757, 32814,
+            49750, 32782, 49738, 32764, 49737, 32752, 49742, 32743, 49737, 32724, 49713, 32728, 49700, 32719, 49693, 32717, 49690, 32705, 49684, 32708,
+            49680, 32700, 49673, 32684, 49664, 32687, 49663, 32683, 49658, 32691, 49655, 32703, 49650, 32705, 49635, 32704, 49631, 32713, 49619, 32715,
+            49614, 32712, 49606, 32707, 49603, 32694, 49593, 32711, 49595, 32721, 49586, 32737, 49566, 32754, 49546, 32746, 49541, 32750, 49524, 32746,
+            49499, 32709, 49500, 32690, 49499, 32678, 49488, 32670, 49459, 32667, 49449, 32673, 49438, 32652, 49431, 32660, 49427, 32679, 49410, 32682,
+            49400, 32678, 49385, 32691, 49385, 32712, 49372, 32738, 49363, 32736, 49353, 32738, 49352, 32729, 49354, 32711, 49353, 32674, 49358, 32646,
+            49376, 32603, 49382, 32562, 49381, 32546, 49392, 32527, 49404, 32521, 49409, 32510, 49396, 32496, 49375, 32488, 49365, 32477, 49357, 32477,
+            49350, 32462, 49347, 32461, 49342, 32461, 49341, 32463, 49341, 32478, 49330, 32468, 49328, 32468, 49326, 32470, 49314, 32490, 49305, 32511,
+            49302, 32528, 49292, 32552, 49283, 32563, 49275, 32598, 49257, 32606, 49259, 32637, 49249, 32651, 49248, 32666, 49254, 32683, 49257, 32712,
+            49251, 32736, 49240, 32758, 49232, 32765, 49237, 32776, 49239, 32797, 49248, 32817, 49246, 32833, 49249, 32846, 49235, 32886
+        ))
     )
 
-    private val STEM_MAP_CANONICAL: List<Pair<String, () -> Map<String, CompactPolygon>>> = listOf(
-        Pair("Івано-Франківськ", ::_Івано_Франківськ),
-        Pair("Волинськ", ::_Волинськ),
-        Pair("Вінницьк", ::_Вінницьк),
-        Pair("Дніпропетровськ", ::_Дніпропетровськ),
-        Pair("Донецьк", ::_Донецьк),
-        Pair("Житомирськ", ::_Житомирськ),
-        Pair("Закарпатськ", ::_Закарпатськ),
-        Pair("Запорізьк", ::_Запорізьк),
-        Pair("Київськ", ::_Київськ),
-        Pair("Крим", ::_Крим),
-        Pair("Кіровоградськ", ::_Кіровоградськ),
-        Pair("Луганськ", ::_Луганськ),
-        Pair("Львівськ", ::_Львівськ),
-        Pair("Миколаївськ", ::_Миколаївськ),
-        Pair("Одеськ", ::_Одеськ),
-        Pair("Полтавськ", ::_Полтавськ),
-        Pair("Рівненськ", ::_Рівненськ),
-        Pair("Сумськ", ::_Сумськ),
-        Pair("Тернопільськ", ::_Тернопільськ),
-        Pair("Харківськ", ::_Харківськ),
-        Pair("Херсонськ", ::_Херсонськ),
-        Pair("Хмельницьк", ::_Хмельницьк),
-        Pair("Черкаськ", ::_Черкаськ),
-        Pair("Чернівецьк", ::_Чернівецьк),
-        Pair("Чернігівськ", ::_Чернігівськ),
+    private fun _r_poltavskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48723, 34293, 48728, 34307, 48734, 34302, 48741, 34313, 48758, 34316, 48764, 34310, 48784, 34342, 48793, 34325, 48785, 34315, 48785, 34298,
+            48821, 34296, 48821, 34335, 48824, 34346, 48829, 34323, 48844, 34326, 48846, 34349, 48856, 34349, 48857, 34337, 48872, 34338, 48885, 34306,
+            48889, 34311, 48896, 34302, 48902, 34302, 48942, 34314, 48984, 34354, 48994, 34342, 49000, 34328, 49007, 34331, 49017, 34346, 49017, 34354,
+            49036, 34367, 49044, 34397, 49050, 34391, 49055, 34417, 49075, 34405, 49095, 34403, 49065, 34465, 49073, 34475, 49061, 34498, 49072, 34516,
+            49057, 34540, 49055, 34559, 49064, 34573, 49072, 34564, 49089, 34570, 49095, 34594, 49108, 34588, 49112, 34599, 49113, 34609, 49115, 34607,
+            49125, 34624, 49125, 34635, 49131, 34645, 49130, 34650, 49124, 34653, 49119, 34662, 49121, 34682, 49128, 34680, 49135, 34693, 49130, 34706,
+            49136, 34729, 49144, 34740, 49143, 34766, 49155, 34766, 49168, 34759, 49171, 34771, 49180, 34785, 49176, 34809, 49166, 34811, 49175, 34824,
+            49186, 34820, 49190, 34856, 49184, 34858, 49181, 34884, 49175, 34901, 49168, 34895, 49169, 34871, 49161, 34865, 49151, 34902, 49156, 34920,
+            49177, 34923, 49185, 34930, 49181, 34936, 49193, 34948, 49186, 34961, 49182, 34973, 49168, 34986, 49160, 35008, 49154, 35014, 49150, 35018,
+            49209, 34996, 49238, 34983, 49247, 34982, 49268, 34989, 49300, 35006, 49302, 35007, 49300, 35013, 49316, 35024, 49317, 35020, 49323, 35024,
+            49331, 35038, 49316, 35078, 49301, 35090, 49302, 35123, 49296, 35167, 49294, 35214, 49298, 35216, 49296, 35243, 49288, 35262, 49283, 35259,
+            49277, 35273, 49291, 35282, 49294, 35290, 49318, 35279, 49338, 35302, 49384, 35363, 49398, 35377, 49405, 35348, 49449, 35363, 49456, 35313,
+            49495, 35331, 49505, 35332, 49484, 35460, 49484, 35481, 49510, 35490, 49516, 35486, 49526, 35429, 49540, 35434, 49549, 35428, 49556, 35405,
+            49562, 35409, 49567, 35474, 49572, 35486, 49605, 35462, 49619, 35456, 49642, 35442, 49655, 35427, 49663, 35423, 49666, 35433, 49673, 35432,
+            49672, 35425, 49669, 35392, 49667, 35392, 49666, 35344, 49681, 35331, 49687, 35297, 49685, 35271, 49696, 35244, 49712, 35256, 49712, 35248,
+            49715, 35265, 49727, 35262, 49735, 35255, 49737, 35224, 49746, 35209, 49764, 35207, 49771, 35213, 49782, 35207, 49789, 35211, 49795, 35201,
+            49804, 35208, 49806, 35221, 49813, 35215, 49831, 35219, 49836, 35195, 49841, 35198, 49845, 35176, 49856, 35159, 49859, 35139, 49851, 35119,
+            49858, 35099, 49858, 35068, 49872, 35047, 49873, 35056, 49881, 35055, 49886, 35064, 49887, 35033, 49876, 35016, 49881, 34996, 49891, 34980,
+            49884, 34972, 49899, 34945, 49909, 34934, 49935, 34913, 49932, 34892, 49942, 34881, 49950, 34860, 49959, 34866, 49988, 34854, 49999, 34872,
+            50034, 34903, 50054, 34932, 50061, 34936, 50074, 34962, 50093, 34957, 50096, 34950, 50095, 34937, 50098, 34936, 50130, 34933, 50152, 34940,
+            50161, 34892, 50162, 34858, 50166, 34848, 50157, 34834, 50160, 34821, 50159, 34799, 50155, 34801, 50154, 34783, 50147, 34766, 50144, 34740,
+            50153, 34751, 50158, 34750, 50161, 34732, 50157, 34721, 50151, 34719, 50153, 34707, 50149, 34699, 50136, 34703, 50133, 34696, 50111, 34700,
+            50111, 34677, 50134, 34677, 50111, 34663, 50115, 34654, 50112, 34632, 50118, 34623, 50122, 34598, 50128, 34594, 50129, 34580, 50121, 34572,
+            50133, 34546, 50142, 34538, 50155, 34537, 50155, 34528, 50171, 34537, 50179, 34524, 50206, 34553, 50207, 34559, 50226, 34571, 50236, 34564,
+            50234, 34555, 50245, 34552, 50249, 34535, 50241, 34529, 50251, 34514, 50262, 34521, 50276, 34512, 50281, 34519, 50285, 34510, 50288, 34464,
+            50286, 34457, 50319, 34400, 50337, 34411, 50346, 34393, 50358, 34384, 50363, 34367, 50354, 34364, 50350, 34330, 50344, 34317, 50352, 34309,
+            50352, 34274, 50344, 34274, 50344, 34265, 50336, 34262, 50336, 34248, 50342, 34252, 50344, 34238, 50337, 34225, 50330, 34238, 50320, 34225,
+            50313, 34232, 50311, 34215, 50304, 34202, 50281, 34194, 50272, 34176, 50270, 34184, 50251, 34174, 50244, 34165, 50216, 34144, 50169, 34132,
+            50157, 34140, 50157, 34129, 50148, 34101, 50147, 34088, 50138, 34057, 50123, 34043, 50112, 34050, 50100, 34038, 50101, 34027, 50093, 34022,
+            50089, 34010, 50074, 33996, 50066, 34013, 50076, 34016, 50082, 34030, 50078, 34036, 50080, 34057, 50062, 34090, 50068, 34102, 50058, 34109,
+            50058, 34119, 50066, 34138, 50053, 34148, 50049, 34158, 50054, 34164, 50041, 34193, 50040, 34213, 50021, 34210, 50014, 34228, 50000, 34240,
+            49986, 34241, 49986, 34254, 49962, 34256, 49965, 34288, 49947, 34290, 49943, 34264, 49931, 34270, 49912, 34290, 49904, 34291, 49898, 34250,
+            49877, 34267, 49858, 34233, 49822, 34234, 49812, 34221, 49803, 34226, 49797, 34181, 49789, 34182, 49793, 34172, 49794, 34141, 49777, 34142,
+            49777, 34133, 49765, 34124, 49766, 34095, 49756, 34094, 49758, 34067, 49754, 34045, 49742, 34048, 49740, 34058, 49727, 34062, 49714, 34055,
+            49715, 34039, 49700, 34034, 49701, 34018, 49694, 34015, 49700, 33994, 49702, 33944, 49710, 33941, 49708, 33928, 49699, 33927, 49691, 33908,
+            49684, 33912, 49689, 33938, 49674, 33945, 49670, 33954, 49661, 33941, 49663, 33930, 49648, 33910, 49645, 33896, 49645, 33869, 49628, 33872,
+            49616, 33868, 49613, 33840, 49604, 33840, 49603, 33810, 49582, 33792, 49580, 33763, 49592, 33768, 49586, 33756, 49591, 33744, 49588, 33723,
+            49590, 33700, 49587, 33694, 49588, 33685, 49571, 33681, 49573, 33668, 49564, 33677, 49532, 33697, 49511, 33702, 49510, 33698, 49503, 33704,
+            49501, 33727, 49489, 33743, 49491, 33753, 49481, 33772, 49475, 33772, 49473, 33786, 49476, 33805, 49462, 33809, 49462, 33796, 49452, 33798,
+            49444, 33790, 49437, 33799, 49424, 33797, 49421, 33804, 49411, 33807, 49412, 33820, 49419, 33816, 49408, 33838, 49414, 33866, 49396, 33871,
+            49396, 33887, 49400, 33881, 49408, 33886, 49406, 33902, 49402, 33893, 49398, 33900, 49383, 33900, 49377, 33892, 49365, 33914, 49371, 33927,
+            49366, 33967, 49369, 33979, 49312, 33990, 49313, 34004, 49294, 34014, 49285, 34029, 49276, 34028, 49260, 34005, 49252, 34007, 49237, 34031,
+            49185, 34044, 49177, 34094, 49165, 34089, 49163, 34099, 49113, 34088, 49112, 34057, 49105, 34053, 49075, 34048, 49083, 33987, 49052, 33974,
+            49049, 33989, 49035, 33982, 49033, 33992, 49020, 33987, 49023, 33964, 49014, 33930, 49014, 33883, 48989, 33882, 48987, 33928, 48979, 33927,
+            48957, 33978, 48946, 33999, 48933, 34012, 48920, 33989, 48880, 33931, 48879, 33945, 48865, 33985, 48867, 34007, 48858, 34030, 48846, 34033,
+            48836, 34055, 48829, 34064, 48823, 34082, 48826, 34107, 48823, 34120, 48814, 34128, 48800, 34122, 48785, 34126, 48775, 34149, 48779, 34175,
+            48760, 34203, 48756, 34234, 48744, 34249, 48745, 34269, 48744, 34287, 48738, 34297, 48724, 34292, 48723, 34293
+        ))
     )
 
-    private fun _Івано_Франківськ(): Map<String, CompactPolygon> = mapOf(
-        "верховинський" to     CompactPolygon(
+    private fun _r_myrhorodskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            48195, 24989, 48202, 25021, 48173, 25038, 48161, 25084, 48112, 25037, 48112, 24980, 48087, 24995, 48027, 24912, 47947, 24919, 47920, 24957,
-            47899, 24944, 47879, 24957, 47855, 24997, 47794, 24947, 47727, 24923, 47724, 24883, 47753, 24878, 47780, 24836, 47821, 24828, 47840, 24706,
-            47865, 24671, 47896, 24674, 47948, 24628, 47969, 24563, 48014, 24575, 48047, 24627, 48118, 24554, 48160, 24600, 48159, 24643, 48184, 24634,
-            48235, 24684, 48260, 24659, 48270, 24675, 48278, 24727, 48255, 24737, 48260, 24781, 48220, 24789, 48226, 24841, 48193, 24902, 48223, 24964,
-            48195, 24989
+            49588, 33685, 49587, 33694, 49590, 33700, 49588, 33723, 49591, 33744, 49586, 33756, 49592, 33768, 49580, 33763, 49582, 33792, 49603, 33810,
+            49604, 33840, 49613, 33840, 49616, 33868, 49628, 33872, 49645, 33869, 49645, 33896, 49648, 33910, 49663, 33930, 49661, 33941, 49670, 33954,
+            49674, 33945, 49689, 33938, 49684, 33912, 49691, 33908, 49699, 33927, 49708, 33928, 49710, 33941, 49702, 33944, 49700, 33994, 49694, 34015,
+            49701, 34018, 49700, 34034, 49715, 34039, 49714, 34055, 49727, 34062, 49740, 34058, 49742, 34048, 49754, 34045, 49758, 34067, 49756, 34094,
+            49766, 34095, 49765, 34124, 49777, 34133, 49777, 34142, 49794, 34141, 49793, 34172, 49789, 34182, 49797, 34181, 49803, 34226, 49812, 34221,
+            49822, 34234, 49858, 34233, 49877, 34267, 49898, 34250, 49904, 34291, 49912, 34290, 49931, 34270, 49943, 34264, 49947, 34290, 49965, 34288,
+            49962, 34256, 49986, 34254, 49986, 34241, 50000, 34240, 50014, 34228, 50021, 34210, 50040, 34213, 50041, 34193, 50054, 34164, 50049, 34158,
+            50053, 34148, 50066, 34138, 50058, 34119, 50058, 34109, 50068, 34102, 50062, 34090, 50080, 34057, 50078, 34036, 50082, 34030, 50076, 34016,
+            50066, 34013, 50074, 33996, 50089, 34010, 50093, 34022, 50101, 34027, 50100, 34038, 50112, 34050, 50123, 34043, 50138, 34057, 50147, 34088,
+            50148, 34101, 50157, 34129, 50157, 34140, 50169, 34132, 50216, 34144, 50244, 34165, 50251, 34174, 50270, 34184, 50272, 34176, 50281, 34194,
+            50304, 34202, 50311, 34215, 50313, 34232, 50320, 34225, 50330, 34238, 50337, 34225, 50344, 34238, 50342, 34252, 50336, 34248, 50336, 34262,
+            50344, 34265, 50344, 34274, 50352, 34274, 50352, 34309, 50344, 34317, 50350, 34330, 50354, 34364, 50363, 34367, 50359, 34378, 50368, 34389,
+            50371, 34376, 50390, 34343, 50411, 34291, 50432, 34272, 50433, 34259, 50453, 34251, 50490, 34256, 50517, 34249, 50523, 34245, 50528, 34232,
+            50533, 34220, 50524, 34206, 50523, 34197, 50525, 34178, 50522, 34159, 50512, 34136, 50510, 34122, 50492, 34120, 50482, 34111, 50481, 34100,
+            50489, 34085, 50504, 34105, 50515, 34073, 50504, 34035, 50498, 34028, 50511, 34029, 50512, 34019, 50523, 34006, 50531, 33986, 50548, 33954,
+            50515, 33915, 50524, 33896, 50533, 33891, 50534, 33876, 50524, 33841, 50519, 33842, 50515, 33822, 50518, 33820, 50515, 33810, 50508, 33815,
+            50506, 33839, 50501, 33852, 50490, 33844, 50488, 33824, 50483, 33828, 50477, 33788, 50461, 33786, 50458, 33734, 50468, 33715, 50481, 33618,
+            50488, 33612, 50496, 33572, 50490, 33562, 50489, 33537, 50480, 33532, 50484, 33516, 50494, 33503, 50481, 33488, 50483, 33478, 50490, 33476,
+            50492, 33463, 50485, 33435, 50475, 33435, 50483, 33420, 50499, 33412, 50497, 33375, 50521, 33374, 50521, 33318, 50532, 33316, 50535, 33299,
+            50551, 33284, 50554, 33270, 50538, 33247, 50514, 33234, 50504, 33221, 50509, 33191, 50523, 33173, 50521, 33153, 50512, 33146, 50512, 33130,
+            50506, 33117, 50518, 33104, 50519, 33070, 50521, 33067, 50519, 33066, 50518, 33059, 50502, 33043, 50501, 33024, 50493, 33026, 50481, 33014,
+            50471, 33014, 50478, 32992, 50473, 32988, 50475, 32970, 50463, 32979, 50460, 32969, 50450, 32969, 50442, 32958, 50446, 32949, 50436, 32935,
+            50430, 32939, 50417, 32961, 50425, 33003, 50414, 33001, 50410, 33018, 50383, 33002, 50384, 33025, 50377, 33039, 50367, 33040, 50364, 33051,
+            50356, 33051, 50339, 33042, 50336, 33069, 50326, 33068, 50329, 33080, 50324, 33091, 50302, 33105, 50296, 33101, 50284, 33109, 50290, 33126,
+            50289, 33135, 50275, 33131, 50267, 33135, 50261, 33127, 50244, 33127, 50245, 33142, 50234, 33150, 50210, 33151, 50206, 33160, 50193, 33152,
+            50192, 33144, 50180, 33186, 50170, 33195, 50171, 33212, 50162, 33221, 50150, 33219, 50147, 33237, 50149, 33259, 50171, 33278, 50184, 33285,
+            50188, 33299, 50195, 33308, 50199, 33335, 50195, 33338, 50168, 33341, 50166, 33352, 50154, 33372, 50143, 33364, 50138, 33376, 50144, 33379,
+            50144, 33407, 50116, 33410, 50110, 33388, 50127, 33383, 50128, 33366, 50110, 33379, 50089, 33389, 50082, 33400, 50067, 33384, 50063, 33388,
+            50027, 33368, 50026, 33350, 50021, 33326, 50012, 33323, 50011, 33296, 49992, 33295, 49979, 33308, 49956, 33359, 49939, 33390, 49923, 33374,
+            49903, 33375, 49901, 33365, 49891, 33366, 49887, 33398, 49866, 33434, 49854, 33441, 49854, 33479, 49858, 33484, 49854, 33498, 49828, 33576,
+            49820, 33580, 49784, 33582, 49780, 33562, 49774, 33563, 49768, 33540, 49737, 33548, 49695, 33503, 49644, 33502, 49634, 33511, 49624, 33503,
+            49616, 33498, 49608, 33490, 49598, 33521, 49596, 33537, 49592, 33538, 49586, 33579, 49576, 33618, 49536, 33636, 49522, 33649, 49516, 33692,
+            49510, 33698, 49511, 33702, 49532, 33697, 49564, 33677, 49573, 33668, 49571, 33681, 49588, 33685
         ))
-    ),
-        "калуський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49171, 24309, 49148, 24207, 49139, 24198, 49133, 24213, 49144, 24172, 49128, 24165, 49149, 24083, 49117, 24020, 49138, 23970, 49098, 23904,
-            49122, 23761, 49094, 23719, 49101, 23699, 49036, 23673, 49025, 23622, 48975, 23566, 48955, 23586, 48911, 23561, 48876, 23608, 48867, 23576,
-            48822, 23552, 48784, 23579, 48725, 23547, 48704, 23630, 48639, 23704, 48641, 23789, 48592, 23792, 48559, 23846, 48552, 23929, 48483, 23908,
-            48465, 23925, 48458, 23966, 48506, 24002, 48534, 24124, 48542, 24133, 48565, 24102, 48648, 24102, 48639, 24144, 48678, 24174, 48711, 24238,
-            48729, 24259, 48753, 24245, 48762, 24298, 48870, 24372, 48864, 24396, 49036, 24572, 49051, 24534, 49089, 24560, 49140, 24551, 49163, 24503,
-            49182, 24514, 49194, 24577, 49196, 24551, 49226, 24529, 49231, 24447, 49176, 24437, 49168, 24416, 49189, 24384, 49171, 24309
-        ))
-    ),
-        "коломийський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48549, 24783, 48577, 24764, 48624, 24784, 48624, 24823, 48681, 24816, 48737, 24711, 48747, 24741, 48773, 24743, 48766, 24766, 48793, 24810,
-            48768, 24852, 48768, 24920, 48728, 24979, 48737, 25001, 48763, 24979, 48730, 25039, 48688, 25070, 48642, 25176, 48651, 25223, 48681, 25243,
-            48711, 25210, 48734, 25260, 48782, 25224, 48815, 25240, 48827, 25315, 48859, 25352, 48844, 25433, 48872, 25438, 48857, 25469, 48831, 25455,
-            48749, 25639, 48723, 25610, 48705, 25653, 48680, 25621, 48668, 25640, 48634, 25585, 48527, 25609, 48413, 25599, 48413, 25621, 48379, 25622,
-            48403, 25444, 48359, 25308, 48367, 25262, 48398, 25250, 48415, 25171, 48397, 25118, 48417, 25083, 48406, 25036, 48441, 24962, 48430, 24847,
-            48465, 24769, 48477, 24760, 48491, 24779, 48526, 24729, 48522, 24748, 48544, 24762, 48528, 24779, 48549, 24783
-        ))
-    ),
-        "косівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48222, 24953, 48193, 24902, 48226, 24841, 48226, 24777, 48260, 24781, 48252, 24748, 48277, 24728, 48269, 24711, 48283, 24738, 48314, 24734,
-            48328, 24756, 48352, 24738, 48375, 24747, 48378, 24721, 48418, 24709, 48458, 24785, 48430, 24847, 48441, 24962, 48406, 25036, 48417, 25083,
-            48396, 25131, 48415, 25171, 48398, 25249, 48367, 25262, 48359, 25308, 48255, 25193, 48225, 25107, 48183, 25138, 48183, 25091, 48160, 25091,
-            48222, 24953
-        ))
-    ),
-        "надвірнянський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48699, 24540, 48680, 24520, 48682, 24480, 48645, 24467, 48633, 24372, 48617, 24372, 48592, 24272, 48520, 24199, 48531, 24134, 48498, 24115,
-            48481, 24140, 48467, 24125, 48409, 24141, 48365, 24180, 48350, 24258, 48396, 24285, 48397, 24305, 48280, 24488, 48244, 24485, 48216, 24546,
-            48160, 24500, 48118, 24555, 48160, 24600, 48159, 24643, 48184, 24634, 48235, 24684, 48260, 24659, 48283, 24738, 48314, 24734, 48327, 24756,
-            48352, 24738, 48375, 24747, 48378, 24721, 48418, 24709, 48458, 24786, 48477, 24760, 48491, 24779, 48527, 24729, 48522, 24748, 48544, 24762,
-            48530, 24763, 48535, 24786, 48595, 24770, 48624, 24784, 48624, 24823, 48639, 24824, 48681, 24816, 48753, 24678, 48756, 24642, 48711, 24594,
-            48722, 24549, 48686, 24580, 48699, 24540
-        ))
-    ),
-        "івано-франківський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49129, 24554, 49163, 24503, 49182, 24514, 49193, 24577, 49196, 24551, 49226, 24529, 49233, 24359, 49243, 24341, 49281, 24364, 49288, 24299,
-            49316, 24302, 49322, 24359, 49308, 24381, 49362, 24400, 49373, 24429, 49431, 24360, 49445, 24410, 49474, 24418, 49495, 24401, 49512, 24440,
-            49536, 24434, 49545, 24449, 49548, 24488, 49513, 24505, 49534, 24570, 49497, 24640, 49492, 24729, 49431, 24771, 49378, 24776, 49386, 24828,
-            49347, 24859, 49321, 24829, 49263, 24843, 49235, 24933, 49164, 24856, 49129, 24900, 49117, 24985, 49097, 24972, 49071, 24991, 49083, 24916,
-            49050, 24905, 49011, 24970, 48993, 24965, 49011, 25017, 48984, 25078, 48995, 25119, 48964, 25110, 48944, 25147, 48924, 25118, 48869, 25140,
-            48870, 25171, 48927, 25191, 48932, 25233, 48847, 25210, 48866, 25266, 48836, 25325, 48813, 25239, 48782, 25224, 48734, 25260, 48711, 25210,
-            48681, 25243, 48651, 25223, 48642, 25176, 48674, 25093, 48763, 24979, 48737, 25001, 48728, 24979, 48768, 24920, 48768, 24852, 48793, 24810,
-            48766, 24766, 48771, 24741, 48766, 24754, 48739, 24723, 48756, 24642, 48711, 24594, 48722, 24549, 48686, 24580, 48700, 24542, 48680, 24520,
-            48682, 24480, 48645, 24467, 48633, 24372, 48617, 24372, 48594, 24275, 48520, 24199, 48531, 24128, 48565, 24102, 48648, 24102, 48639, 24144,
-            48678, 24174, 48711, 24238, 48729, 24259, 48753, 24245, 48762, 24298, 48870, 24372, 48864, 24396, 48970, 24515, 49008, 24530, 49019, 24565,
-            49037, 24571, 49051, 24534, 49081, 24558, 49129, 24554
-        ))
-    )
     )
 
-    private fun _Волинськ(): Map<String, CompactPolygon> = mapOf(
-        "володимирський" to     CompactPolygon(
+    private fun _r_lubenskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            50588, 24735, 50569, 24747, 50577, 24831, 50599, 24826, 50635, 24878, 50636, 24858, 50664, 24880, 50709, 24869, 50715, 24940, 50756, 24942,
-            50804, 24905, 50835, 24904, 50858, 24828, 50886, 24828, 50900, 24741, 50870, 24713, 50862, 24669, 50911, 24559, 50941, 24427, 50957, 24429,
-            50977, 24350, 50986, 24377, 51046, 24370, 51039, 24312, 51053, 24285, 51089, 24293, 51096, 24266, 51076, 24165, 51010, 24100, 51021, 23981,
-            51043, 23955, 51030, 23916, 51015, 23936, 51007, 23915, 50991, 23957, 50928, 23997, 50891, 24052, 50869, 24146, 50836, 24100, 50837, 23990,
-            50795, 23957, 50768, 23978, 50766, 24024, 50723, 24017, 50720, 24072, 50678, 24062, 50664, 24091, 50637, 24088, 50647, 24155, 50592, 24211,
-            50572, 24312, 50600, 24323, 50609, 24381, 50587, 24413, 50560, 24406, 50539, 24450, 50556, 24514, 50533, 24564, 50555, 24575, 50564, 24555,
-            50561, 24616, 50592, 24645, 50588, 24735
+            49802, 32875, 49794, 32878, 49795, 32914, 49773, 32925, 49761, 32974, 49752, 32967, 49748, 32973, 49757, 32990, 49749, 33012, 49754, 33019,
+            49731, 33051, 49728, 33046, 49715, 33060, 49696, 33118, 49701, 33130, 49692, 33150, 49680, 33139, 49673, 33155, 49660, 33142, 49648, 33173,
+            49646, 33187, 49665, 33191, 49661, 33224, 49660, 33258, 49651, 33258, 49639, 33282, 49644, 33294, 49637, 33309, 49649, 33321, 49648, 33349,
+            49654, 33363, 49649, 33366, 49657, 33382, 49644, 33408, 49636, 33445, 49625, 33440, 49615, 33461, 49613, 33495, 49624, 33503, 49634, 33511,
+            49644, 33502, 49695, 33503, 49737, 33548, 49768, 33540, 49774, 33563, 49780, 33562, 49784, 33582, 49820, 33580, 49828, 33576, 49854, 33498,
+            49858, 33484, 49854, 33479, 49854, 33441, 49866, 33434, 49887, 33398, 49891, 33366, 49901, 33365, 49903, 33375, 49923, 33374, 49939, 33390,
+            49956, 33359, 49979, 33308, 49992, 33295, 50011, 33296, 50012, 33323, 50021, 33326, 50026, 33350, 50027, 33368, 50063, 33388, 50067, 33384,
+            50082, 33400, 50089, 33389, 50110, 33379, 50128, 33366, 50127, 33383, 50110, 33388, 50116, 33410, 50144, 33407, 50144, 33379, 50138, 33376,
+            50143, 33364, 50154, 33372, 50166, 33352, 50168, 33341, 50195, 33338, 50199, 33335, 50195, 33308, 50188, 33299, 50184, 33285, 50171, 33278,
+            50149, 33259, 50147, 33237, 50150, 33219, 50162, 33221, 50171, 33212, 50170, 33195, 50180, 33186, 50192, 33144, 50193, 33152, 50206, 33160,
+            50210, 33151, 50234, 33150, 50245, 33142, 50244, 33127, 50261, 33127, 50267, 33135, 50275, 33131, 50289, 33135, 50290, 33126, 50284, 33109,
+            50296, 33101, 50302, 33105, 50324, 33091, 50329, 33080, 50326, 33068, 50336, 33069, 50339, 33042, 50356, 33051, 50364, 33051, 50367, 33040,
+            50377, 33039, 50384, 33025, 50383, 33002, 50410, 33018, 50414, 33001, 50425, 33003, 50417, 32961, 50430, 32939, 50429, 32920, 50424, 32913,
+            50409, 32918, 50404, 32898, 50376, 32842, 50375, 32810, 50371, 32790, 50362, 32787, 50356, 32801, 50347, 32793, 50354, 32770, 50349, 32764,
+            50359, 32748, 50356, 32730, 50358, 32671, 50370, 32672, 50366, 32635, 50356, 32634, 50356, 32587, 50360, 32564, 50355, 32557, 50345, 32525,
+            50359, 32512, 50365, 32492, 50371, 32485, 50378, 32493, 50396, 32493, 50398, 32446, 50412, 32400, 50407, 32397, 50414, 32371, 50426, 32367,
+            50427, 32329, 50424, 32321, 50418, 32316, 50403, 32325, 50398, 32295, 50380, 32291, 50380, 32278, 50373, 32278, 50374, 32254, 50360, 32265,
+            50353, 32255, 50352, 32269, 50347, 32254, 50355, 32238, 50350, 32227, 50357, 32218, 50357, 32209, 50348, 32144, 50335, 32153, 50323, 32144,
+            50316, 32130, 50305, 32142, 50284, 32087, 50276, 32101, 50247, 32090, 50238, 32096, 50225, 32126, 50214, 32113, 50193, 32147, 50187, 32164,
+            50179, 32163, 50166, 32177, 50144, 32299, 50119, 32305, 50120, 32286, 50113, 32251, 50098, 32271, 50082, 32259, 50059, 32283, 50038, 32312,
+            50039, 32323, 50052, 32325, 50059, 32334, 50048, 32352, 50036, 32346, 50034, 32364, 50002, 32370, 50000, 32378, 49980, 32378, 49960, 32428,
+            49935, 32418, 49931, 32432, 49927, 32419, 49903, 32414, 49888, 32435, 49875, 32402, 49885, 32392, 49874, 32373, 49850, 32408, 49840, 32415,
+            49821, 32438, 49796, 32450, 49805, 32505, 49774, 32514, 49773, 32556, 49752, 32572, 49747, 32568, 49703, 32574, 49681, 32662, 49676, 32672,
+            49664, 32681, 49663, 32683, 49664, 32687, 49673, 32684, 49680, 32700, 49684, 32708, 49690, 32705, 49693, 32717, 49700, 32719, 49713, 32728,
+            49737, 32724, 49742, 32743, 49737, 32752, 49738, 32764, 49750, 32782, 49757, 32814, 49762, 32817, 49770, 32806, 49776, 32816, 49783, 32817,
+            49786, 32823, 49784, 32834, 49794, 32837, 49798, 32860, 49803, 32859, 49806, 32864, 49802, 32875
         ))
-    ),
-        "камінь-каширський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            51232, 25948, 51278, 25938, 51334, 25830, 51366, 25824, 51376, 25844, 51387, 25831, 51374, 25781, 51381, 25755, 51400, 25760, 51400, 25725,
-            51381, 25725, 51376, 25695, 51405, 25687, 51417, 25647, 51479, 25641, 51477, 25618, 51495, 25624, 51501, 25555, 51519, 25550, 51525, 25595,
-            51540, 25565, 51581, 25599, 51624, 25555, 51614, 25532, 51631, 25530, 51625, 25578, 51682, 25641, 51756, 25683, 51773, 25670, 51767, 25650,
-            51784, 25659, 51804, 25632, 51819, 25650, 51849, 25640, 51895, 25709, 51940, 25527, 51922, 25509, 51922, 25410, 51969, 25264, 51969, 25191,
-            51892, 24934, 51873, 24909, 51869, 24937, 51846, 24932, 51842, 24947, 51811, 24891, 51826, 24845, 51775, 24816, 51757, 24723, 51708, 24712,
-            51727, 24701, 51724, 24672, 51709, 24699, 51701, 24686, 51667, 24700, 51641, 24667, 51640, 24689, 51615, 24677, 51608, 24640, 51608, 24768,
-            51532, 24785, 51487, 24752, 51451, 24755, 51433, 24827, 51413, 24834, 51404, 24881, 51379, 24899, 51375, 24957, 51353, 24929, 51380, 25194,
-            51326, 25173, 51286, 25200, 51285, 25256, 51246, 25280, 51250, 25327, 51217, 25338, 51210, 25266, 51129, 25411, 51158, 25457, 51159, 25658,
-            51140, 25780, 51191, 25780, 51232, 25948
-        ))
-    ),
-        "ковельський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                51129, 25295, 51112, 25333, 51132, 25412, 51210, 25266, 51217, 25338, 51250, 25327, 51246, 25280, 51285, 25256, 51286, 25200, 51326, 25173,
-                51380, 25194, 51353, 24929, 51375, 24957, 51379, 24899, 51404, 24881, 51413, 24834, 51433, 24827, 51451, 24755, 51487, 24752, 51532, 24785,
-                51608, 24768, 51608, 24640, 51615, 24677, 51640, 24689, 51641, 24667, 51667, 24700, 51701, 24686, 51709, 24699, 51724, 24672, 51727, 24701,
-                51708, 24712, 51757, 24723, 51775, 24816, 51826, 24845, 51811, 24891, 51842, 24947, 51846, 24932, 51869, 24937, 51873, 24909, 51881, 24936,
-                51917, 24915, 51896, 24843, 51912, 24810, 51881, 24750, 51903, 24625, 51879, 24373, 51864, 24340, 51804, 24295, 51751, 24320, 51716, 24268,
-                51667, 24120, 51620, 24076, 51580, 23997, 51592, 23882, 51631, 23913, 51640, 23788, 51668, 23783, 51653, 23678, 51621, 23606, 51584, 23661,
-                51549, 23636, 51507, 23677, 51503, 23616, 51483, 23670, 51446, 23649, 51445, 23685, 51430, 23677, 51420, 23703, 51394, 23677, 51369, 23687,
-                51329, 23636, 51292, 23646, 51292, 23695, 51261, 23727, 51212, 23739, 51150, 23869, 51130, 23870, 51124, 23850, 51100, 23857, 51077, 23876,
-                51078, 23908, 51037, 23921, 51010, 24100, 51076, 24165, 51096, 24266, 51089, 24293, 51053, 24285, 51039, 24312, 51046, 24370, 50986, 24377,
-                50976, 24351, 50862, 24669, 50870, 24713, 50900, 24741, 50886, 24818, 50941, 24828, 50929, 24889, 50947, 24891, 50968, 24840, 51001, 24828,
-                51039, 25190, 51080, 25249, 51121, 25256, 51129, 25295
-            )),
-            ScaledRing(intArrayOf(
-                51202, 25340, 51178, 25350, 51176, 25378, 51202, 25340
-            )),
-            ScaledRing(intArrayOf(
-                51149, 25432, 51162, 25432, 51151, 25415, 51149, 25432
-            ))
-    )),
-        "луцький" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50690, 25386, 50669, 25405, 50662, 25460, 50680, 25470, 50696, 25602, 50717, 25597, 50725, 25694, 50684, 25722, 50671, 25709, 50676, 25773,
-            50620, 25829, 50631, 25844, 50647, 25823, 50709, 25879, 50738, 25872, 50832, 25902, 50821, 26022, 50842, 26040, 50866, 25992, 50935, 26001,
-            50957, 25967, 50973, 26085, 51003, 26086, 51005, 26107, 51051, 26091, 51083, 26017, 51084, 25941, 51115, 25938, 51143, 26059, 51177, 26068,
-            51228, 25996, 51232, 25948, 51191, 25780, 51140, 25780, 51159, 25658, 51158, 25457, 51132, 25429, 51114, 25356, 51121, 25256, 51080, 25249,
-            51039, 25190, 51001, 24828, 50968, 24840, 50954, 24885, 50932, 24891, 50941, 24828, 50858, 24828, 50835, 24904, 50804, 24905, 50756, 24942,
-            50704, 24936, 50709, 24869, 50664, 24880, 50636, 24858, 50635, 24878, 50599, 24826, 50577, 24831, 50569, 24750, 50591, 24734, 50592, 24645,
-            50561, 24616, 50564, 24555, 50555, 24575, 50533, 24564, 50541, 24540, 50494, 24555, 50478, 24597, 50458, 24581, 50456, 24599, 50414, 24597,
-            50384, 24707, 50373, 24722, 50343, 24715, 50361, 24867, 50344, 24885, 50346, 24937, 50389, 24941, 50342, 25017, 50342, 25059, 50301, 25054,
-            50287, 25113, 50312, 25109, 50331, 25166, 50369, 25141, 50380, 25169, 50363, 25199, 50381, 25210, 50428, 25140, 50443, 25154, 50461, 25138,
-            50475, 25084, 50466, 25151, 50505, 25160, 50528, 25123, 50554, 25122, 50533, 25256, 50546, 25311, 50584, 25319, 50580, 25300, 50631, 25292,
-            50612, 25328, 50611, 25406, 50642, 25352, 50655, 25385, 50685, 25372, 50690, 25386
-        ))
-    )
     )
 
-    private fun _Вінницьк(): Map<String, CompactPolygon> = mapOf(
-        "вінницький" to     CompactPolygon(
+    private fun _r_berehivskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            49528, 29006, 49552, 28977, 49603, 28985, 49584, 29117, 49603, 29242, 49590, 29276, 49627, 29276, 49620, 29380, 49659, 29410, 49645, 29520,
-            49637, 29535, 49600, 29496, 49562, 29531, 49521, 29539, 49507, 29585, 49485, 29543, 49443, 29595, 49402, 29542, 49396, 29505, 49371, 29503,
-            49324, 29535, 49306, 29619, 49266, 29613, 49247, 29639, 49237, 29690, 49261, 29701, 49228, 29737, 49225, 29704, 49203, 29726, 49142, 29712,
-            49123, 29734, 49112, 29678, 49089, 29687, 49097, 29651, 49054, 29640, 49046, 29596, 49048, 29544, 49071, 29550, 49115, 29520, 49106, 29497,
-            49128, 29463, 49085, 29406, 49061, 29415, 49043, 29397, 49055, 29378, 49039, 29345, 49022, 29358, 49014, 29344, 48956, 29173, 48995, 29111,
-            49001, 29062, 48952, 29036, 48935, 28982, 48926, 29003, 48914, 28977, 48905, 28995, 48908, 28905, 48866, 28919, 48852, 28894, 48833, 28903,
-            48846, 28827, 48874, 28828, 48872, 28811, 48903, 28796, 48858, 28729, 48874, 28709, 48870, 28667, 48894, 28633, 48917, 28650, 48933, 28625,
-            48882, 28597, 48895, 28551, 48875, 28518, 48855, 28537, 48840, 28526, 48867, 28396, 48822, 28350, 48860, 28291, 48886, 28309, 48925, 28252,
-            48927, 28273, 48986, 28296, 49000, 28274, 48986, 28228, 49014, 28234, 49059, 28188, 49080, 28191, 49091, 28251, 49162, 28156, 49173, 28177,
-            49194, 28095, 49232, 28120, 49262, 27987, 49213, 27867, 49236, 27856, 49249, 27872, 49264, 27849, 49328, 27858, 49366, 27812, 49368, 27829,
-            49388, 27812, 49421, 27850, 49412, 27883, 49430, 27931, 49409, 27996, 49438, 27994, 49451, 27961, 49468, 27970, 49449, 28029, 49469, 28054,
-            49463, 28140, 49435, 28204, 49443, 28253, 49422, 28297, 49399, 28298, 49379, 28368, 49348, 28391, 49371, 28455, 49401, 28474, 49378, 28519,
-            49354, 28519, 49355, 28545, 49373, 28538, 49344, 28585, 49355, 28610, 49338, 28662, 49360, 28681, 49403, 28620, 49427, 28647, 49420, 28780,
-            49437, 28791, 49441, 28886, 49463, 28872, 49445, 28891, 49448, 28965, 49465, 28966, 49472, 29002, 49505, 28969, 49528, 29006
+            48354, 22317, 48339, 22320, 48326, 22312, 48316, 22317, 48306, 22338, 48279, 22338, 48263, 22362, 48244, 22369, 48235, 22383, 48249, 22399,
+            48251, 22416, 48247, 22432, 48250, 22440, 48243, 22449, 48242, 22461, 48253, 22489, 48249, 22502, 48240, 22496, 48237, 22516, 48226, 22515,
+            48209, 22532, 48209, 22545, 48200, 22556, 48197, 22572, 48187, 22570, 48184, 22561, 48164, 22575, 48144, 22598, 48142, 22588, 48133, 22597,
+            48124, 22590, 48118, 22599, 48108, 22591, 48104, 22604, 48106, 22618, 48096, 22636, 48096, 22657, 48092, 22673, 48111, 22707, 48120, 22737,
+            48119, 22758, 48109, 22765, 48110, 22774, 48121, 22771, 48117, 22789, 48122, 22804, 48106, 22807, 48118, 22817, 48114, 22830, 48097, 22829,
+            48082, 22843, 48070, 22864, 48057, 22861, 48052, 22869, 48054, 22882, 48037, 22880, 48020, 22866, 48010, 22866, 47990, 22839, 47983, 22845,
+            47975, 22873, 47968, 22871, 47968, 22893, 47955, 22894, 47961, 22917, 47959, 22930, 47969, 22949, 47973, 22942, 47991, 22939, 48001, 22924,
+            48013, 22921, 48019, 22928, 48012, 22954, 48010, 22978, 48003, 22994, 47996, 22998, 47995, 23011, 47989, 23013, 48000, 23029, 48008, 23067,
+            48005, 23084, 48016, 23098, 48020, 23090, 48031, 23105, 48038, 23108, 48042, 23098, 48054, 23112, 48065, 23105, 48075, 23121, 48082, 23123,
+            48086, 23114, 48096, 23131, 48100, 23146, 48112, 23149, 48114, 23164, 48120, 23167, 48119, 23179, 48109, 23187, 48104, 23185, 48098, 23195,
+            48092, 23236, 48092, 23245, 48100, 23252, 48101, 23261, 48099, 23268, 48106, 23263, 48126, 23275, 48137, 23268, 48152, 23265, 48156, 23258,
+            48156, 23243, 48161, 23233, 48164, 23199, 48172, 23193, 48178, 23176, 48194, 23156, 48209, 23153, 48220, 23138, 48224, 23127, 48242, 23102,
+            48221, 23094, 48222, 23061, 48234, 23068, 48241, 23061, 48255, 23059, 48263, 23040, 48271, 23032, 48269, 23017, 48261, 22998, 48262, 22985,
+            48245, 22948, 48241, 22929, 48243, 22916, 48240, 22902, 48251, 22901, 48255, 22893, 48260, 22869, 48266, 22878, 48272, 22863, 48281, 22853,
+            48282, 22840, 48290, 22839, 48302, 22862, 48305, 22856, 48333, 22856, 48338, 22841, 48346, 22835, 48339, 22828, 48336, 22838, 48330, 22825,
+            48321, 22823, 48311, 22803, 48310, 22793, 48300, 22787, 48292, 22791, 48294, 22767, 48288, 22756, 48293, 22708, 48307, 22669, 48340, 22641,
+            48345, 22635, 48350, 22626, 48342, 22615, 48331, 22626, 48326, 22616, 48333, 22599, 48330, 22585, 48338, 22570, 48330, 22563, 48326, 22546,
+            48320, 22556, 48325, 22570, 48316, 22569, 48306, 22566, 48303, 22557, 48291, 22547, 48288, 22530, 48280, 22534, 48278, 22523, 48296, 22505,
+            48306, 22479, 48316, 22481, 48312, 22504, 48332, 22532, 48342, 22530, 48351, 22543, 48378, 22506, 48378, 22498, 48390, 22498, 48389, 22487,
+            48377, 22484, 48378, 22455, 48385, 22432, 48392, 22419, 48384, 22408, 48392, 22393, 48373, 22369, 48391, 22356, 48402, 22360, 48404, 22352,
+            48389, 22345, 48383, 22346, 48376, 22344, 48373, 22329, 48365, 22319, 48354, 22317
         ))
-    ),
-        "гайсинський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48926, 29666, 48908, 29736, 48898, 29709, 48855, 29732, 48847, 29762, 48786, 29766, 48763, 29867, 48737, 29884, 48735, 29868, 48700, 29861,
-            48637, 29990, 48614, 29990, 48594, 29948, 48573, 30006, 48539, 30020, 48519, 30021, 48516, 29989, 48513, 30006, 48492, 30001, 48492, 29967,
-            48451, 29957, 48426, 29865, 48417, 29873, 48369, 29786, 48349, 29811, 48332, 29804, 48289, 29749, 48272, 29772, 48205, 29780, 48195, 29655,
-            48162, 29676, 48108, 29664, 48133, 29602, 48099, 29570, 48122, 29443, 48086, 29311, 48118, 29204, 48130, 29262, 48150, 29250, 48134, 29209,
-            48141, 29141, 48148, 29157, 48196, 29061, 48273, 29112, 48313, 29078, 48321, 29107, 48339, 29102, 48328, 29081, 48356, 29032, 48378, 29048,
-            48400, 29036, 48415, 29039, 48426, 29096, 48449, 29095, 48455, 28993, 48487, 28993, 48520, 28963, 48504, 28931, 48523, 28917, 48521, 28877,
-            48537, 28876, 48559, 28925, 48566, 29074, 48580, 29054, 48590, 29073, 48575, 29155, 48608, 29142, 48614, 29165, 48661, 29175, 48692, 29120,
-            48686, 29088, 48723, 29062, 48708, 29123, 48722, 29145, 48753, 29075, 48776, 29117, 48815, 29104, 48815, 29145, 48836, 29097, 48828, 29010,
-            48855, 29011, 48855, 28961, 48901, 28968, 48905, 28995, 48920, 28979, 48919, 29003, 48935, 28982, 48952, 29036, 49001, 29062, 48995, 29111,
-            48956, 29173, 48984, 29220, 48987, 29282, 49015, 29312, 49020, 29356, 49043, 29350, 49046, 29402, 49085, 29406, 49128, 29463, 49106, 29497,
-            49115, 29520, 49071, 29550, 49048, 29544, 49057, 29606, 49012, 29639, 49027, 29685, 49001, 29696, 48960, 29652, 48926, 29666
-        ))
-    ),
-        "жмеринський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48977, 28290, 48927, 28273, 48925, 28252, 48886, 28309, 48864, 28288, 48810, 28346, 48789, 28402, 48764, 28377, 48730, 28460, 48698, 28451,
-            48680, 28471, 48573, 28300, 48604, 28244, 48623, 28098, 48650, 28084, 48642, 27975, 48678, 27959, 48685, 27904, 48710, 27916, 48720, 27888,
-            48761, 27877, 48785, 27896, 48814, 27813, 48836, 27809, 48838, 27787, 48801, 27751, 48802, 27702, 48843, 27610, 48886, 27594, 48923, 27488,
-            48889, 27405, 48938, 27392, 48972, 27418, 49007, 27382, 49070, 27435, 49070, 27503, 49088, 27480, 49132, 27508, 49122, 27578, 49161, 27601,
-            49168, 27640, 49142, 27687, 49139, 27741, 49173, 27783, 49190, 27776, 49174, 27791, 49189, 27815, 49177, 27881, 49187, 27898, 49213, 27887,
-            49262, 27987, 49232, 28120, 49194, 28095, 49173, 28177, 49162, 28156, 49091, 28251, 49080, 28191, 49059, 28188, 49037, 28216, 49028, 28206,
-            49014, 28234, 48986, 28228, 49000, 28279, 48977, 28290
-        ))
-    ),
-        "могилів-подільський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48487, 27571, 48489, 27602, 48461, 27591, 48442, 27644, 48456, 27762, 48405, 27872, 48367, 27888, 48328, 27954, 48319, 28071, 48294, 28093,
-            48234, 28090, 48263, 28144, 48257, 28178, 48216, 28186, 48205, 28208, 48246, 28355, 48221, 28370, 48191, 28362, 48161, 28307, 48140, 28306,
-            48136, 28349, 48175, 28383, 48172, 28428, 48144, 28440, 48121, 28422, 48080, 28453, 48066, 28490, 48119, 28491, 48138, 28521, 48151, 28503,
-            48176, 28570, 48190, 28561, 48203, 28588, 48254, 28550, 48266, 28501, 48323, 28507, 48376, 28449, 48423, 28465, 48410, 28393, 48473, 28337,
-            48486, 28348, 48489, 28318, 48520, 28350, 48557, 28296, 48573, 28300, 48604, 28244, 48623, 28098, 48650, 28084, 48642, 27975, 48678, 27959,
-            48685, 27904, 48710, 27916, 48720, 27888, 48761, 27877, 48785, 27896, 48814, 27813, 48836, 27809, 48838, 27787, 48801, 27751, 48802, 27702,
-            48843, 27610, 48886, 27594, 48923, 27487, 48889, 27405, 48812, 27411, 48797, 27428, 48765, 27390, 48740, 27417, 48727, 27399, 48699, 27414,
-            48629, 27372, 48590, 27457, 48484, 27498, 48470, 27532, 48487, 27571
-        ))
-    ),
-        "тульчинський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48207, 28588, 48254, 28550, 48266, 28501, 48323, 28507, 48376, 28449, 48423, 28465, 48410, 28393, 48473, 28337, 48486, 28348, 48489, 28318,
-            48520, 28350, 48557, 28296, 48573, 28300, 48680, 28471, 48698, 28451, 48730, 28460, 48764, 28377, 48789, 28402, 48822, 28335, 48867, 28396,
-            48840, 28526, 48855, 28537, 48875, 28518, 48895, 28551, 48882, 28597, 48933, 28625, 48917, 28650, 48893, 28634, 48857, 28725, 48903, 28796,
-            48872, 28811, 48874, 28828, 48846, 28827, 48833, 28903, 48852, 28894, 48866, 28919, 48908, 28905, 48914, 28933, 48902, 28972, 48871, 28952,
-            48849, 28982, 48855, 29011, 48828, 29010, 48829, 29135, 48814, 29145, 48813, 29103, 48776, 29117, 48753, 29075, 48722, 29145, 48708, 29123,
-            48723, 29062, 48686, 29088, 48672, 29174, 48614, 29165, 48608, 29142, 48575, 29155, 48590, 29073, 48580, 29054, 48566, 29074, 48559, 28925,
-            48537, 28876, 48521, 28877, 48523, 28917, 48504, 28931, 48520, 28963, 48487, 28993, 48455, 28993, 48449, 29095, 48426, 29096, 48415, 29039,
-            48400, 29036, 48378, 29048, 48355, 29033, 48328, 29081, 48336, 29105, 48318, 29107, 48303, 29079, 48273, 29112, 48237, 29074, 48130, 29037,
-            48157, 28945, 48095, 28931, 48069, 28869, 48079, 28848, 48103, 28858, 48129, 28833, 48125, 28688, 48147, 28682, 48167, 28579, 48190, 28561,
-            48207, 28588
-        ))
-    ),
-        "хмільницький" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49528, 29006, 49552, 28977, 49633, 29010, 49679, 28946, 49739, 29002, 49784, 28942, 49804, 28970, 49820, 28944, 49840, 28954, 49889, 28868,
-            49860, 28844, 49844, 28751, 49818, 28759, 49798, 28734, 49817, 28636, 49810, 28602, 49782, 28601, 49774, 28570, 49820, 28529, 49807, 28482,
-            49825, 28422, 49780, 28379, 49815, 28249, 49785, 28226, 49780, 27980, 49756, 27836, 49702, 27812, 49697, 27763, 49666, 27766, 49645, 27812,
-            49618, 27812, 49576, 27758, 49557, 27790, 49531, 27794, 49532, 27743, 49497, 27735, 49489, 27791, 49479, 27764, 49440, 27750, 49431, 27846,
-            49415, 27862, 49431, 27929, 49409, 27996, 49438, 27994, 49451, 27961, 49472, 27981, 49452, 27986, 49449, 28029, 49469, 28054, 49465, 28130,
-            49435, 28204, 49443, 28253, 49422, 28297, 49399, 28298, 49379, 28368, 49348, 28391, 49371, 28455, 49401, 28474, 49378, 28519, 49354, 28519,
-            49355, 28545, 49373, 28538, 49344, 28585, 49355, 28610, 49338, 28662, 49360, 28681, 49403, 28620, 49427, 28647, 49420, 28780, 49437, 28791,
-            49441, 28886, 49463, 28872, 49445, 28891, 49448, 28965, 49465, 28966, 49472, 29002, 49505, 28969, 49528, 29006
-        ))
-    )
     )
 
-    private fun _Дніпропетровськ(): Map<String, CompactPolygon> = mapOf(
-        "дніпровський" to     CompactPolygon(
+    private fun _r_volodymyr_volynskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            48260, 35181, 48140, 35194, 48122, 35062, 48089, 34990, 48091, 34915, 48131, 34916, 48133, 34855, 48054, 34876, 48051, 34839, 48014, 34847,
-            48011, 34818, 47997, 34821, 47985, 34744, 48027, 34731, 48013, 34602, 47982, 34610, 47979, 34586, 47961, 34590, 47924, 34452, 47954, 34441,
-            47939, 34373, 47929, 34410, 47919, 34343, 47929, 34318, 47978, 34303, 47961, 34188, 48001, 34198, 48028, 34238, 48068, 34196, 48078, 34289,
-            48110, 34280, 48117, 34293, 48129, 34429, 48152, 34414, 48171, 34453, 48161, 34394, 48206, 34383, 48196, 34435, 48235, 34425, 48241, 34461,
-            48264, 34473, 48253, 34506, 48274, 34551, 48252, 34565, 48254, 34592, 48285, 34586, 48290, 34607, 48318, 34571, 48330, 34597, 48433, 34562,
-            48442, 34509, 48457, 34511, 48464, 34674, 48435, 34703, 48473, 34702, 48440, 34760, 48473, 34772, 48484, 34749, 48492, 34766, 48536, 34675,
-            48561, 34564, 48588, 34568, 48590, 34633, 48627, 34604, 48599, 34583, 48623, 34535, 48611, 34551, 48578, 34516, 48611, 34446, 48667, 34407,
-            48719, 34292, 48740, 34314, 48765, 34309, 48783, 34342, 48785, 34298, 48821, 34297, 48820, 34339, 48844, 34325, 48850, 34351, 48896, 34300,
-            48941, 34312, 48984, 34353, 48999, 34326, 49055, 34416, 49094, 34402, 49054, 34544, 49063, 34574, 49083, 34566, 49094, 34595, 49112, 34591,
-            49123, 34624, 49098, 34672, 49073, 34687, 49053, 34657, 49048, 34692, 48967, 34754, 48947, 34758, 48940, 34738, 48913, 34788, 48872, 34735,
-            48820, 34779, 48755, 34785, 48777, 34839, 48784, 34826, 48805, 34849, 48823, 34842, 48834, 34891, 48783, 34930, 48793, 34957, 48765, 34956,
-            48753, 34929, 48727, 34966, 48720, 34931, 48701, 34939, 48722, 34972, 48692, 35006, 48755, 35070, 48732, 35162, 48700, 35139, 48672, 35156,
-            48657, 35169, 48670, 35211, 48656, 35216, 48653, 35187, 48613, 35164, 48600, 35174, 48586, 35142, 48547, 35232, 48519, 35241, 48473, 35314,
-            48464, 35285, 48440, 35303, 48428, 35236, 48370, 35309, 48347, 35262, 48325, 35282, 48313, 35255, 48255, 35226, 48260, 35181
+            50565, 24566, 50558, 24597, 50560, 24615, 50573, 24625, 50578, 24636, 50595, 24649, 50590, 24679, 50593, 24734, 50586, 24741, 50572, 24741,
+            50570, 24762, 50574, 24778, 50580, 24833, 50598, 24827, 50608, 24836, 50636, 24878, 50636, 24860, 50654, 24862, 50657, 24876, 50673, 24882,
+            50683, 24869, 50703, 24866, 50715, 24875, 50708, 24898, 50705, 24936, 50717, 24939, 50726, 24935, 50750, 24933, 50757, 24939, 50766, 24936,
+            50778, 24930, 50778, 24921, 50801, 24919, 50807, 24900, 50819, 24892, 50836, 24903, 50855, 24865, 50858, 24829, 50866, 24832, 50886, 24828,
+            50887, 24819, 50883, 24808, 50884, 24791, 50901, 24736, 50886, 24725, 50863, 24717, 50865, 24690, 50859, 24677, 50872, 24649, 50879, 24642,
+            50893, 24608, 50907, 24547, 50914, 24539, 50930, 24496, 50933, 24491, 50934, 24457, 50941, 24428, 50947, 24422, 50958, 24431, 50960, 24403,
+            50972, 24395, 50975, 24361, 50986, 24358, 50993, 24375, 51011, 24378, 51023, 24367, 51036, 24369, 51044, 24377, 51044, 24360, 51037, 24321,
+            51050, 24318, 51053, 24288, 51059, 24285, 51082, 24294, 51089, 24294, 51090, 24279, 51100, 24266, 51097, 24258, 51097, 24229, 51076, 24168,
+            51060, 24166, 51053, 24157, 51048, 24141, 51054, 24131, 51031, 24113, 51011, 24105, 51014, 24092, 51012, 24083, 51016, 24069, 51013, 24061,
+            51022, 24024, 51020, 23981, 51040, 23948, 51054, 23938, 51055, 23914, 51043, 23914, 51038, 23931, 51029, 23915, 51014, 23935, 51012, 23914,
+            51008, 23915, 51006, 23932, 50990, 23958, 50979, 23968, 50956, 23969, 50948, 23975, 50943, 23990, 50930, 23997, 50916, 24026, 50893, 24053,
+            50889, 24088, 50878, 24100, 50869, 24128, 50869, 24147, 50857, 24141, 50850, 24132, 50838, 24104, 50838, 24082, 50834, 24074, 50837, 24051,
+            50834, 24044, 50840, 24030, 50840, 23998, 50825, 23976, 50795, 23958, 50786, 23968, 50780, 23966, 50772, 23982, 50769, 24001, 50772, 24010,
+            50766, 24024, 50755, 24013, 50751, 24024, 50740, 24017, 50724, 24018, 50725, 24024, 50717, 24045, 50721, 24072, 50711, 24076, 50708, 24070,
+            50699, 24073, 50679, 24064, 50676, 24083, 50654, 24088, 50645, 24080, 50636, 24086, 50637, 24097, 50634, 24103, 50647, 24120, 50648, 24129,
+            50646, 24129, 50646, 24138, 50646, 24147, 50632, 24171, 50628, 24169, 50625, 24172, 50618, 24173, 50619, 24183, 50616, 24191, 50614, 24202,
+            50608, 24200, 50589, 24221, 50585, 24234, 50580, 24250, 50580, 24265, 50575, 24285, 50573, 24319, 50599, 24324, 50597, 24365, 50609, 24382,
+            50593, 24400, 50586, 24413, 50576, 24398, 50559, 24408, 50558, 24416, 50540, 24449, 50543, 24472, 50555, 24505, 50553, 24529, 50538, 24542,
+            50539, 24546, 50534, 24553, 50547, 24572, 50547, 24576, 50556, 24584, 50565, 24566
         ))
-    ),
-        "кам'янський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48236, 33546, 48278, 33513, 48329, 33518, 48329, 33474, 48349, 33478, 48353, 33461, 48388, 33468, 48394, 33497, 48545, 33472, 48568, 33509,
-            48567, 33623, 48599, 33609, 48586, 33660, 48615, 33744, 48626, 33764, 48657, 33756, 48663, 33802, 48684, 33805, 48681, 33750, 48723, 33682,
-            48728, 33619, 48755, 33585, 48797, 33583, 48790, 33638, 48815, 33674, 48814, 33715, 48789, 33725, 48803, 33811, 48776, 33819, 48771, 33851,
-            48803, 33848, 48902, 33894, 48865, 34021, 48824, 34075, 48822, 34120, 48778, 34141, 48739, 34296, 48719, 34292, 48667, 34407, 48591, 34474,
-            48578, 34516, 48611, 34551, 48623, 34535, 48599, 34583, 48627, 34604, 48590, 34633, 48588, 34568, 48561, 34564, 48536, 34675, 48492, 34766,
-            48484, 34749, 48473, 34772, 48440, 34760, 48473, 34702, 48435, 34703, 48464, 34674, 48457, 34511, 48442, 34509, 48433, 34562, 48330, 34597,
-            48318, 34571, 48290, 34607, 48285, 34586, 48254, 34592, 48252, 34565, 48274, 34551, 48253, 34506, 48264, 34473, 48241, 34461, 48235, 34425,
-            48196, 34435, 48206, 34383, 48161, 34394, 48171, 34453, 48152, 34414, 48129, 34429, 48117, 34293, 48110, 34280, 48078, 34289, 48056, 34192,
-            48076, 34183, 48102, 34085, 48152, 34059, 48142, 34016, 48185, 34005, 48179, 33935, 48201, 33942, 48223, 33924, 48219, 33886, 48259, 33875,
-            48257, 33779, 48286, 33772, 48282, 33742, 48258, 33741, 48243, 33609, 48291, 33624, 48318, 33613, 48319, 33588, 48314, 33570, 48252, 33578,
-            48236, 33546
-        ))
-    ),
-        "криворізький" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            47800, 34065, 47751, 34021, 47743, 33960, 47722, 33957, 47719, 33927, 47693, 33928, 47666, 33979, 47667, 34043, 47649, 34024, 47635, 34069,
-            47614, 34051, 47596, 34088, 47570, 34045, 47552, 34109, 47475, 34115, 47458, 33955, 47516, 33935, 47485, 33644, 47514, 33636, 47502, 33588,
-            47529, 33576, 47562, 33609, 47600, 33580, 47587, 33474, 47544, 33486, 47524, 33323, 47494, 33349, 47483, 33314, 47518, 33279, 47543, 33287,
-            47533, 33216, 47578, 33233, 47567, 33172, 47579, 33093, 47597, 33095, 47593, 32960, 47615, 32997, 47723, 32972, 47739, 33072, 47782, 33050,
-            47784, 33066, 47832, 33055, 47883, 33070, 47885, 33086, 47920, 33078, 47910, 33014, 47935, 32993, 47937, 33008, 47984, 32995, 47985, 33021,
-            48031, 33032, 48042, 33109, 48066, 33109, 48064, 33143, 48042, 33154, 48077, 33142, 48092, 33225, 48113, 33236, 48104, 33187, 48118, 33182,
-            48127, 33232, 48170, 33213, 48154, 33272, 48103, 33277, 48102, 33293, 48124, 33317, 48150, 33291, 48170, 33431, 48189, 33430, 48202, 33496,
-            48214, 33485, 48232, 33501, 48223, 33527, 48252, 33578, 48317, 33580, 48318, 33613, 48291, 33624, 48243, 33609, 48258, 33741, 48282, 33742,
-            48286, 33772, 48257, 33779, 48259, 33875, 48219, 33886, 48223, 33924, 48201, 33942, 48179, 33935, 48185, 34005, 48142, 34016, 48152, 34059,
-            48102, 34085, 48048, 34232, 48028, 34238, 48001, 34198, 47972, 34201, 47965, 34162, 47941, 34145, 47928, 34011, 47872, 34003, 47874, 34025,
-            47807, 34043, 47800, 34065
-        ))
-    ),
-        "нікопольський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            47659, 34044, 47666, 33979, 47693, 33928, 47719, 33927, 47722, 33957, 47743, 33960, 47751, 34021, 47797, 34069, 47807, 34043, 47874, 34025,
-            47872, 34003, 47928, 34011, 47924, 34063, 47948, 34093, 47941, 34145, 47968, 34168, 47978, 34303, 47929, 34318, 47919, 34343, 47929, 34410,
-            47939, 34373, 47954, 34441, 47927, 34446, 47928, 34495, 47961, 34590, 47979, 34586, 47982, 34610, 48013, 34602, 48027, 34731, 47985, 34744,
-            48015, 34858, 47982, 34870, 47986, 34905, 47933, 34919, 47942, 34876, 47916, 34802, 47864, 34817, 47881, 34861, 47851, 34871, 47853, 34897,
-            47830, 34903, 47818, 34879, 47760, 34894, 47770, 34957, 47712, 34956, 47712, 34930, 47677, 34938, 47674, 34906, 47601, 34942, 47580, 34928,
-            47563, 34959, 47556, 34923, 47548, 34965, 47515, 34862, 47562, 34572, 47475, 34115, 47552, 34109, 47570, 34045, 47596, 34088, 47614, 34051,
-            47635, 34069, 47649, 34024, 47659, 34044
-        ))
-    ),
-        "павлоградський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48339, 35725, 48337, 35756, 48299, 35753, 48286, 35789, 48310, 35784, 48313, 35815, 48355, 35805, 48358, 35827, 48385, 35841, 48391, 35884,
-            48404, 35868, 48409, 35889, 48350, 36103, 48458, 36047, 48441, 36106, 48419, 36112, 48442, 36155, 48436, 36190, 48531, 36296, 48544, 36271,
-            48587, 36319, 48621, 36251, 48661, 36281, 48724, 36143, 48749, 36162, 48766, 36140, 48784, 36159, 48809, 36124, 48808, 36065, 48833, 36076,
-            48855, 36019, 48874, 36040, 48888, 36012, 48915, 36044, 48999, 35940, 48971, 35939, 48975, 35884, 48945, 35856, 48941, 35810, 48876, 35808,
-            48882, 35636, 48847, 35686, 48831, 35647, 48810, 35680, 48769, 35660, 48734, 35676, 48642, 35556, 48640, 35569, 48619, 35544, 48595, 35555,
-            48599, 35525, 48539, 35553, 48532, 35520, 48499, 35533, 48546, 35619, 48522, 35638, 48511, 35615, 48478, 35647, 48491, 35670, 48461, 35707,
-            48472, 35747, 48436, 35792, 48405, 35783, 48401, 35733, 48386, 35748, 48369, 35715, 48384, 35702, 48361, 35679, 48335, 35701, 48339, 35725
-        ))
-    ),
-        "самарівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49133, 34692, 49124, 34623, 49073, 34687, 49052, 34658, 49048, 34692, 48995, 34739, 48991, 34728, 48948, 34759, 48938, 34740, 48913, 34788,
-            48872, 34735, 48820, 34779, 48755, 34785, 48777, 34839, 48784, 34826, 48805, 34849, 48823, 34842, 48834, 34891, 48783, 34930, 48793, 34957,
-            48765, 34956, 48753, 34929, 48727, 34966, 48720, 34931, 48701, 34939, 48722, 34972, 48692, 35006, 48755, 35070, 48732, 35162, 48700, 35139,
-            48672, 35156, 48657, 35169, 48670, 35211, 48656, 35216, 48653, 35187, 48613, 35164, 48600, 35174, 48586, 35142, 48547, 35232, 48486, 35279,
-            48493, 35299, 48473, 35314, 48464, 35285, 48424, 35315, 48455, 35372, 48508, 35331, 48511, 35385, 48527, 35376, 48534, 35397, 48538, 35553,
-            48599, 35525, 48595, 35555, 48619, 35544, 48640, 35569, 48642, 35556, 48739, 35678, 48769, 35660, 48810, 35680, 48831, 35647, 48847, 35686,
-            48882, 35636, 48876, 35808, 48893, 35816, 48924, 35819, 48955, 35788, 48947, 35752, 48967, 35724, 48943, 35696, 48968, 35694, 48967, 35629,
-            48983, 35628, 48987, 35595, 48973, 35485, 49011, 35439, 49069, 35302, 49092, 35307, 49091, 35276, 49113, 35258, 49110, 35190, 49127, 35228,
-            49138, 35190, 49151, 35210, 49163, 35187, 49150, 35144, 49164, 35122, 49141, 35087, 49177, 35053, 49155, 35043, 49149, 35011, 49194, 34949,
-            49149, 34899, 49165, 34867, 49178, 34902, 49191, 34847, 49167, 34812, 49179, 34804, 49168, 34759, 49141, 34749, 49133, 34692
-        ))
-    ),
-        "синельниківський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48339, 35725, 48337, 35756, 48299, 35753, 48286, 35789, 48310, 35784, 48313, 35815, 48355, 35805, 48358, 35827, 48385, 35841, 48391, 35884,
-            48404, 35868, 48409, 35889, 48350, 36103, 48458, 36047, 48441, 36106, 48419, 36112, 48442, 36155, 48436, 36190, 48556, 36324, 48532, 36355,
-            48612, 36424, 48614, 36446, 48634, 36419, 48632, 36447, 48664, 36483, 48603, 36591, 48626, 36739, 48596, 36745, 48600, 36779, 48567, 36788,
-            48569, 36859, 48543, 36902, 48521, 36907, 48518, 36850, 48487, 36857, 48485, 36830, 48417, 36851, 48415, 36825, 48370, 36828, 48348, 36809,
-            48313, 36817, 48309, 36912, 48194, 36937, 48184, 36873, 48078, 36896, 48035, 36855, 48050, 36744, 48085, 36719, 48100, 36653, 48079, 36580,
-            48040, 36574, 48020, 36591, 48011, 36569, 48001, 36587, 47957, 36585, 47962, 36629, 47920, 36640, 47906, 36542, 47877, 36549, 47880, 36577,
-            47847, 36585, 47824, 36470, 47839, 36324, 47821, 36333, 47816, 36299, 47833, 36198, 47859, 36196, 47849, 36074, 47880, 36054, 47865, 36119,
-            47928, 36120, 47942, 36109, 47930, 36085, 47965, 36074, 47966, 36048, 47972, 36071, 48019, 36034, 48025, 36066, 48059, 36052, 48043, 35975,
-            48058, 35989, 48073, 35969, 48085, 35985, 48094, 35969, 48066, 35817, 48100, 35806, 48096, 35743, 48140, 35703, 48075, 35524, 48095, 35519,
-            48100, 35421, 48144, 35295, 48140, 35195, 48260, 35181, 48255, 35226, 48313, 35255, 48325, 35282, 48347, 35262, 48370, 35309, 48429, 35237,
-            48439, 35351, 48455, 35372, 48508, 35331, 48511, 35385, 48527, 35376, 48527, 35522, 48499, 35533, 48546, 35619, 48522, 35638, 48511, 35615,
-            48478, 35647, 48491, 35670, 48461, 35707, 48472, 35747, 48436, 35792, 48405, 35783, 48401, 35733, 48386, 35748, 48369, 35715, 48384, 35702,
-            48361, 35679, 48335, 35701, 48339, 35725
-        ))
-    )
     )
 
-    private fun _Донецьк(): Map<String, CompactPolygon> = mapOf(
-        "бахмутський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                48399, 37969, 48386, 37998, 48414, 37968, 48399, 37969
-            )),
-            ScaledRing(intArrayOf(
-                48405, 38200, 48394, 38103, 48419, 38059, 48416, 38037, 48400, 38053, 48402, 38036, 48383, 38032, 48386, 38007, 48411, 37999, 48396, 38022,
-                48429, 38023, 48426, 37972, 48444, 38014, 48478, 38023, 48467, 37960, 48491, 37965, 48482, 37929, 48543, 37879, 48548, 37812, 48587, 37799,
-                48600, 37829, 48645, 37813, 48672, 37842, 48692, 37801, 48761, 37820, 48805, 37864, 48795, 37935, 48840, 37908, 48845, 38001, 48860, 38002,
-                48870, 38037, 48891, 38041, 48899, 38005, 48940, 38054, 48924, 38133, 48937, 38228, 48839, 38221, 48828, 38314, 48806, 38317, 48803, 38279,
-                48773, 38283, 48750, 38263, 48733, 38320, 48714, 38325, 48711, 38304, 48684, 38315, 48653, 38226, 48634, 38229, 48637, 38263, 48545, 38274,
-                48508, 38321, 48475, 38305, 48476, 38288, 48416, 38400, 48413, 38335, 48391, 38347, 48395, 38249, 48366, 38263, 48361, 38208, 48405, 38200
-            )),
-            ScaledRing(intArrayOf(
-                48359, 37896, 48368, 37823, 48390, 37825, 48405, 37803, 48417, 37934, 48399, 37939, 48371, 37911, 48352, 37935, 48359, 37896
-            )),
-            ScaledRing(intArrayOf(
-                48434, 37868, 48419, 37892, 48434, 37868
-            )),
-            ScaledRing(intArrayOf(
-                48448, 37958, 48455, 37948, 48448, 37958
-            )),
-            ScaledRing(intArrayOf(
-                48464, 37958, 48475, 37952, 48464, 37958
-            )),
-            ScaledRing(intArrayOf(
-                48321, 37761, 48309, 37764, 48321, 37761
-            )),
-            ScaledRing(intArrayOf(
-                48311, 37827, 48317, 37839, 48311, 37827
-            )),
-            ScaledRing(intArrayOf(
-                48325, 37870, 48315, 37895, 48325, 37870
-            )),
-            ScaledRing(intArrayOf(
-                48320, 37811, 48323, 37844, 48287, 37853, 48322, 37857, 48314, 37886, 48327, 37844, 48326, 37891, 48347, 37837, 48320, 37811
-            )),
-            ScaledRing(intArrayOf(
-                48353, 37839, 48362, 37827, 48349, 37851, 48353, 37839
-            )),
-            ScaledRing(intArrayOf(
-                48405, 37780, 48387, 37811, 48379, 37802, 48405, 37780
-            )),
-            ScaledRing(intArrayOf(
-                48375, 37792, 48369, 37806, 48375, 37792
-            )),
-            ScaledRing(intArrayOf(
-                48368, 37818, 48402, 37779, 48433, 37779, 48391, 37770, 48348, 37832, 48368, 37818
-            ))
-    )),
-        "волноваський" to     CompactPolygon(
+    private fun _r_kovelskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            47468, 37245, 47467, 37265, 47448, 37255, 47434, 37289, 47421, 37285, 47397, 37335, 47416, 37357, 47400, 37409, 47383, 37422, 47356, 37407,
-            47370, 37590, 47338, 37637, 47333, 37700, 47371, 37699, 47359, 37841, 47410, 37859, 47421, 37964, 47449, 37964, 47450, 37890, 47457, 37876,
-            47487, 37888, 47494, 37841, 47565, 37824, 47566, 37847, 47580, 37847, 47595, 37816, 47639, 37823, 47660, 37783, 47652, 37763, 47667, 37758,
-            47663, 37778, 47712, 37691, 47688, 37664, 47706, 37647, 47699, 37607, 47753, 37614, 47774, 37591, 47811, 37606, 47800, 37428, 47832, 37296,
-            47802, 37292, 47804, 37275, 47839, 37248, 47867, 37257, 47888, 37184, 47907, 37211, 47934, 37070, 47978, 37076, 47959, 37154, 47982, 37169,
-            47996, 37127, 48005, 37177, 48100, 37153, 48063, 36869, 48035, 36855, 48050, 36744, 48085, 36719, 48100, 36653, 48079, 36580, 48040, 36574,
-            48020, 36591, 48011, 36569, 48001, 36587, 47957, 36585, 47962, 36629, 47920, 36640, 47906, 36542, 47877, 36549, 47880, 36577, 47847, 36585,
-            47851, 36605, 47785, 36588, 47794, 36671, 47679, 36713, 47685, 36792, 47665, 36775, 47659, 36718, 47631, 36725, 47634, 36766, 47607, 36748,
-            47624, 36830, 47545, 36893, 47576, 36944, 47539, 37002, 47553, 37021, 47494, 37074, 47455, 37158, 47484, 37180, 47468, 37245
+            50901, 24736, 50884, 24791, 50883, 24808, 50887, 24819, 50904, 24827, 50913, 24826, 50923, 24835, 50930, 24828, 50941, 24830, 50940, 24869,
+            50933, 24879, 50930, 24892, 50947, 24891, 50954, 24886, 50968, 24859, 50972, 24843, 51002, 24831, 51002, 24906, 51010, 24918, 51019, 24953,
+            51020, 24983, 51018, 25002, 51026, 25034, 51031, 25059, 51033, 25090, 51028, 25094, 51029, 25121, 51032, 25126, 51042, 25140, 51048, 25181,
+            51046, 25190, 51048, 25198, 51056, 25212, 51064, 25217, 51069, 25228, 51077, 25246, 51091, 25230, 51120, 25256, 51124, 25268, 51119, 25293,
+            51128, 25295, 51129, 25320, 51112, 25331, 51113, 25352, 51120, 25373, 51127, 25404, 51131, 25410, 51134, 25408, 51137, 25399, 51137, 25387,
+            51148, 25366, 51157, 25365, 51175, 25331, 51184, 25308, 51197, 25300, 51199, 25290, 51211, 25280, 51212, 25272, 51218, 25299, 51217, 25337,
+            51240, 25334, 51253, 25320, 51249, 25312, 51252, 25287, 51246, 25272, 51272, 25263, 51285, 25249, 51282, 25204, 51311, 25184, 51323, 25179,
+            51333, 25178, 51350, 25196, 51375, 25207, 51380, 25186, 51376, 25128, 51370, 25119, 51365, 25077, 51360, 25049, 51359, 24985, 51352, 24970,
+            51354, 24950, 51359, 24942, 51375, 24956, 51374, 24938, 51378, 24901, 51394, 24881, 51399, 24860, 51412, 24855, 51412, 24832, 51427, 24837,
+            51435, 24829, 51441, 24785, 51453, 24752, 51462, 24763, 51474, 24756, 51488, 24753, 51502, 24762, 51522, 24768, 51537, 24783, 51547, 24776,
+            51582, 24773, 51606, 24769, 51601, 24678, 51605, 24645, 51618, 24650, 51612, 24674, 51618, 24686, 51627, 24678, 51631, 24690, 51637, 24691,
+            51638, 24677, 51649, 24695, 51653, 24694, 51666, 24707, 51700, 24686, 51710, 24697, 51721, 24673, 51726, 24679, 51730, 24683, 51726, 24702,
+            51709, 24711, 51716, 24721, 51736, 24724, 51746, 24731, 51763, 24731, 51778, 24776, 51778, 24795, 51774, 24805, 51781, 24814, 51797, 24817,
+            51803, 24829, 51826, 24846, 51812, 24869, 51810, 24883, 51810, 24889, 51813, 24894, 51827, 24920, 51836, 24926, 51838, 24938, 51845, 24949,
+            51846, 24935, 51864, 24935, 51868, 24930, 51873, 24909, 51878, 24910, 51882, 24937, 51897, 24931, 51912, 24919, 51896, 24843, 51912, 24835,
+            51911, 24807, 51896, 24795, 51884, 24767, 51883, 24741, 51896, 24714, 51892, 24672, 51900, 24661, 51902, 24611, 51894, 24574, 51889, 24566,
+            51887, 24537, 51888, 24516, 51882, 24478, 51882, 24390, 51879, 24373, 51863, 24340, 51856, 24335, 51848, 24342, 51845, 24335, 51812, 24300,
+            51800, 24294, 51775, 24308, 51769, 24307, 51749, 24318, 51717, 24270, 51667, 24119, 51644, 24101, 51620, 24075, 51602, 24025, 51591, 24015,
+            51580, 23995, 51589, 23958, 51597, 23943, 51598, 23903, 51592, 23881, 51597, 23876, 51608, 23880, 51632, 23913, 51643, 23873, 51641, 23846,
+            51646, 23827, 51639, 23794, 51640, 23790, 51660, 23790, 51667, 23780, 51660, 23761, 51660, 23741, 51649, 23703, 51653, 23680, 51641, 23664,
+            51639, 23644, 51629, 23630, 51622, 23605, 51617, 23606, 51608, 23625, 51593, 23631, 51592, 23642, 51582, 23663, 51574, 23664, 51556, 23636,
+            51552, 23637, 51519, 23670, 51505, 23676, 51500, 23672, 51504, 23625, 51497, 23620, 51486, 23640, 51489, 23660, 51483, 23670, 51470, 23674,
+            51471, 23666, 51461, 23656, 51459, 23648, 51446, 23650, 51442, 23684, 51431, 23678, 51415, 23692, 51412, 23701, 51402, 23702, 51394, 23678,
+            51388, 23688, 51383, 23680, 51369, 23685, 51367, 23665, 51340, 23647, 51332, 23638, 51310, 23641, 51300, 23653, 51292, 23647, 51293, 23664,
+            51289, 23687, 51292, 23698, 51284, 23699, 51270, 23721, 51262, 23727, 51248, 23724, 51240, 23734, 51238, 23727, 51227, 23743, 51214, 23740,
+            51212, 23757, 51204, 23761, 51199, 23782, 51188, 23788, 51185, 23809, 51170, 23816, 51162, 23829, 51164, 23842, 51158, 23861, 51141, 23870,
+            51131, 23868, 51130, 23853, 51121, 23849, 51118, 23857, 51099, 23858, 51094, 23871, 51077, 23878, 51082, 23886, 51076, 23894, 51076, 23908,
+            51055, 23914, 51054, 23938, 51040, 23948, 51020, 23981, 51022, 24024, 51013, 24061, 51016, 24069, 51012, 24083, 51014, 24092, 51012, 24104,
+            51031, 24113, 51054, 24131, 51048, 24141, 51053, 24157, 51060, 24166, 51076, 24168, 51097, 24229, 51097, 24258, 51100, 24266, 51090, 24279,
+            51089, 24294, 51082, 24294, 51059, 24285, 51053, 24288, 51050, 24318, 51037, 24321, 51044, 24360, 51044, 24377, 51036, 24369, 51023, 24367,
+            51011, 24378, 50993, 24375, 50986, 24358, 50975, 24361, 50972, 24395, 50960, 24403, 50958, 24431, 50947, 24422, 50941, 24428, 50934, 24457,
+            50933, 24491, 50930, 24496, 50914, 24539, 50907, 24547, 50893, 24608, 50879, 24642, 50872, 24649, 50859, 24677, 50865, 24690, 50863, 24717,
+            50886, 24725, 50901, 24736
         ))
-    ),
-        "горлівський" to     CompactPolygon(
+    )
+
+    private fun _r_lutskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            48165, 38106, 48187, 38151, 48158, 38158, 48133, 38225, 48123, 38194, 48090, 38188, 48102, 38256, 48128, 38248, 48125, 38308, 48106, 38293,
-            48091, 38337, 48048, 38319, 48031, 38358, 47988, 38364, 47958, 38391, 47936, 38455, 47958, 38519, 47936, 38523, 47930, 38561, 47960, 38558,
-            47959, 38596, 47917, 38605, 47930, 38643, 47910, 38674, 47914, 38735, 47866, 38749, 47879, 38776, 47870, 39074, 47896, 39065, 47941, 39091,
-            47956, 39039, 48007, 39040, 48030, 38825, 48048, 38813, 48077, 38829, 48075, 38800, 48116, 38820, 48173, 38602, 48204, 38613, 48268, 38575,
-            48278, 38427, 48339, 38433, 48362, 38487, 48392, 38439, 48448, 38433, 48440, 38401, 48416, 38400, 48413, 38335, 48391, 38347, 48395, 38249,
-            48366, 38263, 48361, 38208, 48412, 38191, 48394, 38103, 48412, 38095, 48417, 38039, 48400, 38053, 48386, 38007, 48411, 37999, 48396, 38022,
-            48429, 38023, 48426, 37972, 48444, 38014, 48478, 38023, 48457, 38003, 48454, 37959, 48367, 37958, 48352, 37905, 48324, 37939, 48308, 37886,
-            48254, 37927, 48251, 37889, 48231, 37894, 48230, 37936, 48213, 37921, 48209, 37958, 48196, 37957, 48196, 38001, 48175, 38001, 48166, 38037,
-            48144, 38042, 48165, 38106
+            50286, 25113, 50294, 25112, 50295, 25103, 50311, 25110, 50312, 25131, 50319, 25130, 50330, 25167, 50343, 25147, 50353, 25151, 50370, 25143,
+            50373, 25159, 50379, 25163, 50372, 25174, 50362, 25183, 50364, 25188, 50368, 25205, 50375, 25210, 50381, 25209, 50387, 25206, 50392, 25202,
+            50396, 25170, 50419, 25170, 50428, 25153, 50428, 25140, 50438, 25142, 50448, 25152, 50460, 25132, 50469, 25096, 50477, 25085, 50471, 25104,
+            50472, 25116, 50468, 25149, 50476, 25156, 50501, 25162, 50521, 25146, 50528, 25125, 50539, 25116, 50548, 25138, 50548, 25154, 50552, 25191,
+            50543, 25192, 50542, 25231, 50534, 25245, 50533, 25269, 50541, 25292, 50540, 25300, 50549, 25312, 50573, 25321, 50583, 25319, 50578, 25300,
+            50603, 25305, 50613, 25293, 50632, 25292, 50631, 25311, 50613, 25327, 50615, 25349, 50611, 25351, 50612, 25383, 50605, 25394, 50611, 25404,
+            50621, 25388, 50635, 25379, 50643, 25354, 50649, 25354, 50656, 25386, 50674, 25388, 50683, 25376, 50689, 25386, 50675, 25395, 50669, 25405,
+            50663, 25459, 50675, 25459, 50680, 25471, 50673, 25476, 50679, 25503, 50685, 25512, 50685, 25526, 50701, 25579, 50700, 25592, 50696, 25601,
+            50716, 25597, 50718, 25606, 50715, 25631, 50725, 25693, 50705, 25698, 50694, 25706, 50684, 25722, 50678, 25707, 50672, 25708, 50670, 25741,
+            50677, 25771, 50666, 25794, 50633, 25818, 50628, 25820, 50621, 25830, 50631, 25842, 50646, 25824, 50667, 25847, 50679, 25855, 50689, 25870,
+            50720, 25878, 50737, 25872, 50751, 25876, 50767, 25887, 50793, 25888, 50804, 25891, 50816, 25908, 50831, 25906, 50831, 25925, 50824, 25958,
+            50826, 25968, 50820, 25999, 50823, 26010, 50820, 26023, 50840, 26030, 50840, 26039, 50852, 26039, 50866, 26013, 50862, 26001, 50867, 25990,
+            50918, 25996, 50935, 26001, 50956, 25966, 50963, 25995, 50962, 26019, 50972, 26054, 50973, 26084, 50990, 26079, 51003, 26086, 51005, 26106,
+            51050, 26092, 51068, 26046, 51083, 26018, 51078, 25981, 51083, 25942, 51087, 25946, 51104, 25950, 51118, 25939, 51126, 25959, 51122, 25983,
+            51123, 25996, 51139, 25995, 51141, 26008, 51130, 26012, 51141, 26046, 51142, 26058, 51146, 26064, 51154, 26070, 51170, 26057, 51176, 26067,
+            51183, 26062, 51227, 25998, 51231, 25955, 51222, 25943, 51214, 25924, 51211, 25868, 51202, 25850, 51194, 25827, 51194, 25802, 51187, 25780,
+            51179, 25773, 51141, 25773, 51134, 25770, 51141, 25706, 51152, 25648, 51146, 25640, 51150, 25634, 51149, 25578, 51146, 25504, 51157, 25476,
+            51156, 25454, 51134, 25432, 51131, 25409, 51127, 25404, 51120, 25373, 51113, 25352, 51112, 25331, 51129, 25320, 51128, 25295, 51119, 25293,
+            51124, 25268, 51120, 25256, 51091, 25230, 51077, 25246, 51069, 25228, 51064, 25217, 51055, 25211, 51047, 25197, 51046, 25187, 51048, 25181,
+            51042, 25140, 51032, 25126, 51029, 25120, 51028, 25094, 51033, 25090, 51031, 25059, 51027, 25038, 51018, 25002, 51020, 24983, 51020, 24954,
+            51010, 24918, 51002, 24906, 51002, 24831, 50972, 24843, 50968, 24859, 50954, 24886, 50947, 24891, 50930, 24892, 50933, 24879, 50940, 24869,
+            50941, 24830, 50930, 24828, 50923, 24835, 50913, 24826, 50904, 24827, 50887, 24819, 50886, 24828, 50866, 24832, 50858, 24829, 50855, 24865,
+            50836, 24903, 50819, 24892, 50807, 24900, 50801, 24919, 50778, 24921, 50778, 24930, 50766, 24936, 50757, 24939, 50750, 24933, 50726, 24935,
+            50717, 24939, 50705, 24936, 50708, 24898, 50715, 24875, 50703, 24866, 50683, 24869, 50673, 24882, 50657, 24876, 50654, 24862, 50636, 24860,
+            50636, 24878, 50608, 24836, 50598, 24827, 50580, 24833, 50574, 24778, 50570, 24762, 50572, 24741, 50586, 24741, 50593, 24734, 50590, 24679,
+            50595, 24649, 50578, 24636, 50573, 24625, 50560, 24615, 50558, 24597, 50565, 24566, 50556, 24584, 50547, 24576, 50547, 24572, 50534, 24554,
+            50539, 24546, 50538, 24542, 50522, 24548, 50512, 24558, 50504, 24552, 50493, 24554, 50489, 24561, 50493, 24584, 50500, 24587, 50466, 24599,
+            50460, 24589, 50456, 24598, 50413, 24597, 50409, 24629, 50411, 24654, 50404, 24651, 50399, 24673, 50386, 24706, 50374, 24721, 50358, 24713,
+            50343, 24713, 50338, 24778, 50346, 24790, 50351, 24842, 50350, 24859, 50360, 24866, 50358, 24888, 50346, 24886, 50344, 24904, 50345, 24938,
+            50371, 24938, 50378, 24929, 50390, 24941, 50360, 24988, 50350, 25008, 50342, 25017, 50346, 25030, 50343, 25060, 50337, 25054, 50329, 25060,
+            50311, 25056, 50301, 25055, 50296, 25070, 50288, 25110, 50286, 25113
         ))
-    ),
-        "донецький" to     CompactPolygon(
+    )
+
+    private fun _r_kamin_kashyrskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            48128, 38248, 48102, 38256, 48092, 38180, 48123, 38194, 48133, 38225, 48158, 38158, 48187, 38151, 48143, 38057, 48175, 38001, 48196, 38001,
-            48198, 37953, 48136, 37876, 48150, 37869, 48142, 37838, 48185, 37814, 48151, 37777, 48142, 37800, 48112, 37799, 48103, 37693, 48078, 37706,
-            48074, 37682, 48058, 37708, 48034, 37657, 48005, 37681, 47995, 37664, 48004, 37625, 48056, 37615, 48051, 37541, 47983, 37544, 47978, 37562,
-            47942, 37525, 47932, 37553, 47867, 37547, 47864, 37603, 47887, 37594, 47893, 37624, 47924, 37610, 47921, 37658, 47889, 37692, 47903, 37783,
-            47881, 37814, 47903, 37811, 47907, 37852, 47886, 37906, 47872, 37915, 47867, 37898, 47831, 37920, 47862, 37965, 47851, 38004, 47814, 38029,
-            47819, 38095, 47839, 38089, 47830, 38131, 47806, 38144, 47836, 38184, 47811, 38207, 47815, 38257, 47767, 38219, 47776, 38189, 47761, 38168,
-            47761, 38191, 47730, 38190, 47712, 38237, 47700, 38222, 47709, 38246, 47687, 38283, 47703, 38317, 47617, 38357, 47617, 38457, 47644, 38457,
-            47645, 38616, 47669, 38630, 47670, 38666, 47699, 38666, 47685, 38773, 47727, 38771, 47773, 38796, 47816, 38789, 47815, 38829, 47868, 38843,
-            47879, 38776, 47866, 38749, 47914, 38735, 47921, 38710, 47917, 38605, 47959, 38596, 47960, 38558, 47930, 38558, 47936, 38523, 47958, 38519,
-            47936, 38455, 47958, 38391, 47988, 38364, 48031, 38358, 48048, 38319, 48091, 38337, 48106, 38293, 48116, 38312, 48129, 38302, 48128, 38248
+            51194, 25802, 51194, 25822, 51202, 25850, 51211, 25868, 51214, 25924, 51226, 25950, 51231, 25955, 51233, 25946, 51249, 25946, 51262, 25931,
+            51278, 25938, 51283, 25917, 51293, 25903, 51292, 25894, 51300, 25898, 51298, 25886, 51305, 25886, 51304, 25875, 51312, 25880, 51318, 25851,
+            51330, 25841, 51334, 25830, 51346, 25822, 51365, 25826, 51376, 25844, 51387, 25831, 51376, 25806, 51379, 25792, 51373, 25778, 51381, 25756,
+            51400, 25760, 51400, 25726, 51389, 25717, 51382, 25720, 51385, 25705, 51394, 25703, 51392, 25692, 51408, 25684, 51414, 25671, 51414, 25656,
+            51418, 25643, 51438, 25636, 51443, 25644, 51480, 25642, 51476, 25617, 51493, 25620, 51493, 25601, 51506, 25609, 51500, 25557, 51512, 25552,
+            51523, 25596, 51529, 25594, 51541, 25563, 51556, 25572, 51563, 25585, 51563, 25596, 51583, 25602, 51594, 25586, 51605, 25582, 51603, 25564,
+            51622, 25556, 51614, 25531, 51632, 25532, 51633, 25569, 51626, 25564, 51624, 25577, 51645, 25588, 51642, 25606, 51664, 25624, 51671, 25625,
+            51681, 25639, 51687, 25634, 51693, 25645, 51707, 25645, 51719, 25663, 51730, 25662, 51738, 25671, 51755, 25680, 51771, 25670, 51764, 25658,
+            51767, 25651, 51783, 25660, 51795, 25646, 51804, 25629, 51814, 25635, 51817, 25646, 51829, 25647, 51837, 25638, 51853, 25641, 51863, 25659,
+            51870, 25660, 51880, 25689, 51896, 25705, 51903, 25676, 51902, 25631, 51907, 25624, 51916, 25596, 51924, 25592, 51940, 25529, 51921, 25511,
+            51928, 25500, 51930, 25486, 51920, 25480, 51921, 25409, 51925, 25405, 51928, 25371, 51934, 25362, 51933, 25341, 51938, 25336, 51959, 25288,
+            51967, 25262, 51966, 25246, 51960, 25226, 51967, 25213, 51970, 25192, 51963, 25167, 51953, 25142, 51951, 25115, 51953, 25100, 51937, 25055,
+            51918, 25019, 51916, 24997, 51912, 24994, 51897, 24964, 51897, 24931, 51882, 24937, 51878, 24910, 51873, 24909, 51868, 24930, 51864, 24935,
+            51846, 24935, 51845, 24949, 51838, 24938, 51836, 24926, 51827, 24920, 51813, 24894, 51811, 24891, 51810, 24884, 51812, 24869, 51826, 24846,
+            51803, 24829, 51797, 24817, 51781, 24814, 51774, 24805, 51778, 24795, 51778, 24776, 51763, 24731, 51746, 24731, 51736, 24724, 51716, 24721,
+            51709, 24711, 51726, 24702, 51730, 24683, 51726, 24679, 51721, 24673, 51710, 24697, 51700, 24686, 51666, 24707, 51653, 24694, 51649, 24695,
+            51638, 24677, 51637, 24691, 51631, 24690, 51627, 24678, 51618, 24686, 51612, 24674, 51618, 24650, 51605, 24645, 51601, 24678, 51606, 24769,
+            51582, 24773, 51547, 24776, 51537, 24783, 51533, 24784, 51522, 24768, 51502, 24762, 51488, 24753, 51474, 24756, 51462, 24763, 51453, 24752,
+            51441, 24785, 51435, 24829, 51427, 24837, 51412, 24832, 51412, 24855, 51399, 24860, 51394, 24881, 51378, 24901, 51374, 24938, 51375, 24956,
+            51359, 24942, 51354, 24950, 51352, 24970, 51359, 24985, 51360, 25049, 51365, 25077, 51370, 25119, 51376, 25128, 51380, 25186, 51375, 25207,
+            51350, 25196, 51333, 25178, 51323, 25179, 51311, 25184, 51282, 25204, 51285, 25249, 51272, 25263, 51246, 25272, 51252, 25287, 51249, 25312,
+            51253, 25320, 51240, 25334, 51217, 25337, 51218, 25299, 51212, 25272, 51211, 25280, 51199, 25290, 51197, 25300, 51184, 25308, 51175, 25331,
+            51157, 25365, 51148, 25366, 51138, 25384, 51136, 25388, 51136, 25400, 51133, 25409, 51131, 25409, 51134, 25432, 51156, 25454, 51157, 25476,
+            51146, 25504, 51149, 25578, 51150, 25634, 51146, 25640, 51152, 25648, 51141, 25706, 51134, 25770, 51141, 25773, 51179, 25773, 51187, 25780,
+            51194, 25802
         ))
-    ),
-        "кальміуський" to     CompactPolygon(
+    )
+
+    private fun _r_vasylivskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            47475, 38295, 47392, 38303, 47364, 38245, 47305, 38221, 47306, 38336, 47269, 38334, 47230, 38233, 47119, 38230, 47022, 38086, 47057, 38133,
-            47107, 38088, 47086, 37984, 47111, 37898, 47106, 37816, 47141, 37786, 47145, 37838, 47163, 37840, 47157, 37881, 47198, 37885, 47214, 37840,
-            47271, 37863, 47281, 37795, 47302, 37803, 47304, 37837, 47342, 37833, 47345, 37864, 47356, 37839, 47410, 37859, 47421, 37964, 47449, 37964,
-            47450, 37890, 47457, 37876, 47487, 37888, 47494, 37841, 47565, 37824, 47566, 37847, 47580, 37847, 47595, 37816, 47639, 37823, 47660, 37783,
-            47652, 37763, 47667, 37758, 47663, 37778, 47712, 37691, 47688, 37664, 47706, 37647, 47699, 37607, 47753, 37614, 47774, 37591, 47811, 37606,
-            47824, 37509, 47839, 37544, 47867, 37544, 47864, 37603, 47887, 37594, 47893, 37624, 47924, 37610, 47921, 37658, 47889, 37692, 47903, 37783,
-            47881, 37814, 47903, 37811, 47906, 37858, 47886, 37906, 47872, 37915, 47867, 37898, 47831, 37920, 47862, 37965, 47851, 38004, 47814, 38029,
-            47819, 38095, 47839, 38089, 47830, 38131, 47806, 38144, 47836, 38184, 47811, 38207, 47815, 38257, 47767, 38219, 47776, 38189, 47761, 38168,
-            47761, 38191, 47730, 38190, 47712, 38237, 47700, 38222, 47709, 38246, 47687, 38283, 47703, 38317, 47631, 38339, 47627, 38358, 47576, 38351,
-            47576, 38311, 47545, 38307, 47544, 38285, 47475, 38295
+            47119, 34516, 47122, 34549, 47159, 34543, 47164, 34594, 47135, 34601, 47145, 34719, 47152, 34720, 47161, 34813, 47172, 34830, 47154, 34857,
+            47143, 34851, 47145, 34873, 47133, 34875, 47141, 34956, 47078, 34964, 47082, 35025, 47079, 35026, 47083, 35066, 47092, 35064, 47096, 35104,
+            47088, 35106, 47090, 35140, 47116, 35150, 47119, 35177, 47128, 35181, 47151, 35175, 47154, 35207, 47145, 35210, 47147, 35222, 47133, 35225,
+            47139, 35267, 47175, 35284, 47175, 35322, 47202, 35324, 47179, 35383, 47201, 35393, 47185, 35448, 47174, 35444, 47161, 35492, 47197, 35507,
+            47201, 35490, 47234, 35511, 47237, 35504, 47249, 35512, 47245, 35523, 47275, 35552, 47266, 35576, 47278, 35585, 47283, 35573, 47307, 35595,
+            47312, 35604, 47333, 35576, 47369, 35609, 47416, 35659, 47434, 35682, 47438, 35673, 47438, 35626, 47443, 35587, 47480, 35579, 47547, 35562,
+            47607, 35549, 47604, 35458, 47618, 35470, 47618, 35430, 47638, 35428, 47639, 35401, 47656, 35400, 47655, 35362, 47659, 35348, 47678, 35334,
+            47660, 35296, 47645, 35278, 47606, 35282, 47582, 35299, 47578, 35309, 47578, 35329, 47571, 35323, 47560, 35330, 47546, 35333, 47544, 35351,
+            47538, 35367, 47537, 35343, 47517, 35324, 47511, 35297, 47501, 35278, 47496, 35275, 47478, 35280, 47473, 35287, 47456, 35273, 47450, 35285,
+            47447, 35306, 47446, 35288, 47452, 35269, 47474, 35267, 47446, 35204, 47446, 35146, 47451, 35121, 47450, 35065, 47438, 35048, 47423, 35036,
+            47408, 35012, 47389, 34967, 47390, 34947, 47395, 34916, 47404, 34883, 47421, 34860, 47437, 34871, 47448, 34874, 47448, 34862, 47456, 34833,
+            47464, 34821, 47465, 34800, 47477, 34767, 47491, 34748, 47489, 34739, 47491, 34722, 47488, 34705, 47490, 34684, 47506, 34683, 47509, 34671,
+            47516, 34673, 47532, 34652, 47541, 34646, 47545, 34632, 47542, 34612, 47533, 34597, 47516, 34580, 47522, 34571, 47529, 34540, 47526, 34530,
+            47515, 34520, 47498, 34497, 47498, 34422, 47502, 34399, 47511, 34382, 47504, 34371, 47503, 34390, 47491, 34368, 47482, 34362, 47477, 34346,
+            47465, 34338, 47450, 34342, 47436, 34326, 47424, 34293, 47434, 34279, 47434, 34263, 47427, 34246, 47394, 34257, 47391, 34252, 47360, 34261,
+            47362, 34272, 47333, 34281, 47274, 34293, 47268, 34306, 47290, 34330, 47294, 34358, 47284, 34370, 47288, 34402, 47298, 34400, 47301, 34420,
+            47323, 34414, 47333, 34494, 47338, 34500, 47336, 34513, 47325, 34507, 47318, 34514, 47315, 34480, 47280, 34488, 47284, 34518, 47267, 34523,
+            47268, 34527, 47251, 34530, 47247, 34492, 47119, 34516
         ))
-    ),
-        "краматорський" to     CompactPolygon(
+    )
+
+    private fun _r_berdianskyi(): CompactPolygon = CompactPolygon(listOf(
         ScaledRing(intArrayOf(
-            48396, 37450, 48347, 37453, 48353, 37470, 48318, 37494, 48336, 37556, 48308, 37608, 48279, 37600, 48261, 37689, 48263, 37721, 48309, 37710,
-            48323, 37750, 48357, 37738, 48377, 37796, 48391, 37770, 48433, 37779, 48402, 37779, 48368, 37818, 48390, 37825, 48405, 37803, 48417, 37817,
-            48405, 37884, 48417, 37876, 48408, 37913, 48421, 37923, 48399, 37939, 48370, 37912, 48358, 37952, 48396, 37965, 48455, 37948, 48457, 38003,
-            48477, 38012, 48467, 37960, 48491, 37965, 48482, 37929, 48543, 37879, 48548, 37812, 48596, 37800, 48600, 37829, 48645, 37813, 48673, 37842,
-            48694, 37801, 48761, 37820, 48805, 37864, 48795, 37935, 48840, 37908, 48845, 38001, 48860, 38002, 48870, 38037, 48891, 38041, 48899, 38005,
-            48935, 38036, 48947, 38006, 48973, 38029, 48965, 38054, 48986, 38052, 48992, 38098, 49060, 38053, 49148, 38082, 49150, 38044, 49127, 38040,
-            49144, 37927, 49175, 37893, 49192, 37935, 49207, 37919, 49214, 37943, 49212, 37890, 49234, 37875, 49201, 37844, 49231, 37568, 49187, 37502,
-            49167, 37554, 49140, 37564, 49146, 37541, 49126, 37585, 49102, 37487, 49070, 37506, 49058, 37481, 49048, 37385, 49025, 37392, 49026, 37375,
-            48992, 37367, 49003, 37344, 48990, 37311, 48983, 37325, 48970, 37295, 48957, 37321, 48947, 37307, 48922, 37328, 48909, 37223, 48881, 37193,
-            48814, 37192, 48851, 37099, 48818, 37078, 48818, 37024, 48787, 36995, 48766, 37043, 48746, 37036, 48795, 36953, 48800, 36854, 48771, 36821,
-            48781, 36789, 48802, 36791, 48806, 36721, 48776, 36689, 48704, 36736, 48693, 36712, 48596, 36745, 48600, 36779, 48567, 36788, 48569, 36859,
-            48531, 36904, 48539, 37004, 48565, 37014, 48559, 37053, 48587, 37047, 48606, 37063, 48609, 37097, 48592, 37112, 48591, 37165, 48609, 37165,
-            48601, 37252, 48568, 37260, 48572, 37301, 48602, 37294, 48556, 37347, 48560, 37366, 48536, 37368, 48534, 37399, 48482, 37363, 48475, 37433,
-            48426, 37446, 48415, 37425, 48396, 37450
-        ))
-    ),
-        "маріупольський" to     CompactPolygon(
+            46682, 36804, 46701, 36804, 46678, 36800, 46682, 36804
+        )),
         ScaledRing(intArrayOf(
-            47107, 37816, 47141, 37786, 47145, 37838, 47163, 37840, 47157, 37881, 47210, 37883, 47214, 37840, 47271, 37863, 47281, 37795, 47305, 37806,
-            47304, 37837, 47342, 37833, 47353, 37863, 47371, 37699, 47333, 37700, 47338, 37637, 47370, 37590, 47356, 37407, 47383, 37422, 47400, 37409,
-            47416, 37357, 47397, 37335, 47443, 37259, 47468, 37252, 47373, 37195, 47356, 37203, 47341, 37162, 47381, 37146, 47376, 37107, 47340, 37122,
-            47300, 37036, 47315, 37026, 47319, 36926, 47202, 36963, 47199, 36855, 47128, 37002, 47089, 37013, 47080, 36985, 47039, 37125, 47007, 37089,
-            46982, 37141, 46928, 37021, 46884, 37062, 46951, 37240, 46913, 37318, 46886, 37324, 46872, 37283, 46869, 37305, 47030, 37477, 47050, 37525,
-            47074, 37527, 47094, 37629, 47085, 37793, 47107, 37877, 47107, 37816
+            46658, 35919, 46662, 35934, 46661, 35971, 46670, 36039, 46669, 36051, 46659, 36092, 46658, 36114, 46671, 36157, 46674, 36180, 46671, 36203,
+            46656, 36231, 46627, 36259, 46602, 36263, 46628, 36266, 46637, 36260, 46635, 36269, 46615, 36272, 46630, 36279, 46639, 36274, 46640, 36290,
+            46651, 36274, 46647, 36289, 46641, 36296, 46621, 36280, 46592, 36262, 46549, 36224, 46528, 36186, 46524, 36175, 46510, 36163, 46522, 36164,
+            46535, 36154, 46516, 36152, 46500, 36137, 46494, 36118, 46499, 36109, 46489, 36112, 46490, 36121, 46505, 36156, 46504, 36172, 46542, 36219,
+            46571, 36248, 46650, 36306, 46666, 36320, 46667, 36317, 46651, 36302, 46658, 36297, 46669, 36305, 46672, 36320, 46683, 36327, 46690, 36337,
+            46680, 36335, 46698, 36358, 46725, 36413, 46738, 36454, 46756, 36524, 46762, 36569, 46780, 36628, 46781, 36653, 46779, 36676, 46780, 36718,
+            46777, 36735, 46754, 36785, 46733, 36815, 46704, 36830, 46676, 36811, 46674, 36794, 46666, 36800, 46659, 36790, 46660, 36784, 46647, 36778,
+            46642, 36769, 46657, 36760, 46641, 36758, 46633, 36749, 46634, 36770, 46643, 36785, 46654, 36798, 46699, 36834, 46742, 36853, 46763, 36865,
+            46799, 36890, 46820, 36912, 46856, 36972, 46865, 36992, 46870, 37034, 46883, 37062, 46894, 37054, 46922, 37029, 46928, 37021, 46968, 37092,
+            46960, 37103, 46982, 37140, 47008, 37090, 47039, 37125, 47059, 37098, 47047, 37081, 47076, 36999, 47080, 36984, 47085, 37007, 47098, 37011,
+            47102, 37004, 47114, 37011, 47115, 37001, 47129, 36999, 47125, 36982, 47136, 36970, 47141, 36972, 47150, 36958, 47160, 36948, 47158, 36939,
+            47166, 36936, 47162, 36924, 47173, 36921, 47166, 36915, 47168, 36906, 47175, 36900, 47172, 36889, 47183, 36876, 47191, 36859, 47192, 36860,
+            47196, 36857, 47196, 36829, 47194, 36825, 47194, 36783, 47202, 36790, 47198, 36679, 47190, 36686, 47189, 36663, 47144, 36668, 47116, 36491,
+            47178, 36482, 47175, 36402, 47221, 36448, 47263, 36434, 47296, 36370, 47296, 36364, 47258, 36344, 47266, 36314, 47275, 36315, 47284, 36272,
+            47277, 36271, 47284, 36261, 47278, 36222, 47283, 36188, 47294, 36181, 47298, 36192, 47328, 36170, 47326, 36162, 47341, 36104, 47338, 36018,
+            47342, 36002, 47318, 35975, 47312, 35979, 47302, 35968, 47285, 35973, 47253, 35994, 47247, 35996, 47224, 35985, 47197, 35983, 47195, 35833,
+            47164, 35837, 47154, 35853, 47142, 35854, 47143, 35866, 47133, 35868, 47130, 35857, 47084, 35861, 47088, 35917, 47068, 35920, 47069, 35950,
+            47060, 35950, 47061, 35963, 47043, 35965, 47041, 35987, 47036, 35994, 47022, 35984, 46976, 35982, 46985, 36068, 46958, 36065, 46918, 36058,
+            46906, 36042, 46905, 35988, 46869, 35984, 46886, 36059, 46894, 36061, 46878, 36102, 46885, 36111, 46873, 36144, 46850, 36084, 46838, 36091,
+            46821, 36092, 46809, 36026, 46781, 36022, 46780, 36030, 46755, 36029, 46746, 35961, 46725, 35967, 46722, 35901, 46658, 35919
         ))
-    ),
-        "покровський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                47840, 37570, 47833, 37560, 47840, 37570
-            )),
-            ScaledRing(intArrayOf(
-                47867, 37544, 47824, 37531, 47802, 37468, 47832, 37296, 47802, 37292, 47805, 37271, 47839, 37248, 47867, 37257, 47888, 37184, 47907, 37211,
-                47934, 37070, 47978, 37076, 47959, 37154, 47982, 37169, 47996, 37127, 48005, 37177, 48100, 37153, 48063, 36882, 48078, 36896, 48184, 36873,
-                48194, 36937, 48309, 36912, 48313, 36817, 48405, 36821, 48417, 36851, 48485, 36830, 48487, 36857, 48518, 36850, 48539, 37004, 48565, 37014,
-                48559, 37053, 48587, 37047, 48606, 37063, 48609, 37097, 48592, 37112, 48591, 37165, 48609, 37165, 48601, 37252, 48568, 37260, 48572, 37301,
-                48602, 37294, 48556, 37347, 48560, 37366, 48536, 37368, 48534, 37399, 48482, 37363, 48475, 37433, 48426, 37446, 48424, 37424, 48410, 37427,
-                48412, 37446, 48347, 37453, 48353, 37470, 48318, 37494, 48336, 37556, 48308, 37608, 48279, 37600, 48261, 37689, 48263, 37721, 48309, 37710,
-                48323, 37750, 48357, 37738, 48366, 37803, 48377, 37797, 48347, 37826, 48368, 37816, 48373, 37872, 48331, 37938, 48308, 37886, 48254, 37927,
-                48250, 37888, 48231, 37894, 48228, 37938, 48213, 37921, 48203, 37960, 48174, 37935, 48166, 37897, 48143, 37895, 48142, 37838, 48182, 37828,
-                48172, 37790, 48144, 37776, 48142, 37800, 48119, 37808, 48103, 37693, 48078, 37706, 48074, 37682, 48058, 37708, 48034, 37657, 48005, 37681,
-                47995, 37664, 48004, 37625, 48056, 37615, 48051, 37541, 47983, 37544, 47978, 37562, 47942, 37525, 47932, 37553, 47867, 37544
-            )),
-            ScaledRing(intArrayOf(
-                48098, 37730, 48096, 37711, 48098, 37730
-            ))
     ))
+
+    private fun _r_melitopolskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            46302, 35104, 46309, 35112, 46336, 35125, 46348, 35142, 46361, 35175, 46384, 35203, 46405, 35213, 46419, 35213, 46436, 35209, 46451, 35184,
+            46468, 35179, 46494, 35162, 46505, 35188, 46488, 35179, 46486, 35190, 46473, 35199, 46466, 35212, 46460, 35212, 46455, 35225, 46450, 35256,
+            46442, 35269, 46434, 35272, 46418, 35267, 46396, 35251, 46358, 35262, 46353, 35268, 46353, 35301, 46332, 35317, 46352, 35327, 46360, 35353,
+            46329, 35332, 46314, 35313, 46311, 35295, 46304, 35289, 46295, 35294, 46252, 35264, 46250, 35269, 46292, 35303, 46318, 35328, 46337, 35344,
+            46396, 35400, 46439, 35453, 46446, 35471, 46454, 35505, 46467, 35520, 46460, 35518, 46476, 35571, 46489, 35600, 46526, 35654, 46548, 35680,
+            46585, 35726, 46601, 35758, 46606, 35780, 46619, 35817, 46633, 35846, 46642, 35847, 46648, 35837, 46669, 35833, 46659, 35842, 46654, 35854,
+            46637, 35852, 46644, 35862, 46658, 35919, 46722, 35901, 46725, 35967, 46746, 35961, 46755, 36029, 46780, 36030, 46781, 36022, 46809, 36026,
+            46821, 36092, 46838, 36091, 46850, 36084, 46873, 36144, 46885, 36111, 46878, 36102, 46894, 36061, 46886, 36059, 46869, 35984, 46905, 35988,
+            46906, 36042, 46918, 36058, 46958, 36065, 46985, 36068, 46976, 35982, 47022, 35984, 47036, 35994, 47041, 35987, 47043, 35965, 47061, 35963,
+            47060, 35950, 47069, 35950, 47068, 35920, 47041, 35922, 47034, 35913, 47027, 35924, 47011, 35922, 47007, 35884, 46993, 35886, 46990, 35862,
+            47005, 35857, 46996, 35765, 46999, 35763, 46996, 35722, 46990, 35722, 46988, 35691, 47045, 35680, 47043, 35671, 47065, 35667, 47102, 35623,
+            47103, 35601, 47097, 35590, 47098, 35555, 47102, 35525, 47101, 35506, 47111, 35506, 47114, 35500, 47127, 35509, 47144, 35509, 47160, 35451,
+            47170, 35457, 47174, 35444, 47185, 35448, 47201, 35393, 47179, 35383, 47202, 35324, 47175, 35322, 47175, 35284, 47139, 35267, 47133, 35225,
+            47147, 35222, 47145, 35210, 47154, 35207, 47151, 35175, 47128, 35181, 47119, 35177, 47116, 35150, 47090, 35140, 47088, 35106, 47096, 35104,
+            47092, 35064, 47083, 35066, 47079, 35026, 47082, 35025, 47078, 34964, 47141, 34956, 47133, 34875, 47145, 34873, 47143, 34851, 47154, 34857,
+            47172, 34830, 47161, 34813, 47152, 34720, 47145, 34719, 47135, 34601, 47164, 34594, 47159, 34543, 47122, 34549, 47119, 34516, 47105, 34520,
+            47106, 34552, 47024, 34568, 47027, 34591, 46992, 34599, 46993, 34620, 46973, 34623, 46979, 34683, 46956, 34688, 46961, 34736, 46880, 34752,
+            46882, 34805, 46834, 34814, 46829, 34818, 46823, 34758, 46781, 34766, 46780, 34750, 46758, 34750, 46758, 34735, 46748, 34735, 46740, 34658,
+            46728, 34660, 46725, 34626, 46688, 34634, 46692, 34681, 46678, 34684, 46683, 34746, 46627, 34757, 46620, 34713, 46581, 34723, 46584, 34749,
+            46551, 34757, 46566, 34891, 46538, 34897, 46537, 34884, 46506, 34890, 46512, 34948, 46504, 34949, 46479, 35022, 46482, 35054, 46383, 35071,
+            46376, 35059, 46355, 35063, 46299, 35072, 46302, 35104
+        ))
     )
 
-    private fun _Житомирськ(): Map<String, CompactPolygon> = mapOf(
-        "бердичівський" to     CompactPolygon(
+    private fun _r_polohivskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            49659, 29410, 49649, 29505, 49663, 29513, 49669, 29489, 49714, 29498, 49713, 29445, 49729, 29435, 49762, 29462, 49817, 29430, 49824, 29385,
-            49831, 29397, 49858, 29365, 49859, 29328, 49842, 29330, 49833, 29309, 49859, 29296, 49862, 29249, 49882, 29251, 49882, 29236, 49892, 29248,
-            49967, 29213, 49964, 29279, 50012, 29269, 50024, 29301, 50054, 29251, 50072, 29273, 50099, 29271, 50110, 29222, 50124, 29235, 50135, 29191,
-            50148, 29199, 50143, 29163, 50090, 29164, 50064, 29122, 50080, 29015, 50050, 28957, 50055, 28924, 50149, 28962, 50153, 28942, 50105, 28856,
-            50090, 28872, 50070, 28780, 50038, 28770, 50062, 28679, 50038, 28640, 50049, 28465, 50031, 28464, 50029, 28427, 49985, 28384, 49946, 28386,
-            49905, 28343, 49924, 28275, 49870, 28146, 49843, 28125, 49857, 28132, 49850, 28087, 49903, 28068, 49920, 27965, 49903, 27969, 49894, 27931,
-            49834, 27874, 49827, 27888, 49786, 27884, 49767, 27919, 49785, 28226, 49815, 28249, 49780, 28379, 49825, 28422, 49807, 28482, 49820, 28529,
-            49774, 28570, 49782, 28601, 49810, 28602, 49817, 28636, 49798, 28734, 49818, 28759, 49844, 28751, 49860, 28844, 49889, 28857, 49889, 28879,
-            49840, 28954, 49820, 28944, 49804, 28970, 49784, 28942, 49739, 29002, 49679, 28946, 49633, 29010, 49597, 28994, 49584, 29117, 49603, 29242,
-            49590, 29276, 49627, 29276, 49620, 29380, 49659, 29410
+            47068, 35920, 47088, 35917, 47084, 35861, 47130, 35857, 47133, 35868, 47143, 35866, 47142, 35854, 47154, 35853, 47164, 35837, 47195, 35833,
+            47197, 35983, 47224, 35985, 47247, 35996, 47253, 35994, 47285, 35973, 47302, 35968, 47312, 35979, 47318, 35975, 47342, 36002, 47338, 36018,
+            47341, 36104, 47326, 36162, 47328, 36170, 47298, 36192, 47294, 36181, 47283, 36188, 47278, 36222, 47284, 36261, 47277, 36271, 47284, 36272,
+            47275, 36315, 47266, 36314, 47258, 36344, 47296, 36364, 47296, 36370, 47263, 36434, 47221, 36448, 47175, 36402, 47178, 36482, 47116, 36491,
+            47144, 36668, 47189, 36663, 47190, 36686, 47198, 36679, 47202, 36790, 47194, 36783, 47194, 36825, 47196, 36829, 47196, 36857, 47200, 36854,
+            47200, 36890, 47206, 36883, 47207, 36932, 47201, 36932, 47202, 36963, 47229, 36956, 47228, 36949, 47243, 36945, 47292, 36936, 47320, 36927,
+            47320, 36946, 47311, 36947, 47314, 37027, 47299, 37037, 47314, 37082, 47323, 37081, 47326, 37095, 47330, 37093, 47341, 37124, 47376, 37107,
+            47380, 37142, 47369, 37151, 47342, 37162, 47356, 37203, 47373, 37195, 47437, 37232, 47436, 37236, 47455, 37244, 47458, 37239, 47469, 37245,
+            47468, 37188, 47480, 37196, 47484, 37179, 47456, 37157, 47469, 37130, 47497, 37085, 47492, 37077, 47551, 37023, 47539, 37002, 47561, 36980,
+            47554, 36968, 47575, 36944, 47545, 36895, 47624, 36831, 47600, 36764, 47607, 36761, 47606, 36747, 47622, 36745, 47623, 36765, 47634, 36765,
+            47631, 36725, 47659, 36718, 47662, 36754, 47666, 36752, 47668, 36768, 47665, 36774, 47673, 36785, 47676, 36780, 47685, 36792, 47678, 36713,
+            47732, 36700, 47730, 36686, 47793, 36672, 47784, 36594, 47785, 36587, 47816, 36589, 47818, 36599, 47838, 36608, 47851, 36605, 47836, 36521,
+            47828, 36522, 47824, 36456, 47828, 36414, 47831, 36401, 47830, 36377, 47838, 36375, 47840, 36325, 47821, 36332, 47815, 36298, 47815, 36276,
+            47832, 36267, 47832, 36198, 47828, 36197, 47825, 36204, 47812, 36201, 47807, 36195, 47801, 36189, 47785, 36176, 47775, 36184, 47778, 36150,
+            47778, 36126, 47766, 36008, 47725, 36013, 47721, 35974, 47744, 35969, 47747, 35958, 47754, 35957, 47759, 35944, 47756, 35908, 47763, 35911,
+            47765, 35891, 47769, 35892, 47772, 35874, 47769, 35842, 47811, 35850, 47833, 35846, 47830, 35800, 47827, 35788, 47804, 35792, 47801, 35771,
+            47757, 35783, 47755, 35780, 47674, 35797, 47598, 35756, 47606, 35744, 47603, 35736, 47628, 35708, 47621, 35692, 47609, 35677, 47593, 35627,
+            47588, 35617, 47579, 35567, 47584, 35554, 47443, 35587, 47438, 35626, 47438, 35673, 47434, 35682, 47416, 35659, 47369, 35609, 47333, 35576,
+            47312, 35604, 47307, 35595, 47283, 35573, 47278, 35585, 47266, 35576, 47275, 35552, 47245, 35523, 47249, 35512, 47237, 35504, 47234, 35511,
+            47201, 35490, 47197, 35507, 47161, 35492, 47170, 35457, 47160, 35451, 47144, 35509, 47127, 35509, 47114, 35500, 47111, 35506, 47101, 35506,
+            47102, 35525, 47098, 35555, 47097, 35590, 47103, 35601, 47102, 35623, 47065, 35667, 47043, 35671, 47045, 35680, 46988, 35691, 46990, 35722,
+            46996, 35722, 46999, 35763, 46996, 35765, 47005, 35857, 46990, 35862, 46993, 35886, 47007, 35884, 47011, 35922, 47027, 35924, 47034, 35913,
+            47041, 35922, 47068, 35920
         ))
-    ),
-        "житомирський" to     CompactPolygon(
+    )
+
+    private fun _r_zaporizkyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            50724, 29463, 50737, 29460, 50726, 29411, 50709, 29411, 50678, 29333, 50692, 29293, 50680, 29306, 50642, 29245, 50683, 29172, 50657, 29044,
-            50673, 29078, 50674, 29048, 50714, 29000, 50709, 28935, 50726, 28911, 50710, 28856, 50667, 28843, 50694, 28762, 50649, 28719, 50670, 28717,
-            50682, 28687, 50720, 28737, 50723, 28668, 50754, 28702, 50755, 28647, 50735, 28612, 50741, 28544, 50769, 28496, 50744, 28484, 50757, 28298,
-            50718, 28290, 50709, 28241, 50678, 28282, 50633, 28240, 50586, 28101, 50594, 28043, 50563, 28055, 50550, 28042, 50512, 27938, 50479, 27927,
-            50436, 27946, 50429, 27929, 50405, 27955, 50404, 27923, 50386, 28046, 50358, 28034, 50336, 28061, 50330, 27983, 50283, 27972, 50290, 27906,
-            50268, 27867, 50227, 27862, 50241, 27862, 50255, 27803, 50249, 27748, 50226, 27778, 50229, 27718, 50213, 27713, 50216, 27690, 50238, 27695,
-            50232, 27666, 50213, 27683, 50223, 27663, 50199, 27651, 50158, 27678, 50146, 27631, 50115, 27639, 50086, 27615, 50077, 27669, 50035, 27681,
-            50037, 27642, 50006, 27612, 50012, 27546, 49949, 27576, 49935, 27548, 49903, 27547, 49892, 27625, 49876, 27610, 49807, 27645, 49794, 27662,
-            49806, 27716, 49800, 27727, 49769, 27704, 49727, 27806, 49756, 27836, 49772, 27924, 49786, 27884, 49827, 27888, 49834, 27874, 49894, 27931,
-            49903, 27969, 49920, 27965, 49903, 28068, 49850, 28087, 49857, 28132, 49843, 28132, 49870, 28146, 49924, 28275, 49905, 28343, 49946, 28386,
-            49985, 28384, 50029, 28427, 50031, 28464, 50049, 28465, 50038, 28640, 50062, 28679, 50038, 28770, 50070, 28780, 50090, 28872, 50105, 28856,
-            50153, 28942, 50149, 28962, 50055, 28924, 50050, 28957, 50080, 29015, 50064, 29123, 50090, 29164, 50147, 29173, 50148, 29199, 50135, 29191,
-            50124, 29235, 50110, 29222, 50099, 29271, 50072, 29273, 50054, 29251, 50024, 29301, 50012, 29269, 49964, 29279, 49969, 29216, 49943, 29211,
-            49931, 29235, 49862, 29249, 49859, 29296, 49833, 29309, 49842, 29330, 49859, 29328, 49858, 29365, 49809, 29409, 49803, 29480, 49835, 29509,
-            49819, 29542, 49835, 29547, 49867, 29655, 49874, 29667, 49886, 29627, 49944, 29735, 50032, 29672, 50044, 29695, 50069, 29697, 50107, 29647,
-            50152, 29692, 50180, 29643, 50230, 29704, 50265, 29666, 50277, 29689, 50298, 29676, 50323, 29692, 50330, 29626, 50341, 29612, 50358, 29642,
-            50373, 29638, 50375, 29589, 50400, 29590, 50423, 29560, 50401, 29455, 50415, 29443, 50419, 29482, 50440, 29499, 50453, 29447, 50471, 29457,
-            50471, 29511, 50500, 29507, 50517, 29460, 50539, 29458, 50547, 29502, 50590, 29498, 50621, 29445, 50628, 29472, 50663, 29486, 50662, 29522,
-            50699, 29576, 50729, 29598, 50740, 29580, 50720, 29584, 50694, 29553, 50717, 29488, 50739, 29504, 50743, 29469, 50720, 29485, 50724, 29463
+            47566, 34960, 47563, 34970, 47569, 34986, 47579, 35023, 47592, 35035, 47602, 35033, 47621, 35055, 47634, 35081, 47644, 35088, 47655, 35109,
+            47666, 35105, 47681, 35112, 47701, 35130, 47714, 35127, 47724, 35144, 47732, 35141, 47738, 35190, 47736, 35199, 47726, 35193, 47714, 35200,
+            47697, 35221, 47682, 35220, 47672, 35226, 47649, 35256, 47671, 35301, 47680, 35310, 47670, 35319, 47678, 35334, 47659, 35348, 47655, 35362,
+            47656, 35400, 47639, 35401, 47638, 35428, 47618, 35430, 47618, 35470, 47604, 35458, 47607, 35549, 47584, 35554, 47579, 35567, 47588, 35617,
+            47593, 35627, 47609, 35677, 47621, 35692, 47628, 35708, 47603, 35736, 47606, 35744, 47598, 35756, 47674, 35797, 47755, 35780, 47757, 35783,
+            47801, 35771, 47804, 35792, 47827, 35788, 47830, 35800, 47833, 35846, 47811, 35850, 47769, 35842, 47772, 35874, 47769, 35892, 47765, 35891,
+            47763, 35911, 47756, 35908, 47759, 35944, 47754, 35957, 47747, 35958, 47744, 35969, 47721, 35974, 47725, 36013, 47766, 36008, 47778, 36126,
+            47778, 36150, 47775, 36184, 47785, 36176, 47801, 36189, 47807, 36195, 47804, 36205, 47812, 36201, 47825, 36204, 47828, 36197, 47834, 36198,
+            47841, 36187, 47855, 36197, 47860, 36197, 47858, 36177, 47850, 36178, 47844, 36102, 47850, 36098, 47849, 36075, 47868, 36069, 47868, 36059,
+            47880, 36054, 47884, 36081, 47862, 36088, 47866, 36118, 47872, 36116, 47890, 36129, 47900, 36122, 47903, 36127, 47925, 36110, 47928, 36120,
+            47942, 36110, 47930, 36084, 47966, 36073, 47959, 36051, 47965, 36048, 47972, 36070, 48000, 36063, 48004, 36041, 48019, 36034, 48025, 36066,
+            48059, 36052, 48047, 35998, 48044, 35975, 48063, 35982, 48059, 35974, 48073, 35970, 48079, 35984, 48087, 35984, 48095, 35968, 48080, 35910,
+            48066, 35817, 48100, 35807, 48094, 35784, 48098, 35775, 48096, 35743, 48141, 35705, 48076, 35523, 48094, 35518, 48098, 35502, 48096, 35485,
+            48104, 35450, 48101, 35420, 48110, 35417, 48116, 35398, 48119, 35383, 48123, 35358, 48124, 35341, 48122, 35337, 48127, 35332, 48132, 35317,
+            48137, 35310, 48142, 35289, 48140, 35270, 48134, 35268, 48131, 35241, 48141, 35222, 48132, 35205, 48126, 35204, 48116, 35228, 48120, 35206,
+            48113, 35198, 48118, 35191, 48117, 35178, 48120, 35150, 48128, 35127, 48127, 35098, 48123, 35090, 48119, 35063, 48110, 35051, 48095, 35049,
+            48085, 35102, 48079, 35106, 48082, 35122, 48080, 35134, 48078, 35109, 48071, 35103, 48055, 35113, 48049, 35123, 48056, 35141, 48046, 35131,
+            48042, 35152, 48039, 35146, 48021, 35158, 48016, 35153, 48009, 35164, 48015, 35196, 48004, 35160, 47992, 35163, 47977, 35140, 47966, 35134,
+            47958, 35146, 47957, 35173, 47963, 35202, 47960, 35218, 47959, 35188, 47954, 35172, 47959, 35134, 47954, 35129, 47949, 35087, 47956, 35064,
+            47957, 35093, 47973, 35092, 47977, 35072, 47984, 35065, 47976, 35082, 47974, 35106, 47988, 35100, 47987, 35107, 48001, 35119, 48012, 35119,
+            48017, 35104, 48016, 35120, 48026, 35124, 48042, 35095, 48063, 35083, 48065, 35074, 48078, 35061, 48090, 35023, 48096, 35026, 48098, 35039,
+            48095, 35004, 48089, 34990, 48097, 34987, 48091, 34930, 48091, 34915, 48113, 34912, 48114, 34921, 48131, 34917, 48127, 34881, 48134, 34878,
+            48133, 34855, 48054, 34875, 48051, 34840, 48014, 34848, 48015, 34859, 48000, 34866, 47983, 34870, 47985, 34906, 47942, 34914, 47934, 34916,
+            47929, 34880, 47942, 34877, 47937, 34850, 47922, 34854, 47916, 34803, 47865, 34818, 47869, 34839, 47876, 34850, 47880, 34864, 47852, 34870,
+            47853, 34897, 47831, 34903, 47821, 34879, 47760, 34894, 47770, 34958, 47741, 34964, 47740, 34954, 47727, 34958, 47727, 34953, 47713, 34956,
+            47712, 34931, 47678, 34938, 47674, 34907, 47635, 34916, 47636, 34932, 47601, 34941, 47592, 34936, 47595, 34926, 47571, 34948, 47566, 34960
         ))
-    ),
-        "звягельський" to     CompactPolygon(
+    )
+
+    private fun _r_zvenyhorodskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            51082, 27585, 51057, 27586, 51078, 27549, 51051, 27470, 51011, 27454, 50985, 27389, 51012, 27353, 51002, 27383, 51020, 27424, 51044, 27446,
-            51068, 27432, 51059, 27359, 51077, 27360, 51083, 27334, 51042, 27326, 51030, 27220, 51008, 27226, 51000, 27200, 50937, 27239, 50920, 27217,
-            50896, 27257, 50795, 27234, 50770, 27242, 50761, 27272, 50721, 27275, 50673, 27245, 50666, 27204, 50640, 27214, 50625, 27186, 50605, 27225,
-            50588, 27215, 50567, 27231, 50562, 27196, 50532, 27207, 50513, 27259, 50492, 27268, 50493, 27301, 50393, 27248, 50368, 27321, 50332, 27316,
-            50333, 27364, 50307, 27417, 50288, 27395, 50225, 27521, 50259, 27597, 50216, 27593, 50199, 27623, 50170, 27623, 50193, 27657, 50221, 27661,
-            50213, 27683, 50232, 27666, 50238, 27695, 50216, 27690, 50213, 27713, 50229, 27718, 50226, 27778, 50249, 27748, 50255, 27803, 50241, 27862,
-            50227, 27862, 50268, 27867, 50290, 27906, 50283, 27972, 50330, 27983, 50336, 28061, 50358, 28034, 50386, 28046, 50404, 27923, 50405, 27955,
-            50429, 27929, 50436, 27946, 50479, 27927, 50512, 27938, 50550, 28042, 50563, 28055, 50594, 28043, 50586, 28095, 50610, 28179, 50633, 28240,
-            50680, 28282, 50709, 28241, 50721, 28262, 50744, 28228, 50752, 28242, 50784, 28166, 50797, 28175, 50804, 28149, 50858, 28131, 50864, 28113,
-            50923, 28171, 50965, 28140, 50967, 28157, 50987, 28106, 51027, 28127, 51030, 28052, 51070, 27952, 51049, 27929, 51048, 27753, 51035, 27764,
-            51030, 27750, 51012, 27774, 50996, 27709, 51013, 27661, 51038, 27667, 51077, 27625, 51082, 27585
+            48743, 31357, 48743, 31361, 48740, 31367, 48731, 31370, 48729, 31376, 48729, 31382, 48730, 31386, 48734, 31385, 48742, 31387, 48748, 31394,
+            48735, 31394, 48748, 31413, 48755, 31411, 48756, 31420, 48744, 31424, 48754, 31438, 48763, 31425, 48788, 31469, 48804, 31529, 48817, 31529,
+            48829, 31560, 48838, 31558, 48857, 31570, 48863, 31559, 48874, 31583, 48885, 31579, 48890, 31569, 48896, 31578, 48901, 31569, 48911, 31581,
+            48906, 31593, 48892, 31579, 48887, 31582, 48894, 31601, 48906, 31621, 48908, 31639, 48900, 31644, 48901, 31680, 48896, 31688, 48918, 31698,
+            48932, 31700, 48935, 31726, 48926, 31754, 48935, 31772, 48946, 31758, 48949, 31763, 48962, 31745, 48955, 31729, 48969, 31717, 48984, 31726,
+            48976, 31694, 48966, 31697, 48953, 31688, 48947, 31677, 48962, 31662, 48973, 31625, 49008, 31626, 49009, 31633, 49066, 31616, 49102, 31621,
+            49101, 31610, 49123, 31563, 49126, 31527, 49143, 31536, 49145, 31525, 49169, 31482, 49173, 31487, 49192, 31491, 49191, 31468, 49198, 31422,
+            49198, 31398, 49203, 31389, 49196, 31344, 49209, 31339, 49232, 31318, 49237, 31309, 49253, 31302, 49257, 31283, 49278, 31283, 49286, 31289,
+            49303, 31285, 49322, 31294, 49326, 31282, 49333, 31304, 49359, 31312, 49360, 31336, 49344, 31347, 49328, 31383, 49335, 31405, 49351, 31422,
+            49371, 31424, 49372, 31419, 49399, 31415, 49410, 31404, 49420, 31375, 49423, 31342, 49427, 31335, 49439, 31359, 49443, 31360, 49433, 31342,
+            49432, 31327, 49418, 31333, 49410, 31312, 49413, 31298, 49411, 31285, 49398, 31287, 49401, 31269, 49390, 31267, 49390, 31238, 49398, 31237,
+            49401, 31228, 49418, 31219, 49414, 31209, 49416, 31174, 49428, 31146, 49424, 31127, 49428, 31125, 49432, 31089, 49430, 31084, 49437, 31064,
+            49452, 31060, 49458, 31039, 49471, 31033, 49472, 31030, 49451, 31006, 49433, 31006, 49424, 30995, 49423, 30991, 49424, 30963, 49416, 30920,
+            49414, 30922, 49406, 30935, 49392, 30928, 49381, 30931, 49381, 30920, 49359, 30909, 49363, 30897, 49361, 30880, 49351, 30866, 49354, 30858,
+            49352, 30834, 49356, 30820, 49354, 30798, 49345, 30780, 49345, 30749, 49333, 30731, 49332, 30728, 49339, 30715, 49335, 30709, 49355, 30676,
+            49354, 30662, 49361, 30661, 49356, 30637, 49371, 30606, 49350, 30584, 49354, 30570, 49341, 30556, 49328, 30537, 49327, 30517, 49366, 30472,
+            49349, 30438, 49332, 30439, 49330, 30412, 49302, 30420, 49301, 30437, 49289, 30465, 49275, 30459, 49253, 30515, 49200, 30496, 49204, 30451,
+            49208, 30432, 49211, 30433, 49214, 30409, 49211, 30398, 49206, 30402, 49190, 30392, 49194, 30401, 49183, 30424, 49181, 30475, 49142, 30479,
+            49147, 30507, 49144, 30511, 49155, 30560, 49143, 30568, 49113, 30556, 49085, 30541, 49083, 30551, 49077, 30542, 49063, 30546, 49040, 30530,
+            49034, 30552, 49019, 30559, 49000, 30547, 48996, 30531, 48983, 30522, 48982, 30512, 48975, 30521, 48974, 30507, 48964, 30488, 48959, 30490,
+            48948, 30478, 48943, 30484, 48918, 30472, 48911, 30474, 48913, 30460, 48895, 30446, 48891, 30454, 48872, 30462, 48873, 30478, 48879, 30475,
+            48853, 30535, 48815, 30474, 48808, 30489, 48787, 30474, 48786, 30468, 48768, 30492, 48769, 30494, 48743, 30532, 48740, 30526, 48725, 30544,
+            48732, 30560, 48721, 30576, 48723, 30588, 48720, 30610, 48740, 30624, 48739, 30636, 48752, 30638, 48767, 30698, 48761, 30718, 48760, 30751,
+            48771, 30754, 48757, 30805, 48769, 30811, 48763, 30821, 48751, 30830, 48753, 30850, 48750, 30877, 48746, 30885, 48747, 30897, 48762, 30902,
+            48762, 30939, 48764, 30947, 48772, 30942, 48770, 30957, 48763, 30962, 48762, 30978, 48765, 30996, 48758, 31003, 48762, 31020, 48760, 31041,
+            48752, 31048, 48756, 31057, 48745, 31071, 48736, 31069, 48732, 31088, 48738, 31089, 48740, 31093, 48740, 31099, 48737, 31104, 48730, 31106,
+            48729, 31111, 48729, 31118, 48736, 31119, 48742, 31125, 48738, 31132, 48746, 31138, 48742, 31152, 48757, 31167, 48762, 31175, 48758, 31212,
+            48768, 31216, 48768, 31246, 48765, 31254, 48750, 31262, 48754, 31271, 48757, 31293, 48756, 31314, 48748, 31313, 48736, 31325, 48734, 31325,
+            48732, 31320, 48726, 31330, 48728, 31355, 48743, 31357
         ))
-    ),
-        "коростенський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                51082, 27585, 51057, 27586, 51078, 27549, 51051, 27470, 51011, 27454, 50985, 27389, 51012, 27353, 51002, 27383, 51044, 27446, 51068, 27432,
-                51059, 27359, 51077, 27360, 51083, 27333, 51098, 27367, 51143, 27364, 51170, 27398, 51201, 27401, 51237, 27474, 51255, 27447, 51264, 27461,
-                51311, 27441, 51315, 27490, 51342, 27522, 51366, 27526, 51375, 27495, 51452, 27504, 51453, 27535, 51428, 27538, 51403, 27614, 51430, 27583,
-                51479, 27579, 51497, 27669, 51518, 27669, 51474, 27764, 51533, 27807, 51544, 27848, 51577, 27825, 51612, 27829, 51629, 27866, 51606, 27922,
-                51578, 27920, 51594, 27975, 51558, 27946, 51567, 28049, 51584, 28118, 51645, 28171, 51681, 28259, 51620, 28256, 51624, 28281, 51577, 28343,
-                51540, 28352, 51593, 28467, 51573, 28648, 51444, 28684, 51466, 28737, 51435, 28734, 51415, 28753, 51455, 28786, 51487, 28762, 51559, 28820,
-                51590, 28913, 51592, 28970, 51574, 28999, 51662, 29118, 51653, 29166, 51647, 29179, 51627, 29156, 51628, 29189, 51608, 29178, 51607, 29204,
-                51567, 29214, 51567, 29252, 51496, 29251, 51459, 29275, 51454, 29309, 51378, 29326, 51379, 29393, 51328, 29396, 51324, 29347, 51306, 29367,
-                51274, 29354, 51263, 29268, 51130, 29317, 51160, 29349, 51061, 29512, 51019, 29465, 50979, 29476, 50984, 29414, 50949, 29411, 50925, 29467,
-                50869, 29521, 50837, 29497, 50814, 29547, 50812, 29488, 50793, 29521, 50774, 29472, 50772, 29570, 50723, 29585, 50695, 29536, 50717, 29488,
-                50739, 29504, 50743, 29469, 50719, 29485, 50736, 29451, 50678, 29333, 50692, 29293, 50680, 29306, 50642, 29245, 50683, 29172, 50657, 29044,
-                50673, 29078, 50674, 29048, 50714, 29000, 50709, 28935, 50726, 28911, 50710, 28856, 50667, 28843, 50694, 28762, 50649, 28719, 50670, 28717,
-                50682, 28687, 50720, 28737, 50721, 28671, 50754, 28702, 50758, 28679, 50735, 28612, 50741, 28544, 50769, 28496, 50744, 28484, 50757, 28298,
-                50716, 28281, 50784, 28166, 50797, 28175, 50804, 28149, 50858, 28131, 50864, 28113, 50923, 28171, 50965, 28140, 50967, 28157, 50987, 28106,
-                51027, 28127, 51030, 28052, 51070, 27952, 51049, 27929, 51048, 27753, 51035, 27764, 51030, 27750, 51012, 27774, 50996, 27709, 51013, 27661,
-                51038, 27667, 51077, 27625, 51082, 27585
-            )),
-            ScaledRing(intArrayOf(
-                50991, 27458, 50994, 27492, 50991, 27458
-            ))
+    )
+
+    private fun _r_umanskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48512, 30306, 48521, 30324, 48524, 30341, 48528, 30387, 48543, 30387, 48574, 30404, 48584, 30453, 48565, 30476, 48569, 30486, 48566, 30526,
+            48572, 30542, 48568, 30568, 48578, 30570, 48581, 30564, 48592, 30568, 48596, 30559, 48606, 30571, 48629, 30532, 48654, 30555, 48663, 30598,
+            48678, 30601, 48698, 30612, 48699, 30602, 48721, 30576, 48732, 30560, 48725, 30544, 48740, 30526, 48743, 30532, 48769, 30494, 48768, 30492,
+            48786, 30468, 48787, 30474, 48808, 30489, 48815, 30474, 48853, 30535, 48879, 30475, 48873, 30478, 48872, 30462, 48891, 30454, 48895, 30446,
+            48913, 30460, 48911, 30474, 48918, 30472, 48943, 30484, 48948, 30478, 48959, 30490, 48964, 30488, 48974, 30507, 48975, 30521, 48982, 30512,
+            48983, 30522, 48996, 30531, 49000, 30547, 49019, 30559, 49034, 30552, 49040, 30530, 49063, 30546, 49077, 30542, 49083, 30551, 49085, 30541,
+            49113, 30556, 49143, 30568, 49155, 30560, 49144, 30511, 49147, 30507, 49142, 30479, 49181, 30475, 49183, 30424, 49194, 30401, 49190, 30392,
+            49206, 30402, 49211, 30398, 49214, 30409, 49211, 30433, 49208, 30432, 49204, 30451, 49200, 30496, 49253, 30515, 49275, 30459, 49289, 30465,
+            49301, 30437, 49303, 30398, 49261, 30385, 49237, 30375, 49246, 30366, 49256, 30368, 49260, 30332, 49272, 30257, 49268, 30256, 49276, 30190,
+            49328, 30199, 49326, 30149, 49335, 30148, 49330, 30136, 49314, 30133, 49309, 30114, 49303, 30107, 49296, 30121, 49282, 30124, 49271, 30114,
+            49274, 30103, 49286, 30089, 49299, 30083, 49312, 30087, 49323, 30078, 49326, 30066, 49332, 30027, 49327, 30011, 49316, 30007, 49316, 29983,
+            49308, 29960, 49312, 29948, 49300, 29945, 49282, 29955, 49250, 29953, 49247, 29932, 49228, 29916, 49223, 29903, 49217, 29910, 49209, 29894,
+            49205, 29897, 49200, 29877, 49190, 29884, 49187, 29882, 49188, 29858, 49179, 29821, 49187, 29815, 49180, 29760, 49208, 29728, 49212, 29740,
+            49226, 29743, 49229, 29735, 49221, 29724, 49224, 29704, 49207, 29710, 49202, 29726, 49183, 29727, 49184, 29719, 49171, 29715, 49157, 29718,
+            49155, 29710, 49142, 29712, 49132, 29719, 49132, 29732, 49122, 29734, 49117, 29691, 49110, 29679, 49088, 29688, 49097, 29652, 49061, 29635,
+            49053, 29640, 49046, 29630, 49056, 29615, 49057, 29606, 49053, 29611, 49043, 29614, 49037, 29622, 49025, 29628, 49014, 29639, 49014, 29652,
+            49024, 29670, 49024, 29682, 49007, 29683, 49001, 29695, 48961, 29651, 48948, 29661, 48936, 29652, 48929, 29668, 48924, 29665, 48912, 29685,
+            48918, 29699, 48911, 29714, 48908, 29736, 48897, 29711, 48887, 29728, 48854, 29732, 48847, 29762, 48786, 29766, 48782, 29774, 48785, 29785,
+            48779, 29805, 48774, 29800, 48763, 29866, 48759, 29859, 48747, 29870, 48746, 29877, 48736, 29885, 48731, 29881, 48733, 29867, 48714, 29854,
+            48708, 29866, 48699, 29861, 48702, 29873, 48671, 29918, 48671, 29945, 48657, 29945, 48659, 29957, 48650, 29959, 48651, 29967, 48635, 29978,
+            48636, 29990, 48612, 29986, 48609, 29950, 48595, 29947, 48582, 29959, 48583, 29974, 48579, 29993, 48572, 30005, 48551, 30003, 48542, 30009,
+            48536, 30022, 48520, 30020, 48521, 29998, 48516, 29988, 48513, 30007, 48492, 30001, 48495, 29982, 48491, 29967, 48474, 29962, 48472, 29968,
+            48472, 30003, 48478, 30003, 48482, 30044, 48480, 30055, 48469, 30072, 48466, 30082, 48455, 30091, 48452, 30111, 48454, 30121, 48463, 30123,
+            48471, 30132, 48473, 30142, 48486, 30157, 48494, 30150, 48504, 30165, 48480, 30221, 48490, 30258, 48507, 30257, 48512, 30306
+        ))
+    )
+
+    private fun _r_zolotoniskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49352, 32729, 49353, 32737, 49356, 32739, 49363, 32736, 49372, 32738, 49385, 32712, 49385, 32691, 49400, 32678, 49410, 32682, 49427, 32679,
+            49431, 32660, 49438, 32652, 49449, 32673, 49459, 32667, 49488, 32670, 49500, 32679, 49499, 32709, 49524, 32746, 49541, 32750, 49546, 32746,
+            49566, 32754, 49586, 32737, 49595, 32721, 49593, 32711, 49603, 32694, 49606, 32707, 49614, 32712, 49619, 32715, 49631, 32713, 49635, 32704,
+            49650, 32705, 49655, 32703, 49658, 32691, 49664, 32681, 49676, 32672, 49681, 32662, 49703, 32574, 49747, 32568, 49752, 32572, 49773, 32556,
+            49774, 32514, 49805, 32505, 49796, 32450, 49821, 32438, 49840, 32415, 49850, 32408, 49874, 32373, 49885, 32392, 49875, 32402, 49888, 32435,
+            49903, 32414, 49927, 32419, 49931, 32432, 49935, 32418, 49960, 32428, 49980, 32378, 50000, 32378, 50002, 32370, 50034, 32364, 50036, 32346,
+            50048, 32352, 50059, 32334, 50052, 32325, 50039, 32323, 50038, 32312, 50059, 32283, 50082, 32259, 50098, 32271, 50113, 32251, 50120, 32286,
+            50119, 32305, 50144, 32299, 50166, 32177, 50179, 32163, 50187, 32164, 50193, 32147, 50214, 32113, 50225, 32126, 50229, 32118, 50229, 32110,
+            50228, 32108, 50221, 32106, 50222, 32087, 50188, 32057, 50190, 32037, 50206, 32015, 50202, 31994, 50194, 31998, 50179, 31984, 50152, 31965,
+            50158, 31936, 50138, 31947, 50142, 31957, 50124, 31973, 50116, 31946, 50102, 31911, 50060, 31908, 50061, 31926, 50051, 31988, 50038, 31979,
+            50044, 31967, 50028, 31917, 50019, 31901, 50014, 31907, 49997, 31909, 49980, 31916, 49960, 31916, 49944, 31902, 49951, 31890, 49963, 31891,
+            49967, 31815, 49960, 31814, 49931, 31792, 49920, 31771, 49894, 31772, 49893, 31756, 49852, 31718, 49847, 31728, 49844, 31708, 49792, 31703,
+            49790, 31693, 49776, 31693, 49776, 31720, 49758, 31717, 49763, 31694, 49754, 31693, 49751, 31701, 49712, 31685, 49702, 31676, 49699, 31688,
+            49680, 31676, 49666, 31662, 49653, 31642, 49641, 31654, 49632, 31701, 49632, 31768, 49625, 31782, 49600, 31789, 49577, 31808, 49569, 31822,
+            49572, 31832, 49558, 31861, 49564, 31871, 49566, 31896, 49558, 31911, 49558, 31930, 49550, 31944, 49539, 31947, 49530, 31960, 49530, 31978,
+            49514, 31999, 49514, 32010, 49521, 32028, 49519, 32040, 49487, 32041, 49475, 32048, 49462, 32064, 49450, 32096, 49449, 32141, 49443, 32148,
+            49418, 32156, 49411, 32181, 49402, 32194, 49399, 32217, 49401, 32234, 49403, 32288, 49399, 32314, 49388, 32346, 49381, 32359, 49360, 32367,
+            49351, 32378, 49345, 32393, 49346, 32411, 49341, 32427, 49341, 32439, 49328, 32467, 49341, 32478, 49341, 32463, 49345, 32460, 49348, 32461,
+            49357, 32477, 49365, 32477, 49375, 32488, 49396, 32496, 49409, 32510, 49404, 32521, 49392, 32527, 49381, 32546, 49382, 32562, 49376, 32603,
+            49358, 32646, 49353, 32674, 49354, 32711, 49352, 32729
+        ))
+    )
+
+    private fun _r_cherkaskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48966, 32733, 48967, 32746, 48971, 32795, 48977, 32796, 48981, 32845, 48991, 32843, 48993, 32872, 49001, 32871, 48999, 32860, 49012, 32845,
+            49009, 32838, 49015, 32826, 49016, 32837, 49027, 32842, 49033, 32836, 49066, 32830, 49074, 32813, 49092, 32864, 49096, 32890, 49120, 32889,
+            49142, 32785, 49149, 32766, 49157, 32759, 49166, 32758, 49171, 32769, 49189, 32780, 49215, 32816, 49230, 32847, 49245, 32856, 49249, 32846,
+            49246, 32833, 49248, 32815, 49239, 32797, 49237, 32776, 49232, 32765, 49240, 32758, 49251, 32736, 49257, 32712, 49254, 32683, 49248, 32666,
+            49249, 32651, 49259, 32637, 49257, 32606, 49275, 32598, 49283, 32563, 49292, 32552, 49302, 32528, 49305, 32511, 49314, 32490, 49333, 32460,
+            49341, 32439, 49341, 32427, 49346, 32411, 49345, 32393, 49351, 32378, 49360, 32367, 49381, 32359, 49388, 32346, 49399, 32314, 49403, 32288,
+            49401, 32234, 49399, 32217, 49402, 32194, 49411, 32181, 49418, 32156, 49443, 32148, 49449, 32141, 49450, 32096, 49462, 32064, 49475, 32048,
+            49487, 32041, 49519, 32040, 49521, 32028, 49514, 32010, 49514, 31999, 49530, 31978, 49530, 31960, 49539, 31947, 49550, 31944, 49558, 31930,
+            49558, 31911, 49566, 31896, 49564, 31871, 49558, 31861, 49572, 31832, 49569, 31822, 49577, 31808, 49600, 31789, 49625, 31782, 49632, 31768,
+            49632, 31701, 49641, 31654, 49653, 31642, 49666, 31662, 49680, 31676, 49699, 31688, 49702, 31676, 49712, 31685, 49751, 31701, 49754, 31693,
+            49763, 31694, 49758, 31717, 49776, 31720, 49776, 31693, 49790, 31693, 49792, 31703, 49844, 31708, 49847, 31728, 49852, 31718, 49850, 31716,
+            49858, 31662, 49858, 31643, 49856, 31616, 49883, 31618, 49906, 31612, 49908, 31583, 49896, 31581, 49896, 31569, 49888, 31569, 49875, 31558,
+            49879, 31541, 49872, 31530, 49871, 31517, 49864, 31520, 49857, 31512, 49847, 31514, 49844, 31500, 49861, 31497, 49857, 31489, 49861, 31475,
+            49874, 31472, 49878, 31462, 49877, 31443, 49899, 31432, 49899, 31427, 49916, 31422, 49932, 31424, 49943, 31433, 49964, 31436, 49974, 31447,
+            49982, 31442, 49991, 31425, 49991, 31412, 49995, 31389, 49991, 31356, 49993, 31316, 49986, 31301, 49976, 31297, 49975, 31299, 49980, 31310,
+            49976, 31316, 49961, 31292, 49957, 31296, 49965, 31312, 49951, 31351, 49945, 31337, 49938, 31338, 49936, 31351, 49907, 31381, 49899, 31374,
+            49892, 31316, 49888, 31315, 49884, 31292, 49859, 31262, 49866, 31245, 49850, 31207, 49833, 31221, 49809, 31206, 49790, 31190, 49777, 31215,
+            49756, 31209, 49734, 31221, 49731, 31213, 49701, 31199, 49694, 31220, 49686, 31214, 49692, 31206, 49684, 31198, 49675, 31202, 49632, 31157,
+            49613, 31143, 49583, 31128, 49582, 31150, 49571, 31139, 49568, 31149, 49556, 31153, 49558, 31144, 49552, 31139, 49560, 31121, 49557, 31111,
+            49541, 31099, 49532, 31104, 49517, 31094, 49498, 31095, 49490, 31084, 49478, 31048, 49471, 31039, 49455, 31047, 49452, 31060, 49437, 31064,
+            49430, 31084, 49432, 31089, 49428, 31125, 49424, 31127, 49428, 31146, 49416, 31174, 49414, 31209, 49418, 31219, 49401, 31228, 49398, 31237,
+            49390, 31238, 49390, 31267, 49401, 31269, 49398, 31287, 49411, 31285, 49413, 31298, 49410, 31312, 49418, 31333, 49432, 31327, 49433, 31342,
+            49443, 31360, 49439, 31359, 49427, 31335, 49423, 31342, 49420, 31375, 49410, 31404, 49399, 31415, 49372, 31419, 49371, 31424, 49351, 31422,
+            49335, 31405, 49328, 31383, 49344, 31347, 49360, 31336, 49359, 31312, 49333, 31304, 49326, 31282, 49322, 31294, 49303, 31285, 49286, 31289,
+            49278, 31283, 49257, 31283, 49253, 31302, 49237, 31309, 49232, 31318, 49209, 31339, 49196, 31344, 49203, 31389, 49198, 31398, 49198, 31422,
+            49191, 31468, 49192, 31491, 49173, 31487, 49169, 31482, 49145, 31525, 49143, 31536, 49126, 31527, 49123, 31563, 49101, 31610, 49102, 31621,
+            49066, 31616, 49009, 31633, 49008, 31626, 48973, 31625, 48962, 31662, 48947, 31677, 48953, 31688, 48966, 31697, 48976, 31694, 48984, 31726,
+            48969, 31717, 48955, 31729, 48962, 31745, 48949, 31763, 48946, 31758, 48935, 31772, 48940, 31797, 48944, 31807, 48935, 31826, 48936, 31837,
+            48919, 31876, 48907, 31918, 48897, 31919, 48888, 31912, 48881, 31921, 48906, 31946, 48908, 31961, 48918, 31998, 48915, 32008, 48932, 32029,
+            48918, 32050, 48921, 32080, 48920, 32093, 48907, 32087, 48904, 32104, 48912, 32112, 48912, 32146, 48918, 32152, 48945, 32153, 48955, 32136,
+            48966, 32135, 48973, 32178, 48998, 32184, 48991, 32196, 48989, 32219, 49037, 32232, 49060, 32235, 49062, 32241, 49060, 32263, 49077, 32260,
+            49081, 32268, 49079, 32283, 49086, 32283, 49074, 32299, 49075, 32316, 49080, 32318, 49079, 32352, 49070, 32354, 49071, 32368, 49052, 32377,
+            49039, 32371, 49028, 32398, 49028, 32419, 49042, 32428, 49040, 32434, 49051, 32444, 49039, 32453, 49041, 32460, 49033, 32473, 49031, 32467,
+            49006, 32475, 49016, 32495, 49015, 32501, 49000, 32498, 48989, 32503, 48980, 32515, 48958, 32513, 48951, 32522, 48940, 32521, 48940, 32551,
+            48953, 32541, 48962, 32541, 48966, 32553, 48957, 32568, 48958, 32577, 48951, 32582, 48954, 32594, 48960, 32593, 48964, 32606, 48955, 32608,
+            48956, 32638, 48954, 32655, 48961, 32675, 48977, 32667, 48984, 32670, 48986, 32676, 48982, 32681, 48983, 32695, 48976, 32698, 48978, 32730,
+            48966, 32733
+        ))
+    )
+
+    private fun _r_nizhynskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            50520, 31492, 50522, 31492, 50523, 31521, 50528, 31521, 50528, 31535, 50519, 31554, 50518, 31564, 50528, 31571, 50522, 31631, 50536, 31648,
+            50553, 31647, 50554, 31662, 50550, 31668, 50562, 31687, 50559, 31782, 50576, 31778, 50579, 31789, 50606, 31784, 50606, 31811, 50622, 31810,
+            50628, 31852, 50640, 31884, 50645, 31889, 50655, 31880, 50661, 31899, 50669, 31904, 50676, 31895, 50707, 31922, 50705, 31937, 50718, 31949,
+            50709, 31995, 50703, 31998, 50698, 32019, 50708, 32019, 50716, 32045, 50726, 32055, 50732, 32047, 50767, 32068, 50761, 32103, 50752, 32101,
+            50753, 32122, 50774, 32109, 50772, 32102, 50788, 32100, 50799, 32104, 50802, 32114, 50822, 32086, 50839, 32081, 50841, 32067, 50864, 32073,
+            50868, 32055, 50876, 32047, 50883, 32059, 50896, 32061, 50899, 32069, 50907, 32056, 50932, 32057, 50936, 32075, 50951, 32086, 50956, 32105,
+            50967, 32104, 50975, 32093, 50991, 32115, 50989, 32149, 51000, 32167, 51018, 32187, 51025, 32179, 51034, 32191, 51023, 32211, 51022, 32229,
+            51029, 32252, 51027, 32263, 51019, 32233, 51020, 32264, 51001, 32272, 51002, 32285, 51016, 32298, 51011, 32311, 51030, 32331, 51016, 32356,
+            50998, 32364, 51002, 32372, 51007, 32365, 51015, 32371, 51013, 32403, 51016, 32409, 51029, 32399, 51041, 32397, 51050, 32414, 51066, 32428,
+            51068, 32437, 51078, 32434, 51081, 32499, 51066, 32526, 51036, 32526, 51025, 32534, 51015, 32565, 51017, 32577, 51012, 32592, 51026, 32606,
+            51026, 32617, 51017, 32642, 51015, 32640, 51004, 32685, 50991, 32698, 50979, 32694, 50973, 32699, 50949, 32692, 50942, 32705, 50942, 32722,
+            50931, 32758, 50911, 32764, 50889, 32775, 50890, 32792, 50876, 32811, 50872, 32822, 50860, 32828, 50859, 32836, 50879, 32894, 50885, 32903,
+            50890, 32935, 50917, 32976, 50926, 32967, 50929, 32996, 50935, 32998, 50938, 32987, 50948, 32978, 50967, 32979, 50982, 33007, 50993, 33015,
+            50997, 33041, 51002, 33046, 51012, 33051, 51040, 33085, 51048, 33060, 51063, 33072, 51070, 33070, 51072, 33038, 51082, 33041, 51085, 32998,
+            51090, 32961, 51086, 32957, 51092, 32945, 51143, 32993, 51163, 32961, 51183, 32986, 51189, 32978, 51200, 32998, 51200, 33030, 51206, 33042,
+            51220, 33039, 51227, 33029, 51255, 33070, 51258, 33060, 51266, 33058, 51269, 33068, 51284, 33074, 51288, 33077, 51286, 33064, 51288, 33060,
+            51290, 33043, 51295, 33054, 51303, 33054, 51313, 33076, 51322, 33078, 51332, 33071, 51331, 33066, 51326, 33065, 51325, 33053, 51329, 33050,
+            51332, 33039, 51331, 33037, 51331, 33032, 51327, 33027, 51330, 33018, 51328, 33015, 51324, 33022, 51322, 33020, 51319, 33014, 51320, 33012,
+            51326, 33009, 51337, 32987, 51331, 32978, 51331, 32971, 51336, 32961, 51348, 32968, 51362, 32997, 51371, 32966, 51377, 32954, 51388, 32947,
+            51392, 32932, 51402, 32945, 51402, 32924, 51411, 32912, 51399, 32906, 51408, 32899, 51415, 32906, 51420, 32894, 51415, 32880, 51407, 32878,
+            51416, 32859, 51424, 32860, 51420, 32848, 51435, 32821, 51435, 32798, 51437, 32788, 51431, 32774, 51435, 32766, 51433, 32745, 51437, 32741,
+            51448, 32729, 51443, 32714, 51441, 32710, 51444, 32687, 51448, 32683, 51453, 32644, 51463, 32634, 51462, 32621, 51452, 32602, 51459, 32590,
+            51456, 32579, 51461, 32572, 51461, 32566, 51455, 32571, 51459, 32562, 51458, 32556, 51455, 32560, 51448, 32565, 51450, 32589, 51446, 32603,
+            51439, 32610, 51426, 32612, 51421, 32584, 51411, 32566, 51413, 32531, 51399, 32513, 51404, 32510, 51395, 32498, 51400, 32487, 51391, 32478,
+            51387, 32440, 51392, 32413, 51410, 32387, 51424, 32397, 51426, 32382, 51414, 32369, 51411, 32347, 51410, 32312, 51414, 32307, 51414, 32286,
+            51404, 32289, 51397, 32259, 51399, 32246, 51388, 32225, 51376, 32231, 51372, 32225, 51378, 32215, 51377, 32195, 51383, 32178, 51395, 32161,
+            51402, 32134, 51400, 32119, 51388, 32090, 51389, 32080, 51382, 32075, 51380, 32032, 51370, 32033, 51361, 32023, 51368, 32011, 51370, 31998,
+            51369, 31995, 51354, 31993, 51348, 32004, 51327, 32025, 51311, 31984, 51298, 31988, 51293, 31974, 51298, 31956, 51291, 31948, 51292, 31928,
+            51264, 31907, 51265, 31900, 51240, 31881, 51235, 31874, 51243, 31870, 51244, 31847, 51236, 31834, 51231, 31814, 51237, 31789, 51245, 31779,
+            51242, 31771, 51247, 31741, 51240, 31733, 51240, 31697, 51232, 31691, 51224, 31656, 51228, 31652, 51240, 31637, 51240, 31602, 51240, 31582,
+            51236, 31571, 51234, 31546, 51220, 31526, 51215, 31500, 51203, 31491, 51199, 31525, 51191, 31526, 51188, 31516, 51188, 31472, 51178, 31441,
+            51165, 31432, 51156, 31435, 51141, 31428, 51135, 31411, 51128, 31421, 51122, 31415, 51122, 31389, 51106, 31393, 51095, 31382, 51095, 31372,
+            51102, 31321, 51089, 31315, 51092, 31295, 51073, 31293, 51072, 31282, 51054, 31313, 51044, 31316, 51034, 31293, 51029, 31268, 51015, 31300,
+            51010, 31301, 51008, 31324, 50992, 31335, 50989, 31346, 50993, 31358, 50991, 31368, 50981, 31371, 50970, 31349, 50957, 31338, 50957, 31327,
+            50949, 31317, 50945, 31340, 50936, 31354, 50930, 31356, 50930, 31335, 50928, 31319, 50914, 31312, 50908, 31301, 50908, 31313, 50899, 31310,
+            50900, 31300, 50869, 31299, 50868, 31320, 50863, 31313, 50857, 31290, 50833, 31271, 50812, 31249, 50810, 31218, 50804, 31212, 50793, 31186,
+            50752, 31240, 50744, 31217, 50749, 31210, 50735, 31202, 50738, 31194, 50732, 31185, 50732, 31166, 50725, 31164, 50724, 31189, 50703, 31189,
+            50707, 31205, 50697, 31205, 50697, 31218, 50668, 31224, 50656, 31205, 50639, 31202, 50627, 31226, 50620, 31219, 50614, 31228, 50606, 31219,
+            50609, 31169, 50595, 31167, 50595, 31187, 50575, 31188, 50575, 31216, 50571, 31217, 50571, 31241, 50557, 31250, 50558, 31260, 50544, 31254,
+            50537, 31270, 50535, 31290, 50526, 31319, 50500, 31328, 50510, 31341, 50530, 31357, 50535, 31370, 50529, 31379, 50516, 31414, 50502, 31417,
+            50501, 31444, 50510, 31456, 50520, 31492
+        ))
+    )
+
+    private fun _r_prylutskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            50374, 32254, 50373, 32278, 50380, 32278, 50380, 32291, 50398, 32295, 50403, 32325, 50417, 32316, 50424, 32321, 50427, 32329, 50426, 32367,
+            50414, 32371, 50407, 32397, 50412, 32400, 50398, 32446, 50396, 32493, 50378, 32493, 50371, 32485, 50365, 32492, 50359, 32512, 50345, 32525,
+            50355, 32557, 50360, 32564, 50356, 32587, 50356, 32634, 50366, 32635, 50370, 32672, 50358, 32671, 50356, 32730, 50359, 32748, 50349, 32764,
+            50354, 32770, 50347, 32793, 50356, 32801, 50362, 32787, 50371, 32790, 50375, 32810, 50376, 32842, 50404, 32898, 50409, 32918, 50424, 32913,
+            50429, 32920, 50430, 32939, 50436, 32935, 50446, 32949, 50442, 32958, 50450, 32969, 50460, 32969, 50463, 32979, 50475, 32970, 50473, 32988,
+            50478, 32992, 50471, 33014, 50481, 33014, 50493, 33026, 50501, 33024, 50502, 33043, 50518, 33059, 50519, 33066, 50521, 33067, 50523, 33062,
+            50541, 33049, 50556, 33074, 50566, 33080, 50580, 33097, 50585, 33094, 50593, 33104, 50591, 33120, 50598, 33123, 50602, 33104, 50613, 33111,
+            50640, 33123, 50648, 33117, 50648, 33136, 50654, 33148, 50695, 33151, 50711, 33137, 50709, 33154, 50714, 33158, 50722, 33202, 50732, 33241,
+            50739, 33231, 50736, 33214, 50747, 33207, 50746, 33190, 50792, 33153, 50790, 33165, 50816, 33166, 50826, 33155, 50848, 33185, 50850, 33169,
+            50866, 33174, 50867, 33179, 50881, 33168, 50895, 33181, 50891, 33187, 50894, 33207, 50902, 33210, 50919, 33197, 50935, 33200, 50962, 33200,
+            50958, 33184, 50962, 33136, 50968, 33139, 50998, 33121, 51007, 33118, 50992, 33077, 50981, 33079, 50988, 33051, 50993, 33039, 50997, 33041,
+            50993, 33015, 50982, 33007, 50967, 32979, 50948, 32978, 50938, 32987, 50935, 32998, 50929, 32996, 50926, 32967, 50917, 32976, 50890, 32935,
+            50885, 32903, 50879, 32894, 50859, 32836, 50860, 32828, 50872, 32822, 50876, 32811, 50890, 32792, 50889, 32775, 50911, 32764, 50931, 32758,
+            50942, 32722, 50942, 32705, 50949, 32692, 50973, 32699, 50979, 32694, 50991, 32698, 51004, 32685, 51015, 32640, 51017, 32642, 51026, 32617,
+            51026, 32606, 51012, 32592, 51017, 32577, 51015, 32565, 51025, 32534, 51036, 32526, 51066, 32526, 51081, 32499, 51078, 32434, 51068, 32437,
+            51066, 32428, 51050, 32414, 51041, 32397, 51029, 32399, 51016, 32409, 51013, 32403, 51015, 32371, 51007, 32365, 51002, 32372, 50998, 32364,
+            51016, 32356, 51030, 32331, 51011, 32311, 51016, 32298, 51002, 32285, 51001, 32272, 51020, 32264, 51019, 32233, 51027, 32263, 51029, 32252,
+            51022, 32229, 51023, 32211, 51034, 32191, 51025, 32179, 51018, 32187, 51000, 32167, 50989, 32149, 50991, 32115, 50975, 32093, 50967, 32104,
+            50956, 32105, 50951, 32086, 50936, 32075, 50932, 32057, 50907, 32056, 50899, 32069, 50896, 32061, 50883, 32059, 50876, 32047, 50868, 32055,
+            50864, 32073, 50841, 32067, 50839, 32081, 50822, 32086, 50802, 32114, 50799, 32104, 50788, 32100, 50772, 32102, 50774, 32109, 50753, 32122,
+            50752, 32101, 50761, 32103, 50767, 32068, 50732, 32047, 50726, 32055, 50716, 32045, 50708, 32019, 50698, 32019, 50703, 31998, 50709, 31995,
+            50718, 31949, 50705, 31937, 50707, 31922, 50676, 31895, 50669, 31904, 50661, 31899, 50655, 31880, 50645, 31889, 50640, 31884, 50631, 31859,
+            50617, 31868, 50620, 31872, 50606, 31883, 50610, 31887, 50590, 31925, 50581, 31928, 50571, 31940, 50558, 31945, 50544, 31955, 50540, 31983,
+            50542, 32032, 50541, 32063, 50529, 32062, 50523, 32053, 50512, 32063, 50494, 32045, 50487, 32008, 50497, 32001, 50496, 31986, 50484, 31983,
+            50489, 31974, 50486, 31964, 50481, 31978, 50473, 31969, 50466, 31973, 50458, 32024, 50437, 32027, 50428, 32039, 50401, 32047, 50398, 32057,
+            50416, 32098, 50412, 32103, 50392, 32078, 50378, 32083, 50374, 32077, 50370, 32090, 50380, 32120, 50376, 32155, 50364, 32157, 50352, 32142,
+            50348, 32144, 50357, 32209, 50357, 32218, 50350, 32227, 50355, 32238, 50347, 32254, 50352, 32269, 50353, 32255, 50360, 32265, 50374, 32254
+        ))
+    )
+
+    private fun _r_koriukivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            51368, 32011, 51361, 32023, 51370, 32033, 51380, 32032, 51382, 32075, 51389, 32080, 51388, 32090, 51400, 32119, 51402, 32134, 51395, 32161,
+            51383, 32178, 51377, 32195, 51378, 32215, 51372, 32225, 51376, 32231, 51388, 32225, 51399, 32246, 51397, 32259, 51404, 32289, 51414, 32286,
+            51414, 32307, 51410, 32312, 51411, 32347, 51414, 32369, 51426, 32382, 51424, 32397, 51410, 32387, 51392, 32413, 51387, 32440, 51391, 32478,
+            51400, 32487, 51395, 32498, 51404, 32510, 51399, 32513, 51413, 32531, 51411, 32566, 51421, 32584, 51426, 32612, 51439, 32610, 51446, 32603,
+            51450, 32589, 51448, 32565, 51455, 32560, 51458, 32556, 51459, 32562, 51455, 32571, 51461, 32566, 51461, 32572, 51456, 32579, 51459, 32590,
+            51452, 32602, 51462, 32621, 51463, 32634, 51453, 32644, 51448, 32683, 51444, 32687, 51441, 32710, 51443, 32714, 51446, 32723, 51457, 32723,
+            51466, 32737, 51476, 32725, 51478, 32702, 51486, 32686, 51480, 32674, 51470, 32677, 51487, 32660, 51484, 32624, 51498, 32617, 51503, 32609,
+            51511, 32607, 51523, 32610, 51523, 32633, 51538, 32628, 51545, 32644, 51543, 32653, 51556, 32654, 51557, 32667, 51551, 32678, 51543, 32676,
+            51555, 32689, 51552, 32740, 51570, 32770, 51568, 32778, 51577, 32787, 51577, 32807, 51569, 32813, 51569, 32843, 51572, 32845, 51580, 32830,
+            51594, 32829, 51601, 32836, 51610, 32833, 51608, 32819, 51614, 32817, 51616, 32832, 51624, 32826, 51618, 32811, 51622, 32802, 51620, 32786,
+            51628, 32773, 51627, 32746, 51637, 32767, 51644, 32768, 51633, 32741, 51634, 32720, 51666, 32717, 51678, 32687, 51690, 32693, 51700, 32681,
+            51716, 32689, 51725, 32699, 51722, 32715, 51725, 32743, 51735, 32769, 51761, 32751, 51776, 32714, 51795, 32703, 51794, 32709, 51807, 32703,
+            51814, 32684, 51820, 32689, 51814, 32701, 51818, 32724, 51827, 32730, 51831, 32712, 51841, 32710, 51837, 32733, 51838, 32768, 51845, 32777,
+            51852, 32798, 51852, 32817, 51867, 32810, 51888, 32813, 51890, 32796, 51904, 32758, 51917, 32770, 51921, 32751, 51933, 32753, 51934, 32734,
+            51924, 32735, 51915, 32694, 51916, 32682, 51911, 32666, 51912, 32644, 51917, 32629, 51953, 32632, 51955, 32639, 51968, 32632, 51970, 32627,
+            51961, 32593, 51961, 32575, 51954, 32563, 51960, 32557, 51961, 32521, 51963, 32508, 51982, 32482, 51971, 32469, 51979, 32444, 51998, 32441,
+            51993, 32431, 51984, 32426, 51988, 32415, 52000, 32433, 52010, 32429, 52002, 32419, 52021, 32408, 52026, 32391, 52032, 32389, 52038, 32370,
+            52050, 32363, 52050, 32381, 52059, 32384, 52057, 32366, 52057, 32350, 52053, 32343, 52057, 32307, 52055, 32290, 52058, 32280, 52076, 32270,
+            52081, 32249, 52080, 32227, 52082, 32219, 52067, 32193, 52072, 32183, 52069, 32148, 52057, 32146, 52046, 32126, 52044, 32097, 52034, 32096,
+            52035, 32066, 52040, 32041, 52045, 32036, 52048, 32017, 52053, 31963, 52046, 31953, 52047, 31928, 52053, 31918, 52059, 31929, 52061, 31943,
+            52068, 31958, 52082, 31954, 52080, 31941, 52091, 31931, 52103, 31902, 52111, 31868, 52110, 31847, 52099, 31818, 52070, 31810, 52064, 31777,
+            52049, 31782, 52043, 31773, 52032, 31778, 52031, 31786, 52041, 31789, 52022, 31796, 51995, 31802, 51988, 31790, 51993, 31780, 51984, 31767,
+            51970, 31772, 51966, 31759, 51955, 31782, 51941, 31792, 51941, 31807, 51936, 31799, 51908, 31807, 51913, 31786, 51912, 31723, 51917, 31729,
+            51922, 31707, 51908, 31693, 51900, 31664, 51897, 31674, 51883, 31662, 51872, 31695, 51857, 31688, 51857, 31682, 51838, 31674, 51822, 31658,
+            51826, 31636, 51810, 31635, 51803, 31653, 51793, 31658, 51781, 31652, 51750, 31731, 51744, 31757, 51739, 31741, 51728, 31732, 51723, 31749,
+            51729, 31781, 51712, 31778, 51693, 31792, 51672, 31788, 51660, 31794, 51654, 31811, 51629, 31805, 51623, 31858, 51608, 31879, 51613, 31885,
+            51602, 31892, 51584, 31880, 51573, 31860, 51543, 31847, 51510, 31854, 51506, 31823, 51499, 31812, 51490, 31831, 51469, 31824, 51460, 31827,
+            51445, 31840, 51439, 31830, 51429, 31830, 51431, 31819, 51417, 31826, 51414, 31857, 51404, 31855, 51400, 31868, 51394, 31867, 51392, 31878,
+            51384, 31879, 51370, 31892, 51370, 31905, 51364, 31929, 51366, 31946, 51362, 31965, 51350, 31970, 51349, 31973, 51354, 31982, 51367, 31983,
+            51370, 31998, 51368, 32011
+        ))
+    )
+
+    private fun _r_novhorod_siverskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            51437, 32788, 51435, 32798, 51435, 32821, 51420, 32848, 51424, 32860, 51416, 32859, 51407, 32878, 51415, 32880, 51420, 32894, 51415, 32906,
+            51408, 32899, 51399, 32906, 51411, 32912, 51402, 32924, 51402, 32945, 51392, 32932, 51388, 32947, 51377, 32954, 51371, 32966, 51362, 32997,
+            51348, 32968, 51336, 32961, 51331, 32971, 51331, 32978, 51337, 32987, 51326, 33009, 51320, 33013, 51323, 33021, 51325, 33021, 51327, 33015,
+            51330, 33017, 51327, 33027, 51331, 33032, 51331, 33037, 51332, 33039, 51329, 33050, 51325, 33053, 51326, 33065, 51331, 33066, 51332, 33071,
+            51334, 33069, 51340, 33074, 51348, 33064, 51342, 33044, 51345, 33038, 51358, 33036, 51368, 33043, 51377, 33030, 51396, 33017, 51404, 33045,
+            51411, 33046, 51406, 33057, 51397, 33052, 51396, 33039, 51387, 33044, 51384, 33060, 51371, 33060, 51368, 33089, 51370, 33093, 51366, 33101,
+            51370, 33112, 51382, 33109, 51390, 33092, 51389, 33110, 51381, 33122, 51382, 33133, 51399, 33136, 51401, 33120, 51417, 33135, 51429, 33113,
+            51461, 33123, 51467, 33135, 51484, 33130, 51497, 33140, 51494, 33156, 51500, 33174, 51507, 33178, 51507, 33192, 51525, 33193, 51537, 33188,
+            51543, 33169, 51552, 33168, 51556, 33158, 51563, 33157, 51570, 33168, 51573, 33192, 51572, 33207, 51581, 33222, 51584, 33192, 51598, 33177,
+            51608, 33155, 51642, 33154, 51643, 33130, 51649, 33128, 51658, 33135, 51660, 33141, 51672, 33148, 51678, 33142, 51679, 33165, 51682, 33163,
+            51682, 33150, 51688, 33145, 51692, 33169, 51700, 33171, 51705, 33154, 51714, 33148, 51722, 33132, 51726, 33138, 51745, 33105, 51757, 33096,
+            51774, 33092, 51769, 33085, 51775, 33078, 51784, 33092, 51782, 33102, 51790, 33101, 51816, 33133, 51818, 33148, 51834, 33136, 51836, 33127,
+            51854, 33126, 51856, 33132, 51871, 33134, 51878, 33145, 51885, 33180, 51896, 33179, 51899, 33173, 51901, 33172, 51905, 33177, 51902, 33185,
+            51910, 33187, 51912, 33189, 51909, 33199, 51912, 33214, 51909, 33217, 51907, 33217, 51906, 33222, 51908, 33224, 51925, 33257, 51918, 33264,
+            51923, 33272, 51924, 33292, 51934, 33297, 51937, 33316, 51930, 33331, 51930, 33356, 51947, 33362, 51954, 33372, 51954, 33391, 51962, 33396,
+            51973, 33382, 51985, 33349, 51999, 33347, 52008, 33336, 52013, 33304, 52018, 33317, 52031, 33317, 52030, 33346, 52042, 33368, 52050, 33389,
+            52051, 33402, 52031, 33412, 52024, 33428, 52033, 33438, 52039, 33465, 52039, 33500, 52089, 33500, 52083, 33491, 52090, 33446, 52109, 33434,
+            52116, 33410, 52123, 33417, 52145, 33343, 52140, 33328, 52135, 33343, 52136, 33322, 52155, 33328, 52155, 33337, 52167, 33333, 52182, 33310,
+            52198, 33330, 52212, 33326, 52213, 33316, 52221, 33324, 52216, 33333, 52222, 33354, 52234, 33366, 52245, 33366, 52258, 33357, 52258, 33373,
+            52272, 33387, 52284, 33382, 52299, 33398, 52322, 33404, 52326, 33414, 52346, 33429, 52349, 33411, 52360, 33417, 52360, 33402, 52367, 33408,
+            52371, 33396, 52370, 33374, 52362, 33370, 52364, 33361, 52354, 33351, 52352, 33337, 52355, 33315, 52350, 33307, 52358, 33289, 52376, 33208,
+            52373, 33170, 52367, 33173, 52341, 33170, 52339, 33156, 52345, 33135, 52326, 33111, 52327, 33108, 52308, 33081, 52303, 33067, 52316, 33063,
+            52317, 33072, 52327, 33072, 52330, 33060, 52318, 33059, 52314, 33045, 52307, 33045, 52300, 33024, 52294, 33018, 52288, 32995, 52281, 33000,
+            52272, 32996, 52274, 32962, 52250, 32911, 52246, 32907, 52245, 32888, 52259, 32879, 52274, 32884, 52274, 32856, 52279, 32833, 52259, 32818,
+            52266, 32799, 52256, 32763, 52267, 32757, 52256, 32726, 52259, 32717, 52248, 32701, 52255, 32701, 52256, 32690, 52266, 32686, 52277, 32668,
+            52287, 32637, 52305, 32607, 52301, 32584, 52326, 32551, 52327, 32501, 52314, 32490, 52326, 32461, 52322, 32433, 52338, 32401, 52334, 32395,
+            52338, 32378, 52328, 32356, 52316, 32352, 52302, 32363, 52276, 32370, 52279, 32395, 52270, 32383, 52254, 32390, 52247, 32402, 52241, 32384,
+            52239, 32361, 52244, 32346, 52224, 32325, 52203, 32331, 52195, 32345, 52183, 32347, 52172, 32334, 52156, 32332, 52156, 32365, 52147, 32368,
+            52140, 32360, 52141, 32335, 52133, 32330, 52137, 32320, 52122, 32317, 52119, 32297, 52111, 32298, 52103, 32291, 52098, 32271, 52091, 32261,
+            52087, 32225, 52085, 32222, 52084, 32224, 52081, 32222, 52081, 32249, 52076, 32270, 52058, 32280, 52055, 32290, 52057, 32307, 52053, 32343,
+            52057, 32350, 52057, 32366, 52059, 32384, 52050, 32381, 52050, 32363, 52038, 32370, 52032, 32389, 52026, 32391, 52021, 32408, 52002, 32419,
+            52010, 32429, 52000, 32433, 51988, 32415, 51984, 32426, 51993, 32431, 51998, 32441, 51979, 32444, 51971, 32469, 51982, 32482, 51963, 32508,
+            51961, 32521, 51960, 32557, 51954, 32563, 51961, 32575, 51961, 32593, 51970, 32623, 51969, 32630, 51955, 32639, 51953, 32632, 51917, 32629,
+            51912, 32644, 51911, 32666, 51916, 32682, 51915, 32694, 51924, 32735, 51934, 32734, 51933, 32753, 51921, 32751, 51917, 32770, 51904, 32758,
+            51890, 32796, 51888, 32813, 51867, 32810, 51852, 32817, 51852, 32798, 51845, 32777, 51838, 32768, 51837, 32733, 51841, 32710, 51831, 32712,
+            51827, 32730, 51818, 32724, 51814, 32701, 51820, 32689, 51814, 32684, 51807, 32703, 51794, 32709, 51795, 32703, 51776, 32714, 51761, 32751,
+            51735, 32769, 51725, 32743, 51722, 32715, 51725, 32699, 51716, 32689, 51700, 32681, 51690, 32693, 51678, 32687, 51666, 32717, 51634, 32720,
+            51633, 32741, 51644, 32768, 51637, 32767, 51627, 32746, 51628, 32773, 51620, 32786, 51622, 32802, 51618, 32811, 51624, 32826, 51616, 32832,
+            51614, 32817, 51608, 32819, 51610, 32833, 51601, 32836, 51594, 32829, 51580, 32830, 51572, 32845, 51569, 32843, 51569, 32813, 51577, 32807,
+            51577, 32787, 51568, 32778, 51570, 32770, 51552, 32740, 51555, 32689, 51543, 32676, 51551, 32678, 51557, 32667, 51556, 32654, 51543, 32653,
+            51545, 32644, 51538, 32628, 51523, 32633, 51523, 32610, 51511, 32607, 51503, 32609, 51498, 32617, 51484, 32624, 51487, 32660, 51470, 32677,
+            51480, 32674, 51486, 32686, 51478, 32702, 51476, 32725, 51466, 32737, 51457, 32723, 51446, 32723, 51448, 32729, 51437, 32741, 51434, 32744,
+            51435, 32766, 51431, 32774, 51437, 32788
+        ))
+    )
+
+    private fun _r_chernihivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            50793, 31186, 50804, 31212, 50810, 31218, 50812, 31249, 50833, 31271, 50857, 31290, 50863, 31313, 50868, 31320, 50869, 31299, 50900, 31300,
+            50899, 31310, 50908, 31313, 50908, 31301, 50914, 31312, 50928, 31319, 50930, 31335, 50930, 31356, 50936, 31354, 50945, 31340, 50949, 31317,
+            50957, 31327, 50957, 31338, 50970, 31349, 50981, 31371, 50991, 31368, 50993, 31358, 50989, 31346, 50992, 31335, 51008, 31324, 51010, 31301,
+            51015, 31300, 51029, 31268, 51034, 31293, 51044, 31316, 51054, 31313, 51072, 31282, 51073, 31293, 51092, 31295, 51089, 31315, 51102, 31321,
+            51095, 31372, 51095, 31382, 51106, 31393, 51122, 31389, 51122, 31415, 51128, 31421, 51135, 31411, 51141, 31428, 51156, 31435, 51165, 31432,
+            51178, 31441, 51188, 31472, 51188, 31516, 51191, 31526, 51199, 31525, 51203, 31491, 51215, 31500, 51220, 31526, 51234, 31546, 51236, 31571,
+            51240, 31582, 51240, 31602, 51240, 31634, 51239, 31640, 51224, 31656, 51232, 31691, 51240, 31697, 51240, 31733, 51247, 31741, 51242, 31771,
+            51245, 31779, 51237, 31789, 51231, 31814, 51236, 31834, 51244, 31847, 51243, 31870, 51235, 31874, 51240, 31881, 51265, 31900, 51264, 31907,
+            51292, 31928, 51291, 31948, 51298, 31956, 51293, 31974, 51298, 31988, 51311, 31984, 51327, 32025, 51348, 32004, 51354, 31993, 51369, 31995,
+            51367, 31983, 51354, 31982, 51350, 31976, 51349, 31971, 51362, 31965, 51366, 31946, 51364, 31929, 51370, 31905, 51370, 31892, 51384, 31879,
+            51392, 31878, 51394, 31867, 51400, 31868, 51404, 31855, 51414, 31857, 51417, 31826, 51431, 31819, 51429, 31830, 51439, 31830, 51445, 31840,
+            51460, 31827, 51469, 31824, 51490, 31831, 51499, 31812, 51506, 31823, 51510, 31854, 51543, 31847, 51573, 31860, 51584, 31880, 51602, 31892,
+            51613, 31885, 51608, 31879, 51623, 31858, 51629, 31805, 51654, 31811, 51660, 31794, 51672, 31788, 51693, 31792, 51712, 31778, 51729, 31781,
+            51723, 31749, 51728, 31732, 51739, 31741, 51744, 31757, 51750, 31731, 51781, 31652, 51793, 31658, 51803, 31653, 51810, 31635, 51826, 31636,
+            51822, 31658, 51838, 31674, 51857, 31682, 51857, 31688, 51872, 31695, 51883, 31662, 51897, 31674, 51900, 31664, 51908, 31693, 51922, 31707,
+            51917, 31729, 51912, 31723, 51913, 31786, 51908, 31807, 51936, 31799, 51941, 31807, 51941, 31792, 51955, 31782, 51966, 31759, 51970, 31772,
+            51984, 31767, 51993, 31780, 51988, 31790, 51995, 31802, 52022, 31796, 52041, 31789, 52031, 31786, 52032, 31778, 52043, 31773, 52049, 31782,
+            52064, 31777, 52070, 31810, 52099, 31818, 52104, 31796, 52112, 31787, 52111, 31771, 52096, 31723, 52108, 31713, 52116, 31661, 52114, 31653,
+            52114, 31616, 52112, 31607, 52121, 31562, 52121, 31547, 52125, 31518, 52116, 31488, 52121, 31464, 52140, 31451, 52143, 31430, 52140, 31420,
+            52142, 31402, 52134, 31389, 52134, 31376, 52122, 31388, 52114, 31371, 52105, 31324, 52093, 31322, 52086, 31312, 52083, 31321, 52052, 31298,
+            52043, 31254, 52050, 31226, 52064, 31212, 52068, 31217, 52075, 31192, 52080, 31159, 52103, 31139, 52089, 31099, 52092, 31069, 52078, 30991,
+            52082, 30963, 52090, 30964, 52090, 30949, 52075, 30952, 52076, 30936, 52064, 30936, 52060, 30946, 52050, 30946, 52052, 30936, 52061, 30932,
+            52053, 30924, 52046, 30938, 52040, 30924, 52022, 30925, 52024, 30914, 52015, 30924, 52010, 30910, 52006, 30926, 52000, 30932, 51993, 30923,
+            51995, 30911, 52005, 30908, 51999, 30892, 51988, 30910, 51984, 30885, 51970, 30889, 51967, 30874, 51972, 30864, 51962, 30849, 51962, 30837,
+            51956, 30836, 51955, 30854, 51948, 30845, 51956, 30821, 51950, 30819, 51946, 30806, 51922, 30825, 51908, 30808, 51899, 30802, 51898, 30788,
+            51905, 30753, 51902, 30746, 51883, 30736, 51868, 30707, 51844, 30698, 51835, 30692, 51833, 30669, 51826, 30653, 51797, 30670, 51787, 30664,
+            51782, 30653, 51775, 30658, 51772, 30648, 51776, 30633, 51769, 30614, 51761, 30624, 51765, 30639, 51763, 30649, 51750, 30647, 51732, 30627,
+            51718, 30626, 51709, 30610, 51712, 30580, 51708, 30566, 51700, 30561, 51685, 30573, 51667, 30570, 51663, 30551, 51675, 30536, 51676, 30524,
+            51663, 30518, 51658, 30534, 51644, 30526, 51641, 30514, 51626, 30510, 51622, 30536, 51615, 30535, 51611, 30554, 51605, 30557, 51600, 30547,
+            51606, 30536, 51604, 30515, 51597, 30510, 51585, 30528, 51584, 30547, 51576, 30554, 51574, 30532, 51562, 30531, 51542, 30548, 51552, 30571,
+            51549, 30581, 51540, 30585, 51515, 30566, 51503, 30583, 51482, 30587, 51473, 30602, 51471, 30619, 51461, 30621, 51457, 30588, 51447, 30580,
+            51426, 30587, 51423, 30597, 51428, 30619, 51413, 30627, 51375, 30653, 51369, 30641, 51359, 30636, 51344, 30652, 51338, 30650, 51333, 30624,
+            51313, 30592, 51308, 30615, 51301, 30605, 51305, 30624, 51299, 30618, 51283, 30613, 51281, 30595, 51274, 30572, 51269, 30570, 51263, 30540,
+            51256, 30543, 51250, 30555, 51236, 30559, 51230, 30547, 51235, 30530, 51232, 30511, 51226, 30503, 51204, 30530, 51190, 30516, 51185, 30521,
+            51180, 30540, 51174, 30526, 51176, 30502, 51167, 30491, 51139, 30492, 51127, 30498, 51111, 30518, 51103, 30517, 51098, 30490, 51090, 30487,
+            51072, 30510, 51065, 30508, 51049, 30494, 51022, 30502, 51027, 30602, 51010, 30604, 51009, 30624, 51003, 30641, 50986, 30650, 50963, 30647,
+            50952, 30661, 50901, 30683, 50899, 30714, 50895, 30732, 50887, 30738, 50873, 30771, 50862, 30776, 50851, 30771, 50832, 30779, 50826, 30767,
+            50814, 30770, 50810, 30756, 50818, 30745, 50816, 30732, 50807, 30742, 50795, 30743, 50791, 30746, 50780, 30738, 50771, 30740, 50774, 30747,
+            50776, 30755, 50773, 30758, 50779, 30770, 50769, 30800, 50770, 30811, 50762, 30835, 50772, 30845, 50780, 30871, 50777, 30875, 50771, 30855,
+            50757, 30838, 50756, 30829, 50745, 30833, 50746, 30874, 50766, 30875, 50773, 30890, 50766, 30894, 50764, 30933, 50759, 30932, 50758, 30949,
+            50763, 30955, 50763, 30982, 50766, 31015, 50762, 31031, 50764, 31071, 50781, 31076, 50775, 31126, 50752, 31122, 50747, 31140, 50737, 31150,
+            50733, 31166, 50732, 31166, 50732, 31185, 50738, 31194, 50735, 31202, 50749, 31210, 50744, 31217, 50752, 31240, 50793, 31186
+        ))
+    )
+
+    private fun _r_boryspilskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49850, 31716, 49893, 31756, 49894, 31772, 49920, 31771, 49931, 31792, 49960, 31814, 49967, 31815, 49963, 31891, 49951, 31890, 49944, 31902,
+            49960, 31916, 49980, 31916, 49997, 31909, 50014, 31907, 50019, 31901, 50028, 31917, 50044, 31967, 50038, 31979, 50051, 31988, 50061, 31926,
+            50060, 31908, 50102, 31911, 50116, 31946, 50124, 31973, 50142, 31957, 50138, 31947, 50158, 31936, 50152, 31965, 50179, 31984, 50194, 31998,
+            50202, 31994, 50206, 32015, 50190, 32037, 50188, 32057, 50222, 32087, 50221, 32106, 50228, 32108, 50229, 32110, 50229, 32118, 50238, 32096,
+            50247, 32090, 50276, 32101, 50284, 32087, 50305, 32142, 50316, 32130, 50323, 32144, 50335, 32153, 50352, 32142, 50364, 32157, 50376, 32155,
+            50380, 32120, 50370, 32090, 50374, 32077, 50373, 32075, 50383, 32053, 50385, 32038, 50390, 32034, 50390, 32010, 50377, 32006, 50365, 32027,
+            50356, 32028, 50347, 32037, 50343, 32030, 50350, 31980, 50365, 31971, 50368, 31894, 50405, 31835, 50402, 31758, 50408, 31762, 50409, 31746,
+            50401, 31744, 50394, 31736, 50360, 31714, 50351, 31719, 50337, 31701, 50323, 31670, 50295, 31672, 50280, 31676, 50280, 31646, 50273, 31646,
+            50263, 31629, 50255, 31601, 50264, 31582, 50280, 31588, 50283, 31580, 50294, 31588, 50304, 31561, 50277, 31537, 50275, 31513, 50270, 31507,
+            50258, 31507, 50252, 31496, 50243, 31499, 50233, 31486, 50246, 31443, 50259, 31420, 50255, 31416, 50272, 31395, 50278, 31380, 50267, 31362,
+            50261, 31358, 50246, 31380, 50226, 31382, 50220, 31398, 50187, 31418, 50171, 31419, 50166, 31396, 50176, 31372, 50176, 31347, 50168, 31272,
+            50189, 31272, 50189, 31212, 50199, 31188, 50248, 31210, 50285, 31207, 50295, 31187, 50299, 31155, 50310, 31146, 50337, 31143, 50346, 31160,
+            50362, 31176, 50360, 31211, 50384, 31202, 50382, 31214, 50390, 31220, 50401, 31212, 50407, 31218, 50418, 31208, 50422, 31225, 50448, 31183,
+            50442, 31164, 50444, 31142, 50476, 31099, 50476, 31057, 50458, 31029, 50457, 31012, 50467, 31000, 50476, 31001, 50475, 30990, 50482, 30968,
+            50474, 30958, 50474, 30944, 50455, 30894, 50432, 30866, 50404, 30826, 50393, 30817, 50393, 30802, 50398, 30790, 50395, 30777, 50383, 30778,
+            50381, 30764, 50375, 30762, 50372, 30742, 50376, 30727, 50382, 30721, 50378, 30712, 50369, 30715, 50366, 30706, 50356, 30713, 50347, 30697,
+            50353, 30678, 50360, 30669, 50369, 30678, 50365, 30659, 50360, 30649, 50343, 30658, 50338, 30636, 50349, 30625, 50343, 30605, 50330, 30620,
+            50318, 30627, 50293, 30651, 50279, 30671, 50267, 30657, 50259, 30678, 50261, 30693, 50251, 30711, 50238, 30720, 50219, 30708, 50215, 30714,
+            50211, 30745, 50204, 30750, 50193, 30742, 50184, 30750, 50175, 30765, 50160, 30774, 50159, 30785, 50164, 30800, 50157, 30816, 50149, 30824,
+            50150, 30857, 50141, 30882, 50130, 30896, 50104, 30922, 50088, 30928, 50082, 30948, 50067, 30964, 50054, 30964, 50046, 30972, 50030, 30998,
+            50020, 31011, 50000, 31047, 49975, 31069, 49980, 31085, 49986, 31126, 49983, 31136, 49974, 31139, 49959, 31158, 49951, 31181, 49940, 31226,
+            49936, 31256, 49948, 31281, 49974, 31289, 49976, 31297, 49986, 31301, 49993, 31316, 49991, 31356, 49995, 31389, 49991, 31412, 49991, 31424,
+            49982, 31442, 49974, 31447, 49964, 31436, 49943, 31433, 49932, 31424, 49916, 31422, 49899, 31427, 49899, 31432, 49877, 31443, 49878, 31462,
+            49874, 31472, 49861, 31475, 49857, 31489, 49861, 31497, 49844, 31500, 49847, 31514, 49857, 31512, 49864, 31520, 49871, 31517, 49872, 31530,
+            49879, 31541, 49875, 31558, 49888, 31569, 49896, 31569, 49896, 31581, 49908, 31583, 49906, 31612, 49883, 31618, 49856, 31616, 49858, 31643,
+            49858, 31662, 49850, 31716
+        ))
+    )
+
+    private fun _r_bilotserkivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49190, 29884, 49200, 29877, 49205, 29897, 49209, 29894, 49217, 29910, 49223, 29903, 49228, 29916, 49247, 29932, 49250, 29953, 49282, 29955,
+            49300, 29945, 49312, 29948, 49308, 29960, 49316, 29983, 49316, 30007, 49327, 30011, 49332, 30027, 49326, 30066, 49323, 30078, 49312, 30087,
+            49299, 30083, 49286, 30089, 49274, 30103, 49271, 30114, 49282, 30124, 49296, 30121, 49303, 30107, 49309, 30114, 49314, 30133, 49330, 30136,
+            49335, 30148, 49326, 30149, 49328, 30199, 49276, 30190, 49268, 30256, 49272, 30257, 49260, 30332, 49256, 30368, 49246, 30366, 49237, 30375,
+            49261, 30385, 49303, 30398, 49302, 30420, 49330, 30412, 49332, 30439, 49349, 30438, 49366, 30472, 49327, 30517, 49328, 30537, 49341, 30556,
+            49354, 30570, 49350, 30584, 49371, 30606, 49356, 30637, 49361, 30661, 49354, 30662, 49355, 30676, 49335, 30709, 49339, 30715, 49332, 30730,
+            49345, 30749, 49345, 30780, 49354, 30798, 49356, 30820, 49352, 30834, 49354, 30858, 49351, 30866, 49361, 30880, 49363, 30897, 49359, 30909,
+            49381, 30920, 49381, 30931, 49392, 30928, 49406, 30935, 49415, 30920, 49417, 30927, 49427, 30919, 49433, 30924, 49440, 30900, 49436, 30796,
+            49445, 30797, 49444, 30783, 49456, 30793, 49464, 30768, 49455, 30762, 49467, 30761, 49468, 30748, 49489, 30736, 49490, 30722, 49501, 30716,
+            49512, 30701, 49537, 30689, 49554, 30666, 49571, 30652, 49581, 30661, 49592, 30626, 49605, 30619, 49617, 30620, 49606, 30621, 49597, 30644,
+            49601, 30648, 49602, 30665, 49596, 30669, 49600, 30699, 49610, 30707, 49601, 30713, 49604, 30722, 49626, 30736, 49639, 30699, 49657, 30700,
+            49656, 30729, 49686, 30736, 49694, 30745, 49707, 30736, 49707, 30725, 49738, 30707, 49738, 30717, 49769, 30716, 49790, 30718, 49825, 30716,
+            49831, 30674, 49837, 30656, 49826, 30542, 49861, 30540, 49862, 30572, 49870, 30572, 49890, 30587, 49905, 30564, 49916, 30531, 49937, 30538,
+            49935, 30528, 49942, 30524, 49937, 30514, 49936, 30494, 49967, 30488, 49983, 30466, 49984, 30454, 49991, 30442, 49990, 30417, 49987, 30404,
+            49991, 30393, 49986, 30369, 49995, 30339, 49998, 30345, 50018, 30313, 50015, 30302, 50022, 30292, 50044, 30274, 50048, 30286, 50055, 30276,
+            50090, 30235, 50107, 30224, 50105, 30208, 50118, 30199, 50111, 30180, 50107, 30184, 50106, 30147, 50101, 30129, 50076, 30098, 50067, 30104,
+            50051, 30097, 50015, 30094, 50014, 30080, 50024, 30060, 50035, 29994, 50041, 29974, 50052, 29957, 50038, 29927, 50022, 29936, 50011, 29926,
+            50003, 29926, 50004, 29936, 49995, 29937, 49968, 29981, 49954, 29984, 49941, 29970, 49934, 29944, 49906, 29899, 49897, 29891, 49896, 29895,
+            49892, 29895, 49893, 29878, 49871, 29852, 49878, 29826, 49900, 29784, 49882, 29732, 49906, 29700, 49878, 29646, 49875, 29667, 49865, 29652,
+            49869, 29639, 49852, 29620, 49856, 29602, 49843, 29596, 49841, 29574, 49837, 29574, 49836, 29548, 49821, 29542, 49826, 29524, 49835, 29507,
+            49826, 29490, 49812, 29497, 49802, 29483, 49816, 29471, 49802, 29449, 49805, 29438, 49789, 29445, 49788, 29450, 49762, 29462, 49732, 29445,
+            49729, 29435, 49715, 29445, 49713, 29497, 49708, 29492, 49670, 29488, 49663, 29514, 49649, 29505, 49646, 29520, 49641, 29521, 49636, 29537,
+            49619, 29509, 49613, 29512, 49601, 29499, 49594, 29499, 49564, 29531, 49542, 29538, 49522, 29542, 49519, 29550, 49504, 29570, 49506, 29584,
+            49495, 29584, 49497, 29558, 49485, 29546, 49463, 29561, 49455, 29588, 49444, 29593, 49434, 29572, 49428, 29575, 49401, 29540, 49395, 29505,
+            49371, 29503, 49363, 29518, 49348, 29524, 49338, 29522, 49324, 29537, 49324, 29573, 49315, 29602, 49306, 29618, 49299, 29606, 49274, 29622,
+            49266, 29612, 49246, 29646, 49250, 29662, 49237, 29689, 49255, 29693, 49263, 29709, 49247, 29720, 49241, 29716, 49231, 29723, 49226, 29743,
+            49212, 29740, 49208, 29728, 49180, 29760, 49187, 29815, 49179, 29821, 49188, 29858, 49187, 29882, 49190, 29884
+        ))
+    )
+
+    private fun _r_vyshhorodskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            50571, 30315, 50574, 30340, 50574, 30370, 50586, 30371, 50586, 30446, 50584, 30463, 50572, 30464, 50572, 30482, 50567, 30494, 50577, 30514,
+            50573, 30522, 50551, 30544, 50546, 30570, 50558, 30558, 50560, 30573, 50571, 30593, 50583, 30574, 50586, 30576, 50592, 30596, 50586, 30612,
+            50595, 30641, 50600, 30642, 50604, 30629, 50610, 30627, 50611, 30647, 50622, 30649, 50644, 30661, 50654, 30672, 50658, 30700, 50662, 30699,
+            50672, 30678, 50689, 30678, 50714, 30673, 50723, 30710, 50765, 30739, 50774, 30747, 50771, 30740, 50780, 30738, 50791, 30746, 50795, 30743,
+            50807, 30742, 50816, 30732, 50818, 30745, 50810, 30756, 50814, 30770, 50826, 30767, 50832, 30779, 50851, 30771, 50862, 30776, 50873, 30771,
+            50887, 30738, 50895, 30732, 50899, 30714, 50901, 30683, 50952, 30661, 50963, 30647, 50986, 30650, 51003, 30641, 51009, 30624, 51010, 30604,
+            51027, 30602, 51022, 30502, 51049, 30494, 51065, 30508, 51072, 30510, 51090, 30487, 51098, 30490, 51103, 30517, 51111, 30518, 51127, 30498,
+            51139, 30492, 51167, 30491, 51176, 30502, 51174, 30526, 51180, 30540, 51185, 30521, 51190, 30516, 51204, 30530, 51226, 30503, 51232, 30511,
+            51235, 30530, 51230, 30547, 51236, 30559, 51250, 30555, 51256, 30543, 51263, 30540, 51281, 30506, 51275, 30464, 51282, 30454, 51291, 30467,
+            51300, 30460, 51306, 30462, 51308, 30442, 51304, 30421, 51312, 30399, 51348, 30348, 51353, 30334, 51362, 30324, 51380, 30359, 51424, 30344,
+            51426, 30333, 51463, 30288, 51469, 30271, 51485, 30245, 51494, 30214, 51513, 30179, 51509, 30166, 51489, 30162, 51500, 30137, 51506, 30131,
+            51505, 30119, 51490, 30126, 51488, 30118, 51497, 30080, 51498, 30049, 51503, 30032, 51505, 30015, 51496, 30017, 51490, 30010, 51481, 29991,
+            51483, 29972, 51474, 29969, 51474, 29952, 51483, 29947, 51490, 29926, 51485, 29894, 51476, 29881, 51471, 29888, 51456, 29876, 51444, 29875,
+            51449, 29850, 51457, 29843, 51450, 29814, 51460, 29809, 51458, 29791, 51442, 29793, 51451, 29762, 51459, 29740, 51491, 29726, 51494, 29745,
+            51509, 29738, 51512, 29743, 51530, 29737, 51526, 29708, 51521, 29708, 51511, 29671, 51502, 29669, 51506, 29655, 51499, 29641, 51506, 29635,
+            51495, 29622, 51492, 29608, 51471, 29608, 51461, 29581, 51481, 29542, 51481, 29537, 51463, 29532, 51447, 29515, 51436, 29522, 51413, 29507,
+            51396, 29500, 51398, 29482, 51414, 29424, 51409, 29394, 51401, 29375, 51391, 29367, 51388, 29357, 51376, 29358, 51380, 29394, 51345, 29392,
+            51321, 29396, 51275, 29354, 51271, 29329, 51278, 29332, 51273, 29302, 51264, 29267, 51203, 29290, 51163, 29303, 51131, 29317, 51125, 29329,
+            51157, 29330, 51160, 29349, 51124, 29429, 51088, 29460, 51071, 29497, 51060, 29511, 51030, 29472, 51017, 29464, 50987, 29467, 50979, 29474,
+            50987, 29440, 50985, 29413, 50949, 29412, 50946, 29436, 50926, 29468, 50914, 29475, 50903, 29471, 50889, 29490, 50888, 29501, 50880, 29515,
+            50870, 29522, 50839, 29499, 50824, 29529, 50829, 29543, 50813, 29550, 50818, 29504, 50812, 29490, 50800, 29498, 50791, 29523, 50785, 29506,
+            50775, 29511, 50774, 29478, 50765, 29505, 50772, 29518, 50776, 29544, 50771, 29554, 50772, 29570, 50775, 29573, 50776, 29588, 50784, 29600,
+            50782, 29610, 50771, 29610, 50764, 29649, 50766, 29754, 50773, 29771, 50772, 29780, 50776, 29826, 50786, 29836, 50795, 29873, 50789, 29876,
+            50781, 29898, 50771, 29886, 50751, 29898, 50748, 29904, 50763, 29908, 50779, 29903, 50775, 29918, 50760, 29917, 50754, 29923, 50755, 29960,
+            50776, 29972, 50776, 29982, 50771, 29999, 50773, 30050, 50770, 30062, 50764, 30050, 50755, 30047, 50741, 30058, 50730, 30043, 50708, 30075,
+            50699, 30080, 50691, 30110, 50705, 30114, 50707, 30104, 50715, 30107, 50710, 30150, 50713, 30197, 50719, 30218, 50714, 30264, 50707, 30264,
+            50686, 30311, 50668, 30296, 50663, 30282, 50646, 30284, 50640, 30275, 50625, 30284, 50620, 30297, 50610, 30301, 50608, 30316, 50602, 30330,
+            50599, 30321, 50604, 30294, 50599, 30284, 50589, 30286, 50571, 30315
+        )),
+        ScaledRing(intArrayOf(
+            51539, 30778, 51542, 30737, 51548, 30735, 51554, 30702, 51531, 30697, 51531, 30669, 51525, 30654, 51519, 30665, 51521, 30698, 51512, 30778,
+            51539, 30778
+        ))
     ))
+
+    private fun _r_obukhivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49433, 31006, 49451, 31006, 49472, 31030, 49471, 31033, 49459, 31038, 49457, 31046, 49471, 31039, 49478, 31048, 49490, 31084, 49498, 31095,
+            49517, 31094, 49532, 31104, 49541, 31099, 49557, 31111, 49560, 31121, 49552, 31139, 49558, 31144, 49556, 31153, 49568, 31149, 49571, 31139,
+            49582, 31150, 49583, 31128, 49613, 31143, 49632, 31157, 49675, 31202, 49684, 31198, 49692, 31206, 49686, 31214, 49694, 31220, 49701, 31199,
+            49731, 31213, 49734, 31221, 49756, 31209, 49777, 31215, 49790, 31190, 49809, 31206, 49833, 31221, 49850, 31207, 49866, 31245, 49859, 31262,
+            49884, 31292, 49888, 31315, 49892, 31316, 49899, 31374, 49907, 31381, 49936, 31351, 49938, 31338, 49945, 31337, 49951, 31351, 49965, 31312,
+            49957, 31296, 49961, 31292, 49976, 31316, 49980, 31310, 49975, 31299, 49974, 31289, 49948, 31281, 49936, 31256, 49940, 31226, 49951, 31181,
+            49959, 31158, 49974, 31139, 49983, 31136, 49986, 31126, 49980, 31085, 49975, 31069, 50000, 31047, 50020, 31011, 50030, 30998, 50046, 30972,
+            50054, 30964, 50067, 30964, 50082, 30948, 50088, 30928, 50104, 30922, 50130, 30896, 50141, 30882, 50150, 30857, 50149, 30824, 50157, 30816,
+            50164, 30800, 50159, 30785, 50160, 30774, 50175, 30765, 50184, 30750, 50193, 30742, 50204, 30750, 50211, 30745, 50215, 30714, 50219, 30708,
+            50238, 30720, 50251, 30711, 50256, 30704, 50261, 30692, 50259, 30678, 50267, 30657, 50267, 30644, 50280, 30643, 50281, 30610, 50266, 30617,
+            50247, 30634, 50240, 30646, 50235, 30637, 50226, 30644, 50213, 30592, 50244, 30587, 50260, 30574, 50259, 30553, 50270, 30554, 50276, 30543,
+            50291, 30546, 50291, 30528, 50298, 30534, 50317, 30534, 50326, 30509, 50322, 30496, 50327, 30488, 50332, 30497, 50336, 30486, 50333, 30475,
+            50342, 30474, 50342, 30458, 50335, 30448, 50334, 30438, 50325, 30428, 50320, 30433, 50320, 30417, 50309, 30422, 50307, 30438, 50303, 30426,
+            50295, 30427, 50296, 30408, 50293, 30392, 50284, 30398, 50283, 30388, 50273, 30385, 50267, 30395, 50257, 30386, 50252, 30402, 50244, 30398,
+            50240, 30386, 50231, 30392, 50230, 30405, 50224, 30400, 50214, 30425, 50204, 30414, 50197, 30416, 50197, 30390, 50168, 30391, 50169, 30371,
+            50175, 30362, 50171, 30352, 50174, 30339, 50183, 30334, 50196, 30341, 50201, 30325, 50209, 30332, 50226, 30326, 50227, 30295, 50217, 30309,
+            50197, 30308, 50199, 30298, 50188, 30284, 50211, 30246, 50216, 30252, 50221, 30242, 50217, 30235, 50215, 30232, 50202, 30235, 50190, 30221,
+            50189, 30208, 50180, 30208, 50180, 30240, 50165, 30240, 50156, 30253, 50146, 30240, 50150, 30214, 50140, 30206, 50135, 30219, 50128, 30219,
+            50118, 30199, 50105, 30208, 50107, 30224, 50090, 30235, 50055, 30276, 50048, 30286, 50044, 30274, 50022, 30292, 50015, 30302, 50018, 30313,
+            49998, 30345, 49995, 30339, 49986, 30369, 49991, 30393, 49987, 30404, 49990, 30417, 49991, 30442, 49984, 30454, 49983, 30466, 49967, 30488,
+            49936, 30494, 49937, 30514, 49942, 30524, 49935, 30528, 49937, 30538, 49916, 30531, 49905, 30564, 49890, 30587, 49870, 30572, 49862, 30572,
+            49861, 30540, 49826, 30542, 49837, 30656, 49831, 30674, 49825, 30716, 49790, 30718, 49769, 30716, 49738, 30717, 49738, 30707, 49707, 30725,
+            49707, 30736, 49694, 30745, 49686, 30736, 49656, 30729, 49657, 30700, 49639, 30699, 49626, 30736, 49604, 30722, 49601, 30713, 49610, 30707,
+            49600, 30699, 49596, 30669, 49602, 30665, 49601, 30648, 49597, 30644, 49606, 30621, 49617, 30620, 49605, 30619, 49592, 30626, 49581, 30661,
+            49571, 30652, 49554, 30666, 49537, 30689, 49512, 30701, 49501, 30716, 49490, 30722, 49489, 30736, 49468, 30748, 49467, 30761, 49455, 30762,
+            49464, 30768, 49456, 30793, 49444, 30783, 49445, 30797, 49436, 30796, 49440, 30900, 49433, 30924, 49427, 30919, 49417, 30927, 49424, 30963,
+            49423, 30993, 49433, 31006
+        ))
     )
 
-    private fun _Закарпатськ(): Map<String, CompactPolygon> = mapOf(
-        "берегівський" to     CompactPolygon(
+    private fun _r_brovarskyi(): CompactPolygon = CompactPolygon(listOf(
         ScaledRing(intArrayOf(
-            48287, 23029, 48333, 22993, 48351, 22945, 48328, 22895, 48281, 22898, 48287, 22874, 48305, 22856, 48326, 22853, 48335, 22879, 48355, 22864,
-            48336, 22860, 48346, 22831, 48336, 22839, 48310, 22792, 48291, 22792, 48293, 22707, 48340, 22641, 48313, 22611, 48339, 22571, 48326, 22545,
-            48319, 22579, 48307, 22567, 48299, 22513, 48308, 22502, 48349, 22543, 48384, 22497, 48375, 22460, 48392, 22394, 48379, 22365, 48403, 22361,
-            48406, 22342, 48380, 22347, 48369, 22319, 48327, 22313, 48234, 22385, 48249, 22401, 48253, 22490, 48209, 22531, 48196, 22571, 48182, 22561,
-            48145, 22598, 48107, 22590, 48092, 22673, 48120, 22735, 48118, 22824, 48080, 22836, 48053, 22882, 47990, 22836, 47954, 22896, 47967, 22948,
-            48019, 22927, 47991, 23014, 48006, 23091, 48087, 23114, 48120, 23167, 48098, 23190, 48100, 23268, 48152, 23264, 48181, 23175, 48243, 23103,
-            48221, 23093, 48222, 23063, 48274, 23036, 48255, 22941, 48286, 22979, 48287, 23029
-        ))
-    ),
-        "мукачівський" to     CompactPolygon(
+            50278, 31380, 50272, 31395, 50255, 31416, 50259, 31420, 50246, 31443, 50233, 31486, 50243, 31499, 50252, 31496, 50258, 31507, 50270, 31507,
+            50275, 31513, 50277, 31537, 50304, 31561, 50294, 31588, 50283, 31580, 50280, 31588, 50264, 31582, 50255, 31601, 50263, 31629, 50273, 31646,
+            50280, 31646, 50280, 31676, 50295, 31672, 50323, 31670, 50337, 31701, 50351, 31719, 50360, 31714, 50394, 31736, 50401, 31744, 50408, 31745,
+            50410, 31747, 50408, 31762, 50402, 31758, 50405, 31835, 50368, 31894, 50365, 31971, 50350, 31980, 50343, 32030, 50347, 32037, 50356, 32028,
+            50365, 32027, 50377, 32006, 50390, 32010, 50390, 32034, 50385, 32038, 50383, 32053, 50373, 32075, 50378, 32083, 50392, 32078, 50412, 32103,
+            50416, 32098, 50398, 32057, 50401, 32047, 50428, 32039, 50437, 32027, 50458, 32024, 50466, 31973, 50473, 31969, 50481, 31978, 50486, 31964,
+            50489, 31974, 50484, 31983, 50496, 31986, 50497, 32001, 50487, 32008, 50494, 32045, 50512, 32063, 50523, 32053, 50529, 32062, 50541, 32063,
+            50542, 32032, 50540, 31983, 50544, 31955, 50558, 31945, 50571, 31940, 50581, 31928, 50590, 31925, 50610, 31887, 50606, 31883, 50620, 31872,
+            50617, 31868, 50631, 31859, 50626, 31843, 50622, 31810, 50606, 31811, 50606, 31784, 50579, 31789, 50576, 31778, 50559, 31782, 50562, 31687,
+            50550, 31668, 50554, 31662, 50553, 31647, 50536, 31648, 50522, 31631, 50528, 31571, 50518, 31564, 50519, 31554, 50528, 31535, 50528, 31521,
+            50523, 31521, 50522, 31492, 50520, 31492, 50510, 31456, 50501, 31444, 50502, 31417, 50516, 31414, 50529, 31379, 50535, 31370, 50530, 31357,
+            50510, 31341, 50500, 31328, 50526, 31319, 50535, 31290, 50537, 31270, 50544, 31254, 50558, 31260, 50557, 31250, 50571, 31241, 50571, 31217,
+            50575, 31216, 50575, 31188, 50595, 31187, 50595, 31167, 50609, 31169, 50606, 31219, 50614, 31228, 50620, 31219, 50627, 31226, 50639, 31202,
+            50656, 31205, 50668, 31224, 50697, 31218, 50697, 31205, 50707, 31205, 50703, 31189, 50724, 31189, 50725, 31164, 50733, 31166, 50737, 31150,
+            50747, 31140, 50752, 31122, 50775, 31126, 50781, 31076, 50764, 31071, 50762, 31031, 50766, 31015, 50763, 30982, 50763, 30955, 50758, 30949,
+            50759, 30932, 50764, 30933, 50766, 30894, 50773, 30890, 50766, 30875, 50746, 30874, 50745, 30833, 50756, 30829, 50757, 30838, 50771, 30855,
+            50777, 30875, 50780, 30871, 50772, 30845, 50762, 30835, 50770, 30811, 50769, 30800, 50779, 30770, 50773, 30758, 50776, 30755, 50765, 30739,
+            50723, 30710, 50714, 30673, 50689, 30678, 50672, 30678, 50662, 30699, 50658, 30700, 50654, 30672, 50644, 30661, 50622, 30649, 50611, 30647,
+            50610, 30627, 50604, 30629, 50600, 30642, 50595, 30641, 50586, 30612, 50592, 30598, 50587, 30579, 50583, 30574, 50571, 30593, 50560, 30573,
+            50558, 30558, 50546, 30570, 50538, 30572, 50534, 30654, 50552, 30664, 50562, 30697, 50555, 30699, 50556, 30714, 50576, 30710, 50586, 30722,
+            50591, 30718, 50583, 30753, 50584, 30766, 50576, 30771, 50578, 30785, 50570, 30796, 50565, 30817, 50537, 30823, 50522, 30769, 50519, 30752,
+            50509, 30762, 50499, 30738, 50490, 30743, 50490, 30754, 50484, 30760, 50484, 30748, 50462, 30755, 50458, 30743, 50449, 30759, 50443, 30777,
+            50439, 30776, 50426, 30802, 50418, 30796, 50410, 30809, 50404, 30826, 50432, 30866, 50455, 30894, 50474, 30944, 50474, 30958, 50482, 30968,
+            50475, 30990, 50476, 31001, 50467, 31000, 50457, 31012, 50458, 31029, 50476, 31057, 50476, 31099, 50444, 31142, 50442, 31164, 50448, 31180,
+            50448, 31184, 50422, 31225, 50418, 31208, 50407, 31218, 50401, 31212, 50390, 31220, 50382, 31214, 50384, 31202, 50360, 31211, 50362, 31176,
+            50346, 31160, 50337, 31143, 50310, 31146, 50299, 31155, 50295, 31187, 50285, 31207, 50248, 31210, 50199, 31188, 50189, 31212, 50189, 31272,
+            50168, 31272, 50176, 31347, 50176, 31372, 50166, 31396, 50171, 31419, 50187, 31418, 50220, 31398, 50226, 31382, 50246, 31380, 50261, 31358,
+            50267, 31362, 50278, 31380
+        )),
         ScaledRing(intArrayOf(
-            48825, 22881, 48878, 22833, 48918, 22860, 48925, 22886, 48874, 22970, 48836, 22986, 48863, 23097, 48854, 23131, 48761, 23200, 48776, 23286,
-            48757, 23317, 48728, 23314, 48652, 23248, 48636, 23164, 48627, 23178, 48614, 23165, 48626, 23138, 48609, 23199, 48585, 23195, 48556, 23155,
-            48476, 23171, 48445, 23143, 48497, 22984, 48452, 22920, 48423, 22912, 48433, 22883, 48449, 22896, 48439, 22851, 48410, 22880, 48406, 22913,
-            48357, 22945, 48328, 22895, 48281, 22898, 48305, 22856, 48326, 22853, 48335, 22879, 48355, 22864, 48336, 22860, 48346, 22831, 48336, 22839,
-            48310, 22792, 48291, 22792, 48293, 22707, 48340, 22641, 48314, 22618, 48339, 22572, 48326, 22545, 48319, 22579, 48307, 22567, 48301, 22504,
-            48349, 22543, 48373, 22495, 48404, 22503, 48475, 22362, 48496, 22510, 48482, 22558, 48511, 22583, 48531, 22555, 48560, 22549, 48577, 22628,
-            48650, 22677, 48616, 22852, 48728, 22862, 48763, 22896, 48825, 22881
+            50512, 30732, 50517, 30747, 50524, 30746, 50522, 30722, 50511, 30724, 50512, 30732
         ))
-    ),
-        "рахівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            47914, 24345, 47926, 24325, 47897, 24221, 47917, 24195, 47915, 24113, 47953, 24064, 47963, 23950, 47989, 23964, 47986, 23933, 48045, 23892,
-            48053, 23941, 48108, 23919, 48183, 23996, 48204, 23968, 48200, 24017, 48262, 24035, 48260, 24124, 48305, 24165, 48320, 24145, 48367, 24178,
-            48350, 24259, 48398, 24289, 48381, 24350, 48352, 24358, 48280, 24488, 48244, 24485, 48216, 24546, 48187, 24511, 48153, 24504, 48089, 24598,
-            48047, 24627, 48016, 24576, 47959, 24553, 47970, 24436, 47914, 24345
-        ))
-    ),
-        "тячівський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                48004, 23624, 48010, 23540, 48057, 23441, 48114, 23470, 48129, 23549, 48176, 23510, 48208, 23527, 48223, 23575, 48301, 23631, 48317, 23684,
-                48339, 23666, 48348, 23695, 48372, 23703, 48365, 23737, 48400, 23792, 48432, 23819, 48448, 23807, 48522, 23858, 48553, 23860, 48552, 23929,
-                48476, 23910, 48458, 23963, 48506, 24002, 48530, 24132, 48498, 24115, 48481, 24140, 48452, 24127, 48389, 24152, 48375, 24182, 48320, 24145,
-                48305, 24165, 48254, 24112, 48273, 24088, 48250, 24066, 48262, 24035, 48197, 24012, 48201, 23965, 48183, 23996, 48108, 23919, 48053, 23941,
-                48045, 23892, 47986, 23933, 47989, 23964, 47966, 23960, 47932, 23865, 47983, 23819, 47998, 23751, 47984, 23666, 48004, 23624
-            )),
-            ScaledRing(intArrayOf(
-                48210, 24213, 48221, 24197, 48228, 24229, 48210, 24213
-            ))
-    )),
-        "ужгородський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48959, 22878, 48970, 22919, 49005, 22898, 49002, 22847, 49026, 22834, 49052, 22773, 49039, 22682, 49093, 22600, 49079, 22553, 49007, 22545,
-            48991, 22477, 48929, 22425, 48885, 22421, 48865, 22384, 48800, 22388, 48766, 22346, 48730, 22362, 48684, 22340, 48647, 22250, 48588, 22171,
-            48405, 22142, 48426, 22207, 48410, 22264, 48386, 22240, 48355, 22298, 48377, 22345, 48406, 22342, 48403, 22361, 48379, 22365, 48392, 22394,
-            48374, 22482, 48386, 22475, 48404, 22503, 48475, 22362, 48496, 22510, 48482, 22558, 48511, 22583, 48531, 22555, 48560, 22549, 48577, 22628,
-            48650, 22677, 48616, 22852, 48728, 22862, 48764, 22896, 48828, 22882, 48878, 22833, 48918, 22860, 48925, 22886, 48959, 22878
-        ))
-    ),
-        "хустський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                48287, 23029, 48333, 22993, 48344, 22949, 48406, 22913, 48410, 22880, 48439, 22851, 48449, 22896, 48433, 22883, 48423, 22912, 48452, 22920,
-                48497, 22984, 48445, 23143, 48476, 23171, 48556, 23155, 48585, 23195, 48609, 23199, 48626, 23138, 48614, 23165, 48627, 23178, 48636, 23164,
-                48652, 23248, 48688, 23291, 48753, 23317, 48771, 23361, 48733, 23397, 48718, 23472, 48735, 23512, 48707, 23626, 48639, 23704, 48641, 23789,
-                48591, 23793, 48554, 23862, 48448, 23807, 48432, 23819, 48365, 23737, 48372, 23703, 48348, 23695, 48339, 23666, 48317, 23684, 48301, 23631,
-                48223, 23575, 48208, 23527, 48176, 23510, 48129, 23549, 48114, 23470, 48070, 23439, 48043, 23457, 48023, 23528, 47969, 23501, 48047, 23288,
-                48060, 23277, 48072, 23291, 48108, 23261, 48152, 23264, 48181, 23175, 48243, 23103, 48221, 23093, 48222, 23063, 48274, 23036, 48255, 22941,
-                48286, 22979, 48287, 23029
-            )),
-            ScaledRing(intArrayOf(
-                48251, 22903, 48238, 22900, 48243, 22918, 48251, 22903
-            ))
     ))
+
+    private fun _r_buchanskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            50486, 30338, 50496, 30346, 50493, 30335, 50496, 30320, 50487, 30321, 50486, 30338
+        )),
+        ScaledRing(intArrayOf(
+            50376, 30340, 50361, 30361, 50351, 30361, 50369, 30391, 50371, 30412, 50379, 30429, 50376, 30435, 50382, 30442, 50396, 30423, 50406, 30394,
+            50425, 30366, 50445, 30358, 50442, 30322, 50447, 30281, 50426, 30269, 50431, 30255, 50423, 30245, 50427, 30236, 50442, 30246, 50450, 30239,
+            50470, 30258, 50474, 30249, 50487, 30253, 50488, 30263, 50499, 30270, 50510, 30260, 50518, 30267, 50533, 30302, 50544, 30304, 50552, 30297,
+            50555, 30311, 50546, 30326, 50551, 30333, 50564, 30327, 50571, 30315, 50589, 30286, 50599, 30284, 50604, 30294, 50599, 30321, 50602, 30330,
+            50608, 30316, 50610, 30301, 50620, 30297, 50625, 30284, 50640, 30275, 50646, 30284, 50663, 30282, 50668, 30296, 50686, 30311, 50707, 30264,
+            50714, 30264, 50719, 30218, 50713, 30197, 50710, 30150, 50715, 30107, 50707, 30104, 50705, 30114, 50691, 30110, 50699, 30080, 50708, 30075,
+            50730, 30043, 50741, 30058, 50755, 30047, 50764, 30050, 50770, 30062, 50773, 30050, 50771, 29999, 50776, 29982, 50776, 29972, 50755, 29960,
+            50754, 29923, 50760, 29917, 50775, 29918, 50779, 29903, 50763, 29908, 50748, 29904, 50751, 29898, 50771, 29886, 50781, 29898, 50789, 29876,
+            50795, 29873, 50786, 29836, 50776, 29826, 50772, 29780, 50773, 29771, 50766, 29754, 50764, 29649, 50771, 29610, 50782, 29610, 50784, 29600,
+            50776, 29588, 50775, 29573, 50768, 29573, 50749, 29577, 50747, 29585, 50745, 29580, 50739, 29587, 50728, 29592, 50729, 29598, 50709, 29586,
+            50696, 29570, 50690, 29543, 50674, 29532, 50664, 29530, 50657, 29509, 50661, 29502, 50659, 29482, 50654, 29478, 50647, 29489, 50633, 29467,
+            50628, 29478, 50620, 29446, 50608, 29475, 50594, 29494, 50579, 29497, 50574, 29503, 50559, 29499, 50549, 29502, 50538, 29486, 50540, 29459,
+            50528, 29467, 50515, 29461, 50504, 29500, 50488, 29508, 50485, 29503, 50472, 29512, 50461, 29482, 50472, 29456, 50453, 29446, 50453, 29474,
+            50450, 29474, 50451, 29498, 50436, 29497, 50420, 29482, 50417, 29469, 50421, 29449, 50417, 29442, 50400, 29456, 50405, 29483, 50414, 29479,
+            50423, 29560, 50402, 29589, 50375, 29591, 50372, 29611, 50365, 29617, 50373, 29631, 50359, 29638, 50341, 29612, 50329, 29626, 50323, 29644,
+            50322, 29674, 50324, 29692, 50314, 29690, 50316, 29717, 50344, 29764, 50355, 29765, 50319, 29797, 50308, 29812, 50300, 29880, 50304, 29892,
+            50303, 29910, 50317, 29910, 50319, 29925, 50342, 29921, 50338, 29945, 50349, 29986, 50368, 29986, 50387, 29996, 50391, 29986, 50408, 29968,
+            50404, 29996, 50400, 29995, 50395, 30026, 50378, 30034, 50376, 30056, 50367, 30064, 50358, 30081, 50357, 30066, 50348, 30063, 50330, 30078,
+            50326, 30088, 50346, 30114, 50349, 30132, 50346, 30151, 50350, 30164, 50336, 30217, 50318, 30242, 50337, 30246, 50350, 30266, 50348, 30273,
+            50357, 30295, 50350, 30306, 50376, 30340
+        ))
+    ))
+
+    private fun _r_fastivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49878, 29646, 49906, 29700, 49882, 29732, 49900, 29784, 49878, 29826, 49871, 29852, 49893, 29878, 49892, 29895, 49896, 29895, 49897, 29891,
+            49900, 29893, 49919, 29918, 49934, 29944, 49941, 29970, 49954, 29984, 49968, 29981, 49995, 29937, 50004, 29936, 50003, 29926, 50011, 29926,
+            50022, 29936, 50038, 29927, 50052, 29957, 50041, 29974, 50035, 29994, 50024, 30060, 50014, 30080, 50015, 30094, 50051, 30097, 50067, 30104,
+            50076, 30098, 50101, 30129, 50106, 30147, 50107, 30184, 50111, 30180, 50128, 30219, 50135, 30219, 50140, 30206, 50150, 30214, 50146, 30240,
+            50156, 30253, 50165, 30240, 50180, 30240, 50180, 30208, 50189, 30208, 50190, 30221, 50202, 30235, 50215, 30232, 50217, 30235, 50221, 30242,
+            50216, 30252, 50211, 30246, 50188, 30284, 50199, 30298, 50197, 30308, 50217, 30309, 50227, 30295, 50226, 30326, 50209, 30332, 50201, 30325,
+            50196, 30341, 50183, 30334, 50174, 30339, 50171, 30352, 50175, 30362, 50169, 30371, 50168, 30391, 50197, 30390, 50197, 30416, 50204, 30414,
+            50214, 30425, 50224, 30400, 50230, 30405, 50231, 30392, 50240, 30386, 50244, 30398, 50252, 30402, 50257, 30386, 50267, 30395, 50273, 30385,
+            50283, 30388, 50284, 30398, 50293, 30392, 50296, 30408, 50295, 30427, 50303, 30426, 50307, 30438, 50309, 30422, 50320, 30417, 50320, 30433,
+            50325, 30428, 50334, 30438, 50335, 30448, 50342, 30458, 50342, 30474, 50360, 30468, 50361, 30458, 50355, 30452, 50357, 30438, 50376, 30435,
+            50379, 30429, 50371, 30412, 50369, 30391, 50351, 30361, 50361, 30361, 50376, 30340, 50371, 30331, 50350, 30306, 50357, 30295, 50348, 30273,
+            50350, 30266, 50337, 30246, 50318, 30242, 50336, 30217, 50350, 30164, 50346, 30151, 50349, 30132, 50346, 30114, 50326, 30088, 50330, 30078,
+            50348, 30063, 50357, 30066, 50358, 30081, 50367, 30064, 50376, 30056, 50378, 30034, 50395, 30026, 50400, 29995, 50404, 29996, 50408, 29968,
+            50391, 29986, 50387, 29996, 50368, 29986, 50349, 29986, 50338, 29945, 50342, 29921, 50319, 29925, 50317, 29910, 50303, 29910, 50304, 29892,
+            50300, 29880, 50308, 29812, 50319, 29797, 50355, 29765, 50344, 29764, 50316, 29717, 50314, 29690, 50310, 29689, 50312, 29681, 50297, 29676,
+            50285, 29678, 50284, 29689, 50274, 29680, 50275, 29666, 50268, 29672, 50266, 29663, 50254, 29681, 50240, 29689, 50232, 29700, 50227, 29685,
+            50208, 29675, 50188, 29655, 50180, 29643, 50173, 29650, 50161, 29673, 50156, 29693, 50143, 29688, 50124, 29657, 50118, 29657, 50116, 29671,
+            50106, 29648, 50073, 29691, 50068, 29696, 50042, 29694, 50033, 29673, 50013, 29683, 50006, 29699, 50000, 29690, 49990, 29696, 49978, 29718,
+            49968, 29713, 49970, 29728, 49964, 29732, 49961, 29722, 49946, 29733, 49941, 29724, 49934, 29728, 49911, 29665, 49898, 29642, 49886, 29633,
+            49877, 29634, 49878, 29646
+        ))
     )
 
-    private fun _Запорізьк(): Map<String, CompactPolygon> = mapOf(
-        "бердянський" to     CompactPolygon(
+    private fun _r_dnistrovskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            47284, 36392, 47295, 36362, 47263, 36346, 47277, 36220, 47282, 36189, 47328, 36170, 47342, 36000, 47302, 35969, 47245, 36008, 47197, 35998,
-            47194, 35833, 47165, 35837, 47143, 35866, 47084, 35861, 47088, 35917, 47068, 35919, 47060, 35950, 47069, 36000, 47053, 35983, 46976, 35982,
-            46985, 36068, 46918, 36058, 46905, 35988, 46869, 35984, 46894, 36061, 46872, 36144, 46850, 36084, 46822, 36092, 46809, 36026, 46755, 36030,
-            46746, 35962, 46724, 35967, 46721, 35901, 46657, 35920, 46670, 36188, 46620, 36258, 46571, 36235, 46530, 36186, 46542, 36153, 46507, 36144,
-            46494, 36094, 46487, 36104, 46515, 36193, 46709, 36379, 46782, 36626, 46778, 36725, 46730, 36811, 46708, 36828, 46671, 36763, 46631, 36743,
-            46630, 36768, 46679, 36825, 46811, 36902, 46860, 36980, 46884, 37062, 46928, 37021, 46982, 37141, 47007, 37089, 47039, 37125, 47059, 37099,
-            47047, 37081, 47080, 36985, 47089, 37013, 47128, 37002, 47199, 36855, 47198, 36678, 47190, 36662, 47145, 36669, 47116, 36490, 47179, 36482,
-            47175, 36402, 47221, 36447, 47263, 36434, 47284, 36392
+            48238, 26518, 48209, 26523, 48216, 26548, 48224, 26549, 48220, 26570, 48240, 26573, 48246, 26588, 48239, 26596, 48239, 26620, 48252, 26618,
+            48248, 26630, 48260, 26630, 48274, 26616, 48291, 26642, 48305, 26648, 48317, 26676, 48325, 26676, 48327, 26696, 48345, 26690, 48356, 26682,
+            48360, 26694, 48318, 26734, 48313, 26737, 48324, 26758, 48302, 26767, 48292, 26794, 48295, 26817, 48304, 26826, 48312, 26822, 48314, 26831,
+            48344, 26824, 48352, 26808, 48343, 26796, 48354, 26765, 48380, 26739, 48405, 26709, 48412, 26724, 48399, 26754, 48407, 26768, 48418, 26775,
+            48419, 26788, 48413, 26851, 48420, 26873, 48409, 26890, 48397, 26901, 48384, 26895, 48363, 26932, 48372, 26931, 48359, 26995, 48364, 27002,
+            48380, 27005, 48383, 27028, 48374, 27046, 48402, 27045, 48411, 27040, 48420, 27014, 48425, 27014, 48427, 27029, 48423, 27037, 48426, 27052,
+            48421, 27062, 48432, 27069, 48435, 27085, 48413, 27087, 48401, 27102, 48379, 27124, 48374, 27139, 48381, 27168, 48395, 27192, 48389, 27200,
+            48391, 27213, 48373, 27236, 48380, 27263, 48371, 27286, 48408, 27297, 48423, 27314, 48429, 27312, 48444, 27320, 48441, 27337, 48448, 27339,
+            48440, 27354, 48449, 27353, 48442, 27373, 48415, 27378, 48411, 27384, 48410, 27406, 48414, 27418, 48409, 27447, 48434, 27462, 48448, 27466,
+            48458, 27491, 48455, 27505, 48470, 27535, 48470, 27520, 48484, 27496, 48506, 27479, 48528, 27483, 48551, 27478, 48584, 27461, 48604, 27444,
+            48621, 27403, 48631, 27364, 48629, 27353, 48618, 27344, 48604, 27334, 48600, 27316, 48604, 27302, 48612, 27296, 48625, 27275, 48625, 27254,
+            48623, 27246, 48617, 27240, 48612, 27238, 48608, 27239, 48589, 27259, 48574, 27261, 48570, 27258, 48566, 27247, 48565, 27234, 48568, 27217,
+            48579, 27192, 48582, 27166, 48576, 27140, 48564, 27126, 48557, 27108, 48557, 27088, 48564, 27045, 48569, 27004, 48575, 26995, 48587, 26989,
+            48587, 26980, 48576, 26968, 48576, 26939, 48574, 26926, 48565, 26915, 48551, 26905, 48541, 26883, 48545, 26863, 48557, 26841, 48576, 26824,
+            48590, 26821, 48605, 26825, 48608, 26821, 48610, 26815, 48609, 26800, 48603, 26786, 48598, 26780, 48588, 26778, 48567, 26795, 48551, 26787,
+            48546, 26780, 48548, 26761, 48555, 26755, 48575, 26750, 48583, 26743, 48586, 26723, 48574, 26724, 48567, 26739, 48557, 26743, 48538, 26740,
+            48530, 26716, 48532, 26705, 48553, 26677, 48560, 26660, 48561, 26639, 48552, 26619, 48545, 26618, 48539, 26621, 48536, 26626, 48543, 26664,
+            48540, 26675, 48524, 26680, 48510, 26705, 48494, 26714, 48489, 26710, 48486, 26701, 48485, 26682, 48486, 26656, 48505, 26637, 48509, 26628,
+            48508, 26612, 48495, 26608, 48468, 26627, 48454, 26617, 48451, 26592, 48453, 26567, 48459, 26554, 48491, 26532, 48521, 26502, 48537, 26496,
+            48543, 26490, 48546, 26484, 48544, 26467, 48535, 26433, 48537, 26404, 48531, 26385, 48512, 26366, 48508, 26355, 48516, 26326, 48508, 26308,
+            48515, 26294, 48534, 26283, 48539, 26260, 48530, 26229, 48525, 26194, 48529, 26166, 48536, 26155, 48547, 26148, 48566, 26145, 48590, 26146,
+            48600, 26144, 48616, 26126, 48618, 26111, 48613, 26101, 48605, 26098, 48598, 26097, 48590, 26105, 48580, 26107, 48568, 26126, 48560, 26128,
+            48550, 26126, 48544, 26118, 48540, 26122, 48528, 26107, 48524, 26093, 48486, 26107, 48482, 26080, 48496, 26071, 48496, 26062, 48463, 26093,
+            48470, 26119, 48444, 26161, 48429, 26187, 48411, 26196, 48387, 26223, 48375, 26204, 48359, 26218, 48351, 26207, 48339, 26206, 48330, 26214,
+            48330, 26242, 48348, 26249, 48362, 26263, 48347, 26297, 48365, 26323, 48351, 26358, 48362, 26364, 48358, 26383, 48361, 26391, 48336, 26388,
+            48334, 26398, 48357, 26418, 48361, 26417, 48345, 26453, 48346, 26471, 48318, 26486, 48287, 26487, 48252, 26518, 48238, 26518
         ))
-    ),
-        "василівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            47086, 34963, 47141, 34955, 47133, 34874, 47172, 34829, 47134, 34601, 47163, 34595, 47159, 34542, 47121, 34550, 47119, 34517, 47247, 34491,
-            47256, 34530, 47284, 34518, 47280, 34488, 47315, 34479, 47318, 34516, 47335, 34512, 47323, 34414, 47301, 34419, 47287, 34401, 47290, 34330,
-            47274, 34294, 47434, 34243, 47477, 34139, 47562, 34588, 47515, 34861, 47530, 34944, 47511, 34977, 47509, 35067, 47537, 35140, 47615, 35190,
-            47609, 35282, 47644, 35279, 47678, 35336, 47659, 35347, 47639, 35428, 47618, 35430, 47619, 35469, 47606, 35458, 47607, 35549, 47438, 35588,
-            47433, 35682, 47333, 35579, 47312, 35606, 47266, 35578, 47275, 35554, 47237, 35502, 47161, 35491, 47202, 35392, 47179, 35381, 47203, 35322,
-            47174, 35320, 47176, 35283, 47139, 35264, 47152, 35173, 47119, 35174, 47116, 35147, 47090, 35140, 47086, 34963
-        ))
-    ),
-        "запорізький" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            47868, 34826, 47881, 34861, 47851, 34871, 47853, 34897, 47830, 34903, 47818, 34879, 47760, 34894, 47770, 34957, 47712, 34956, 47712, 34930,
-            47677, 34938, 47674, 34906, 47601, 34942, 47580, 34928, 47563, 34959, 47556, 34923, 47561, 34961, 47530, 34944, 47505, 35024, 47537, 35140,
-            47615, 35190, 47609, 35282, 47644, 35279, 47678, 35336, 47659, 35347, 47639, 35428, 47618, 35430, 47619, 35469, 47606, 35458, 47607, 35549,
-            47576, 35567, 47622, 35715, 47597, 35757, 47672, 35798, 47802, 35772, 47805, 35791, 47829, 35787, 47833, 35846, 47769, 35842, 47756, 35954,
-            47721, 35974, 47725, 36012, 47766, 36007, 47775, 36184, 47794, 36180, 47807, 36207, 47838, 36189, 47859, 36197, 47843, 36102, 47868, 36058,
-            47883, 36081, 47861, 36087, 47865, 36119, 47890, 36130, 47942, 36109, 47930, 36085, 47965, 36074, 47966, 36048, 47972, 36071, 48019, 36034,
-            48025, 36066, 48059, 36052, 48043, 35975, 48058, 35989, 48073, 35969, 48085, 35985, 48095, 35967, 48066, 35817, 48100, 35806, 48096, 35743,
-            48140, 35703, 48075, 35524, 48095, 35519, 48100, 35421, 48144, 35295, 48132, 35102, 48089, 34990, 48091, 34915, 48131, 34916, 48133, 34855,
-            48054, 34876, 48051, 34839, 48014, 34847, 47982, 34870, 47986, 34905, 47933, 34919, 47942, 34876, 47916, 34802, 47868, 34826
-        ))
-    ),
-        "мелітопольський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            47119, 34517, 47121, 34550, 47159, 34542, 47163, 34595, 47134, 34601, 47172, 34829, 47133, 34874, 47141, 34955, 47078, 34963, 47079, 35026,
-            47090, 35140, 47116, 35147, 47119, 35174, 47152, 35173, 47139, 35264, 47176, 35283, 47174, 35320, 47203, 35322, 47179, 35381, 47202, 35392,
-            47185, 35446, 47159, 35450, 47144, 35509, 47101, 35506, 47102, 35623, 47045, 35680, 46987, 35689, 47005, 35858, 46992, 35886, 47007, 35883,
-            47011, 35922, 47068, 35919, 47069, 36000, 47053, 35983, 46976, 35982, 46985, 36068, 46918, 36058, 46905, 35988, 46869, 35984, 46894, 36061,
-            46872, 36144, 46850, 36084, 46822, 36092, 46809, 36026, 46755, 36030, 46746, 35962, 46724, 35967, 46721, 35901, 46657, 35920, 46589, 35728,
-            46483, 35589, 46435, 35445, 46263, 35284, 46300, 35072, 46482, 35055, 46513, 34947, 46507, 34890, 46563, 34891, 46549, 34757, 46584, 34748,
-            46581, 34723, 46620, 34713, 46627, 34756, 46683, 34746, 46688, 34632, 46724, 34625, 46758, 34750, 46781, 34750, 46781, 34768, 46823, 34758,
-            46828, 34817, 46883, 34805, 46880, 34753, 46961, 34736, 46956, 34685, 46979, 34681, 46973, 34624, 46993, 34617, 46992, 34600, 47027, 34592,
-            47024, 34567, 47106, 34553, 47105, 34520, 47119, 34517
-        ))
-    ),
-        "пологівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            47469, 37245, 47373, 37195, 47356, 37203, 47341, 37162, 47381, 37146, 47376, 37107, 47340, 37122, 47300, 37036, 47315, 37026, 47319, 36926,
-            47202, 36963, 47198, 36678, 47190, 36662, 47145, 36669, 47116, 36490, 47179, 36482, 47175, 36402, 47221, 36447, 47263, 36434, 47295, 36370,
-            47264, 36329, 47284, 36272, 47282, 36189, 47328, 36170, 47342, 36000, 47302, 35969, 47245, 36008, 47197, 35998, 47194, 35833, 47165, 35837,
-            47143, 35866, 47084, 35861, 47088, 35917, 47011, 35922, 47007, 35883, 46992, 35886, 47005, 35858, 46987, 35689, 47045, 35680, 47102, 35623,
-            47101, 35506, 47144, 35509, 47159, 35450, 47161, 35491, 47237, 35502, 47275, 35554, 47266, 35578, 47312, 35606, 47333, 35579, 47433, 35682,
-            47438, 35588, 47580, 35555, 47622, 35715, 47597, 35757, 47672, 35798, 47802, 35772, 47805, 35791, 47829, 35787, 47833, 35846, 47769, 35842,
-            47756, 35954, 47721, 35974, 47725, 36012, 47766, 36007, 47776, 36185, 47794, 36180, 47807, 36207, 47833, 36198, 47816, 36299, 47821, 36333,
-            47839, 36324, 47824, 36476, 47851, 36605, 47785, 36588, 47794, 36671, 47679, 36713, 47685, 36792, 47665, 36775, 47659, 36718, 47631, 36725,
-            47634, 36766, 47607, 36748, 47624, 36830, 47545, 36893, 47576, 36944, 47539, 37002, 47553, 37021, 47494, 37074, 47455, 37158, 47484, 37180,
-            47469, 37245
-        ))
-    )
     )
 
-    private fun _Київськ(): Map<String, CompactPolygon> = mapOf(
-        "бориспільський" to     CompactPolygon(
+    private fun _r_chernivetskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            50274, 31645, 50265, 31581, 50290, 31590, 50309, 31547, 50306, 31501, 50271, 31469, 50286, 31440, 50253, 31415, 50273, 31371, 50260, 31355,
-            50176, 31422, 50162, 31394, 50167, 31272, 50189, 31272, 50195, 31190, 50287, 31208, 50298, 31157, 50324, 31143, 50361, 31173, 50359, 31212,
-            50380, 31203, 50387, 31224, 50417, 31210, 50422, 31225, 50476, 31097, 50464, 31004, 50483, 30970, 50435, 30868, 50439, 30829, 50419, 30849,
-            50394, 30819, 50395, 30777, 50372, 30742, 50383, 30717, 50352, 30711, 50355, 30674, 50371, 30679, 50361, 30636, 50338, 30642, 50346, 30611,
-            50278, 30672, 50264, 30660, 50245, 30721, 50220, 30715, 50220, 30732, 50158, 30772, 50132, 30894, 50085, 30926, 50074, 30961, 50049, 30967,
-            49985, 31063, 49986, 31118, 49967, 31187, 49951, 31178, 49936, 31256, 49967, 31301, 49981, 31296, 49987, 31432, 49974, 31445, 49936, 31425,
-            49892, 31434, 49843, 31502, 49869, 31515, 49875, 31557, 49907, 31581, 49906, 31613, 49857, 31615, 49851, 31711, 49893, 31752, 49894, 31774,
-            49920, 31771, 49966, 31813, 49962, 31890, 49944, 31901, 49991, 31918, 50019, 31900, 50052, 31987, 50056, 31904, 50101, 31911, 50125, 31975,
-            50158, 31934, 50152, 31965, 50201, 31993, 50188, 32056, 50228, 32118, 50247, 32089, 50277, 32101, 50283, 32084, 50305, 32140, 50354, 32141,
-            50369, 32161, 50390, 32009, 50345, 32036, 50343, 32015, 50365, 31974, 50368, 31894, 50406, 31831, 50408, 31746, 50350, 31720, 50323, 31669,
-            50279, 31673, 50274, 31645
+            47926, 25443, 47933, 25498, 47938, 25593, 47949, 25625, 47949, 25657, 47944, 25683, 47945, 25697, 47940, 25713, 47946, 25733, 47942, 25738,
+            47940, 25776, 47954, 25819, 47964, 25826, 47970, 25861, 47963, 25879, 47961, 25892, 47965, 25908, 47977, 25915, 47975, 25941, 47970, 25952,
+            47988, 26064, 47979, 26096, 47982, 26118, 47987, 26127, 47984, 26140, 47994, 26185, 48009, 26200, 48030, 26209, 48051, 26212, 48064, 26239,
+            48076, 26267, 48085, 26276, 48114, 26285, 48134, 26298, 48149, 26317, 48153, 26329, 48161, 26336, 48178, 26327, 48184, 26333, 48184, 26347,
+            48188, 26366, 48196, 26371, 48196, 26384, 48186, 26385, 48188, 26402, 48201, 26422, 48194, 26435, 48202, 26435, 48206, 26456, 48213, 26457,
+            48220, 26469, 48216, 26481, 48217, 26500, 48212, 26513, 48213, 26523, 48238, 26518, 48252, 26518, 48287, 26487, 48318, 26486, 48346, 26471,
+            48345, 26453, 48361, 26417, 48357, 26418, 48334, 26398, 48336, 26388, 48361, 26391, 48358, 26383, 48362, 26364, 48351, 26358, 48365, 26323,
+            48347, 26297, 48362, 26263, 48348, 26249, 48330, 26242, 48330, 26214, 48339, 26206, 48351, 26207, 48359, 26218, 48375, 26204, 48387, 26223,
+            48411, 26196, 48429, 26187, 48444, 26161, 48470, 26119, 48463, 26093, 48496, 26062, 48496, 26071, 48482, 26080, 48486, 26107, 48524, 26093,
+            48528, 26107, 48540, 26122, 48544, 26118, 48538, 26104, 48538, 26092, 48556, 26081, 48570, 26058, 48585, 26045, 48603, 26066, 48622, 26060,
+            48631, 26063, 48645, 26057, 48648, 26040, 48643, 26033, 48620, 26030, 48610, 26022, 48610, 26010, 48619, 25992, 48621, 25975, 48607, 25954,
+            48593, 25938, 48587, 25920, 48588, 25901, 48599, 25877, 48596, 25861, 48600, 25848, 48614, 25857, 48622, 25854, 48629, 25842, 48661, 25813,
+            48668, 25804, 48676, 25779, 48671, 25767, 48661, 25755, 48637, 25746, 48633, 25735, 48639, 25727, 48656, 25720, 48664, 25712, 48667, 25654,
+            48673, 25628, 48660, 25622, 48652, 25605, 48635, 25585, 48625, 25588, 48590, 25587, 48570, 25603, 48566, 25598, 48551, 25603, 48543, 25600,
+            48527, 25608, 48506, 25600, 48490, 25601, 48473, 25597, 48462, 25606, 48447, 25604, 48425, 25609, 48412, 25601, 48412, 25615, 48398, 25620,
+            48395, 25612, 48384, 25619, 48382, 25622, 48379, 25623, 48372, 25640, 48358, 25662, 48350, 25664, 48334, 25648, 48325, 25658, 48312, 25648,
+            48311, 25639, 48298, 25612, 48282, 25609, 48257, 25597, 48261, 25580, 48252, 25573, 48252, 25558, 48260, 25542, 48265, 25520, 48252, 25511,
+            48256, 25488, 48250, 25479, 48236, 25473, 48209, 25468, 48201, 25461, 48192, 25465, 48183, 25456, 48168, 25457, 48164, 25466, 48158, 25464,
+            48142, 25471, 48129, 25468, 48121, 25474, 48116, 25470, 48120, 25448, 48123, 25412, 48114, 25386, 48101, 25366, 48093, 25379, 48081, 25378,
+            48070, 25371, 48052, 25345, 48056, 25337, 48048, 25330, 48036, 25330, 48027, 25344, 48020, 25360, 48010, 25367, 47980, 25346, 47968, 25360,
+            47942, 25410, 47939, 25423, 47926, 25443
         ))
-    ),
-        "броварський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                50525, 30751, 50511, 30724, 50525, 30751
-            )),
-            ScaledRing(intArrayOf(
-                50580, 31920, 50544, 31952, 50541, 32063, 50496, 32047, 50486, 31963, 50482, 31979, 50467, 31973, 50458, 32022, 50402, 32046, 50413, 32102,
-                50379, 32083, 50390, 32009, 50345, 32036, 50343, 32015, 50365, 31974, 50368, 31894, 50406, 31831, 50408, 31746, 50350, 31720, 50323, 31669,
-                50279, 31673, 50263, 31631, 50265, 31581, 50290, 31590, 50309, 31547, 50306, 31501, 50271, 31469, 50286, 31440, 50253, 31415, 50271, 31367,
-                50260, 31355, 50176, 31422, 50162, 31390, 50167, 31272, 50189, 31272, 50197, 31185, 50249, 31211, 50287, 31208, 50298, 31157, 50324, 31143,
-                50361, 31173, 50359, 31212, 50380, 31203, 50387, 31224, 50417, 31210, 50422, 31225, 50449, 31182, 50444, 31144, 50476, 31097, 50464, 31004,
-                50483, 30970, 50435, 30868, 50439, 30829, 50419, 30849, 50404, 30826, 50458, 30743, 50484, 30760, 50499, 30738, 50509, 30762, 50519, 30752,
-                50537, 30823, 50564, 30816, 50580, 30784, 50591, 30720, 50556, 30714, 50554, 30670, 50534, 30654, 50540, 30557, 50516, 30566, 50544, 30530,
-                50555, 30590, 50584, 30577, 50594, 30641, 50609, 30626, 50660, 30700, 50689, 30675, 50701, 30703, 50712, 30671, 50725, 30715, 50772, 30747,
-                50764, 30837, 50786, 30871, 50777, 30846, 50744, 30838, 50747, 30875, 50774, 30889, 50757, 30951, 50774, 31127, 50750, 31122, 50697, 31218,
-                50667, 31224, 50645, 31199, 50613, 31228, 50607, 31166, 50589, 31166, 50528, 31319, 50501, 31330, 50531, 31364, 50500, 31445, 50522, 31522,
-                50536, 31523, 50520, 31553, 50521, 31630, 50553, 31647, 50563, 31683, 50559, 31782, 50606, 31782, 50632, 31859, 50580, 31920
-            ))
-    )),
-        "бучанський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                50425, 30367, 50381, 30443, 50353, 30364, 50375, 30335, 50348, 30304, 50355, 30260, 50321, 30235, 50355, 30167, 50324, 30090, 50377, 30056,
-                50410, 29972, 50380, 29999, 50352, 29984, 50338, 29918, 50299, 29910, 50297, 29828, 50349, 29758, 50314, 29719, 50324, 29645, 50341, 29612,
-                50358, 29642, 50373, 29638, 50375, 29589, 50400, 29590, 50423, 29560, 50401, 29455, 50415, 29443, 50419, 29482, 50440, 29499, 50453, 29447,
-                50471, 29457, 50471, 29511, 50500, 29507, 50517, 29460, 50539, 29458, 50547, 29502, 50590, 29498, 50621, 29445, 50628, 29472, 50663, 29486,
-                50662, 29523, 50709, 29586, 50729, 29598, 50780, 29571, 50767, 29751, 50795, 29875, 50780, 29897, 50747, 29898, 50778, 29908, 50754, 29920,
-                50755, 29961, 50776, 29972, 50777, 30057, 50730, 30042, 50698, 30073, 50690, 30113, 50715, 30107, 50718, 30212, 50686, 30308, 50664, 30280,
-                50629, 30280, 50596, 30341, 50597, 30283, 50557, 30342, 50554, 30298, 50533, 30303, 50512, 30261, 50498, 30270, 50427, 30236, 50450, 30349,
-                50425, 30367
-            )),
-            ScaledRing(intArrayOf(
-                50499, 30344, 50492, 30317, 50483, 30344, 50499, 30344
-            ))
-    )),
-        "білоцерківський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49354, 30572, 49370, 30607, 49332, 30729, 49354, 30800, 49351, 30866, 49359, 30909, 49407, 30937, 49445, 30901, 49438, 30795, 49445, 30779,
-            49458, 30791, 49458, 30756, 49489, 30733, 49473, 30694, 49503, 30716, 49560, 30655, 49582, 30660, 49607, 30618, 49623, 30621, 49600, 30630,
-            49596, 30698, 49622, 30736, 49642, 30697, 49657, 30701, 49657, 30730, 49692, 30746, 49740, 30706, 49826, 30718, 49826, 30542, 49860, 30541,
-            49863, 30573, 49891, 30587, 49917, 30530, 49936, 30538, 49936, 30493, 49966, 30488, 49992, 30441, 49992, 30334, 50117, 30197, 50077, 30097,
-            50013, 30094, 50055, 29951, 50045, 29915, 50003, 29919, 49953, 29984, 49871, 29851, 49900, 29786, 49882, 29731, 49906, 29700, 49878, 29650,
-            49874, 29667, 49867, 29655, 49835, 29547, 49819, 29542, 49835, 29509, 49804, 29483, 49806, 29439, 49762, 29462, 49729, 29435, 49713, 29445,
-            49714, 29498, 49669, 29489, 49637, 29535, 49600, 29496, 49562, 29531, 49521, 29539, 49507, 29585, 49485, 29543, 49443, 29595, 49402, 29542,
-            49396, 29505, 49370, 29503, 49324, 29535, 49306, 29619, 49266, 29613, 49247, 29639, 49237, 29690, 49261, 29701, 49236, 29716, 49227, 29754,
-            49208, 29727, 49180, 29760, 49186, 29883, 49200, 29877, 49252, 29956, 49312, 29947, 49315, 30007, 49334, 30026, 49322, 30078, 49270, 30112,
-            49289, 30123, 49303, 30107, 49331, 30137, 49328, 30200, 49275, 30190, 49255, 30367, 49236, 30376, 49303, 30398, 49302, 30421, 49330, 30414,
-            49335, 30442, 49352, 30438, 49365, 30473, 49328, 30516, 49327, 30547, 49354, 30572
-        ))
-    ),
-        "вишгородський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                50541, 30527, 50555, 30590, 50583, 30576, 50594, 30641, 50609, 30626, 50658, 30699, 50689, 30675, 50701, 30703, 50712, 30671, 50725, 30714,
-                50769, 30749, 50811, 30734, 50817, 30770, 50863, 30775, 50895, 30733, 50902, 30684, 50964, 30645, 51003, 30642, 51010, 30603, 51027, 30601,
-                51019, 30499, 51074, 30510, 51092, 30482, 51111, 30517, 51165, 30490, 51180, 30541, 51187, 30517, 51202, 30531, 51227, 30505, 51239, 30561,
-                51280, 30505, 51273, 30454, 51307, 30464, 51313, 30398, 51361, 30324, 51379, 30358, 51423, 30352, 51464, 30288, 51513, 30180, 51489, 30164,
-                51506, 30128, 51487, 30117, 51505, 30014, 51490, 30015, 51471, 29964, 51492, 29932, 51485, 29894, 51446, 29881, 51460, 29813, 51458, 29794,
-                51442, 29797, 51457, 29744, 51531, 29740, 51530, 29717, 51503, 29673, 51506, 29634, 51464, 29585, 51482, 29539, 51424, 29523, 51397, 29496,
-                51415, 29422, 51402, 29383, 51376, 29359, 51379, 29393, 51328, 29396, 51324, 29347, 51286, 29365, 51265, 29268, 51130, 29317, 51160, 29349,
-                51061, 29512, 51019, 29465, 50979, 29476, 50982, 29413, 50949, 29411, 50925, 29467, 50869, 29521, 50837, 29497, 50814, 29547, 50812, 29488,
-                50793, 29521, 50774, 29472, 50783, 29599, 50763, 29653, 50767, 29751, 50795, 29875, 50780, 29897, 50747, 29898, 50778, 29908, 50754, 29920,
-                50755, 29961, 50776, 29972, 50777, 30057, 50730, 30042, 50698, 30073, 50690, 30113, 50715, 30107, 50718, 30212, 50686, 30308, 50664, 30280,
-                50629, 30280, 50599, 30341, 50605, 30288, 50571, 30305, 50584, 30463, 50541, 30527
-            )),
-            ScaledRing(intArrayOf(
-                51516, 30606, 51522, 30586, 51512, 30782, 51525, 30789, 51553, 30709, 51531, 30710, 51516, 30606
-            )),
-            ScaledRing(intArrayOf(
-                51513, 30766, 51509, 30777, 51513, 30766
-            ))
-    )),
-        "обухівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49837, 30659, 49826, 30542, 49860, 30541, 49863, 30573, 49891, 30587, 49917, 30530, 49936, 30538, 49936, 30493, 49966, 30488, 49992, 30441,
-            49990, 30342, 50013, 30300, 50117, 30197, 50131, 30222, 50150, 30198, 50154, 30252, 50182, 30204, 50201, 30235, 50212, 30228, 50188, 30293,
-            50236, 30333, 50184, 30339, 50166, 30382, 50194, 30387, 50212, 30421, 50237, 30384, 50249, 30401, 50265, 30375, 50274, 30397, 50289, 30379,
-            50295, 30420, 50318, 30403, 50340, 30478, 50317, 30534, 50291, 30528, 50277, 30564, 50213, 30593, 50226, 30644, 50281, 30610, 50274, 30668,
-            50257, 30669, 50245, 30721, 50220, 30715, 50220, 30732, 50158, 30772, 50132, 30894, 50085, 30926, 50074, 30961, 50049, 30967, 49985, 31063,
-            49986, 31118, 49937, 31249, 49964, 31312, 49907, 31380, 49852, 31208, 49832, 31221, 49790, 31190, 49777, 31217, 49757, 31205, 49733, 31222,
-            49702, 31196, 49695, 31217, 49604, 31136, 49584, 31129, 49581, 31153, 49572, 31140, 49555, 31154, 49557, 31109, 49497, 31095, 49474, 31040,
-            49457, 31044, 49472, 31029, 49422, 30994, 49418, 30930, 49445, 30901, 49438, 30795, 49445, 30779, 49458, 30791, 49458, 30756, 49489, 30731,
-            49473, 30694, 49503, 30716, 49619, 30618, 49597, 30644, 49606, 30725, 49625, 30736, 49639, 30698, 49657, 30701, 49657, 30730, 49692, 30746,
-            49740, 30706, 49826, 30718, 49837, 30659
-        ))
-    ),
-        "фастівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50172, 30222, 50182, 30204, 50217, 30235, 50188, 30293, 50236, 30328, 50184, 30339, 50166, 30382, 50194, 30387, 50212, 30421, 50237, 30384,
-            50249, 30401, 50265, 30375, 50274, 30397, 50287, 30378, 50295, 30420, 50318, 30403, 50338, 30474, 50360, 30468, 50357, 30437, 50374, 30426,
-            50353, 30364, 50375, 30335, 50348, 30304, 50355, 30260, 50321, 30235, 50355, 30167, 50324, 30090, 50377, 30056, 50410, 29972, 50380, 29999,
-            50352, 29984, 50338, 29918, 50299, 29910, 50297, 29828, 50349, 29758, 50316, 29726, 50312, 29682, 50277, 29689, 50265, 29666, 50230, 29704,
-            50180, 29643, 50154, 29692, 50107, 29647, 50069, 29697, 50044, 29695, 50032, 29672, 49944, 29735, 49886, 29627, 49878, 29650, 49906, 29700,
-            49882, 29731, 49900, 29786, 49871, 29851, 49896, 29875, 49891, 29895, 49953, 29984, 50003, 29919, 50045, 29915, 50055, 29951, 50013, 30094,
-            50077, 30097, 50129, 30221, 50150, 30198, 50154, 30252, 50172, 30222
-        ))
-    )
     )
 
-    private fun _Крим(): Map<String, CompactPolygon> = mapOf(
-        "бахчисарайський" to     CompactPolygon(
+    private fun _r_vyzhnytskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            44712, 33616, 44717, 33727, 44690, 33777, 44620, 33716, 44601, 33736, 44613, 33780, 44586, 33787, 44571, 33827, 44526, 33857, 44519, 33846,
-            44479, 33897, 44421, 33926, 44440, 33980, 44473, 34003, 44474, 34033, 44553, 34135, 44593, 34239, 44614, 34231, 44639, 34264, 44646, 34230,
-            44718, 34185, 44718, 34253, 44764, 34280, 44795, 34264, 44798, 34229, 44780, 34227, 44777, 34171, 44730, 34115, 44822, 34000, 44834, 34049,
-            44858, 34006, 44873, 34010, 44880, 33940, 44921, 33871, 44921, 33834, 44898, 33832, 44911, 33739, 44897, 33714, 44909, 33647, 44931, 33646,
-            44926, 33612, 44858, 33602, 44839, 33567, 44808, 33587, 44785, 33678, 44770, 33682, 44750, 33614, 44712, 33616
+            47726, 24922, 47729, 24947, 47730, 24984, 47725, 24997, 47736, 25005, 47727, 25040, 47748, 25052, 47740, 25064, 47754, 25103, 47755, 25116,
+            47769, 25117, 47792, 25149, 47792, 25167, 47797, 25171, 47809, 25167, 47814, 25177, 47826, 25180, 47834, 25197, 47849, 25200, 47859, 25222,
+            47881, 25223, 47892, 25229, 47896, 25242, 47892, 25270, 47914, 25311, 47913, 25335, 47916, 25347, 47926, 25443, 47939, 25423, 47942, 25410,
+            47968, 25360, 47980, 25346, 48010, 25367, 48020, 25360, 48027, 25344, 48036, 25330, 48048, 25330, 48056, 25337, 48052, 25345, 48070, 25371,
+            48081, 25378, 48093, 25379, 48101, 25366, 48114, 25386, 48123, 25412, 48120, 25448, 48116, 25470, 48121, 25474, 48129, 25468, 48142, 25471,
+            48158, 25464, 48164, 25466, 48168, 25457, 48183, 25456, 48192, 25465, 48201, 25461, 48209, 25468, 48236, 25473, 48250, 25479, 48256, 25488,
+            48252, 25511, 48265, 25520, 48260, 25542, 48252, 25558, 48252, 25573, 48261, 25580, 48257, 25597, 48282, 25609, 48298, 25612, 48311, 25639,
+            48312, 25648, 48325, 25658, 48334, 25648, 48350, 25664, 48358, 25662, 48372, 25640, 48378, 25625, 48383, 25618, 48376, 25600, 48378, 25581,
+            48383, 25562, 48385, 25543, 48395, 25528, 48401, 25499, 48399, 25479, 48401, 25444, 48395, 25433, 48394, 25401, 48389, 25377, 48383, 25358,
+            48368, 25318, 48347, 25291, 48340, 25278, 48329, 25275, 48330, 25264, 48323, 25255, 48318, 25256, 48314, 25242, 48289, 25227, 48286, 25220,
+            48264, 25198, 48254, 25191, 48246, 25174, 48246, 25146, 48225, 25108, 48220, 25118, 48212, 25114, 48195, 25140, 48181, 25135, 48179, 25126,
+            48185, 25112, 48185, 25094, 48181, 25085, 48171, 25083, 48164, 25092, 48161, 25089, 48159, 25066, 48147, 25073, 48132, 25065, 48130, 25044,
+            48126, 25037, 48116, 25039, 48110, 25029, 48121, 24998, 48118, 24988, 48113, 24980, 48109, 24979, 48092, 24993, 48079, 24985, 48075, 24974,
+            48050, 24941, 48040, 24933, 48031, 24920, 48029, 24912, 48021, 24911, 48014, 24912, 48011, 24920, 48001, 24912, 47994, 24910, 47948, 24918,
+            47938, 24925, 47936, 24933, 47928, 24946, 47922, 24948, 47919, 24956, 47909, 24960, 47903, 24949, 47894, 24949, 47888, 24955, 47878, 24959,
+            47876, 24971, 47867, 24985, 47860, 24981, 47857, 24996, 47826, 24980, 47825, 24974, 47801, 24956, 47798, 24949, 47782, 24942, 47759, 24936,
+            47750, 24927, 47726, 24922
         ))
-    ),
-        "білогірський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45054, 34270, 45095, 34262, 45112, 34278, 45145, 34252, 45151, 34203, 45178, 34192, 45253, 34188, 45255, 34206, 45285, 34217, 45280, 34319,
-            45241, 34317, 45207, 34345, 45226, 34477, 45208, 34544, 45227, 34560, 45254, 34533, 45260, 34611, 45238, 34684, 45188, 34669, 45224, 34768,
-            45161, 34765, 45160, 34785, 45179, 34791, 45178, 34864, 45160, 34864, 45160, 34890, 45134, 34888, 45132, 34862, 45081, 34862, 45079, 34923,
-            45051, 34923, 45046, 34970, 44996, 34933, 45000, 34882, 44948, 34879, 44931, 34829, 44913, 34826, 44881, 34741, 44900, 34701, 44873, 34693,
-            44880, 34650, 44859, 34646, 44842, 34607, 44865, 34588, 44877, 34604, 44886, 34574, 44888, 34537, 44866, 34536, 44857, 34473, 44867, 34406,
-            44900, 34357, 44888, 34330, 44938, 34291, 44952, 34306, 44990, 34279, 45054, 34270
-        ))
-    ),
-        "джанкойський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45913, 34132, 45908, 34096, 45940, 34108, 45982, 34060, 46020, 34094, 46031, 34071, 46052, 34078, 46058, 34043, 46117, 34070, 46054, 34244,
-            46068, 34320, 45944, 34476, 45948, 34511, 45994, 34561, 45986, 34629, 45909, 34754, 45901, 34802, 45810, 34799, 45756, 34960, 45709, 34850,
-            45635, 34807, 45643, 34729, 45611, 34717, 45602, 34797, 45584, 34797, 45584, 34697, 45565, 34698, 45556, 34614, 45570, 34595, 45522, 34562,
-            45547, 34462, 45566, 34462, 45550, 34255, 45626, 34255, 45627, 34187, 45579, 34160, 45578, 34140, 45614, 34139, 45632, 34063, 45665, 34077,
-            45681, 34108, 45762, 34100, 45786, 34115, 45820, 34077, 45820, 34102, 45856, 34100, 45854, 34154, 45879, 34154, 45879, 34132, 45913, 34132
-        ))
-    ),
-        "керченський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45429, 36569, 45427, 36530, 45457, 36468, 45446, 36412, 45484, 36344, 45470, 36323, 45482, 36285, 45448, 36083, 45394, 36060, 45370, 35982,
-            45412, 35879, 45448, 35846, 45467, 35872, 45473, 35845, 45461, 35821, 45432, 35819, 45394, 35749, 45374, 35762, 45334, 35720, 45284, 35518,
-            45328, 35417, 45404, 35313, 45613, 35091, 45759, 34967, 45680, 35006, 45486, 35223, 45389, 35306, 45391, 35322, 45303, 35415, 45294, 35464,
-            45268, 35449, 45218, 35463, 45215, 35424, 45172, 35427, 45163, 35505, 45179, 35515, 45127, 35538, 45127, 35615, 45094, 35725, 45044, 35809,
-            44999, 35837, 45013, 35954, 45050, 36032, 45028, 36226, 45051, 36254, 45059, 36374, 45087, 36444, 45105, 36453, 45174, 36406, 45215, 36403,
-            45271, 36437, 45277, 36427, 45243, 36413, 45255, 36427, 45261, 36409, 45258, 36429, 45283, 36416, 45317, 36495, 45336, 36461, 45361, 36483,
-            45346, 36597, 45363, 36632, 45383, 36647, 45409, 36608, 45422, 36614, 45440, 36588, 45429, 36569
-        ))
-    ),
-        "красногвардійський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45225, 34447, 45209, 34331, 45280, 34319, 45285, 34219, 45225, 34185, 45227, 34087, 45248, 34100, 45248, 34069, 45232, 34067, 45233, 34020,
-            45191, 33999, 45191, 33973, 45244, 33980, 45244, 33933, 45290, 33912, 45290, 33884, 45334, 33890, 45348, 33979, 45402, 33978, 45403, 34044,
-            45474, 34042, 45451, 33973, 45538, 33977, 45540, 34063, 45595, 34063, 45600, 34000, 45644, 33993, 45649, 34064, 45632, 34063, 45631, 34102,
-            45614, 34101, 45614, 34140, 45578, 34140, 45579, 34160, 45627, 34187, 45626, 34255, 45550, 34255, 45566, 34462, 45547, 34462, 45522, 34562,
-            45497, 34549, 45454, 34570, 45437, 34528, 45404, 34535, 45406, 34579, 45387, 34580, 45387, 34601, 45330, 34608, 45330, 34543, 45254, 34558,
-            45242, 34534, 45227, 34560, 45208, 34544, 45225, 34447
-        ))
-    ),
-        "курманський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45681, 34108, 45665, 34077, 45632, 34063, 45614, 34139, 45578, 34140, 45579, 34160, 45627, 34187, 45626, 34255, 45550, 34255, 45566, 34462,
-            45547, 34462, 45522, 34562, 45497, 34549, 45454, 34570, 45437, 34528, 45404, 34535, 45406, 34579, 45387, 34580, 45387, 34601, 45330, 34608,
-            45330, 34543, 45254, 34558, 45242, 34534, 45227, 34560, 45208, 34544, 45226, 34485, 45209, 34331, 45280, 34319, 45285, 34219, 45225, 34185,
-            45227, 34087, 45248, 34100, 45248, 34069, 45232, 34067, 45233, 34020, 45191, 33999, 45191, 33973, 45244, 33980, 45244, 33933, 45290, 33912,
-            45290, 33884, 45334, 33890, 45338, 33916, 45398, 33902, 45398, 33801, 45443, 33816, 45439, 33737, 45417, 33739, 45416, 33705, 45446, 33678,
-            45443, 33650, 45473, 33647, 45478, 33525, 45574, 33533, 45588, 33572, 45627, 33574, 45629, 33599, 45747, 33604, 45748, 33652, 45721, 33653,
-            45703, 33717, 45735, 33703, 45749, 33746, 45773, 33732, 45776, 33767, 45806, 33767, 45786, 33972, 45768, 33973, 45767, 34012, 45780, 34030,
-            45802, 34012, 45812, 34076, 45786, 34115, 45762, 34100, 45681, 34108
-        ))
-    ),
-        "кіровський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45215, 35424, 45144, 35442, 45127, 35339, 45099, 35344, 45088, 35316, 45113, 35262, 45056, 35250, 45060, 35230, 45016, 35236, 44999, 35161,
-            44980, 35165, 44977, 35150, 44967, 35006, 44985, 35026, 45029, 34989, 45084, 35015, 45089, 34965, 45055, 34922, 45079, 34923, 45081, 34862,
-            45132, 34862, 45138, 34907, 45116, 34903, 45115, 34952, 45169, 34953, 45186, 35017, 45174, 35121, 45241, 35114, 45241, 35096, 45263, 35091,
-            45267, 35044, 45284, 35043, 45313, 35131, 45498, 35180, 45509, 35196, 45389, 35306, 45391, 35322, 45303, 35415, 45294, 35464, 45268, 35449,
-            45218, 35463, 45215, 35424
-        ))
-    ),
-        "ленінський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45396, 35321, 45613, 35091, 45759, 34967, 45680, 35006, 45486, 35223, 45389, 35306, 45391, 35322, 45303, 35415, 45294, 35464, 45268, 35449,
-            45218, 35463, 45215, 35424, 45172, 35427, 45163, 35505, 45179, 35515, 45127, 35538, 45127, 35615, 45094, 35725, 45044, 35809, 44999, 35837,
-            45013, 35954, 45050, 36032, 45028, 36226, 45051, 36254, 45059, 36374, 45087, 36444, 45104, 36453, 45137, 36420, 45235, 36402, 45266, 36350,
-            45310, 36420, 45358, 36374, 45381, 36406, 45375, 36514, 45395, 36533, 45364, 36566, 45363, 36609, 45392, 36633, 45438, 36597, 45424, 36554,
-            45456, 36476, 45446, 36414, 45484, 36344, 45462, 36126, 45442, 36073, 45408, 36073, 45387, 36050, 45370, 35982, 45412, 35879, 45448, 35846,
-            45467, 35872, 45473, 35845, 45461, 35821, 45432, 35819, 45394, 35749, 45374, 35762, 45334, 35720, 45283, 35528, 45319, 35433, 45396, 35321
-        ))
-    ),
-        "міський округ алушта" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            44640, 34400, 44712, 34460, 44812, 34734, 44844, 34722, 44881, 34741, 44900, 34701, 44873, 34693, 44880, 34650, 44859, 34646, 44842, 34607,
-            44865, 34588, 44877, 34604, 44888, 34537, 44866, 34536, 44857, 34473, 44835, 34517, 44841, 34482, 44747, 34328, 44771, 34308, 44764, 34281,
-            44718, 34253, 44719, 34185, 44677, 34199, 44639, 34264, 44603, 34246, 44596, 34277, 44574, 34277, 44550, 34325, 44549, 34348, 44582, 34349,
-            44640, 34400
-        ))
-    ),
-        "міський округ армянськ" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            46135, 33615, 46081, 33643, 46071, 33626, 46062, 33715, 46090, 33740, 46127, 33718, 46123, 33746, 46144, 33769, 46119, 33801, 46150, 33831,
-            46192, 33759, 46228, 33622, 46142, 33641, 46135, 33615
-        ))
-    ),
-        "міський округ джанкой" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45731, 34376, 45684, 34364, 45688, 34435, 45712, 34438, 45711, 34413, 45729, 34425, 45747, 34368, 45731, 34376
-        ))
-    ),
-        "міський округ керч" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45370, 36447, 45386, 36487, 45375, 36514, 45395, 36533, 45364, 36566, 45383, 36647, 45346, 36597, 45359, 36479, 45336, 36461, 45317, 36495,
-            45288, 36421, 45258, 36429, 45261, 36409, 45255, 36427, 45243, 36413, 45277, 36427, 45260, 36434, 45214, 36397, 45249, 36393, 45266, 36350,
-            45310, 36420, 45358, 36374, 45381, 36406, 45370, 36447
-        ))
-    ),
-        "міський округ саки" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45099, 33548, 45146, 33510, 45145, 33630, 45128, 33611, 45118, 33631, 45115, 33563, 45099, 33548
-        ))
-    ),
-        "міський округ судак" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            44926, 35174, 44915, 35056, 44938, 35072, 44939, 35143, 44957, 35112, 44960, 35176, 44983, 35141, 44968, 35005, 44985, 35026, 45029, 34989,
-            45084, 35015, 45089, 34965, 45052, 34922, 45056, 34968, 45012, 34958, 45000, 34882, 44948, 34879, 44931, 34829, 44900, 34801, 44892, 34754,
-            44825, 34724, 44810, 34746, 44816, 34909, 44840, 34967, 44830, 35031, 44801, 35048, 44792, 35082, 44824, 35130, 44887, 35154, 44896, 35139,
-            44926, 35174
-        ))
-    ),
-        "міський округ сімферополь" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            44898, 34078, 44905, 34058, 44932, 34064, 44936, 34029, 44972, 34078, 44985, 34072, 45003, 34020, 45022, 34013, 45000, 33983, 45030, 33987,
-            45027, 33964, 45076, 33980, 45034, 33971, 45028, 34033, 45049, 34027, 45019, 34062, 45007, 34039, 44985, 34073, 45004, 34107, 44987, 34129,
-            44994, 34188, 44970, 34199, 44940, 34141, 44918, 34181, 44901, 34177, 44911, 34150, 44898, 34134, 44914, 34135, 44898, 34078
-        ))
-    ),
-        "міський округ феодосія" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45092, 35325, 45113, 35262, 45056, 35250, 45060, 35230, 45016, 35236, 44999, 35161, 44980, 35165, 44969, 35145, 44959, 35177, 44957, 35112,
-            44941, 35143, 44930, 35128, 44938, 35072, 44915, 35056, 44928, 35172, 44896, 35139, 44887, 35154, 44918, 35240, 44968, 35270, 44947, 35384,
-            44988, 35357, 45013, 35425, 45025, 35391, 45052, 35386, 45099, 35450, 45127, 35538, 45179, 35515, 45163, 35505, 45172, 35427, 45144, 35442,
-            45127, 35339, 45099, 35344, 45092, 35325
-        ))
-    ),
-        "міський округ ялта" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            44498, 34181, 44428, 34124, 44392, 33970, 44407, 33861, 44389, 33762, 44438, 33976, 44473, 34003, 44474, 34033, 44546, 34123, 44592, 34239,
-            44620, 34237, 44596, 34277, 44574, 34277, 44564, 34319, 44507, 34252, 44498, 34181
-        ))
-    ),
-        "міський округ євпаторія" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                45151, 33254, 45186, 33313, 45221, 33322, 45250, 33362, 45155, 33493, 45198, 33390, 45173, 33305, 45148, 33282, 45151, 33254
-            )),
-            ScaledRing(intArrayOf(
-                45388, 33127, 45400, 33153, 45373, 33101, 45388, 33127
-            )),
-            ScaledRing(intArrayOf(
-                45307, 33030, 45341, 33029, 45337, 33092, 45339, 33068, 45323, 33073, 45307, 33030
-            )),
-            ScaledRing(intArrayOf(
-                45319, 32999, 45325, 32987, 45319, 32999
-            ))
-    )),
-        "нижньогірський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45625, 35071, 45589, 35104, 45562, 35012, 45499, 35000, 45493, 34920, 45439, 34927, 45448, 34843, 45430, 34856, 45422, 34758, 45383, 34817,
-            45358, 34806, 45359, 34758, 45287, 34766, 45287, 34726, 45237, 34687, 45244, 34642, 45261, 34644, 45250, 34558, 45330, 34543, 45330, 34608,
-            45351, 34608, 45387, 34601, 45387, 34580, 45406, 34579, 45404, 34535, 45436, 34528, 45454, 34570, 45497, 34549, 45563, 34586, 45584, 34797,
-            45602, 34797, 45611, 34717, 45643, 34729, 45635, 34807, 45709, 34850, 45759, 34967, 45680, 35006, 45625, 35071
-        ))
-    ),
-        "первомайський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45657, 34033, 45644, 33993, 45622, 33990, 45600, 34000, 45595, 34063, 45540, 34063, 45538, 33977, 45451, 33973, 45474, 34042, 45403, 34044,
-            45402, 33978, 45348, 33979, 45344, 33916, 45398, 33902, 45398, 33801, 45443, 33816, 45439, 33737, 45417, 33739, 45416, 33705, 45446, 33678,
-            45443, 33650, 45473, 33647, 45478, 33525, 45574, 33533, 45588, 33572, 45627, 33574, 45629, 33599, 45747, 33604, 45748, 33652, 45721, 33653,
-            45703, 33717, 45735, 33703, 45749, 33746, 45773, 33732, 45776, 33767, 45806, 33767, 45786, 33972, 45768, 33973, 45767, 34012, 45780, 34030,
-            45802, 34012, 45810, 34081, 45786, 34115, 45762, 34100, 45681, 34108, 45649, 34071, 45657, 34033
-        ))
-    ),
-        "перекопський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            46192, 33759, 46200, 33849, 46126, 33998, 46116, 34069, 46058, 34043, 46052, 34078, 46031, 34071, 46020, 34094, 45982, 34060, 45940, 34108,
-            45908, 34096, 45913, 34132, 45879, 34132, 45879, 34154, 45854, 34154, 45856, 34100, 45820, 34102, 45820, 34077, 45803, 34076, 45802, 34012,
-            45780, 34030, 45767, 34012, 45768, 33973, 45786, 33972, 45806, 33767, 45776, 33767, 45773, 33732, 45749, 33746, 45735, 33703, 45703, 33717,
-            45721, 33653, 45748, 33652, 45747, 33604, 45629, 33599, 45627, 33574, 45588, 33572, 45574, 33533, 45478, 33525, 45473, 33647, 45441, 33651,
-            45435, 33608, 45403, 33598, 45403, 33574, 45433, 33577, 45444, 33551, 45432, 33430, 45455, 33430, 45464, 33458, 45511, 33464, 45507, 33392,
-            45523, 33392, 45525, 33360, 45478, 33374, 45478, 33334, 45553, 33320, 45557, 33232, 45608, 33229, 45608, 33204, 45659, 33204, 45662, 33115,
-            45697, 33125, 45696, 33100, 45713, 33099, 45732, 33154, 45792, 33171, 45757, 33211, 45755, 33263, 45883, 33541, 45849, 33497, 45836, 33544,
-            45890, 33614, 45843, 33683, 45906, 33679, 45934, 33759, 45951, 33745, 45956, 33691, 45946, 33618, 45969, 33632, 46052, 33615, 46080, 33643,
-            46127, 33616, 46142, 33641, 46226, 33615, 46192, 33759
-        ))
-    ),
-        "роздольненський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45849, 33497, 45881, 33542, 45755, 33263, 45757, 33211, 45792, 33171, 45733, 33155, 45713, 33099, 45696, 33100, 45697, 33125, 45662, 33115,
-            45659, 33204, 45608, 33204, 45608, 33229, 45557, 33232, 45553, 33320, 45478, 33334, 45478, 33374, 45525, 33360, 45523, 33392, 45507, 33392,
-            45511, 33464, 45464, 33458, 45455, 33430, 45432, 33430, 45444, 33551, 45433, 33577, 45403, 33574, 45403, 33598, 45435, 33608, 45441, 33651,
-            45473, 33647, 45478, 33525, 45574, 33533, 45588, 33572, 45627, 33574, 45629, 33599, 45747, 33604, 45748, 33652, 45721, 33653, 45703, 33717,
-            45735, 33703, 45749, 33746, 45775, 33731, 45776, 33711, 45837, 33724, 45834, 33689, 45889, 33620, 45869, 33568, 45835, 33542, 45849, 33497
-        ))
-    ),
-        "сакський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45319, 32999, 45203, 33149, 45151, 33254, 45186, 33313, 45221, 33322, 45250, 33362, 45140, 33505, 45145, 33630, 45128, 33611, 45118, 33631,
-            45115, 33563, 45099, 33548, 44992, 33605, 44988, 33682, 45038, 33676, 45045, 33797, 45076, 33796, 45077, 33770, 45094, 33770, 45105, 33896,
-            45160, 33914, 45165, 33883, 45190, 33883, 45191, 33955, 45290, 33912, 45290, 33884, 45334, 33890, 45338, 33916, 45398, 33902, 45398, 33801,
-            45443, 33816, 45439, 33737, 45417, 33739, 45416, 33705, 45446, 33678, 45435, 33608, 45403, 33598, 45403, 33574, 45433, 33577, 45444, 33551,
-            45432, 33430, 45455, 33430, 45464, 33458, 45511, 33464, 45507, 33392, 45523, 33392, 45525, 33360, 45478, 33374, 45476, 33255, 45352, 33022,
-            45327, 32986, 45319, 32999
-        ))
-    ),
-        "совєтський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45509, 35196, 45498, 35180, 45313, 35131, 45284, 35043, 45267, 35044, 45263, 35091, 45241, 35096, 45241, 35114, 45173, 35120, 45186, 35017,
-            45169, 34953, 45115, 34952, 45115, 34910, 45178, 34864, 45179, 34791, 45160, 34785, 45161, 34765, 45224, 34768, 45188, 34669, 45260, 34697,
-            45269, 34726, 45287, 34726, 45287, 34766, 45359, 34758, 45372, 34816, 45422, 34758, 45430, 34856, 45448, 34843, 45439, 34927, 45493, 34920,
-            45499, 35000, 45562, 35012, 45589, 35104, 45509, 35196
-        ))
-    ),
-        "сімферопольський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            44926, 33612, 44931, 33646, 44909, 33647, 44897, 33714, 44911, 33739, 44898, 33832, 44921, 33834, 44921, 33871, 44880, 33940, 44873, 34010,
-            44858, 34006, 44834, 34049, 44822, 34000, 44730, 34115, 44777, 34171, 44780, 34227, 44798, 34229, 44795, 34264, 44764, 34280, 44769, 34314,
-            44747, 34328, 44841, 34482, 44840, 34520, 44871, 34455, 44867, 34406, 44900, 34357, 44892, 34325, 44938, 34291, 44952, 34306, 44990, 34279,
-            45045, 34282, 45057, 34264, 45112, 34278, 45145, 34252, 45151, 34203, 45225, 34190, 45227, 34087, 45248, 34100, 45233, 34020, 45191, 33999,
-            45190, 33977, 45244, 33980, 45244, 33933, 45191, 33955, 45190, 33883, 45165, 33883, 45160, 33914, 45106, 33897, 45094, 33770, 45077, 33770,
-            45076, 33796, 45045, 33797, 45038, 33676, 44988, 33682, 44992, 33604, 44926, 33612
-        ))
-    ),
-        "феодосійський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45165, 35517, 45127, 35538, 45099, 35450, 45052, 35386, 45025, 35391, 45013, 35425, 44988, 35357, 44947, 35384, 44966, 35342, 44965, 35262,
-            44918, 35240, 44894, 35158, 44824, 35130, 44792, 35082, 44801, 35048, 44830, 35031, 44840, 34967, 44816, 34909, 44810, 34746, 44824, 34724,
-            44881, 34741, 44948, 34879, 45000, 34882, 44996, 34933, 45049, 34970, 45051, 34923, 45079, 34923, 45081, 34862, 45132, 34862, 45134, 34888,
-            45160, 34890, 45160, 34864, 45178, 34865, 45179, 34791, 45160, 34785, 45161, 34765, 45224, 34768, 45188, 34669, 45225, 34674, 45287, 34726,
-            45287, 34766, 45359, 34758, 45372, 34816, 45422, 34758, 45430, 34856, 45448, 34843, 45439, 34927, 45493, 34920, 45499, 35000, 45562, 35012,
-            45589, 35104, 45571, 35132, 45389, 35306, 45391, 35322, 45303, 35415, 45294, 35464, 45268, 35449, 45218, 35463, 45215, 35424, 45172, 35427,
-            45163, 35505, 45179, 35515, 45165, 35517
-        ))
-    ),
-        "чорноморський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45462, 33235, 45327, 32986, 45362, 32905, 45368, 32779, 45315, 32652, 45345, 32498, 45375, 32514, 45391, 32480, 45470, 32563, 45523, 32692,
-            45510, 32691, 45515, 32710, 45562, 32790, 45548, 32830, 45575, 32846, 45590, 32826, 45715, 33096, 45696, 33100, 45697, 33125, 45662, 33115,
-            45659, 33204, 45608, 33204, 45608, 33229, 45557, 33232, 45553, 33320, 45468, 33334, 45476, 33255, 45462, 33235
-        ))
-    ),
-        "ялтинський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            44680, 34426, 44582, 34349, 44549, 34348, 44552, 34306, 44506, 34250, 44495, 34168, 44429, 34126, 44392, 33970, 44407, 33861, 44389, 33762,
-            44438, 33976, 44473, 34003, 44474, 34033, 44546, 34123, 44593, 34239, 44614, 34231, 44639, 34264, 44677, 34199, 44719, 34185, 44718, 34253,
-            44764, 34281, 44771, 34308, 44747, 34328, 44841, 34482, 44835, 34517, 44857, 34473, 44866, 34536, 44888, 34537, 44877, 34604, 44865, 34588,
-            44842, 34607, 44859, 34646, 44880, 34650, 44873, 34693, 44900, 34701, 44881, 34741, 44844, 34722, 44812, 34734, 44728, 34492, 44680, 34426
-        ))
-    ),
-        "яни капу" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45954, 33774, 45975, 33780, 45982, 33821, 45961, 33831, 45985, 33848, 45981, 33867, 45956, 33855, 45952, 33822, 45929, 33833, 45954, 33774
-        ))
-    ),
-        "євпаторійський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45099, 33548, 45197, 33400, 45148, 33258, 45203, 33149, 45324, 32997, 45360, 32912, 45365, 32756, 45315, 32652, 45347, 32494, 45372, 32514,
-            45400, 32481, 45480, 32584, 45523, 32692, 45510, 32697, 45562, 32790, 45548, 32830, 45575, 32846, 45590, 32826, 45715, 33096, 45696, 33100,
-            45697, 33125, 45662, 33115, 45659, 33204, 45608, 33204, 45608, 33229, 45557, 33232, 45553, 33320, 45478, 33334, 45478, 33374, 45525, 33360,
-            45523, 33392, 45507, 33392, 45511, 33464, 45464, 33458, 45455, 33430, 45432, 33430, 45444, 33551, 45433, 33577, 45403, 33574, 45403, 33598,
-            45435, 33608, 45446, 33678, 45416, 33705, 45417, 33739, 45439, 33737, 45443, 33816, 45398, 33801, 45397, 33903, 45338, 33916, 45334, 33890,
-            45290, 33884, 45290, 33912, 45191, 33955, 45190, 33883, 45165, 33883, 45160, 33914, 45106, 33897, 45094, 33770, 45077, 33770, 45076, 33796,
-            45045, 33797, 45038, 33676, 44988, 33681, 44992, 33605, 45099, 33548
-        ))
-    )
     )
 
-    private fun _Кіровоградськ(): Map<String, CompactPolygon> = mapOf(
-        "голованівський" to     CompactPolygon(
+    private fun _r_kupyanskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            48188, 30684, 48185, 30647, 48172, 30656, 48156, 30618, 48156, 30556, 48180, 30527, 48158, 30505, 48175, 30367, 48141, 30317, 48155, 30187,
-            48140, 30105, 48150, 30049, 48179, 30032, 48184, 30002, 48209, 30009, 48230, 29990, 48217, 29975, 48233, 29930, 48186, 29891, 48212, 29843,
-            48204, 29786, 48272, 29772, 48289, 29749, 48332, 29804, 48349, 29811, 48369, 29786, 48417, 29873, 48426, 29865, 48451, 29957, 48472, 29968,
-            48483, 30050, 48452, 30114, 48504, 30163, 48480, 30221, 48489, 30256, 48505, 30255, 48527, 30386, 48574, 30403, 48567, 30567, 48606, 30571,
-            48628, 30529, 48654, 30552, 48663, 30599, 48698, 30611, 48721, 30576, 48719, 30609, 48752, 30637, 48769, 30811, 48744, 30883, 48762, 30902,
-            48759, 30946, 48772, 30944, 48761, 31038, 48728, 31114, 48762, 31175, 48764, 31253, 48696, 31267, 48713, 31224, 48673, 31146, 48601, 31200,
-            48603, 30983, 48554, 30984, 48553, 30922, 48522, 30932, 48522, 30883, 48494, 30882, 48453, 30808, 48438, 30842, 48413, 30825, 48376, 30851,
-            48396, 30934, 48380, 30999, 48318, 31030, 48294, 31021, 48302, 31125, 48284, 31132, 48267, 31091, 48252, 31106, 48224, 31091, 48222, 30981,
-            48184, 30989, 48184, 30932, 48166, 30930, 48159, 30900, 48161, 30855, 48184, 30848, 48188, 30824, 48168, 30793, 48191, 30785, 48188, 30684
+            49469, 37652, 49492, 37670, 49503, 37690, 49517, 37700, 49517, 37713, 49506, 37751, 49508, 37772, 49499, 37772, 49492, 37803, 49498, 37808,
+            49495, 37841, 49503, 37846, 49508, 37843, 49520, 37848, 49519, 37886, 49534, 37919, 49548, 37928, 49549, 37885, 49574, 37901, 49570, 37923,
+            49569, 37953, 49584, 37939, 49595, 37935, 49594, 37942, 49611, 37945, 49612, 37974, 49627, 37982, 49628, 37996, 49644, 37987, 49648, 37999,
+            49658, 38047, 49663, 38029, 49669, 38030, 49679, 38016, 49696, 38014, 49701, 37999, 49704, 38018, 49715, 38017, 49715, 37989, 49708, 37974,
+            49718, 37961, 49730, 37951, 49748, 37961, 49768, 37976, 49755, 37983, 49753, 37998, 49757, 38010, 49766, 38012, 49778, 38034, 49783, 38036,
+            49784, 38054, 49792, 38056, 49800, 38036, 49813, 38009, 49837, 38019, 49839, 38048, 49836, 38076, 49846, 38094, 49857, 38080, 49910, 38023,
+            49926, 38021, 49933, 38044, 49967, 38005, 49963, 37999, 49977, 37981, 49979, 37965, 50034, 37926, 50051, 37893, 50054, 37864, 50068, 37825,
+            50084, 37797, 50078, 37755, 50094, 37743, 50107, 37726, 50134, 37702, 50142, 37691, 50152, 37670, 50170, 37652, 50180, 37639, 50191, 37644,
+            50204, 37627, 50220, 37614, 50241, 37627, 50293, 37626, 50303, 37638, 50311, 37636, 50315, 37620, 50316, 37594, 50307, 37577, 50330, 37556,
+            50334, 37535, 50317, 37529, 50311, 37514, 50316, 37510, 50298, 37463, 50301, 37461, 50290, 37419, 50255, 37423, 50249, 37412, 50232, 37400,
+            50235, 37384, 50222, 37368, 50193, 37379, 50178, 37369, 50189, 37349, 50181, 37318, 50172, 37322, 50154, 37308, 50152, 37290, 50145, 37302,
+            50137, 37303, 50126, 37267, 50117, 37281, 50106, 37263, 50112, 37255, 50107, 37242, 50114, 37228, 50121, 37206, 50117, 37183, 50103, 37158,
+            50098, 37153, 50086, 37167, 50078, 37188, 50067, 37184, 50067, 37168, 50043, 37158, 50031, 37166, 50013, 37162, 50006, 37149, 50000, 37160,
+            49990, 37153, 49982, 37176, 49967, 37166, 49957, 37142, 49948, 37135, 49941, 37154, 49937, 37177, 49918, 37179, 49918, 37184, 49885, 37185,
+            49885, 37188, 49839, 37189, 49839, 37180, 49825, 37148, 49793, 37118, 49789, 37104, 49797, 37078, 49771, 37067, 49773, 37057, 49785, 37041,
+            49793, 37043, 49804, 37024, 49788, 37012, 49773, 36964, 49766, 36974, 49727, 36991, 49726, 37000, 49714, 37000, 49712, 37025, 49672, 36986,
+            49661, 36968, 49637, 36995, 49633, 37002, 49621, 37005, 49624, 37023, 49622, 37036, 49634, 37048, 49627, 37059, 49613, 37060, 49614, 37068,
+            49598, 37077, 49592, 37087, 49587, 37084, 49582, 37105, 49601, 37142, 49595, 37165, 49576, 37173, 49563, 37174, 49561, 37162, 49542, 37173,
+            49544, 37199, 49541, 37241, 49524, 37293, 49535, 37336, 49550, 37373, 49543, 37390, 49517, 37380, 49515, 37402, 49521, 37407, 49484, 37455,
+            49470, 37486, 49468, 37520, 49454, 37519, 49446, 37541, 49444, 37568, 49434, 37570, 49440, 37594, 49450, 37613, 49449, 37634, 49452, 37642,
+            49460, 37652, 49469, 37652
         ))
-    ),
-        "кропивницький" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48689, 32808, 48687, 32764, 48660, 32755, 48621, 32801, 48639, 32856, 48616, 32857, 48606, 32777, 48577, 32764, 48453, 32784, 48432, 32844,
-            48474, 32912, 48482, 33017, 48505, 33013, 48508, 33046, 48462, 33051, 48464, 33091, 48436, 33106, 48433, 33078, 48371, 33071, 48371, 33042,
-            48318, 33053, 48323, 33106, 48276, 33121, 48278, 33137, 48252, 33150, 48152, 33146, 48145, 33188, 48158, 33185, 48161, 33214, 48127, 33232,
-            48118, 33182, 48104, 33187, 48113, 33236, 48092, 33225, 48077, 33142, 48042, 33154, 48064, 33143, 48066, 33109, 48042, 33109, 48034, 33037,
-            47985, 33019, 48048, 32989, 48032, 32870, 47986, 32894, 47983, 32689, 47947, 32697, 47952, 32737, 47933, 32746, 47921, 32652, 47905, 32656,
-            47907, 32677, 47873, 32686, 47871, 32664, 47852, 32679, 47820, 32658, 47789, 32363, 47824, 32304, 47816, 32248, 47792, 32223, 47760, 32232,
-            47749, 32140, 47817, 32055, 47783, 31838, 47817, 31827, 47823, 31869, 47865, 31857, 47867, 31891, 47919, 31877, 47916, 31855, 47964, 31844,
-            47944, 31753, 48036, 31729, 48042, 31783, 48107, 31766, 48112, 31886, 48126, 31883, 48138, 31915, 48134, 32031, 48163, 31952, 48188, 31944,
-            48191, 31957, 48274, 31912, 48279, 31933, 48336, 31944, 48441, 31919, 48439, 31886, 48473, 31877, 48476, 31847, 48496, 31849, 48496, 31871,
-            48529, 31872, 48534, 31954, 48579, 31915, 48600, 31986, 48654, 31941, 48667, 31958, 48695, 31943, 48685, 31974, 48713, 32074, 48799, 32016,
-            48814, 31900, 48842, 31930, 48887, 31912, 48931, 32027, 48919, 32093, 48905, 32086, 48912, 32146, 48945, 32154, 48951, 32131, 48966, 32135,
-            48973, 32178, 48996, 32188, 48987, 32218, 49059, 32234, 49059, 32262, 49078, 32260, 49085, 32283, 49079, 32349, 49026, 32397, 49053, 32443,
-            49034, 32476, 49010, 32471, 49012, 32498, 48939, 32522, 48942, 32552, 48967, 32539, 48953, 32653, 48957, 32680, 48983, 32671, 48983, 32696,
-            48975, 32731, 48936, 32753, 48931, 32742, 48924, 32774, 48891, 32778, 48884, 32871, 48815, 32886, 48801, 32784, 48725, 32800, 48720, 32778,
-            48689, 32808
-        ))
-    ),
-        "новоукраїнський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48631, 31178, 48601, 31200, 48603, 30983, 48554, 30984, 48553, 30922, 48522, 30932, 48522, 30883, 48494, 30882, 48453, 30808, 48438, 30842,
-            48417, 30825, 48384, 30841, 48396, 30934, 48380, 30999, 48318, 31030, 48294, 31021, 48302, 31125, 48284, 31132, 48267, 31091, 48252, 31106,
-            48224, 31091, 48222, 31164, 48194, 31192, 48179, 31182, 48171, 31221, 48117, 31236, 48138, 31325, 48114, 31330, 48132, 31380, 48108, 31395,
-            48130, 31487, 48087, 31499, 48063, 31470, 48050, 31493, 48069, 31509, 48070, 31551, 48108, 31541, 48097, 31571, 48129, 31582, 48120, 31684,
-            48093, 31695, 48112, 31886, 48126, 31883, 48138, 31915, 48134, 32031, 48163, 31952, 48188, 31944, 48191, 31957, 48274, 31912, 48279, 31933,
-            48336, 31944, 48441, 31919, 48439, 31886, 48473, 31877, 48476, 31847, 48496, 31849, 48496, 31871, 48529, 31872, 48534, 31954, 48579, 31915,
-            48600, 31986, 48654, 31941, 48667, 31958, 48695, 31943, 48685, 31974, 48713, 32074, 48799, 32016, 48814, 31900, 48842, 31930, 48876, 31906,
-            48906, 31918, 48950, 31805, 48926, 31751, 48931, 31698, 48896, 31690, 48908, 31639, 48888, 31581, 48906, 31595, 48913, 31582, 48900, 31567,
-            48873, 31581, 48804, 31528, 48789, 31468, 48728, 31384, 48742, 31358, 48727, 31326, 48759, 31309, 48752, 31268, 48741, 31253, 48696, 31267,
-            48713, 31224, 48673, 31146, 48631, 31178
-        ))
-    ),
-        "олександрійський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48501, 32784, 48453, 32784, 48432, 32844, 48474, 32912, 48482, 33017, 48505, 33013, 48508, 33046, 48462, 33051, 48464, 33091, 48436, 33106,
-            48433, 33078, 48371, 33071, 48371, 33042, 48318, 33053, 48323, 33106, 48276, 33121, 48278, 33137, 48232, 33154, 48152, 33146, 48145, 33188,
-            48158, 33185, 48173, 33243, 48152, 33247, 48154, 33272, 48103, 33277, 48102, 33293, 48124, 33317, 48150, 33291, 48170, 33431, 48189, 33430,
-            48202, 33496, 48214, 33485, 48232, 33501, 48219, 33511, 48235, 33546, 48278, 33513, 48329, 33518, 48329, 33474, 48349, 33478, 48358, 33460,
-            48388, 33468, 48394, 33497, 48534, 33469, 48558, 33482, 48576, 33584, 48560, 33590, 48567, 33623, 48599, 33609, 48586, 33661, 48625, 33762,
-            48657, 33757, 48663, 33802, 48688, 33805, 48681, 33750, 48723, 33682, 48728, 33619, 48755, 33585, 48797, 33583, 48790, 33638, 48815, 33674,
-            48814, 33715, 48789, 33725, 48803, 33811, 48776, 33819, 48771, 33851, 48803, 33848, 48902, 33894, 48938, 33815, 48945, 33699, 48978, 33665,
-            48974, 33637, 48911, 33575, 48931, 33537, 48915, 33474, 48952, 33476, 48960, 33404, 48928, 33401, 48949, 33320, 49011, 33298, 49025, 33328,
-            49062, 33320, 49092, 33262, 49118, 33304, 49167, 33240, 49086, 33249, 49074, 33200, 49096, 33187, 49099, 33156, 49130, 33158, 49185, 33102,
-            49202, 32995, 49240, 32983, 49230, 32929, 49245, 32859, 49167, 32757, 49142, 32777, 49127, 32890, 49095, 32896, 49075, 32814, 49075, 32829,
-            49028, 32843, 49011, 32828, 48992, 32874, 48965, 32733, 48936, 32753, 48931, 32742, 48924, 32774, 48891, 32778, 48882, 32872, 48815, 32886,
-            48801, 32784, 48725, 32800, 48720, 32778, 48689, 32808, 48687, 32764, 48660, 32755, 48621, 32801, 48637, 32858, 48616, 32857, 48599, 32774,
-            48558, 32756, 48544, 32776, 48501, 32784
-        ))
-    )
     )
 
-    private fun _Луганськ(): Map<String, CompactPolygon> = mapOf(
-        "алчевський" to     CompactPolygon(
+    private fun _r_chuhuivskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            48273, 38524, 48267, 38575, 48238, 38588, 48298, 38811, 48354, 38812, 48397, 38936, 48433, 38964, 48463, 38958, 48456, 38988, 48490, 39037,
-            48472, 39043, 48473, 39095, 48514, 39065, 48537, 39088, 48544, 39064, 48551, 39130, 48563, 39095, 48590, 39116, 48594, 39047, 48649, 39075,
-            48661, 39011, 48663, 39029, 48695, 39017, 48712, 38986, 48720, 39001, 48745, 38981, 48735, 38943, 48751, 38901, 48693, 38882, 48671, 38843,
-            48717, 38685, 48753, 38679, 48747, 38660, 48768, 38649, 48758, 38593, 48780, 38558, 48785, 38480, 48773, 38519, 48734, 38521, 48724, 38498,
-            48717, 38525, 48686, 38531, 48679, 38581, 48660, 38548, 48673, 38552, 48684, 38510, 48671, 38478, 48684, 38470, 48691, 38496, 48698, 38466,
-            48679, 38418, 48660, 38396, 48657, 38420, 48642, 38417, 48654, 38479, 48641, 38421, 48626, 38450, 48611, 38445, 48599, 38400, 48582, 38397,
-            48563, 38404, 48570, 38444, 48530, 38459, 48524, 38482, 48467, 38453, 48465, 38429, 48392, 38439, 48362, 38487, 48339, 38433, 48278, 38427,
-            48273, 38524
+            49475, 36491, 49471, 36499, 49481, 36500, 49484, 36526, 49504, 36518, 49510, 36498, 49517, 36488, 49504, 36474, 49508, 36472, 49510, 36438,
+            49526, 36429, 49537, 36439, 49534, 36477, 49524, 36493, 49523, 36512, 49548, 36535, 49545, 36567, 49558, 36580, 49555, 36585, 49565, 36594,
+            49564, 36604, 49588, 36622, 49570, 36698, 49587, 36701, 49590, 36718, 49598, 36743, 49600, 36757, 49609, 36760, 49620, 36799, 49637, 36799,
+            49637, 36852, 49609, 36853, 49603, 36856, 49602, 36879, 49590, 36886, 49598, 36899, 49600, 36917, 49634, 36933, 49632, 36941, 49645, 36973,
+            49647, 36971, 49651, 36979, 49661, 36968, 49672, 36986, 49712, 37025, 49714, 37000, 49726, 37000, 49727, 36991, 49766, 36974, 49773, 36964,
+            49788, 37012, 49804, 37024, 49793, 37043, 49785, 37041, 49773, 37057, 49771, 37067, 49797, 37078, 49789, 37104, 49793, 37118, 49825, 37148,
+            49839, 37180, 49839, 37189, 49885, 37188, 49885, 37185, 49918, 37184, 49918, 37179, 49937, 37177, 49941, 37154, 49948, 37135, 49957, 37142,
+            49967, 37166, 49982, 37176, 49990, 37153, 50000, 37160, 50006, 37149, 50013, 37162, 50031, 37166, 50043, 37158, 50067, 37168, 50067, 37184,
+            50078, 37188, 50086, 37167, 50098, 37153, 50103, 37158, 50117, 37183, 50121, 37206, 50114, 37228, 50107, 37242, 50112, 37255, 50106, 37263,
+            50117, 37281, 50126, 37267, 50137, 37303, 50145, 37302, 50152, 37290, 50154, 37308, 50172, 37322, 50181, 37318, 50189, 37349, 50178, 37369,
+            50193, 37379, 50222, 37368, 50235, 37384, 50232, 37400, 50249, 37412, 50255, 37423, 50290, 37419, 50301, 37461, 50298, 37463, 50316, 37510,
+            50311, 37514, 50317, 37529, 50334, 37535, 50336, 37522, 50352, 37505, 50357, 37485, 50369, 37472, 50380, 37466, 50407, 37466, 50419, 37462,
+            50431, 37465, 50431, 37484, 50445, 37485, 50458, 37491, 50460, 37477, 50454, 37470, 50443, 37432, 50434, 37421, 50431, 37397, 50437, 37352,
+            50437, 37333, 50426, 37310, 50406, 37300, 50401, 37293, 50391, 37257, 50392, 37256, 50374, 37210, 50363, 37182, 50356, 37149, 50361, 37138,
+            50358, 37101, 50352, 37107, 50345, 37045, 50349, 37037, 50350, 36941, 50346, 36916, 50338, 36888, 50335, 36872, 50328, 36852, 50313, 36833,
+            50312, 36810, 50306, 36800, 50302, 36768, 50292, 36764, 50277, 36720, 50264, 36701, 50267, 36688, 50257, 36683, 50237, 36679, 50221, 36661,
+            50209, 36660, 50211, 36670, 50202, 36687, 50202, 36708, 50194, 36720, 50195, 36706, 50191, 36694, 50181, 36705, 50169, 36688, 50170, 36676,
+            50160, 36683, 50159, 36701, 50155, 36700, 50147, 36669, 50136, 36686, 50129, 36692, 50118, 36682, 50112, 36664, 50105, 36670, 50102, 36650,
+            50109, 36633, 50095, 36624, 50102, 36594, 50093, 36579, 50094, 36560, 50082, 36548, 50062, 36552, 50036, 36566, 50037, 36590, 50025, 36623,
+            50014, 36628, 50006, 36648, 50000, 36639, 50001, 36629, 49984, 36630, 49970, 36649, 49937, 36602, 49931, 36610, 49921, 36600, 49914, 36583,
+            49919, 36568, 49904, 36560, 49908, 36540, 49886, 36534, 49881, 36486, 49880, 36457, 49866, 36445, 49869, 36430, 49843, 36419, 49815, 36409,
+            49799, 36421, 49790, 36378, 49798, 36365, 49794, 36359, 49792, 36335, 49801, 36323, 49816, 36323, 49825, 36307, 49817, 36269, 49822, 36248,
+            49816, 36238, 49814, 36218, 49820, 36198, 49824, 36168, 49806, 36129, 49794, 36128, 49785, 36120, 49786, 36149, 49781, 36160, 49768, 36157,
+            49754, 36129, 49758, 36106, 49768, 36086, 49756, 36056, 49763, 36037, 49758, 36027, 49762, 35988, 49760, 35986, 49758, 35975, 49743, 35979,
+            49732, 35999, 49728, 36023, 49722, 36033, 49721, 36014, 49715, 36005, 49705, 36017, 49706, 36049, 49700, 36070, 49692, 36075, 49671, 36074,
+            49673, 36039, 49660, 36043, 49652, 36055, 49632, 36062, 49625, 36067, 49616, 36067, 49616, 36074, 49603, 36080, 49594, 36077, 49587, 36103,
+            49579, 36101, 49571, 36082, 49541, 36068, 49518, 36082, 49517, 36132, 49539, 36134, 49537, 36178, 49531, 36180, 49522, 36181, 49511, 36194,
+            49509, 36203, 49514, 36209, 49507, 36243, 49542, 36260, 49542, 36276, 49527, 36336, 49525, 36339, 49523, 36346, 49521, 36356, 49508, 36368,
+            49507, 36383, 49468, 36384, 49465, 36414, 49460, 36435, 49470, 36464, 49477, 36478, 49475, 36491
         ))
-    ),
-        "довжанський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                48133, 39407, 48137, 39368, 48183, 39389, 48174, 39420, 48214, 39439, 48202, 39450, 48216, 39537, 48204, 39533, 48188, 39580, 48238, 39604,
-                48252, 39651, 48269, 39673, 48284, 39666, 48298, 39704, 48339, 39688, 48343, 39664, 48384, 39695, 48375, 39631, 48432, 39603, 48453, 39601,
-                48465, 39634, 48487, 39642, 48493, 39620, 48567, 39609, 48587, 39622, 48593, 39790, 48569, 39850, 48507, 39867, 48502, 39848, 48475, 39846,
-                48448, 39898, 48398, 39919, 48390, 39906, 48375, 39925, 48387, 39942, 48364, 39932, 48354, 39947, 48333, 39846, 48310, 39841, 48309, 39887,
-                48270, 39915, 48317, 39990, 48254, 40021, 48225, 40010, 48229, 39943, 48181, 39937, 48180, 39909, 48079, 39869, 48067, 39834, 48041, 39883,
-                48040, 39776, 48001, 39816, 47955, 39825, 47919, 39794, 47870, 39795, 47871, 39763, 47846, 39764, 47828, 39738, 47839, 39627, 47825, 39520,
-                47860, 39478, 47857, 39431, 47887, 39426, 47900, 39444, 47900, 39497, 47991, 39385, 48013, 39393, 48047, 39472, 48069, 39425, 48133, 39407
-            )),
-            ScaledRing(intArrayOf(
-                48301, 39583, 48299, 39568, 48277, 39574, 48301, 39527, 48321, 39567, 48301, 39583
-            )),
-            ScaledRing(intArrayOf(
-                48039, 39383, 48023, 39400, 48057, 39424, 48058, 39387, 48039, 39383
-            ))
-    )),
-        "луганський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                48463, 38958, 48415, 38956, 48386, 38915, 48359, 38916, 48379, 38975, 48353, 39002, 48353, 39041, 48291, 39052, 48292, 39147, 48230, 39206,
-                48211, 39263, 48234, 39375, 48202, 39356, 48175, 39415, 48214, 39439, 48202, 39450, 48222, 39507, 48188, 39580, 48238, 39604, 48252, 39651,
-                48269, 39673, 48284, 39666, 48302, 39706, 48339, 39688, 48343, 39664, 48384, 39695, 48375, 39631, 48417, 39607, 48453, 39601, 48465, 39634,
-                48487, 39642, 48493, 39620, 48590, 39606, 48582, 39571, 48599, 39559, 48585, 39532, 48635, 39515, 48628, 39468, 48656, 39451, 48658, 39411,
-                48699, 39356, 48712, 39348, 48719, 39375, 48727, 39355, 48768, 39355, 48777, 39326, 48742, 39255, 48710, 39243, 48707, 39196, 48661, 39140,
-                48651, 39073, 48594, 39047, 48590, 39116, 48563, 39095, 48558, 39131, 48544, 39064, 48537, 39088, 48514, 39065, 48473, 39095, 48472, 39043,
-                48490, 39037, 48456, 38988, 48463, 38958
-            )),
-            ScaledRing(intArrayOf(
-                48202, 39616, 48206, 39597, 48202, 39616
-            ))
-    )),
-        "ровеньківський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48128, 39399, 48137, 39368, 48173, 39389, 48202, 39356, 48234, 39375, 48211, 39264, 48230, 39206, 48292, 39147, 48291, 39052, 48353, 39041,
-            48353, 39002, 48379, 38975, 48359, 38916, 48397, 38928, 48354, 38812, 48298, 38811, 48237, 38588, 48204, 38613, 48173, 38602, 48116, 38820,
-            48075, 38800, 48077, 38829, 48048, 38813, 48030, 38825, 48007, 39040, 47956, 39039, 47941, 39091, 47896, 39065, 47870, 39074, 47842, 39110,
-            47873, 39355, 47871, 39388, 47830, 39412, 47840, 39439, 47887, 39426, 47900, 39497, 47972, 39393, 48013, 39393, 48047, 39472, 48069, 39425,
-            48130, 39416, 48128, 39399
-        ))
-    ),
-        "сватівський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                49183, 38354, 49205, 38409, 49207, 38356, 49252, 38355, 49282, 38424, 49301, 38425, 49280, 38552, 49342, 38585, 49357, 38625, 49389, 38620,
-                49400, 38584, 49427, 38611, 49427, 38672, 49380, 38673, 49363, 38693, 49353, 38767, 49378, 38891, 49413, 38896, 49428, 38864, 49506, 38918,
-                49585, 38896, 49624, 38910, 49624, 38947, 49640, 38930, 49641, 38946, 49653, 38933, 49679, 38956, 49726, 38891, 49713, 38777, 49778, 38795,
-                49818, 38912, 49849, 38904, 49859, 38918, 49897, 38745, 49937, 38692, 49962, 38686, 49983, 38719, 50005, 38691, 49974, 38681, 49956, 38647,
-                49977, 38592, 49964, 38489, 49995, 38469, 50001, 38434, 49982, 38416, 50007, 38350, 50085, 38329, 50080, 38179, 50023, 38186, 49979, 38222,
-                49922, 38127, 49942, 38125, 49915, 38046, 49900, 38032, 49846, 38094, 49837, 38018, 49813, 38010, 49783, 38053, 49753, 37999, 49768, 37977,
-                49732, 37951, 49708, 37975, 49713, 38017, 49700, 37999, 49658, 38046, 49648, 37996, 49612, 37975, 49611, 37944, 49589, 37934, 49569, 37952,
-                49574, 37901, 49549, 37886, 49548, 37927, 49534, 37917, 49521, 37847, 49445, 37844, 49447, 37876, 49403, 37896, 49313, 37883, 49304, 37949,
-                49285, 37958, 49246, 37866, 49212, 37890, 49214, 37943, 49161, 37893, 49131, 37981, 49127, 38040, 49151, 38031, 49178, 38054, 49179, 38103,
-                49193, 38095, 49183, 38224, 49159, 38220, 49180, 38236, 49183, 38354
-            )),
-            ScaledRing(intArrayOf(
-                49083, 38210, 49089, 38190, 49083, 38210
-            ))
-    )),
-        "старобільський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49127, 39149, 49098, 39138, 49122, 38879, 49094, 38816, 49055, 38818, 49046, 38691, 49066, 38692, 49068, 38722, 49092, 38719, 49105, 38690,
-            49161, 38689, 49174, 38613, 49197, 38626, 49197, 38517, 49223, 38513, 49247, 38475, 49283, 38477, 49280, 38552, 49342, 38585, 49357, 38625,
-            49389, 38620, 49400, 38584, 49427, 38611, 49428, 38671, 49371, 38678, 49353, 38767, 49378, 38891, 49397, 38904, 49428, 38864, 49506, 38918,
-            49585, 38896, 49624, 38910, 49624, 38947, 49640, 38930, 49641, 38946, 49653, 38933, 49679, 38956, 49726, 38891, 49713, 38777, 49778, 38795,
-            49819, 38889, 49797, 38931, 49816, 39067, 49889, 39180, 49840, 39226, 49776, 39251, 49755, 39286, 49739, 39378, 49760, 39443, 49734, 39611,
-            49719, 39591, 49616, 39659, 49597, 39750, 49558, 39806, 49559, 39891, 49598, 39952, 49617, 40135, 49569, 40170, 49521, 40039, 49454, 40030,
-            49386, 40114, 49346, 40200, 49281, 40186, 49261, 40228, 49242, 40208, 49239, 40137, 49187, 40078, 49179, 40031, 49083, 39939, 49056, 39938,
-            49061, 39811, 49040, 39767, 49051, 39693, 49041, 39672, 49035, 39685, 49001, 39664, 48990, 39676, 48983, 39650, 49004, 39626, 48977, 39586,
-            48992, 39536, 49073, 39496, 49089, 39505, 49087, 39467, 49105, 39463, 49103, 39445, 49077, 39433, 49064, 39446, 49056, 39430, 49100, 39306,
-            49094, 39245, 49109, 39226, 49127, 39242, 49127, 39149
-        ))
-    ),
-        "сіверськодонецький" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                49183, 38354, 49205, 38409, 49207, 38356, 49262, 38360, 49276, 38414, 49308, 38441, 49298, 38477, 49247, 38475, 49223, 38513, 49203, 38504,
-                49197, 38626, 49174, 38613, 49161, 38689, 49105, 38690, 49092, 38719, 49068, 38722, 49066, 38692, 49046, 38691, 49055, 38818, 49020, 38821,
-                49007, 38801, 49006, 38821, 48974, 38823, 48883, 38697, 48873, 38721, 48857, 38660, 48830, 38696, 48811, 38663, 48799, 38695, 48770, 38658,
-                48751, 38901, 48693, 38882, 48671, 38843, 48717, 38685, 48753, 38679, 48747, 38660, 48768, 38649, 48758, 38593, 48780, 38558, 48785, 38480,
-                48773, 38519, 48734, 38521, 48724, 38498, 48717, 38525, 48686, 38531, 48679, 38581, 48660, 38548, 48673, 38552, 48684, 38510, 48671, 38478,
-                48684, 38470, 48691, 38496, 48697, 38459, 48660, 38396, 48657, 38420, 48642, 38417, 48656, 38479, 48640, 38469, 48641, 38421, 48626, 38450,
-                48611, 38445, 48599, 38400, 48582, 38397, 48563, 38404, 48570, 38444, 48530, 38459, 48524, 38482, 48467, 38453, 48465, 38429, 48448, 38433,
-                48429, 38382, 48476, 38288, 48475, 38305, 48508, 38321, 48545, 38274, 48637, 38263, 48639, 38228, 48653, 38226, 48684, 38315, 48711, 38304,
-                48714, 38325, 48733, 38320, 48750, 38263, 48773, 38283, 48803, 38279, 48806, 38317, 48828, 38314, 48839, 38221, 48937, 38228, 48924, 38133,
-                48940, 38054, 48925, 38037, 48947, 38006, 48973, 38029, 48965, 38054, 48986, 38052, 48993, 38099, 49060, 38053, 49135, 38084, 49151, 38031,
-                49178, 38054, 49197, 38146, 49175, 38195, 49182, 38226, 49159, 38220, 49180, 38236, 49183, 38354
-            )),
-            ScaledRing(intArrayOf(
-                48727, 38625, 48725, 38637, 48727, 38625
-            )),
-            ScaledRing(intArrayOf(
-                48719, 38570, 48727, 38549, 48704, 38584, 48719, 38570
-            )),
-            ScaledRing(intArrayOf(
-                48662, 38463, 48675, 38511, 48662, 38463
-            )),
-            ScaledRing(intArrayOf(
-                48497, 38303, 48491, 38293, 48497, 38303
-            ))
-    )),
-        "щастинський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48688, 39181, 48707, 39196, 48713, 39248, 48742, 39255, 48777, 39326, 48768, 39355, 48727, 39355, 48719, 39375, 48712, 39348, 48698, 39357,
-            48658, 39411, 48656, 39452, 48629, 39467, 48635, 39515, 48585, 39531, 48599, 39561, 48582, 39571, 48592, 39603, 48574, 39609, 48586, 39691,
-            48608, 39660, 48655, 39716, 48670, 39702, 48684, 39723, 48721, 39704, 48744, 39739, 48753, 39726, 48770, 39744, 48766, 39768, 48840, 39797,
-            48793, 39976, 48870, 40080, 48909, 40061, 48916, 40035, 48901, 40004, 48868, 39993, 48896, 39925, 48903, 39838, 48886, 39827, 48908, 39819,
-            48922, 39775, 48952, 39778, 48986, 39753, 48976, 39727, 49001, 39700, 48983, 39650, 49004, 39626, 48977, 39586, 48992, 39536, 49073, 39496,
-            49089, 39505, 49087, 39467, 49105, 39463, 49103, 39445, 49077, 39433, 49064, 39446, 49056, 39430, 49100, 39306, 49094, 39245, 49109, 39226,
-            49127, 39242, 49128, 39143, 49098, 39138, 49122, 38879, 49094, 38816, 49020, 38821, 49007, 38801, 49006, 38821, 48974, 38823, 48883, 38697,
-            48873, 38721, 48857, 38660, 48836, 38695, 48811, 38663, 48799, 38695, 48774, 38658, 48764, 38673, 48770, 38764, 48735, 38943, 48745, 38981,
-            48720, 39001, 48712, 38986, 48695, 39017, 48663, 39029, 48661, 39011, 48647, 39043, 48661, 39140, 48688, 39181
-        ))
-    )
     )
 
-    private fun _Львівськ(): Map<String, CompactPolygon> = mapOf(
-        "дрогобицький" to     CompactPolygon(
+    private fun _r_bohodukhivskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            49300, 23712, 49336, 23746, 49337, 23782, 49351, 23790, 49361, 23772, 49380, 23808, 49422, 23784, 49449, 23801, 49473, 23739, 49494, 23789,
-            49546, 23578, 49496, 23554, 49485, 23402, 49462, 23388, 49454, 23334, 49466, 23288, 49431, 23248, 49416, 23267, 49352, 23220, 49363, 23155,
-            49317, 23105, 49269, 23160, 49244, 23143, 49236, 23161, 49221, 23153, 49176, 23220, 49099, 23153, 49029, 23250, 49107, 23287, 49129, 23270,
-            49154, 23309, 49134, 23352, 49160, 23386, 49202, 23356, 49226, 23419, 49191, 23439, 49186, 23497, 49165, 23515, 49133, 23494, 49119, 23517,
-            49138, 23518, 49142, 23569, 49212, 23582, 49203, 23634, 49220, 23672, 49251, 23692, 49282, 23669, 49300, 23712
+            49737, 35224, 49734, 35257, 49727, 35262, 49715, 35265, 49712, 35248, 49712, 35256, 49696, 35244, 49685, 35271, 49687, 35297, 49681, 35331,
+            49666, 35344, 49667, 35392, 49669, 35392, 49671, 35404, 49674, 35466, 49669, 35471, 49672, 35486, 49667, 35494, 49667, 35514, 49662, 35531,
+            49649, 35537, 49645, 35571, 49656, 35601, 49656, 35618, 49662, 35622, 49692, 35622, 49696, 35660, 49692, 35664, 49706, 35699, 49722, 35685,
+            49732, 35675, 49745, 35680, 49752, 35655, 49763, 35674, 49780, 35686, 49775, 35708, 49791, 35716, 49801, 35712, 49803, 35698, 49823, 35703,
+            49826, 35728, 49824, 35731, 49837, 35762, 49825, 35781, 49819, 35771, 49810, 35824, 49819, 35821, 49828, 35828, 49831, 35839, 49836, 35836,
+            49836, 35821, 49860, 35824, 49873, 35858, 49869, 35863, 49875, 35871, 49882, 35866, 49902, 35876, 49903, 35868, 49915, 35874, 49916, 35853,
+            49923, 35846, 49922, 35828, 49936, 35823, 49927, 35807, 49931, 35798, 49938, 35802, 49935, 35810, 49944, 35812, 49950, 35792, 49976, 35815,
+            49984, 35809, 49995, 35811, 49991, 35822, 49995, 35834, 50002, 35828, 50002, 35807, 50008, 35810, 50016, 35794, 50034, 35795, 50036, 35811,
+            50045, 35810, 50044, 35798, 50059, 35823, 50066, 35844, 50069, 35834, 50080, 35826, 50090, 35832, 50114, 35814, 50120, 35824, 50119, 35838,
+            50114, 35844, 50098, 35844, 50100, 35850, 50086, 35856, 50079, 35871, 50084, 35869, 50080, 35887, 50087, 35893, 50091, 35912, 50097, 35916,
+            50093, 35945, 50100, 35946, 50102, 35936, 50112, 35941, 50108, 35950, 50109, 35996, 50118, 35985, 50137, 35987, 50133, 36014, 50156, 36021,
+            50181, 36037, 50180, 36076, 50201, 36071, 50207, 36061, 50212, 36037, 50226, 36095, 50236, 36098, 50239, 36084, 50246, 36093, 50238, 36101,
+            50241, 36125, 50252, 36125, 50262, 36140, 50269, 36142, 50270, 36155, 50279, 36151, 50290, 36172, 50299, 36172, 50300, 36163, 50307, 36168,
+            50315, 36158, 50324, 36162, 50333, 36154, 50333, 36171, 50347, 36173, 50358, 36158, 50359, 36148, 50352, 36138, 50365, 36122, 50366, 36113,
+            50364, 36108, 50365, 36105, 50393, 36165, 50402, 36178, 50409, 36171, 50432, 36161, 50438, 36136, 50438, 36116, 50448, 36087, 50446, 36070,
+            50451, 36068, 50450, 36039, 50445, 36019, 50441, 35975, 50436, 35968, 50434, 35938, 50437, 35922, 50439, 35890, 50422, 35872, 50429, 35856,
+            50425, 35835, 50434, 35832, 50416, 35792, 50411, 35806, 50405, 35807, 50390, 35793, 50368, 35756, 50354, 35738, 50355, 35673, 50351, 35659,
+            50347, 35654, 50343, 35680, 50345, 35693, 50335, 35689, 50334, 35678, 50326, 35674, 50326, 35661, 50310, 35651, 50320, 35624, 50324, 35630,
+            50331, 35592, 50319, 35572, 50322, 35558, 50317, 35517, 50300, 35536, 50290, 35525, 50301, 35505, 50293, 35496, 50309, 35459, 50315, 35461,
+            50317, 35439, 50334, 35422, 50322, 35410, 50320, 35379, 50306, 35386, 50296, 35382, 50319, 35330, 50289, 35297, 50276, 35332, 50263, 35300,
+            50266, 35268, 50258, 35261, 50235, 35260, 50236, 35240, 50228, 35236, 50235, 35200, 50229, 35190, 50242, 35149, 50226, 35128, 50215, 35106,
+            50207, 35070, 50201, 35077, 50165, 35043, 50167, 35031, 50180, 35032, 50185, 35008, 50178, 35007, 50183, 34998, 50182, 34977, 50185, 34962,
+            50159, 34974, 50152, 34940, 50130, 34933, 50110, 34934, 50096, 34936, 50096, 34950, 50093, 34957, 50074, 34962, 50061, 34936, 50054, 34932,
+            50034, 34903, 49999, 34872, 49988, 34854, 49959, 34866, 49950, 34860, 49942, 34881, 49932, 34892, 49935, 34913, 49909, 34934, 49899, 34945,
+            49884, 34972, 49891, 34980, 49881, 34996, 49876, 35016, 49887, 35033, 49886, 35064, 49881, 35055, 49873, 35056, 49872, 35047, 49858, 35068,
+            49858, 35099, 49851, 35119, 49859, 35139, 49856, 35159, 49845, 35176, 49841, 35198, 49836, 35195, 49831, 35219, 49813, 35215, 49806, 35221,
+            49804, 35208, 49795, 35201, 49789, 35211, 49782, 35207, 49771, 35213, 49764, 35207, 49746, 35209, 49737, 35224
         ))
-    ),
-        "золочівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50282, 25125, 50301, 25056, 50281, 25032, 50257, 25052, 50197, 24994, 50179, 24836, 50162, 24831, 50150, 24882, 50099, 24861, 50125, 24794,
-            50120, 24746, 50139, 24753, 50146, 24673, 50119, 24629, 50118, 24530, 50097, 24535, 50107, 24436, 50052, 24473, 50060, 24493, 50038, 24499,
-            50021, 24553, 50015, 24482, 49977, 24443, 49964, 24457, 49895, 24436, 49900, 24392, 49869, 24354, 49846, 24453, 49866, 24503, 49832, 24604,
-            49805, 24590, 49795, 24613, 49772, 24608, 49739, 24694, 49708, 24697, 49721, 24764, 49713, 24782, 49677, 24788, 49685, 24849, 49661, 24854,
-            49658, 24818, 49644, 24844, 49622, 24829, 49621, 24851, 49601, 24846, 49609, 24943, 49617, 24931, 49616, 24954, 49643, 24961, 49643, 24988,
-            49735, 25022, 49712, 25067, 49746, 25115, 49770, 25072, 49782, 25090, 49828, 25084, 49815, 25137, 49837, 25175, 49828, 25288, 49854, 25299,
-            49868, 25375, 49933, 25387, 49937, 25427, 49948, 25404, 49986, 25402, 50016, 25319, 50131, 25197, 50180, 25215, 50209, 25165, 50249, 25190,
-            50247, 25207, 50279, 25205, 50282, 25125
-        ))
-    ),
-        "львівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50195, 24276, 50199, 24313, 50175, 24348, 50159, 24338, 50176, 24389, 50166, 24439, 50159, 24456, 50138, 24427, 50133, 24526, 50104, 24537,
-            50107, 24436, 50052, 24473, 50060, 24493, 50038, 24499, 50021, 24553, 50015, 24482, 49977, 24443, 49964, 24457, 49895, 24436, 49900, 24392,
-            49869, 24354, 49846, 24453, 49866, 24503, 49829, 24610, 49805, 24590, 49795, 24613, 49772, 24608, 49739, 24694, 49708, 24697, 49721, 24764,
-            49713, 24782, 49677, 24788, 49685, 24849, 49661, 24854, 49658, 24818, 49644, 24844, 49622, 24829, 49621, 24851, 49587, 24839, 49570, 24721,
-            49497, 24721, 49492, 24701, 49497, 24639, 49534, 24570, 49513, 24505, 49548, 24486, 49537, 24435, 49512, 24440, 49495, 24401, 49497, 24318,
-            49538, 24306, 49564, 24261, 49577, 24137, 49640, 24058, 49648, 24037, 49625, 24015, 49659, 23937, 49614, 23914, 49593, 23961, 49570, 23932,
-            49580, 23847, 49606, 23818, 49573, 23783, 49513, 23818, 49531, 23805, 49510, 23781, 49533, 23777, 49535, 23737, 49505, 23767, 49501, 23718,
-            49517, 23713, 49530, 23639, 49573, 23649, 49602, 23603, 49609, 23624, 49636, 23630, 49645, 23605, 49656, 23616, 49639, 23569, 49681, 23537,
-            49677, 23500, 49706, 23486, 49677, 23438, 49689, 23419, 49744, 23451, 49756, 23436, 49766, 23463, 49824, 23444, 49821, 23485, 49877, 23549,
-            49877, 23585, 49855, 23582, 49825, 23640, 49861, 23692, 49843, 23719, 49842, 23856, 49850, 23885, 49878, 23858, 49891, 23918, 49935, 23939,
-            49928, 23920, 49976, 23893, 49995, 23812, 50069, 23773, 50134, 23618, 50142, 23628, 50145, 23598, 50175, 23580, 50176, 23528, 50152, 23505,
-            50189, 23488, 50199, 23448, 50266, 23581, 50321, 23639, 50329, 23677, 50300, 23686, 50300, 23797, 50269, 23814, 50255, 23885, 50220, 23913,
-            50220, 23973, 50203, 23973, 50203, 24092, 50168, 24091, 50166, 24071, 50142, 24108, 50115, 24109, 50115, 24135, 50160, 24149, 50130, 24203,
-            50197, 24244, 50195, 24276
-        ))
-    ),
-        "самбірський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48869, 23163, 48842, 23148, 48863, 23097, 48830, 23000, 48845, 22975, 48874, 22970, 48911, 22892, 48956, 22873, 48981, 22919, 49005, 22898,
-            49003, 22868, 49017, 22894, 49067, 22865, 49095, 22893, 49111, 22831, 49158, 22789, 49158, 22739, 49183, 22756, 49175, 22707, 49216, 22748,
-            49226, 22715, 49247, 22740, 49360, 22747, 49495, 22697, 49508, 22651, 49530, 22641, 49693, 22806, 49714, 22850, 49709, 22909, 49697, 22923,
-            49684, 22910, 49676, 22973, 49666, 22965, 49636, 23002, 49636, 22970, 49625, 23028, 49632, 23051, 49639, 23036, 49649, 23046, 49635, 23079,
-            49655, 23156, 49652, 23308, 49674, 23317, 49666, 23350, 49686, 23406, 49706, 23405, 49715, 23381, 49761, 23396, 49754, 23442, 49744, 23451,
-            49689, 23419, 49677, 23438, 49706, 23486, 49677, 23500, 49681, 23537, 49639, 23569, 49656, 23616, 49645, 23605, 49636, 23630, 49609, 23624,
-            49602, 23603, 49573, 23649, 49546, 23643, 49532, 23638, 49547, 23573, 49510, 23567, 49490, 23530, 49485, 23402, 49462, 23388, 49454, 23334,
-            49466, 23288, 49431, 23248, 49416, 23267, 49352, 23220, 49366, 23168, 49340, 23112, 49323, 23127, 49317, 23105, 49302, 23109, 49269, 23160,
-            49244, 23143, 49236, 23161, 49221, 23153, 49176, 23220, 49100, 23152, 49041, 23225, 49037, 23190, 49020, 23183, 49029, 23128, 49020, 23136,
-            49009, 23113, 48964, 23128, 48923, 23085, 48879, 23100, 48869, 23163
-        ))
-    ),
-        "стрийський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                49300, 23712, 49336, 23746, 49337, 23782, 49351, 23790, 49361, 23772, 49380, 23808, 49422, 23784, 49449, 23801, 49473, 23739, 49494, 23789,
-                49497, 23737, 49505, 23767, 49530, 23725, 49533, 23777, 49510, 23783, 49531, 23802, 49513, 23818, 49573, 23783, 49606, 23818, 49580, 23847,
-                49570, 23932, 49593, 23961, 49614, 23914, 49659, 23937, 49625, 24015, 49648, 24037, 49640, 24058, 49577, 24137, 49564, 24261, 49538, 24306,
-                49498, 24314, 49495, 24401, 49474, 24418, 49445, 24410, 49431, 24360, 49373, 24429, 49362, 24400, 49308, 24381, 49322, 24359, 49316, 24302,
-                49289, 24299, 49281, 24364, 49243, 24341, 49233, 24358, 49230, 24447, 49176, 24437, 49168, 24416, 49189, 24375, 49148, 24207, 49139, 24198,
-                49133, 24213, 49144, 24172, 49128, 24155, 49149, 24083, 49117, 24020, 49138, 23970, 49098, 23904, 49122, 23761, 49094, 23719, 49101, 23699,
-                49036, 23673, 49025, 23622, 48975, 23566, 48955, 23586, 48911, 23561, 48876, 23608, 48867, 23576, 48822, 23552, 48784, 23579, 48724, 23542,
-                48733, 23397, 48771, 23362, 48753, 23326, 48776, 23286, 48761, 23201, 48806, 23178, 48838, 23132, 48872, 23163, 48881, 23098, 48923, 23085,
-                48964, 23128, 49013, 23114, 49035, 23138, 49020, 23181, 49037, 23190, 49030, 23211, 49041, 23225, 49053, 23214, 49029, 23252, 49107, 23287,
-                49129, 23270, 49154, 23309, 49134, 23352, 49160, 23386, 49202, 23356, 49226, 23419, 49191, 23439, 49186, 23497, 49165, 23515, 49133, 23494,
-                49119, 23517, 49138, 23518, 49142, 23569, 49212, 23582, 49203, 23634, 49220, 23672, 49251, 23692, 49282, 23669, 49300, 23712
-            )),
-            ScaledRing(intArrayOf(
-                49467, 23750, 49447, 23761, 49449, 23738, 49466, 23735, 49467, 23750
-            ))
-    )),
-        "шептицький" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50255, 25041, 50281, 25032, 50297, 25058, 50342, 25059, 50342, 25017, 50389, 24941, 50346, 24937, 50344, 24885, 50361, 24867, 50343, 24715,
-            50373, 24722, 50384, 24707, 50414, 24597, 50456, 24599, 50458, 24581, 50478, 24597, 50494, 24555, 50552, 24531, 50539, 24450, 50560, 24406,
-            50587, 24413, 50609, 24381, 50600, 24323, 50572, 24312, 50584, 24231, 50647, 24155, 50649, 24126, 50623, 24092, 50503, 24070, 50412, 23998,
-            50388, 23727, 50320, 23674, 50300, 23686, 50300, 23797, 50269, 23814, 50255, 23885, 50220, 23913, 50220, 23973, 50203, 23973, 50203, 24092,
-            50168, 24091, 50166, 24071, 50142, 24108, 50115, 24110, 50115, 24135, 50160, 24149, 50130, 24203, 50197, 24244, 50199, 24313, 50175, 24348,
-            50159, 24338, 50176, 24389, 50159, 24456, 50133, 24437, 50133, 24526, 50117, 24529, 50114, 24581, 50131, 24666, 50146, 24673, 50141, 24743,
-            50136, 24757, 50120, 24746, 50125, 24794, 50099, 24861, 50150, 24882, 50162, 24831, 50179, 24836, 50197, 24994, 50255, 25041
-        ))
-    ),
-        "яворівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49842, 23856, 49843, 23719, 49861, 23692, 49825, 23640, 49855, 23582, 49877, 23585, 49878, 23550, 49821, 23485, 49824, 23444, 49808, 23460,
-            49760, 23461, 49761, 23396, 49715, 23381, 49706, 23405, 49684, 23404, 49666, 23350, 49674, 23317, 49654, 23312, 49644, 23269, 49655, 23156,
-            49635, 23079, 49649, 23046, 49628, 23047, 49624, 22995, 49636, 22970, 49636, 23002, 49666, 22965, 49676, 22973, 49684, 22910, 49697, 22923,
-            49709, 22909, 49714, 22850, 50100, 23279, 50199, 23448, 50189, 23488, 50152, 23505, 50176, 23528, 50175, 23580, 50145, 23598, 50142, 23628,
-            50134, 23618, 50069, 23773, 49995, 23812, 49972, 23900, 49928, 23920, 49935, 23939, 49891, 23918, 49878, 23858, 49850, 23885, 49842, 23856
-        ))
-    )
     )
 
-    private fun _Миколаївськ(): Map<String, CompactPolygon> = mapOf(
-        "баштанський" to     CompactPolygon(
+    private fun _r_lozivskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            47120, 32907, 47190, 32961, 47197, 33004, 47178, 33038, 47223, 33072, 47203, 33130, 47210, 33143, 47231, 33127, 47238, 33184, 47280, 33105,
-            47322, 33103, 47334, 33137, 47385, 33123, 47380, 33039, 47421, 33029, 47444, 33054, 47468, 33047, 47475, 33069, 47412, 33072, 47420, 33138,
-            47508, 33123, 47515, 33147, 47545, 33141, 47528, 33095, 47597, 33095, 47593, 32960, 47615, 32997, 47723, 32972, 47739, 33072, 47782, 33050,
-            47784, 33066, 47859, 33061, 47885, 33086, 47920, 33078, 47918, 33001, 48048, 32989, 48032, 32870, 47986, 32894, 47983, 32689, 47947, 32697,
-            47952, 32737, 47933, 32746, 47921, 32652, 47905, 32656, 47907, 32677, 47873, 32686, 47871, 32664, 47852, 32679, 47820, 32658, 47790, 32430,
-            47802, 32421, 47789, 32363, 47824, 32304, 47815, 32237, 47760, 32232, 47757, 32208, 47711, 32221, 47707, 32177, 47616, 32193, 47618, 32218,
-            47594, 32223, 47589, 32176, 47614, 32171, 47612, 32150, 47590, 32155, 47583, 32113, 47561, 32122, 47563, 32158, 47516, 32147, 47514, 32121,
-            47489, 32106, 47489, 32049, 47442, 32059, 47416, 32117, 47346, 32132, 47342, 32106, 47277, 32125, 47273, 32087, 47166, 32111, 47183, 32229,
-            47173, 32241, 47148, 32218, 47158, 32339, 47136, 32321, 47134, 32379, 47155, 32552, 47088, 32580, 47090, 32600, 47030, 32617, 47010, 32609,
-            47002, 32544, 47018, 32527, 46957, 32544, 46953, 32517, 46926, 32524, 46932, 32571, 46903, 32577, 46869, 32547, 46862, 32688, 46821, 32701,
-            46858, 32949, 46883, 32915, 46883, 32838, 46896, 32839, 46934, 32980, 46949, 32976, 46947, 32950, 46986, 32934, 47003, 32950, 46973, 33022,
-            47117, 33156, 47137, 33105, 47108, 33082, 47100, 33103, 47062, 33073, 47070, 33052, 47040, 33027, 47087, 32917, 47120, 32907
+            48532, 36296, 48556, 36326, 48540, 36356, 48532, 36356, 48565, 36393, 48570, 36382, 48628, 36441, 48636, 36422, 48633, 36448, 48663, 36482,
+            48623, 36561, 48617, 36563, 48616, 36580, 48607, 36581, 48602, 36592, 48608, 36656, 48616, 36655, 48618, 36675, 48625, 36674, 48628, 36704,
+            48623, 36705, 48626, 36740, 48646, 36735, 48661, 36722, 48669, 36725, 48680, 36717, 48685, 36720, 48694, 36711, 48695, 36731, 48707, 36732,
+            48737, 36715, 48745, 36719, 48756, 36711, 48767, 36709, 48768, 36692, 48775, 36688, 48786, 36704, 48805, 36719, 48806, 36704, 48811, 36693,
+            48814, 36690, 48846, 36683, 48855, 36692, 48858, 36703, 48863, 36702, 48865, 36713, 48858, 36728, 48892, 36761, 48889, 36774, 48896, 36779,
+            48891, 36789, 48891, 36800, 48910, 36809, 48912, 36797, 48940, 36790, 48939, 36779, 48951, 36772, 48985, 36765, 48984, 36753, 48994, 36750,
+            48993, 36737, 49000, 36739, 49013, 36758, 49020, 36744, 49018, 36728, 49030, 36724, 49022, 36699, 49032, 36682, 49020, 36678, 49018, 36644,
+            49078, 36628, 49088, 36634, 49092, 36620, 49083, 36617, 49095, 36591, 49103, 36592, 49131, 36619, 49135, 36612, 49150, 36628, 49150, 36637,
+            49194, 36655, 49197, 36630, 49227, 36647, 49231, 36618, 49234, 36622, 49242, 36595, 49261, 36585, 49268, 36572, 49268, 36562, 49279, 36572,
+            49283, 36589, 49275, 36609, 49297, 36613, 49310, 36571, 49315, 36562, 49327, 36565, 49327, 36552, 49355, 36553, 49353, 36520, 49368, 36520,
+            49375, 36509, 49385, 36475, 49388, 36450, 49417, 36462, 49455, 36482, 49459, 36472, 49470, 36464, 49460, 36435, 49465, 36414, 49468, 36384,
+            49507, 36383, 49508, 36368, 49521, 36356, 49523, 36346, 49525, 36339, 49527, 36336, 49542, 36276, 49542, 36260, 49507, 36243, 49514, 36209,
+            49509, 36203, 49511, 36194, 49522, 36181, 49531, 36180, 49537, 36178, 49539, 36134, 49517, 36132, 49518, 36082, 49503, 36076, 49505, 36061,
+            49505, 35985, 49485, 35986, 49486, 35980, 49475, 35983, 49463, 35979, 49458, 35998, 49429, 35993, 49406, 35984, 49401, 35986, 49399, 36000,
+            49384, 35995, 49383, 36004, 49370, 36002, 49369, 36010, 49355, 36010, 49355, 36026, 49344, 36027, 49347, 36042, 49337, 36042, 49332, 36033,
+            49322, 36035, 49312, 36029, 49301, 36039, 49289, 36067, 49282, 36074, 49274, 36066, 49263, 36068, 49256, 36061, 49252, 36132, 49247, 36137,
+            49226, 36142, 49227, 36130, 49216, 36130, 49213, 36144, 49196, 36138, 49198, 36164, 49178, 36165, 49134, 36170, 49131, 36162, 49110, 36165,
+            49119, 36218, 49127, 36255, 49103, 36272, 49097, 36262, 49099, 36249, 49088, 36238, 49081, 36209, 49073, 36197, 49069, 36159, 49063, 36154,
+            49050, 36128, 49051, 36107, 49043, 36107, 49032, 36097, 49015, 36073, 49004, 36065, 49002, 36051, 48991, 36052, 48979, 36035, 48980, 36018,
+            48986, 36013, 48991, 35991, 49008, 35984, 49001, 35960, 48998, 35958, 48994, 35949, 48970, 35989, 48960, 35977, 48946, 36004, 48940, 35995,
+            48917, 36044, 48887, 36012, 48874, 36040, 48854, 36020, 48844, 36041, 48843, 36053, 48835, 36077, 48825, 36071, 48808, 36069, 48808, 36124,
+            48785, 36157, 48781, 36152, 48768, 36157, 48766, 36140, 48749, 36163, 48724, 36143, 48663, 36266, 48659, 36284, 48649, 36268, 48641, 36269,
+            48626, 36260, 48622, 36252, 48587, 36319, 48544, 36272, 48532, 36296
         ))
-    ),
-        "вознесенський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            47821, 30773, 47793, 30780, 47782, 30754, 47764, 30759, 47767, 30784, 47740, 30792, 47700, 30741, 47636, 30792, 47624, 30775, 47584, 30779,
-            47580, 30745, 47546, 30773, 47545, 30876, 47508, 30883, 47503, 30852, 47444, 30865, 47444, 30848, 47426, 30850, 47426, 30887, 47403, 30893,
-            47401, 30873, 47359, 30885, 47346, 30909, 47334, 30868, 47318, 30875, 47321, 30893, 47277, 30908, 47290, 30997, 47267, 30989, 47270, 31008,
-            47239, 31018, 47266, 31170, 47223, 31178, 47218, 31146, 47182, 31157, 47188, 31109, 47156, 31110, 47155, 31197, 47172, 31201, 47178, 31246,
-            47146, 31295, 47145, 31385, 47231, 31359, 47239, 31325, 47259, 31411, 47299, 31401, 47280, 31551, 47337, 31664, 47380, 31592, 47397, 31618,
-            47427, 31592, 47447, 31727, 47508, 31752, 47536, 31801, 47561, 31777, 47578, 31785, 47576, 31806, 47561, 31803, 47560, 31946, 47541, 31953,
-            47533, 31999, 47556, 32108, 47583, 32113, 47590, 32155, 47612, 32150, 47614, 32171, 47589, 32176, 47594, 32223, 47618, 32218, 47616, 32193,
-            47707, 32177, 47711, 32221, 47757, 32208, 47756, 32117, 47784, 32109, 47782, 32090, 47817, 32055, 47783, 31838, 47817, 31827, 47823, 31869,
-            47865, 31857, 47867, 31891, 47919, 31877, 47916, 31855, 47964, 31844, 47944, 31753, 48036, 31729, 48042, 31783, 48102, 31767, 48093, 31695,
-            48120, 31684, 48115, 31642, 48135, 31634, 48129, 31582, 48097, 31570, 48108, 31541, 48070, 31551, 48069, 31509, 48050, 31493, 48063, 31470,
-            48087, 31499, 48130, 31487, 48109, 31404, 48017, 31404, 47999, 31435, 47850, 31478, 47845, 31445, 47776, 31453, 47787, 31376, 47762, 31383,
-            47749, 31294, 47796, 31256, 47847, 31272, 47835, 31312, 47854, 31301, 47848, 31262, 47915, 31236, 47922, 31195, 47904, 31091, 47880, 31113,
-            47886, 31046, 47821, 30773
-        ))
-    ),
-        "миколаївський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            47566, 32120, 47563, 32158, 47516, 32147, 47514, 32121, 47489, 32106, 47489, 32049, 47442, 32059, 47416, 32117, 47346, 32132, 47342, 32106,
-            47277, 32125, 47273, 32087, 47166, 32111, 47183, 32229, 47173, 32241, 47148, 32218, 47158, 32339, 47136, 32321, 47134, 32379, 47155, 32552,
-            47088, 32580, 47090, 32600, 47030, 32617, 47010, 32609, 47002, 32544, 47018, 32527, 46957, 32544, 46953, 32517, 46926, 32524, 46932, 32571,
-            46903, 32577, 46881, 32534, 46823, 32531, 46817, 32469, 46840, 32463, 46829, 32365, 46799, 32373, 46795, 32342, 46845, 32227, 46820, 32252,
-            46806, 32210, 46771, 32219, 46745, 32057, 46684, 32087, 46653, 31930, 46582, 31927, 46479, 31804, 46372, 31811, 46349, 31797, 46408, 31381,
-            46410, 31159, 46648, 31190, 46651, 31176, 46660, 31197, 46735, 31154, 46769, 31178, 46792, 31153, 46835, 31156, 46845, 31111, 46881, 31093,
-            46899, 31040, 46964, 31018, 46991, 31242, 47022, 31229, 47025, 31291, 47083, 31302, 47160, 31273, 47145, 31385, 47231, 31359, 47239, 31325,
-            47259, 31411, 47299, 31401, 47280, 31551, 47337, 31664, 47380, 31592, 47397, 31618, 47427, 31592, 47447, 31727, 47508, 31752, 47536, 31801,
-            47561, 31777, 47578, 31785, 47576, 31806, 47561, 31803, 47560, 31946, 47541, 31953, 47533, 31999, 47566, 32120
-        ))
-    ),
-        "первомайський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            47821, 30773, 47793, 30780, 47782, 30754, 47764, 30759, 47767, 30784, 47740, 30792, 47701, 30741, 47648, 30777, 47639, 30709, 47609, 30720,
-            47601, 30660, 47635, 30662, 47618, 30471, 47640, 30464, 47634, 30421, 47752, 30389, 47761, 30424, 47787, 30416, 47801, 30436, 47821, 30423,
-            47811, 30330, 47930, 30307, 47967, 30246, 48012, 30226, 48028, 30256, 48068, 30207, 48090, 30250, 48094, 30325, 48106, 30315, 48101, 30357,
-            48117, 30315, 48142, 30308, 48174, 30364, 48158, 30505, 48180, 30527, 48156, 30556, 48156, 30618, 48172, 30656, 48185, 30647, 48196, 30717,
-            48191, 30785, 48168, 30793, 48184, 30848, 48161, 30855, 48159, 30900, 48166, 30930, 48184, 30932, 48184, 30989, 48222, 30981, 48229, 31138,
-            48203, 31185, 48179, 31182, 48171, 31221, 48117, 31236, 48138, 31325, 48114, 31330, 48129, 31389, 48096, 31407, 48014, 31405, 47999, 31435,
-            47850, 31478, 47845, 31445, 47776, 31453, 47787, 31376, 47762, 31383, 47749, 31294, 47796, 31256, 47847, 31272, 47835, 31312, 47854, 31301,
-            47848, 31262, 47915, 31236, 47922, 31195, 47904, 31091, 47880, 31113, 47886, 31046, 47821, 30773
-        ))
-    )
     )
 
-    private fun _Одеськ(): Map<String, CompactPolygon> = mapOf(
-        "березівський" to     CompactPolygon(
+    private fun _r_krasnohradskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            46967, 31033, 46961, 31017, 46909, 31038, 46876, 30943, 46871, 30911, 46925, 30896, 46920, 30866, 46945, 30865, 46954, 30844, 46947, 30795,
-            46918, 30802, 46897, 30710, 46874, 30692, 46908, 30696, 46899, 30641, 46839, 30678, 46830, 30652, 46780, 30658, 46774, 30608, 46816, 30587,
-            46775, 30593, 46769, 30566, 46811, 30547, 46797, 30507, 46866, 30460, 46827, 30462, 46820, 30404, 46845, 30395, 46842, 30372, 46926, 30349,
-            46923, 30317, 46941, 30311, 46960, 30333, 46976, 30255, 46949, 30262, 46947, 30248, 46990, 30237, 46980, 30138, 47094, 30110, 47110, 30174,
-            47211, 30150, 47241, 30135, 47240, 30118, 47295, 30123, 47274, 30084, 47327, 30048, 47316, 29956, 47291, 29933, 47329, 29892, 47360, 29912,
-            47367, 29888, 47413, 29876, 47441, 30011, 47438, 30108, 47464, 30147, 47494, 30115, 47501, 30166, 47532, 30156, 47566, 30275, 47577, 30447,
-            47590, 30443, 47595, 30478, 47618, 30471, 47635, 30662, 47601, 30660, 47602, 30699, 47609, 30720, 47639, 30709, 47649, 30789, 47584, 30779,
-            47580, 30745, 47546, 30773, 47545, 30876, 47508, 30883, 47503, 30852, 47444, 30865, 47439, 30848, 47420, 30852, 47426, 30887, 47403, 30893,
-            47401, 30873, 47359, 30885, 47346, 30909, 47334, 30868, 47321, 30893, 47277, 30908, 47290, 30997, 47267, 30989, 47270, 31008, 47239, 31018,
-            47266, 31170, 47223, 31178, 47218, 31146, 47182, 31157, 47188, 31109, 47156, 31110, 47172, 31270, 47083, 31302, 47025, 31291, 47022, 31229,
-            46992, 31244, 46967, 31033
+            48957, 35854, 48963, 35879, 48975, 35884, 48969, 35912, 48974, 35922, 48973, 35936, 48980, 35930, 48986, 35935, 48999, 35937, 49000, 35940,
+            48994, 35949, 48998, 35958, 49001, 35960, 49008, 35984, 48991, 35991, 48986, 36013, 48980, 36018, 48979, 36035, 48991, 36052, 49002, 36051,
+            49004, 36065, 49015, 36073, 49032, 36097, 49043, 36107, 49051, 36107, 49050, 36128, 49063, 36154, 49069, 36159, 49073, 36197, 49081, 36209,
+            49088, 36238, 49099, 36249, 49097, 36262, 49103, 36272, 49127, 36255, 49119, 36218, 49110, 36165, 49131, 36162, 49134, 36170, 49178, 36165,
+            49198, 36164, 49196, 36138, 49213, 36144, 49216, 36130, 49227, 36130, 49226, 36142, 49247, 36137, 49252, 36132, 49256, 36061, 49263, 36068,
+            49274, 36066, 49282, 36074, 49289, 36067, 49301, 36039, 49312, 36029, 49322, 36035, 49332, 36033, 49337, 36042, 49347, 36042, 49344, 36027,
+            49355, 36026, 49355, 36010, 49369, 36010, 49370, 36002, 49383, 36004, 49384, 35995, 49399, 36000, 49401, 35986, 49406, 35984, 49429, 35993,
+            49458, 35998, 49463, 35979, 49475, 35983, 49486, 35980, 49485, 35986, 49505, 35985, 49505, 36061, 49503, 36076, 49518, 36082, 49541, 36068,
+            49571, 36082, 49579, 36101, 49587, 36103, 49594, 36077, 49603, 36080, 49616, 36074, 49618, 36034, 49622, 36031, 49634, 35966, 49625, 35965,
+            49593, 35896, 49582, 35866, 49598, 35847, 49609, 35852, 49620, 35848, 49625, 35852, 49641, 35832, 49636, 35818, 49636, 35790, 49622, 35783,
+            49618, 35767, 49629, 35741, 49638, 35748, 49650, 35736, 49648, 35727, 49651, 35713, 49664, 35712, 49666, 35722, 49676, 35718, 49689, 35738,
+            49698, 35746, 49697, 35707, 49706, 35699, 49692, 35664, 49696, 35660, 49692, 35622, 49662, 35622, 49656, 35618, 49656, 35601, 49645, 35571,
+            49649, 35537, 49662, 35531, 49667, 35514, 49667, 35494, 49672, 35486, 49669, 35471, 49674, 35466, 49673, 35432, 49666, 35433, 49663, 35423,
+            49655, 35427, 49642, 35442, 49619, 35456, 49605, 35462, 49572, 35486, 49567, 35474, 49562, 35409, 49556, 35405, 49549, 35428, 49540, 35434,
+            49526, 35429, 49516, 35486, 49510, 35490, 49484, 35481, 49484, 35460, 49505, 35332, 49495, 35331, 49456, 35313, 49449, 35363, 49405, 35348,
+            49398, 35377, 49384, 35363, 49338, 35302, 49318, 35279, 49294, 35290, 49291, 35282, 49277, 35273, 49283, 35259, 49288, 35262, 49296, 35243,
+            49298, 35216, 49294, 35214, 49296, 35167, 49302, 35123, 49301, 35090, 49316, 35078, 49331, 35036, 49321, 35022, 49317, 35020, 49316, 35024,
+            49300, 35013, 49302, 35007, 49270, 34990, 49253, 34983, 49247, 34982, 49238, 34983, 49209, 34996, 49150, 35018, 49156, 35044, 49173, 35049,
+            49175, 35060, 49170, 35073, 49159, 35072, 49160, 35081, 49150, 35077, 49141, 35085, 49154, 35092, 49157, 35112, 49164, 35124, 49157, 35137,
+            49153, 35132, 49150, 35143, 49152, 35152, 49160, 35162, 49158, 35178, 49162, 35188, 49156, 35198, 49153, 35208, 49150, 35209, 49149, 35195,
+            49137, 35190, 49138, 35200, 49126, 35229, 49125, 35213, 49118, 35210, 49119, 35199, 49108, 35195, 49105, 35222, 49099, 35228, 49113, 35239,
+            49113, 35257, 49104, 35268, 49089, 35275, 49094, 35293, 49090, 35306, 49079, 35312, 49070, 35302, 49060, 35332, 49053, 35344, 49047, 35340,
+            49040, 35353, 49038, 35370, 49027, 35384, 49031, 35402, 49013, 35413, 49012, 35437, 49006, 35437, 48996, 35460, 48989, 35457, 48986, 35470,
+            48979, 35478, 48980, 35488, 48972, 35485, 48983, 35510, 48976, 35530, 48982, 35529, 48974, 35562, 48975, 35576, 48986, 35585, 48981, 35601,
+            48982, 35625, 48972, 35624, 48964, 35631, 48964, 35642, 48974, 35649, 48972, 35671, 48967, 35691, 48958, 35692, 48944, 35692, 48948, 35697,
+            48945, 35704, 48953, 35716, 48958, 35713, 48963, 35717, 48966, 35721, 48966, 35733, 48966, 35736, 48962, 35739, 48949, 35739, 48949, 35758,
+            48956, 35761, 48949, 35775, 48949, 35778, 48955, 35784, 48952, 35790, 48946, 35790, 48942, 35799, 48936, 35792, 48928, 35800, 48930, 35811,
+            48934, 35811, 48938, 35807, 48942, 35810, 48942, 35818, 48951, 35830, 48947, 35856, 48957, 35854
         ))
-    ),
-        "болградський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                45458, 28710, 45470, 28708, 45458, 28710
-            )),
-            ScaledRing(intArrayOf(
-                46346, 28990, 46316, 29004, 46318, 28985, 46259, 28952, 46196, 29067, 46094, 28950, 46049, 29006, 46003, 28979, 45971, 28776, 45929, 28754,
-                45832, 28786, 45818, 28697, 45780, 28709, 45771, 28581, 45729, 28589, 45738, 28521, 45678, 28481, 45660, 28486, 45665, 28516, 45554, 28553,
-                45522, 28661, 45465, 28651, 45496, 28769, 45589, 28738, 45628, 28948, 45648, 28938, 45656, 28986, 45698, 28972, 45702, 29023, 45737, 29019,
-                45751, 29076, 45780, 29066, 45786, 29105, 45801, 29100, 45813, 29169, 45706, 29208, 45737, 29375, 45753, 29411, 45792, 29403, 45779, 29480,
-                45865, 29438, 45915, 29465, 45922, 29596, 45950, 29591, 45946, 29561, 46044, 29552, 46038, 29503, 46096, 29534, 46147, 29530, 46147, 29474,
-                46159, 29473, 46195, 29484, 46207, 29626, 46295, 29605, 46287, 29532, 46324, 29384, 46360, 29484, 46407, 29411, 46504, 29351, 46496, 29332,
-                46474, 29337, 46465, 29308, 46415, 29324, 46407, 29265, 46376, 29241, 46386, 29207, 46417, 29247, 46464, 29220, 46485, 29255, 46558, 29236,
-                46544, 29162, 46515, 29163, 46489, 28981, 46480, 29023, 46462, 29025, 46458, 28931, 46346, 28990
-            ))
-    )),
-        "білгород-дністровський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            46159, 29473, 46195, 29484, 46196, 29603, 46220, 29626, 46295, 29605, 46287, 29532, 46324, 29384, 46360, 29484, 46407, 29411, 46447, 29387,
-            46499, 29448, 46461, 29502, 46447, 29484, 46428, 29495, 46416, 29566, 46361, 29580, 46354, 29603, 46361, 29679, 46436, 29660, 46435, 29735,
-            46467, 29727, 46473, 29741, 46396, 29823, 46386, 29805, 46352, 29891, 46372, 29887, 46400, 29939, 46389, 29999, 46360, 30008, 46372, 30087,
-            46416, 30171, 46435, 30169, 46444, 30218, 46414, 30261, 46388, 30260, 46348, 30300, 46266, 30267, 46222, 30377, 46112, 30456, 46156, 30491,
-            46183, 30550, 46166, 30565, 45866, 30222, 45529, 29650, 45561, 29597, 45648, 29604, 45614, 29492, 45675, 29461, 45671, 29424, 45699, 29418,
-            45690, 29327, 45732, 29315, 45753, 29411, 45792, 29403, 45779, 29480, 45865, 29438, 45915, 29465, 45922, 29596, 45950, 29591, 45946, 29561,
-            46044, 29552, 46038, 29503, 46096, 29534, 46147, 29530, 46147, 29474, 46159, 29473
-        ))
-    ),
-        "одеський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            46343, 30702, 46166, 30565, 46183, 30550, 46156, 30491, 46112, 30456, 46222, 30377, 46266, 30267, 46348, 30300, 46429, 30246, 46446, 30195,
-            46435, 30169, 46413, 30167, 46429, 30154, 46412, 30131, 46440, 30096, 46426, 30096, 46426, 30059, 46443, 30064, 46461, 29995, 46469, 30023,
-            46473, 29995, 46510, 29987, 46494, 29937, 46547, 29876, 46555, 29945, 46589, 29936, 46584, 29963, 46598, 29968, 46633, 29954, 46628, 30153,
-            46675, 30129, 46690, 30317, 46652, 30325, 46647, 30277, 46633, 30281, 46639, 30338, 46614, 30345, 46617, 30376, 46654, 30351, 46659, 30400,
-            46705, 30390, 46707, 30329, 46731, 30324, 46741, 30392, 46754, 30384, 46740, 30403, 46756, 30494, 46864, 30456, 46795, 30510, 46811, 30547,
-            46769, 30566, 46775, 30593, 46816, 30587, 46774, 30608, 46780, 30658, 46830, 30652, 46839, 30678, 46899, 30641, 46908, 30696, 46874, 30692,
-            46897, 30710, 46918, 30802, 46947, 30795, 46954, 30844, 46945, 30865, 46920, 30866, 46925, 30896, 46871, 30911, 46909, 31038, 46881, 31093,
-            46845, 31111, 46837, 31155, 46792, 31153, 46769, 31178, 46735, 31154, 46660, 31197, 46651, 31176, 46648, 31190, 46627, 31177, 46545, 30752,
-            46499, 30729, 46484, 30757, 46496, 30760, 46436, 30773, 46375, 30752, 46343, 30702
-        ))
-    ),
-        "подільський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            47415, 29326, 47370, 29337, 47380, 29391, 47300, 29398, 47295, 29446, 47306, 29486, 47356, 29488, 47370, 29574, 47441, 29589, 47446, 29618,
-            47454, 29575, 47509, 29598, 47531, 29826, 47469, 29845, 47467, 29939, 47438, 29949, 47432, 30057, 47464, 30147, 47494, 30115, 47501, 30166,
-            47532, 30156, 47566, 30275, 47577, 30447, 47590, 30443, 47595, 30478, 47640, 30464, 47634, 30421, 47752, 30389, 47761, 30424, 47787, 30416,
-            47801, 30436, 47821, 30423, 47811, 30330, 47930, 30307, 47967, 30246, 48012, 30226, 48028, 30256, 48068, 30207, 48113, 30357, 48117, 30315,
-            48143, 30308, 48150, 30050, 48179, 30032, 48185, 30002, 48209, 30009, 48230, 29990, 48217, 29975, 48233, 29930, 48186, 29891, 48213, 29841,
-            48195, 29655, 48162, 29676, 48108, 29664, 48133, 29602, 48099, 29570, 48103, 29495, 48123, 29467, 48114, 29395, 48090, 29372, 48091, 29277,
-            48112, 29258, 48118, 29204, 48130, 29262, 48150, 29250, 48134, 29209, 48141, 29141, 48148, 29157, 48195, 29075, 48174, 29046, 48126, 29032,
-            48151, 29005, 48157, 28945, 48095, 28931, 48073, 28833, 48061, 28852, 48035, 28839, 48013, 28902, 48001, 28878, 47962, 28923, 47979, 28962,
-            47943, 29033, 47944, 29074, 47947, 29087, 47971, 29079, 47960, 29098, 47983, 29093, 47994, 29175, 47884, 29201, 47888, 29282, 47820, 29198,
-            47798, 29219, 47804, 29276, 47751, 29249, 47719, 29204, 47684, 29231, 47642, 29209, 47643, 29234, 47572, 29185, 47554, 29117, 47507, 29152,
-            47514, 29190, 47475, 29188, 47459, 29158, 47467, 29189, 47425, 29191, 47462, 29242, 47415, 29244, 47449, 29317, 47415, 29326
-        ))
-    ),
-        "роздільнянський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            46753, 29975, 46633, 29954, 46628, 30153, 46675, 30129, 46690, 30317, 46652, 30325, 46647, 30277, 46633, 30281, 46639, 30338, 46614, 30345,
-            46617, 30376, 46654, 30351, 46659, 30400, 46705, 30390, 46707, 30329, 46731, 30324, 46741, 30392, 46754, 30384, 46740, 30403, 46761, 30495,
-            46827, 30462, 46820, 30404, 46845, 30395, 46842, 30372, 46926, 30349, 46923, 30317, 46941, 30311, 46960, 30333, 46976, 30255, 46949, 30262,
-            46947, 30248, 46990, 30237, 46980, 30138, 47094, 30110, 47110, 30174, 47211, 30150, 47241, 30135, 47240, 30118, 47295, 30123, 47274, 30084,
-            47327, 30048, 47316, 29956, 47291, 29933, 47329, 29892, 47360, 29912, 47367, 29888, 47413, 29876, 47438, 29976, 47438, 29949, 47467, 29939,
-            47469, 29845, 47531, 29826, 47509, 29598, 47454, 29575, 47446, 29618, 47441, 29589, 47419, 29594, 47389, 29569, 47257, 29599, 47251, 29552,
-            47136, 29580, 47132, 29495, 47075, 29530, 47076, 29550, 47094, 29548, 47098, 29613, 47045, 29629, 47042, 29602, 46964, 29596, 46958, 29557,
-            46940, 29572, 46955, 29640, 46919, 29648, 46932, 29718, 46861, 29750, 46886, 29884, 46820, 29905, 46842, 29951, 46820, 29980, 46806, 29935,
-            46753, 29975
-        ))
-    ),
-        "ізмаїльський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            45500, 29624, 45458, 29680, 45490, 29745, 45463, 29744, 45463, 29786, 45368, 29763, 45318, 29784, 45270, 29755, 45222, 29757, 45200, 29690,
-            45239, 29662, 45268, 29679, 45340, 29651, 45409, 29551, 45443, 29430, 45433, 29238, 45331, 28966, 45280, 28942, 45335, 28796, 45323, 28781,
-            45303, 28803, 45284, 28752, 45243, 28793, 45224, 28711, 45250, 28561, 45320, 28349, 45400, 28285, 45444, 28281, 45467, 28214, 45547, 28305,
-            45513, 28421, 45485, 28421, 45500, 28515, 45571, 28491, 45580, 28544, 45554, 28553, 45522, 28661, 45465, 28651, 45496, 28769, 45589, 28738,
-            45628, 28948, 45648, 28938, 45656, 28986, 45698, 28972, 45702, 29023, 45737, 29019, 45751, 29076, 45780, 29066, 45813, 29169, 45706, 29208,
-            45732, 29315, 45690, 29327, 45699, 29418, 45671, 29424, 45675, 29461, 45614, 29492, 45648, 29604, 45561, 29597, 45529, 29650, 45500, 29624
-        ))
-    )
     )
 
-    private fun _Полтавськ(): Map<String, CompactPolygon> = mapOf(
-        "кременчуцький" to     CompactPolygon(
+    private fun _r_iziumskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            48954, 33686, 48978, 33666, 48975, 33638, 48911, 33575, 48931, 33537, 48915, 33474, 48952, 33476, 48960, 33404, 48928, 33401, 48949, 33320,
-            49011, 33298, 49025, 33328, 49062, 33320, 49092, 33262, 49118, 33304, 49167, 33240, 49086, 33249, 49074, 33200, 49096, 33187, 49099, 33156,
-            49130, 33158, 49175, 33121, 49202, 32995, 49240, 32983, 49230, 32929, 49249, 32815, 49233, 32764, 49257, 32714, 49253, 32610, 49276, 32597,
-            49322, 32478, 49347, 32462, 49408, 32510, 49381, 32547, 49353, 32738, 49372, 32737, 49385, 32690, 49425, 32679, 49436, 32651, 49448, 32673,
-            49499, 32678, 49502, 32717, 49540, 32756, 49579, 32753, 49600, 32715, 49657, 32709, 49660, 32690, 49712, 32727, 49738, 32723, 49755, 32820,
-            49785, 32817, 49785, 32849, 49807, 32858, 49748, 32975, 49755, 33018, 49715, 33059, 49692, 33151, 49660, 33141, 49648, 33174, 49663, 33189,
-            49660, 33260, 49639, 33284, 49657, 33381, 49636, 33447, 49621, 33441, 49576, 33617, 49522, 33642, 49477, 33804, 49461, 33813, 49428, 33790,
-            49410, 33803, 49414, 33869, 49396, 33889, 49387, 33874, 49364, 33915, 49369, 33980, 49312, 33990, 49285, 34028, 49253, 34006, 49238, 34030,
-            49184, 34044, 49177, 34095, 49113, 34088, 49112, 34057, 49079, 34053, 49083, 33986, 49051, 33974, 49049, 33988, 49020, 33987, 49014, 33883,
-            48988, 33883, 48988, 33927, 48934, 34013, 48880, 33931, 48937, 33819, 48954, 33686
+            48851, 37098, 48843, 37131, 48842, 37149, 48833, 37141, 48833, 37152, 48826, 37156, 48815, 37192, 48850, 37194, 48870, 37190, 48881, 37196,
+            48885, 37210, 48896, 37221, 48908, 37226, 48910, 37244, 48907, 37266, 48923, 37269, 48923, 37298, 48918, 37299, 48923, 37312, 48923, 37328,
+            48935, 37334, 48939, 37316, 48951, 37307, 48953, 37320, 48970, 37294, 48981, 37307, 48977, 37316, 48990, 37313, 48994, 37336, 49004, 37345,
+            48998, 37358, 48992, 37359, 48994, 37372, 49026, 37375, 49027, 37391, 49034, 37385, 49049, 37384, 49054, 37410, 49063, 37418, 49062, 37450,
+            49053, 37452, 49062, 37465, 49055, 37467, 49063, 37479, 49064, 37496, 49070, 37506, 49080, 37509, 49091, 37501, 49101, 37488, 49106, 37500,
+            49111, 37542, 49125, 37584, 49135, 37571, 49134, 37564, 49144, 37543, 49145, 37561, 49150, 37567, 49165, 37558, 49183, 37499, 49196, 37510,
+            49218, 37551, 49230, 37566, 49230, 37600, 49233, 37621, 49220, 37710, 49203, 37798, 49207, 37798, 49206, 37826, 49202, 37842, 49222, 37850,
+            49236, 37865, 49237, 37872, 49246, 37868, 49253, 37897, 49260, 37911, 49270, 37899, 49277, 37912, 49281, 37948, 49285, 37958, 49303, 37947,
+            49313, 37883, 49328, 37878, 49403, 37897, 49418, 37878, 49436, 37880, 49447, 37877, 49446, 37845, 49487, 37851, 49493, 37839, 49496, 37840,
+            49498, 37808, 49492, 37803, 49499, 37772, 49508, 37772, 49506, 37751, 49517, 37713, 49517, 37700, 49503, 37690, 49489, 37667, 49469, 37652,
+            49460, 37652, 49452, 37642, 49449, 37634, 49450, 37613, 49440, 37594, 49434, 37570, 49444, 37568, 49446, 37541, 49454, 37519, 49468, 37520,
+            49470, 37486, 49484, 37455, 49521, 37407, 49515, 37402, 49517, 37380, 49543, 37390, 49550, 37373, 49535, 37336, 49524, 37293, 49541, 37241,
+            49544, 37199, 49542, 37173, 49561, 37162, 49563, 37174, 49576, 37173, 49595, 37165, 49601, 37142, 49582, 37105, 49587, 37084, 49592, 37087,
+            49598, 37077, 49614, 37068, 49613, 37060, 49627, 37059, 49634, 37048, 49622, 37036, 49624, 37023, 49621, 37005, 49633, 37002, 49637, 36995,
+            49651, 36979, 49647, 36971, 49645, 36973, 49632, 36941, 49634, 36933, 49600, 36917, 49598, 36899, 49590, 36886, 49602, 36879, 49603, 36856,
+            49609, 36853, 49637, 36852, 49637, 36799, 49620, 36799, 49609, 36760, 49600, 36757, 49598, 36743, 49590, 36718, 49587, 36701, 49570, 36698,
+            49588, 36622, 49564, 36604, 49565, 36594, 49555, 36585, 49558, 36580, 49545, 36567, 49548, 36535, 49523, 36512, 49524, 36493, 49534, 36477,
+            49537, 36439, 49526, 36429, 49510, 36438, 49508, 36472, 49504, 36474, 49517, 36488, 49510, 36498, 49504, 36518, 49484, 36526, 49481, 36500,
+            49471, 36499, 49475, 36491, 49477, 36482, 49470, 36464, 49459, 36472, 49455, 36482, 49417, 36462, 49388, 36450, 49385, 36475, 49375, 36509,
+            49368, 36520, 49353, 36520, 49355, 36553, 49327, 36552, 49327, 36565, 49315, 36562, 49310, 36571, 49297, 36613, 49275, 36609, 49283, 36589,
+            49279, 36572, 49268, 36562, 49268, 36572, 49261, 36585, 49242, 36595, 49234, 36622, 49231, 36618, 49227, 36647, 49197, 36630, 49194, 36655,
+            49150, 36637, 49150, 36628, 49135, 36612, 49131, 36619, 49103, 36592, 49095, 36591, 49083, 36617, 49092, 36620, 49088, 36634, 49078, 36628,
+            49018, 36644, 49020, 36678, 49032, 36682, 49022, 36699, 49030, 36724, 49018, 36728, 49020, 36744, 49013, 36758, 49000, 36739, 48993, 36737,
+            48994, 36750, 48984, 36753, 48985, 36765, 48951, 36772, 48939, 36779, 48940, 36790, 48912, 36797, 48910, 36809, 48891, 36800, 48891, 36789,
+            48896, 36779, 48889, 36774, 48892, 36761, 48858, 36728, 48865, 36713, 48863, 36702, 48858, 36703, 48855, 36692, 48846, 36683, 48817, 36689,
+            48811, 36693, 48806, 36704, 48803, 36730, 48797, 36765, 48803, 36790, 48790, 36784, 48781, 36788, 48778, 36816, 48771, 36820, 48773, 36839,
+            48800, 36854, 48798, 36921, 48794, 36923, 48792, 36945, 48796, 36948, 48793, 36968, 48775, 36988, 48750, 37032, 48753, 37038, 48767, 37042,
+            48768, 37025, 48775, 37024, 48787, 36995, 48804, 37012, 48802, 37019, 48817, 37025, 48815, 37035, 48814, 37068, 48818, 37078, 48851, 37098
         ))
-    ),
-        "лубенський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50037, 33374, 50088, 33405, 50111, 33377, 50145, 33394, 50140, 33370, 50148, 33379, 50171, 33341, 50199, 33350, 50185, 33286, 50147, 33246,
-            50190, 33152, 50234, 33151, 50249, 33124, 50287, 33131, 50284, 33108, 50325, 33091, 50337, 33044, 50366, 33062, 50386, 33052, 50383, 33001,
-            50409, 33017, 50424, 33002, 50429, 32920, 50409, 32917, 50371, 32790, 50347, 32793, 50358, 32671, 50370, 32672, 50346, 32528, 50369, 32487,
-            50399, 32493, 50427, 32331, 50418, 32316, 50403, 32326, 50374, 32252, 50347, 32255, 50348, 32143, 50305, 32140, 50283, 32084, 50277, 32101,
-            50247, 32089, 50225, 32125, 50213, 32112, 50165, 32177, 50142, 32299, 50120, 32304, 50115, 32250, 50097, 32277, 50083, 32262, 50039, 32314,
-            50058, 32334, 50048, 32350, 49981, 32379, 49960, 32428, 49903, 32414, 49888, 32435, 49874, 32374, 49796, 32450, 49805, 32504, 49774, 32514,
-            49774, 32556, 49753, 32572, 49703, 32574, 49660, 32690, 49712, 32727, 49738, 32723, 49755, 32820, 49785, 32817, 49785, 32849, 49808, 32872,
-            49785, 32880, 49790, 32910, 49748, 32975, 49755, 33018, 49715, 33059, 49692, 33151, 49660, 33141, 49648, 33174, 49663, 33189, 49660, 33260,
-            49639, 33284, 49657, 33381, 49613, 33491, 49648, 33514, 49693, 33500, 49737, 33547, 49768, 33540, 49784, 33581, 49820, 33580, 49855, 33497,
-            49851, 33439, 49891, 33366, 49943, 33383, 49992, 33281, 50037, 33374
-        ))
-    ),
-        "миргородський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                50037, 33374, 50088, 33405, 50111, 33377, 50145, 33394, 50140, 33370, 50148, 33379, 50171, 33341, 50199, 33350, 50185, 33286, 50150, 33258,
-                50150, 33221, 50171, 33212, 50190, 33152, 50234, 33151, 50249, 33124, 50287, 33131, 50284, 33108, 50325, 33091, 50339, 33042, 50366, 33062,
-                50386, 33052, 50383, 33001, 50409, 33017, 50424, 33002, 50418, 32962, 50437, 32933, 50445, 32966, 50476, 32973, 50471, 33016, 50502, 33023,
-                50520, 33065, 50505, 33119, 50523, 33173, 50503, 33221, 50554, 33276, 50520, 33319, 50521, 33374, 50497, 33375, 50499, 33414, 50476, 33434,
-                50493, 33464, 50480, 33532, 50495, 33572, 50458, 33734, 50461, 33787, 50478, 33788, 50499, 33851, 50516, 33812, 50534, 33893, 50514, 33914,
-                50548, 33955, 50499, 34028, 50516, 34066, 50504, 34103, 50488, 34082, 50481, 34098, 50522, 34159, 50524, 34246, 50441, 34252, 50367, 34391,
-                50345, 34336, 50352, 34273, 50336, 34263, 50336, 34227, 50312, 34233, 50307, 34207, 50215, 34144, 50156, 34140, 50147, 34088, 50123, 34081,
-                50109, 34036, 50093, 34047, 50082, 34030, 50091, 34059, 50063, 34090, 50066, 34137, 50040, 34213, 49962, 34243, 49965, 34287, 49947, 34290,
-                49942, 34257, 49904, 34292, 49893, 34235, 49869, 34254, 49859, 34233, 49802, 34226, 49794, 34141, 49766, 34124, 49755, 34046, 49731, 34069,
-                49700, 34033, 49710, 33939, 49691, 33908, 49689, 33939, 49660, 33950, 49646, 33869, 49616, 33869, 49603, 33810, 49582, 33792, 49589, 33684,
-                49573, 33668, 49511, 33701, 49524, 33639, 49576, 33617, 49608, 33489, 49648, 33514, 49693, 33500, 49737, 33547, 49768, 33540, 49784, 33581,
-                49820, 33580, 49855, 33497, 49851, 33439, 49891, 33366, 49943, 33383, 49992, 33281, 50037, 33374
-            )),
-            ScaledRing(intArrayOf(
-                49882, 33201, 49905, 33219, 49923, 33208, 49960, 33261, 49969, 33314, 49954, 33325, 49918, 33241, 49902, 33262, 49861, 33236, 49882, 33201
-            ))
-    )),
-        "полтавський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50082, 34030, 50093, 34047, 50110, 34037, 50123, 34081, 50147, 34088, 50156, 34140, 50215, 34144, 50307, 34207, 50312, 34233, 50336, 34227,
-            50361, 34367, 50337, 34410, 50318, 34400, 50287, 34456, 50281, 34520, 50248, 34514, 50227, 34571, 50177, 34523, 50154, 34527, 50121, 34573,
-            50111, 34664, 50134, 34677, 50111, 34677, 50111, 34698, 50150, 34700, 50160, 34734, 50145, 34747, 50166, 34847, 50152, 34940, 50096, 34937,
-            50075, 34965, 49987, 34856, 49950, 34859, 49935, 34912, 49885, 34971, 49885, 35064, 49872, 35047, 49859, 35068, 49860, 35140, 49830, 35219,
-            49807, 35222, 49800, 35200, 49756, 35205, 49733, 35259, 49694, 35244, 49682, 35330, 49665, 35345, 49673, 35433, 49656, 35426, 49572, 35486,
-            49555, 35405, 49502, 35489, 49484, 35462, 49505, 35332, 49455, 35316, 49447, 35364, 49405, 35348, 49398, 35375, 49318, 35279, 49296, 35288,
-            49277, 35272, 49297, 35242, 49301, 35091, 49326, 35024, 49250, 34980, 49150, 35016, 49194, 34949, 49149, 34899, 49165, 34867, 49178, 34902,
-            49191, 34847, 49167, 34812, 49179, 34804, 49168, 34759, 49141, 34749, 49112, 34591, 49094, 34595, 49095, 34572, 49063, 34574, 49055, 34558,
-            49072, 34516, 49064, 34466, 49094, 34402, 49055, 34416, 48999, 34326, 48984, 34353, 48941, 34312, 48896, 34300, 48850, 34351, 48844, 34325,
-            48820, 34339, 48821, 34297, 48785, 34298, 48783, 34342, 48765, 34309, 48728, 34307, 48778, 34141, 48822, 34120, 48825, 34072, 48865, 34020,
-            48880, 33931, 48934, 34013, 48988, 33927, 48988, 33883, 49014, 33883, 49020, 33987, 49049, 33988, 49051, 33974, 49083, 33986, 49079, 34053,
-            49112, 34057, 49113, 34088, 49177, 34095, 49184, 34044, 49238, 34030, 49253, 34006, 49285, 34028, 49312, 33990, 49369, 33980, 49364, 33915,
-            49387, 33874, 49396, 33889, 49414, 33869, 49410, 33803, 49446, 33791, 49469, 33813, 49505, 33702, 49573, 33668, 49591, 33697, 49582, 33792,
-            49603, 33810, 49616, 33869, 49646, 33869, 49660, 33950, 49689, 33939, 49691, 33908, 49710, 33939, 49700, 34033, 49731, 34069, 49755, 34046,
-            49766, 34124, 49794, 34141, 49802, 34226, 49859, 34233, 49869, 34254, 49893, 34235, 49904, 34292, 49942, 34257, 49947, 34290, 49965, 34287,
-            49962, 34243, 50040, 34213, 50066, 34137, 50063, 34090, 50091, 34059, 50082, 34030
-        ))
-    )
     )
 
-    private fun _Рівненськ(): Map<String, CompactPolygon> = mapOf(
-        "вараський" to     CompactPolygon(
+    private fun _r_kharkivskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            51314, 25877, 51278, 25938, 51232, 25946, 51228, 25996, 51184, 26059, 51233, 26156, 51235, 26258, 51254, 26269, 51270, 26210, 51284, 26214,
-            51299, 26183, 51334, 26210, 51333, 26241, 51313, 26218, 51306, 26242, 51297, 26230, 51323, 26364, 51330, 26339, 51353, 26333, 51393, 26440,
-            51418, 26448, 51420, 26378, 51464, 26359, 51456, 26301, 51471, 26285, 51492, 26321, 51548, 26227, 51556, 26297, 51581, 26313, 51608, 26276,
-            51641, 26299, 51697, 26169, 51733, 26241, 51709, 26350, 51737, 26322, 51767, 26347, 51762, 26440, 51813, 26470, 51831, 26396, 51877, 26395,
-            51862, 26372, 51864, 26155, 51880, 26155, 51912, 26094, 51933, 25999, 51915, 25924, 51925, 25825, 51943, 25824, 51950, 25765, 51922, 25772,
-            51925, 25593, 51895, 25709, 51849, 25640, 51819, 25650, 51804, 25632, 51784, 25659, 51767, 25650, 51773, 25670, 51756, 25683, 51682, 25641,
-            51625, 25578, 51631, 25530, 51614, 25532, 51624, 25555, 51581, 25599, 51540, 25565, 51525, 25595, 51519, 25550, 51501, 25555, 51495, 25624,
-            51477, 25618, 51479, 25641, 51417, 25647, 51405, 25687, 51376, 25695, 51381, 25725, 51400, 25725, 51400, 25760, 51381, 25755, 51374, 25781,
-            51387, 25831, 51376, 25844, 51345, 25821, 51314, 25877
+            49697, 35707, 49698, 35746, 49689, 35738, 49676, 35718, 49666, 35722, 49664, 35712, 49651, 35713, 49648, 35727, 49650, 35736, 49638, 35748,
+            49629, 35741, 49618, 35767, 49622, 35783, 49636, 35790, 49636, 35818, 49641, 35832, 49625, 35852, 49620, 35848, 49609, 35852, 49598, 35847,
+            49582, 35866, 49593, 35896, 49625, 35965, 49634, 35966, 49622, 36031, 49618, 36034, 49616, 36067, 49625, 36067, 49632, 36062, 49652, 36055,
+            49660, 36043, 49673, 36039, 49671, 36074, 49692, 36075, 49700, 36070, 49706, 36049, 49705, 36017, 49715, 36005, 49721, 36014, 49722, 36033,
+            49728, 36023, 49732, 35999, 49743, 35979, 49758, 35975, 49760, 35986, 49762, 35988, 49758, 36027, 49763, 36037, 49756, 36056, 49768, 36086,
+            49758, 36106, 49754, 36129, 49768, 36157, 49781, 36160, 49786, 36149, 49785, 36120, 49794, 36128, 49806, 36129, 49824, 36168, 49820, 36198,
+            49814, 36218, 49816, 36238, 49822, 36248, 49817, 36269, 49825, 36307, 49816, 36323, 49801, 36323, 49792, 36335, 49794, 36359, 49798, 36365,
+            49790, 36378, 49799, 36421, 49815, 36409, 49843, 36419, 49869, 36430, 49866, 36445, 49880, 36457, 49881, 36486, 49886, 36534, 49908, 36540,
+            49904, 36560, 49919, 36568, 49914, 36583, 49917, 36593, 49924, 36604, 49931, 36610, 49937, 36602, 49970, 36649, 49984, 36630, 50001, 36629,
+            50000, 36639, 50006, 36648, 50014, 36628, 50025, 36623, 50037, 36590, 50036, 36566, 50062, 36552, 50082, 36548, 50094, 36560, 50093, 36579,
+            50102, 36594, 50095, 36624, 50109, 36633, 50102, 36650, 50105, 36670, 50112, 36664, 50118, 36682, 50129, 36692, 50136, 36686, 50147, 36669,
+            50155, 36700, 50159, 36701, 50160, 36683, 50170, 36676, 50169, 36688, 50181, 36705, 50191, 36694, 50196, 36708, 50194, 36720, 50202, 36708,
+            50202, 36687, 50211, 36670, 50209, 36660, 50221, 36661, 50218, 36649, 50228, 36618, 50224, 36614, 50229, 36597, 50250, 36560, 50262, 36580,
+            50274, 36574, 50275, 36593, 50286, 36585, 50285, 36562, 50281, 36556, 50286, 36524, 50294, 36526, 50295, 36511, 50306, 36489, 50311, 36488,
+            50313, 36473, 50311, 36440, 50331, 36433, 50328, 36424, 50310, 36407, 50300, 36374, 50293, 36379, 50287, 36364, 50292, 36296, 50299, 36299,
+            50299, 36286, 50323, 36273, 50336, 36284, 50356, 36256, 50364, 36233, 50372, 36231, 50387, 36211, 50404, 36193, 50406, 36184, 50393, 36165,
+            50366, 36106, 50364, 36106, 50366, 36113, 50365, 36122, 50352, 36138, 50359, 36148, 50358, 36158, 50347, 36173, 50333, 36171, 50333, 36154,
+            50324, 36162, 50315, 36158, 50307, 36168, 50300, 36163, 50299, 36172, 50290, 36172, 50279, 36151, 50270, 36155, 50269, 36142, 50262, 36140,
+            50252, 36125, 50241, 36125, 50238, 36101, 50246, 36093, 50239, 36084, 50236, 36098, 50226, 36095, 50212, 36037, 50207, 36061, 50201, 36071,
+            50180, 36076, 50181, 36037, 50156, 36021, 50133, 36014, 50137, 35987, 50118, 35985, 50109, 35996, 50108, 35950, 50112, 35941, 50102, 35936,
+            50100, 35946, 50093, 35945, 50097, 35916, 50091, 35912, 50087, 35893, 50080, 35887, 50084, 35869, 50079, 35871, 50086, 35856, 50100, 35850,
+            50098, 35844, 50114, 35844, 50119, 35838, 50120, 35824, 50114, 35814, 50090, 35832, 50080, 35826, 50069, 35834, 50066, 35844, 50059, 35823,
+            50044, 35798, 50045, 35810, 50036, 35811, 50034, 35795, 50016, 35794, 50008, 35810, 50002, 35807, 50002, 35828, 49995, 35834, 49991, 35822,
+            49995, 35811, 49984, 35809, 49976, 35815, 49950, 35792, 49944, 35812, 49935, 35810, 49938, 35802, 49931, 35798, 49927, 35807, 49936, 35823,
+            49922, 35828, 49923, 35846, 49916, 35853, 49915, 35874, 49903, 35868, 49902, 35876, 49882, 35866, 49875, 35871, 49869, 35863, 49873, 35858,
+            49860, 35824, 49836, 35821, 49836, 35836, 49831, 35839, 49828, 35828, 49819, 35821, 49810, 35824, 49819, 35771, 49825, 35781, 49837, 35762,
+            49824, 35731, 49826, 35728, 49823, 35703, 49803, 35698, 49801, 35712, 49791, 35716, 49775, 35708, 49780, 35686, 49763, 35674, 49752, 35655,
+            49745, 35680, 49732, 35675, 49722, 35685, 49697, 35707
         ))
-    ),
-        "дубенський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50287, 25113, 50312, 25109, 50331, 25166, 50369, 25141, 50380, 25169, 50363, 25199, 50381, 25210, 50428, 25140, 50443, 25154, 50461, 25138,
-            50475, 25084, 50466, 25151, 50505, 25160, 50528, 25123, 50554, 25122, 50539, 25296, 50569, 25321, 50580, 25300, 50631, 25292, 50612, 25328,
-            50612, 25406, 50642, 25352, 50658, 25387, 50691, 25379, 50669, 25405, 50662, 25460, 50680, 25470, 50696, 25602, 50717, 25597, 50725, 25694,
-            50684, 25722, 50671, 25709, 50667, 25793, 50620, 25829, 50598, 25817, 50609, 25851, 50595, 25905, 50560, 25908, 50536, 25942, 50535, 25992,
-            50513, 25978, 50505, 26023, 50539, 26093, 50474, 26098, 50481, 26080, 50443, 26056, 50432, 26077, 50384, 26064, 50391, 25921, 50383, 25940,
-            50368, 25927, 50352, 25972, 50286, 26030, 50269, 26061, 50272, 26130, 50242, 26113, 50257, 26065, 50230, 26020, 50255, 25924, 50191, 25857,
-            50181, 25822, 50187, 25729, 50152, 25625, 50176, 25576, 50150, 25554, 50166, 25476, 50150, 25449, 50124, 25448, 50102, 25489, 50094, 25454,
-            50053, 25431, 50046, 25364, 50004, 25347, 50131, 25197, 50180, 25215, 50209, 25165, 50249, 25190, 50247, 25207, 50279, 25205, 50287, 25113
-        ))
-    ),
-        "рівненський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50193, 26297, 50174, 26225, 50197, 26179, 50267, 26221, 50263, 26191, 50231, 26166, 50242, 26113, 50272, 26130, 50269, 26061, 50311, 25995,
-            50352, 25972, 50368, 25927, 50393, 25931, 50384, 26064, 50432, 26077, 50443, 26056, 50481, 26080, 50474, 26098, 50539, 26093, 50505, 26023,
-            50513, 25978, 50535, 25992, 50536, 25942, 50560, 25908, 50595, 25905, 50606, 25810, 50631, 25844, 50647, 25823, 50709, 25879, 50738, 25872,
-            50832, 25902, 50821, 26022, 50842, 26040, 50866, 25992, 50935, 26001, 50957, 25967, 50973, 26085, 51003, 26086, 51005, 26107, 51052, 26088,
-            51083, 26017, 51084, 25941, 51119, 25942, 51143, 26059, 51156, 26071, 51185, 26059, 51206, 26109, 51194, 26115, 51169, 26082, 51159, 26197,
-            51111, 26219, 51112, 26300, 51078, 26363, 51053, 26352, 51051, 26436, 51027, 26471, 51067, 26478, 51059, 26507, 51038, 26507, 51051, 26520,
-            51094, 26449, 51088, 26534, 51130, 26475, 51176, 26560, 51184, 26630, 51146, 26664, 51110, 26674, 51105, 26656, 51095, 26687, 51148, 26790,
-            51135, 26807, 51134, 26973, 51088, 27067, 51060, 27089, 51056, 27134, 51028, 27137, 50973, 27219, 50937, 27239, 50920, 27217, 50896, 27257,
-            50795, 27234, 50770, 27242, 50761, 27272, 50721, 27275, 50673, 27245, 50666, 27204, 50640, 27214, 50625, 27186, 50605, 27225, 50567, 27230,
-            50561, 27131, 50595, 27118, 50584, 27079, 50551, 27073, 50559, 27018, 50523, 26983, 50546, 26900, 50509, 26857, 50523, 26827, 50503, 26818,
-            50489, 26765, 50470, 26762, 50468, 26787, 50462, 26743, 50477, 26734, 50445, 26737, 50446, 26717, 50417, 26713, 50420, 26692, 50365, 26648,
-            50368, 26602, 50340, 26587, 50330, 26553, 50317, 26561, 50311, 26527, 50262, 26502, 50265, 26396, 50231, 26324, 50193, 26297
-        ))
-    ),
-        "сарненський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            51438, 26363, 51464, 26359, 51456, 26301, 51471, 26285, 51492, 26321, 51548, 26227, 51556, 26297, 51581, 26313, 51608, 26276, 51641, 26299,
-            51697, 26169, 51733, 26241, 51709, 26350, 51737, 26322, 51767, 26347, 51762, 26440, 51800, 26472, 51796, 26547, 51830, 26593, 51816, 26729,
-            51802, 26757, 51773, 26753, 51757, 26791, 51766, 26846, 51736, 26948, 51769, 26994, 51773, 27202, 51668, 27208, 51654, 27273, 51602, 27240,
-            51620, 27455, 51587, 27503, 51607, 27527, 51630, 27507, 51623, 27543, 51637, 27550, 51605, 27619, 51618, 27653, 51594, 27735, 51563, 27723,
-            51540, 27676, 51497, 27669, 51479, 27579, 51430, 27583, 51403, 27614, 51428, 27538, 51453, 27535, 51452, 27504, 51375, 27495, 51353, 27528,
-            51315, 27490, 51311, 27441, 51264, 27461, 51255, 27447, 51237, 27474, 51201, 27401, 51170, 27398, 51143, 27364, 51098, 27367, 51080, 27324,
-            51042, 27326, 51030, 27220, 51008, 27226, 50991, 27203, 51028, 27137, 51056, 27134, 51060, 27089, 51088, 27067, 51134, 26973, 51135, 26807,
-            51148, 26790, 51095, 26687, 51105, 26656, 51110, 26674, 51146, 26664, 51163, 26633, 51182, 26636, 51176, 26560, 51129, 26475, 51088, 26534,
-            51094, 26449, 51051, 26520, 51038, 26507, 51059, 26507, 51067, 26478, 51034, 26484, 51027, 26469, 51051, 26436, 51053, 26352, 51078, 26363,
-            51112, 26300, 51111, 26219, 51159, 26197, 51169, 26082, 51233, 26156, 51235, 26258, 51254, 26269, 51270, 26210, 51284, 26214, 51299, 26183,
-            51334, 26210, 51333, 26241, 51313, 26218, 51306, 26242, 51297, 26230, 51305, 26327, 51323, 26364, 51330, 26339, 51353, 26334, 51404, 26451,
-            51422, 26445, 51420, 26378, 51438, 26363
-        ))
-    )
     )
 
-    private fun _Сумськ(): Map<String, CompactPolygon> = mapOf(
-        "конотопський" to     CompactPolygon(
+    private fun _r_synelnykivskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            50981, 33259, 50967, 33443, 50987, 33452, 50985, 33508, 51032, 33507, 51040, 33555, 51023, 33583, 51032, 33640, 51004, 33646, 50993, 33676,
-            50971, 33660, 50964, 33694, 50984, 33733, 50983, 33904, 50990, 33893, 51006, 33910, 51036, 33969, 51071, 33967, 51066, 34017, 51080, 34017,
-            51091, 34069, 51144, 34108, 51142, 34130, 51179, 34119, 51197, 34148, 51239, 34150, 51275, 34252, 51293, 34238, 51311, 34282, 51335, 34282,
-            51329, 34315, 51356, 34338, 51375, 34285, 51388, 34292, 51400, 34228, 51417, 34221, 51487, 34291, 51502, 34244, 51490, 34199, 51527, 34175,
-            51500, 34132, 51517, 34079, 51550, 34052, 51521, 34050, 51532, 33992, 51510, 33990, 51520, 33974, 51486, 34001, 51469, 33987, 51462, 33955,
-            51481, 33954, 51443, 33873, 51497, 33897, 51485, 33863, 51500, 33871, 51513, 33784, 51579, 33724, 51585, 33743, 51611, 33736, 51635, 33663,
-            51648, 33677, 51672, 33556, 51702, 33506, 51711, 33514, 51700, 33488, 51717, 33465, 51717, 33399, 51681, 33341, 51683, 33286, 51654, 33226,
-            51683, 33199, 51678, 33141, 51648, 33125, 51642, 33154, 51607, 33155, 51580, 33222, 51569, 33159, 51514, 33193, 51494, 33136, 51428, 33113,
-            51417, 33135, 51404, 33119, 51382, 33133, 51390, 33092, 51366, 33108, 51371, 33062, 51391, 33039, 51404, 33057, 51410, 33046, 51396, 33017,
-            51343, 33042, 51339, 33081, 51313, 33077, 51292, 33042, 51290, 33076, 51267, 33058, 51255, 33069, 51227, 33030, 51206, 33042, 51188, 32977,
-            51163, 32960, 51143, 32993, 51090, 32943, 51069, 33069, 51049, 33060, 51037, 33085, 51011, 33050, 50988, 33050, 50981, 33079, 51007, 33118,
-            50961, 33137, 50959, 33180, 50981, 33259
+            47848, 36585, 47880, 36577, 47877, 36550, 47906, 36543, 47911, 36592, 47921, 36590, 47917, 36616, 47920, 36640, 47961, 36628, 47956, 36586,
+            47998, 36576, 48000, 36590, 48015, 36572, 48020, 36590, 48036, 36577, 48044, 36577, 48053, 36586, 48062, 36579, 48066, 36588, 48082, 36587,
+            48085, 36604, 48090, 36608, 48083, 36622, 48089, 36630, 48089, 36652, 48096, 36649, 48088, 36664, 48091, 36669, 48086, 36694, 48080, 36712,
+            48085, 36715, 48079, 36725, 48071, 36726, 48062, 36748, 48053, 36741, 48049, 36754, 48055, 36764, 48047, 36773, 48052, 36803, 48040, 36812,
+            48034, 36832, 48037, 36843, 48032, 36854, 48052, 36858, 48051, 36876, 48061, 36881, 48064, 36881, 48077, 36896, 48183, 36873, 48180, 36893,
+            48193, 36905, 48194, 36936, 48309, 36912, 48305, 36874, 48317, 36871, 48312, 36817, 48348, 36809, 48349, 36816, 48366, 36813, 48369, 36827,
+            48406, 36821, 48409, 36835, 48413, 36826, 48421, 36836, 48418, 36851, 48444, 36847, 48443, 36836, 48485, 36830, 48487, 36856, 48517, 36850,
+            48522, 36907, 48544, 36901, 48543, 36885, 48551, 36883, 48550, 36872, 48569, 36859, 48566, 36824, 48569, 36810, 48597, 36806, 48597, 36780,
+            48601, 36779, 48597, 36747, 48626, 36740, 48623, 36705, 48628, 36704, 48625, 36674, 48618, 36675, 48616, 36655, 48608, 36656, 48602, 36592,
+            48607, 36581, 48616, 36580, 48617, 36563, 48623, 36561, 48663, 36482, 48633, 36448, 48636, 36422, 48628, 36441, 48570, 36382, 48565, 36393,
+            48532, 36356, 48540, 36356, 48556, 36326, 48532, 36296, 48522, 36287, 48483, 36242, 48479, 36248, 48446, 36209, 48449, 36202, 48439, 36186,
+            48440, 36160, 48431, 36125, 48425, 36124, 48420, 36111, 48426, 36100, 48440, 36106, 48448, 36089, 48446, 36080, 48451, 36058, 48458, 36046,
+            48350, 36103, 48409, 35890, 48403, 35866, 48391, 35884, 48385, 35841, 48380, 35839, 48377, 35824, 48357, 35828, 48355, 35806, 48313, 35815,
+            48310, 35785, 48286, 35788, 48293, 35759, 48302, 35754, 48310, 35762, 48313, 35748, 48321, 35756, 48338, 35750, 48341, 35728, 48337, 35719,
+            48336, 35708, 48333, 35708, 48335, 35702, 48361, 35679, 48369, 35700, 48380, 35692, 48383, 35702, 48368, 35716, 48386, 35748, 48401, 35733,
+            48405, 35784, 48427, 35777, 48436, 35793, 48465, 35763, 48472, 35748, 48465, 35733, 48472, 35726, 48462, 35707, 48491, 35671, 48478, 35648,
+            48502, 35621, 48511, 35615, 48523, 35638, 48546, 35619, 48543, 35606, 48529, 35610, 48520, 35560, 48504, 35566, 48499, 35534, 48536, 35518,
+            48527, 35516, 48538, 35435, 48527, 35403, 48534, 35397, 48526, 35376, 48512, 35385, 48505, 35367, 48517, 35356, 48509, 35330, 48455, 35372,
+            48447, 35348, 48439, 35352, 48424, 35315, 48441, 35303, 48433, 35238, 48428, 35236, 48425, 35251, 48406, 35269, 48408, 35253, 48392, 35269,
+            48394, 35280, 48385, 35280, 48371, 35309, 48367, 35271, 48361, 35278, 48352, 35257, 48326, 35282, 48323, 35272, 48311, 35262, 48313, 35254,
+            48299, 35249, 48278, 35248, 48255, 35230, 48252, 35216, 48264, 35192, 48261, 35183, 48236, 35196, 48205, 35195, 48180, 35189, 48166, 35190,
+            48146, 35197, 48141, 35194, 48143, 35220, 48135, 35239, 48136, 35253, 48144, 35274, 48144, 35298, 48125, 35337, 48123, 35358, 48119, 35383,
+            48116, 35398, 48110, 35417, 48101, 35420, 48104, 35450, 48096, 35485, 48098, 35502, 48094, 35518, 48076, 35523, 48141, 35705, 48096, 35743,
+            48098, 35775, 48094, 35784, 48100, 35807, 48066, 35817, 48080, 35910, 48095, 35968, 48087, 35984, 48079, 35984, 48073, 35970, 48059, 35974,
+            48063, 35982, 48044, 35975, 48047, 35998, 48059, 36052, 48025, 36066, 48019, 36034, 48004, 36041, 48000, 36063, 47972, 36070, 47965, 36048,
+            47959, 36051, 47966, 36073, 47930, 36084, 47942, 36110, 47928, 36120, 47925, 36110, 47903, 36127, 47900, 36122, 47890, 36129, 47872, 36116,
+            47866, 36118, 47862, 36088, 47884, 36081, 47880, 36054, 47868, 36059, 47868, 36069, 47849, 36075, 47850, 36098, 47844, 36102, 47850, 36178,
+            47858, 36177, 47860, 36195, 47859, 36197, 47855, 36197, 47841, 36187, 47834, 36198, 47832, 36198, 47832, 36267, 47815, 36276, 47815, 36298,
+            47821, 36332, 47840, 36325, 47838, 36375, 47830, 36377, 47831, 36401, 47828, 36414, 47824, 36456, 47828, 36522, 47836, 36521, 47848, 36585
         ))
-    ),
-        "охтирський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50542, 35360, 50546, 35434, 50488, 35477, 50451, 35564, 50465, 35569, 50448, 35586, 50395, 35584, 50375, 35612, 50367, 35602, 50335, 35689,
-            50310, 35650, 50331, 35594, 50317, 35516, 50302, 35535, 50290, 35524, 50335, 35423, 50321, 35379, 50294, 35382, 50319, 35330, 50290, 35297,
-            50274, 35330, 50265, 35266, 50234, 35260, 50242, 35148, 50206, 35070, 50165, 35040, 50180, 35033, 50185, 34964, 50158, 34974, 50152, 34940,
-            50166, 34847, 50145, 34747, 50160, 34734, 50150, 34700, 50111, 34698, 50111, 34677, 50134, 34677, 50111, 34657, 50132, 34546, 50177, 34523,
-            50227, 34571, 50248, 34514, 50281, 34520, 50287, 34456, 50318, 34400, 50336, 34411, 50359, 34377, 50388, 34486, 50450, 34513, 50449, 34577,
-            50470, 34585, 50519, 34712, 50539, 34732, 50569, 34728, 50565, 34774, 50600, 34790, 50625, 34862, 50671, 34885, 50697, 34939, 50718, 34946,
-            50749, 34915, 50733, 34952, 50754, 34977, 50739, 34981, 50716, 35092, 50715, 35046, 50708, 35058, 50696, 35020, 50677, 35026, 50689, 35043,
-            50670, 35069, 50687, 35154, 50675, 35183, 50648, 35201, 50607, 35166, 50591, 35189, 50591, 35151, 50571, 35185, 50580, 35273, 50542, 35273,
-            50541, 35247, 50536, 35269, 50518, 35263, 50527, 35295, 50550, 35294, 50528, 35316, 50542, 35360
-        ))
-    ),
-        "роменський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50984, 33846, 50984, 33733, 50964, 33694, 50971, 33660, 50993, 33676, 51004, 33646, 51032, 33640, 51023, 33583, 51040, 33555, 51032, 33507,
-            50985, 33508, 50987, 33452, 50967, 33443, 50984, 33280, 50973, 33208, 50920, 33197, 50901, 33211, 50888, 33170, 50868, 33184, 50851, 33170,
-            50849, 33185, 50828, 33155, 50800, 33169, 50792, 33156, 50747, 33190, 50732, 33240, 50711, 33136, 50655, 33147, 50648, 33117, 50602, 33103,
-            50596, 33123, 50541, 33049, 50505, 33119, 50523, 33173, 50503, 33221, 50554, 33276, 50520, 33319, 50521, 33374, 50497, 33375, 50499, 33414,
-            50476, 33434, 50493, 33464, 50480, 33532, 50495, 33572, 50458, 33734, 50461, 33787, 50478, 33788, 50499, 33851, 50516, 33812, 50534, 33893,
-            50514, 33914, 50548, 33955, 50499, 34028, 50516, 34066, 50504, 34103, 50488, 34082, 50481, 34098, 50522, 34159, 50525, 34247, 50553, 34226,
-            50601, 34227, 50708, 34081, 50734, 34164, 50744, 34146, 50767, 34178, 50810, 34142, 50809, 34160, 50854, 34188, 50881, 34170, 50871, 34130,
-            50935, 34103, 50949, 34047, 50997, 34085, 51015, 34047, 51066, 34013, 51071, 33967, 51036, 33969, 51006, 33910, 50990, 33893, 50983, 33904,
-            50984, 33846
-        ))
-    ),
-        "сумський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50716, 35092, 50739, 34981, 50754, 34977, 50733, 34952, 50749, 34915, 50718, 34946, 50697, 34939, 50671, 34885, 50625, 34862, 50600, 34790,
-            50565, 34774, 50569, 34728, 50539, 34732, 50519, 34712, 50470, 34585, 50449, 34577, 50450, 34513, 50388, 34486, 50372, 34374, 50441, 34252,
-            50601, 34227, 50708, 34081, 50734, 34164, 50744, 34146, 50767, 34178, 50810, 34142, 50809, 34160, 50859, 34187, 50881, 34170, 50871, 34130,
-            50924, 34098, 50929, 34112, 50949, 34047, 50997, 34085, 51044, 34021, 51078, 34016, 51091, 34069, 51129, 34089, 51144, 34132, 51179, 34119,
-            51197, 34148, 51239, 34150, 51265, 34225, 51238, 34306, 51274, 34384, 51234, 34580, 51254, 34603, 51247, 34663, 51198, 34669, 51171, 34717,
-            51185, 34785, 51169, 34835, 51199, 34862, 51193, 34898, 51236, 34980, 51204, 35039, 51235, 35072, 51223, 35150, 51165, 35123, 51122, 35175,
-            51109, 35163, 51099, 35177, 51083, 35148, 51047, 35210, 51079, 35304, 51048, 35406, 51027, 35409, 51009, 35375, 51014, 35323, 50974, 35352,
-            50947, 35326, 50914, 35400, 50896, 35380, 50879, 35402, 50870, 35382, 50844, 35419, 50803, 35411, 50777, 35489, 50689, 35459, 50679, 35496,
-            50656, 35486, 50650, 35393, 50603, 35426, 50580, 35390, 50543, 35439, 50545, 35333, 50528, 35316, 50550, 35294, 50527, 35295, 50518, 35263,
-            50536, 35269, 50541, 35247, 50542, 35273, 50580, 35273, 50571, 35185, 50591, 35151, 50591, 35189, 50607, 35166, 50648, 35201, 50675, 35183,
-            50681, 35021, 50698, 35024, 50708, 35058, 50715, 35046, 50716, 35092
-        ))
-    ),
-        "шосткинський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            51714, 33436, 51700, 33488, 51711, 33514, 51702, 33506, 51662, 33578, 51671, 33605, 51644, 33642, 51648, 33677, 51635, 33663, 51609, 33738,
-            51585, 33743, 51583, 33722, 51534, 33749, 51500, 33871, 51485, 33863, 51497, 33897, 51452, 33868, 51443, 33882, 51481, 33954, 51462, 33957,
-            51475, 33996, 51520, 33974, 51510, 33990, 51532, 33992, 51521, 34050, 51550, 34052, 51517, 34079, 51500, 34132, 51527, 34175, 51490, 34199,
-            51502, 34244, 51487, 34291, 51519, 34308, 51533, 34260, 51577, 34249, 51597, 34182, 51646, 34167, 51667, 34081, 51720, 34309, 51715, 34400,
-            51743, 34440, 51782, 34409, 51826, 34415, 51887, 34304, 51882, 34245, 51909, 34261, 51920, 34219, 51969, 34190, 51968, 34143, 51985, 34129,
-            52000, 34140, 52005, 34097, 52041, 34101, 52073, 34062, 52085, 34094, 52109, 34086, 52141, 34117, 52167, 34059, 52201, 34053, 52202, 34016,
-            52227, 34001, 52250, 33938, 52283, 33945, 52305, 33921, 52320, 33839, 52333, 33855, 52361, 33836, 52363, 33708, 52334, 33604, 52311, 33582,
-            52324, 33544, 52302, 33560, 52314, 33482, 52355, 33518, 52365, 33455, 52343, 33447, 52316, 33387, 52303, 33402, 52267, 33386, 52258, 33359,
-            52233, 33367, 52217, 33317, 52202, 33331, 52185, 33310, 52162, 33337, 52136, 33324, 52147, 33339, 52123, 33417, 52088, 33438, 52089, 33500,
-            52038, 33500, 52026, 33429, 52051, 33402, 52032, 33317, 52013, 33304, 51999, 33349, 51955, 33394, 51931, 33355, 51912, 33188, 51902, 33172,
-            51886, 33180, 51864, 33123, 51816, 33147, 51776, 33079, 51700, 33170, 51684, 33147, 51683, 33199, 51654, 33226, 51682, 33281, 51683, 33346,
-            51715, 33391, 51714, 33436
-        ))
-    )
     )
 
-    private fun _Тернопільськ(): Map<String, CompactPolygon> = mapOf(
-        "кременецький" to     CompactPolygon(
+    private fun _r_dniprovskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            49717, 25983, 49716, 26161, 49729, 26166, 49714, 26191, 49745, 26244, 49776, 26241, 49847, 26178, 49866, 26201, 49898, 26133, 49922, 26166,
-            49972, 26142, 49993, 26202, 50016, 26211, 50025, 26176, 50048, 26227, 50067, 26201, 50098, 26199, 50103, 26274, 50131, 26235, 50143, 26244,
-            50155, 26209, 50181, 26219, 50197, 26179, 50267, 26221, 50263, 26191, 50231, 26166, 50257, 26065, 50229, 26009, 50256, 25928, 50191, 25857,
-            50187, 25729, 50152, 25625, 50176, 25576, 50150, 25554, 50166, 25476, 50150, 25449, 50124, 25448, 50102, 25489, 50094, 25454, 50053, 25431,
-            50046, 25364, 50018, 25349, 50004, 25347, 49986, 25403, 49948, 25404, 49935, 25430, 49915, 25420, 49871, 25470, 49824, 25476, 49815, 25508,
-            49775, 25542, 49850, 25677, 49825, 25684, 49802, 25724, 49802, 25904, 49789, 25915, 49774, 25875, 49752, 25854, 49739, 25862, 49701, 25945,
-            49715, 25948, 49717, 25983
+            48292, 34604, 48286, 34594, 48283, 34586, 48254, 34592, 48252, 34564, 48272, 34558, 48273, 34529, 48266, 34531, 48268, 34518, 48255, 34508,
+            48264, 34474, 48241, 34462, 48237, 34456, 48234, 34427, 48197, 34435, 48193, 34403, 48207, 34399, 48206, 34383, 48160, 34394, 48165, 34439,
+            48172, 34437, 48171, 34452, 48166, 34454, 48156, 34444, 48155, 34410, 48142, 34410, 48140, 34427, 48129, 34429, 48126, 34389, 48121, 34379,
+            48131, 34376, 48116, 34296, 48109, 34281, 48079, 34290, 48067, 34232, 48073, 34228, 48068, 34196, 48056, 34202, 48057, 34222, 48047, 34223,
+            48048, 34231, 48029, 34237, 48027, 34221, 48017, 34224, 48014, 34208, 48004, 34210, 48002, 34198, 47973, 34199, 47970, 34184, 47962, 34186,
+            47964, 34238, 47976, 34235, 47979, 34301, 47949, 34307, 47930, 34319, 47933, 34337, 47919, 34342, 47923, 34377, 47926, 34377, 47928, 34408,
+            47934, 34408, 47929, 34376, 47939, 34374, 47944, 34419, 47952, 34418, 47954, 34440, 47928, 34448, 47924, 34453, 47929, 34494, 47936, 34493,
+            47940, 34532, 47951, 34531, 47953, 34555, 47959, 34554, 47962, 34591, 47980, 34587, 47982, 34610, 48014, 34603, 48021, 34667, 48019, 34667,
+            48026, 34731, 47986, 34744, 47996, 34769, 47992, 34770, 47997, 34821, 48010, 34820, 48014, 34848, 48051, 34840, 48054, 34875, 48133, 34855,
+            48134, 34878, 48127, 34881, 48131, 34917, 48114, 34921, 48113, 34912, 48091, 34915, 48091, 34930, 48097, 34987, 48089, 34990, 48095, 35004,
+            48098, 35039, 48105, 35041, 48122, 35059, 48123, 35080, 48131, 35101, 48131, 35118, 48129, 35157, 48131, 35178, 48141, 35194, 48146, 35197,
+            48166, 35190, 48180, 35189, 48205, 35195, 48236, 35196, 48261, 35183, 48264, 35192, 48252, 35216, 48255, 35230, 48278, 35248, 48299, 35249,
+            48313, 35254, 48311, 35262, 48323, 35272, 48326, 35282, 48352, 35257, 48361, 35278, 48367, 35271, 48371, 35309, 48385, 35280, 48394, 35280,
+            48392, 35269, 48408, 35253, 48406, 35269, 48425, 35251, 48428, 35236, 48433, 35238, 48441, 35303, 48462, 35288, 48474, 35313, 48492, 35298,
+            48486, 35281, 48517, 35254, 48521, 35242, 48544, 35234, 48566, 35187, 48583, 35161, 48579, 35153, 48586, 35144, 48598, 35173, 48612, 35163,
+            48651, 35185, 48657, 35195, 48652, 35212, 48666, 35200, 48657, 35169, 48660, 35159, 48649, 35139, 48662, 35132, 48674, 35161, 48700, 35137,
+            48707, 35155, 48732, 35161, 48743, 35107, 48756, 35068, 48701, 35022, 48692, 35008, 48709, 34981, 48713, 34987, 48722, 34972, 48702, 34939,
+            48710, 34928, 48721, 34930, 48724, 34945, 48720, 34952, 48727, 34964, 48733, 34953, 48750, 34938, 48753, 34928, 48766, 34952, 48775, 34954,
+            48781, 34948, 48793, 34955, 48794, 34948, 48783, 34929, 48810, 34897, 48816, 34908, 48822, 34908, 48834, 34891, 48823, 34876, 48828, 34868,
+            48828, 34854, 48823, 34842, 48806, 34849, 48804, 34842, 48790, 34827, 48783, 34826, 48777, 34838, 48755, 34810, 48760, 34796, 48756, 34787,
+            48778, 34792, 48791, 34773, 48820, 34778, 48824, 34769, 48845, 34766, 48853, 34738, 48872, 34736, 48899, 34786, 48904, 34780, 48909, 34789,
+            48934, 34759, 48931, 34752, 48940, 34740, 48947, 34758, 48963, 34744, 48967, 34753, 48990, 34730, 48996, 34739, 49048, 34693, 49039, 34669,
+            49052, 34657, 49062, 34680, 49067, 34676, 49073, 34687, 49092, 34672, 49097, 34672, 49098, 34648, 49104, 34640, 49123, 34624, 49115, 34607,
+            49113, 34609, 49112, 34599, 49108, 34588, 49095, 34594, 49089, 34570, 49072, 34564, 49064, 34573, 49055, 34559, 49057, 34540, 49072, 34516,
+            49061, 34498, 49073, 34475, 49065, 34465, 49095, 34403, 49075, 34405, 49055, 34417, 49050, 34391, 49044, 34397, 49036, 34367, 49017, 34354,
+            49017, 34346, 49007, 34331, 49000, 34328, 48994, 34342, 48984, 34354, 48942, 34314, 48910, 34304, 48897, 34301, 48889, 34311, 48885, 34306,
+            48872, 34338, 48857, 34337, 48856, 34349, 48846, 34349, 48844, 34326, 48829, 34323, 48824, 34346, 48821, 34335, 48821, 34296, 48785, 34298,
+            48785, 34315, 48793, 34325, 48784, 34342, 48764, 34310, 48758, 34316, 48741, 34313, 48734, 34302, 48728, 34307, 48723, 34293, 48713, 34298,
+            48708, 34306, 48707, 34336, 48701, 34353, 48691, 34360, 48678, 34353, 48671, 34357, 48659, 34386, 48648, 34399, 48641, 34437, 48633, 34442,
+            48615, 34441, 48596, 34459, 48586, 34498, 48579, 34515, 48555, 34545, 48583, 34559, 48599, 34540, 48603, 34531, 48606, 34545, 48614, 34554,
+            48610, 34564, 48630, 34601, 48621, 34614, 48607, 34612, 48600, 34621, 48601, 34633, 48589, 34636, 48586, 34576, 48567, 34569, 48556, 34571,
+            48554, 34581, 48543, 34584, 48540, 34592, 48539, 34625, 48535, 34646, 48536, 34664, 48533, 34686, 48519, 34702, 48500, 34733, 48491, 34766,
+            48485, 34765, 48484, 34751, 48474, 34770, 48453, 34760, 48440, 34761, 48441, 34743, 48464, 34724, 48472, 34702, 48453, 34701, 48447, 34712,
+            48438, 34701, 48443, 34684, 48452, 34694, 48464, 34672, 48463, 34661, 48473, 34658, 48467, 34642, 48456, 34644, 48458, 34632, 48451, 34590,
+            48459, 34578, 48463, 34558, 48457, 34553, 48457, 34513, 48442, 34511, 48440, 34536, 48426, 34535, 48426, 34551, 48420, 34562, 48406, 34565,
+            48366, 34580, 48366, 34584, 48331, 34599, 48326, 34569, 48319, 34570, 48309, 34593, 48292, 34604
         ))
-    ),
-        "тернопільський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49138, 25531, 49160, 25506, 49184, 25523, 49212, 25463, 49204, 25404, 49186, 25403, 49215, 25295, 49184, 25255, 49168, 25073, 49177, 24923,
-            49198, 24887, 49236, 24933, 49263, 24843, 49285, 24828, 49337, 24834, 49347, 24859, 49386, 24828, 49378, 24776, 49431, 24771, 49496, 24716,
-            49570, 24721, 49573, 24792, 49610, 24871, 49609, 24943, 49617, 24931, 49616, 24954, 49643, 24961, 49643, 24988, 49735, 25022, 49712, 25067,
-            49746, 25115, 49770, 25072, 49782, 25090, 49828, 25084, 49815, 25137, 49837, 25175, 49828, 25288, 49854, 25299, 49868, 25375, 49897, 25389,
-            49913, 25376, 49937, 25400, 49935, 25430, 49915, 25420, 49886, 25462, 49824, 25476, 49815, 25508, 49775, 25542, 49850, 25677, 49825, 25684,
-            49802, 25724, 49802, 25904, 49789, 25915, 49749, 25855, 49701, 25945, 49715, 25949, 49716, 26161, 49729, 26166, 49669, 26269, 49638, 26263,
-            49637, 26231, 49609, 26199, 49551, 26219, 49549, 26176, 49509, 26142, 49481, 26188, 49430, 26193, 49400, 26236, 49375, 26224, 49383, 26127,
-            49369, 26126, 49359, 25972, 49377, 25905, 49318, 25898, 49296, 25939, 49277, 25856, 49211, 25829, 49203, 25854, 49160, 25811, 49160, 25781,
-            49140, 25781, 49135, 25766, 49175, 25743, 49168, 25717, 49182, 25709, 49162, 25681, 49179, 25636, 49149, 25665, 49147, 25627, 49131, 25624,
-            49138, 25531
-        ))
-    ),
-        "чортківський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49167, 26209, 49195, 26183, 49243, 26201, 49243, 26243, 49264, 26258, 49275, 26241, 49277, 26258, 49309, 26252, 49331, 26226, 49369, 26245,
-            49385, 26163, 49362, 26078, 49359, 25972, 49377, 25905, 49318, 25898, 49296, 25939, 49277, 25856, 49211, 25829, 49203, 25854, 49134, 25767,
-            49175, 25743, 49168, 25717, 49182, 25709, 49162, 25681, 49179, 25636, 49149, 25665, 49147, 25627, 49131, 25624, 49134, 25541, 49160, 25506,
-            49184, 25523, 49212, 25463, 49204, 25404, 49186, 25403, 49215, 25295, 49184, 25255, 49168, 25073, 49184, 24987, 49169, 24986, 49173, 24935,
-            49198, 24887, 49178, 24856, 49129, 24900, 49117, 24985, 49097, 24972, 49071, 24991, 49083, 24916, 49055, 24903, 49011, 24970, 48993, 24965,
-            49011, 25017, 48984, 25078, 48995, 25119, 48964, 25110, 48944, 25147, 48924, 25118, 48869, 25140, 48870, 25171, 48927, 25191, 48933, 25231,
-            48846, 25211, 48867, 25260, 48838, 25325, 48860, 25354, 48844, 25433, 48872, 25439, 48857, 25469, 48831, 25455, 48748, 25641, 48725, 25610,
-            48705, 25653, 48673, 25628, 48663, 25711, 48633, 25738, 48670, 25767, 48671, 25799, 48620, 25855, 48597, 25849, 48587, 25909, 48621, 25975,
-            48610, 26021, 48649, 26048, 48607, 26066, 48585, 26044, 48539, 26091, 48554, 26127, 48600, 26096, 48620, 26118, 48598, 26145, 48531, 26163,
-            48540, 26268, 48510, 26300, 48508, 26357, 48542, 26443, 48565, 26380, 48542, 26361, 48560, 26364, 48569, 26336, 48588, 26360, 48623, 26293,
-            48630, 26324, 48640, 26288, 48658, 26308, 48647, 26273, 48668, 26279, 48689, 26220, 48697, 26238, 48736, 26244, 48752, 26223, 48756, 26246,
-            48797, 26207, 48790, 26233, 48813, 26226, 48815, 26259, 48819, 26234, 48859, 26200, 48910, 26224, 48916, 26184, 48955, 26208, 48974, 26177,
-            48983, 26212, 48996, 26176, 49005, 26216, 49056, 26183, 49072, 26216, 49078, 26192, 49133, 26206, 49158, 26190, 49167, 26209
-        ))
-    )
     )
 
-    private fun _Харківськ(): Map<String, CompactPolygon> = mapOf(
-        "берестинський" to     CompactPolygon(
+    private fun _r_novomoskovskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            49118, 35208, 49127, 35228, 49138, 35190, 49151, 35210, 49163, 35187, 49150, 35144, 49164, 35122, 49141, 35087, 49177, 35053, 49151, 35018,
-            49250, 34980, 49326, 35024, 49301, 35091, 49297, 35242, 49277, 35272, 49296, 35288, 49318, 35279, 49398, 35375, 49405, 35348, 49447, 35364,
-            49455, 35316, 49505, 35332, 49491, 35485, 49517, 35485, 49527, 35429, 49550, 35427, 49555, 35405, 49572, 35486, 49656, 35426, 49673, 35433,
-            49646, 35572, 49657, 35618, 49691, 35622, 49706, 35699, 49694, 35747, 49657, 35710, 49644, 35746, 49627, 35743, 49617, 35769, 49648, 35832,
-            49582, 35866, 49633, 35966, 49616, 36074, 49588, 36121, 49565, 36078, 49505, 36078, 49504, 35985, 49462, 35981, 49456, 35997, 49406, 35984,
-            49356, 36010, 49347, 36041, 49312, 36029, 49283, 36073, 49257, 36061, 49246, 36136, 49196, 36137, 49198, 36162, 49110, 36166, 49127, 36255,
-            49104, 36272, 49051, 36107, 48980, 36034, 49004, 35945, 48971, 35939, 48975, 35884, 48927, 35807, 48954, 35789, 48947, 35752, 48967, 35724,
-            48943, 35696, 48967, 35695, 48967, 35629, 48983, 35627, 48973, 35485, 49011, 35439, 49069, 35302, 49092, 35307, 49091, 35276, 49113, 35258,
-            49111, 35190, 49118, 35208
+            48526, 35376, 48534, 35397, 48527, 35403, 48538, 35435, 48527, 35516, 48536, 35518, 48532, 35520, 48539, 35553, 48564, 35543, 48563, 35540,
+            48600, 35526, 48595, 35555, 48619, 35550, 48618, 35544, 48631, 35547, 48630, 35563, 48638, 35567, 48642, 35555, 48663, 35593, 48669, 35582,
+            48684, 35603, 48688, 35599, 48702, 35618, 48700, 35626, 48707, 35636, 48705, 35642, 48733, 35674, 48738, 35676, 48760, 35677, 48769, 35661,
+            48781, 35666, 48795, 35682, 48802, 35670, 48811, 35679, 48831, 35647, 48848, 35669, 48843, 35680, 48847, 35685, 48869, 35650, 48872, 35636,
+            48882, 35637, 48888, 35644, 48882, 35703, 48886, 35757, 48876, 35755, 48876, 35808, 48893, 35816, 48914, 35811, 48924, 35819, 48934, 35811,
+            48930, 35811, 48928, 35800, 48936, 35792, 48942, 35799, 48946, 35790, 48952, 35790, 48949, 35777, 48956, 35761, 48949, 35758, 48949, 35739,
+            48962, 35739, 48966, 35733, 48964, 35727, 48966, 35720, 48958, 35713, 48953, 35716, 48945, 35704, 48948, 35697, 48944, 35692, 48958, 35692,
+            48967, 35691, 48972, 35671, 48974, 35649, 48964, 35642, 48964, 35631, 48972, 35624, 48982, 35625, 48981, 35601, 48986, 35585, 48975, 35576,
+            48974, 35562, 48982, 35529, 48976, 35530, 48983, 35510, 48972, 35485, 48980, 35488, 48979, 35478, 48986, 35470, 48989, 35457, 48996, 35460,
+            49006, 35437, 49012, 35437, 49013, 35413, 49031, 35402, 49027, 35384, 49038, 35370, 49040, 35353, 49047, 35340, 49053, 35344, 49060, 35332,
+            49070, 35302, 49079, 35312, 49090, 35306, 49094, 35293, 49089, 35275, 49104, 35268, 49113, 35257, 49113, 35239, 49099, 35228, 49105, 35222,
+            49108, 35195, 49119, 35199, 49118, 35210, 49125, 35213, 49126, 35229, 49138, 35200, 49137, 35190, 49149, 35195, 49149, 35207, 49151, 35209,
+            49156, 35198, 49162, 35188, 49159, 35179, 49161, 35169, 49160, 35162, 49152, 35153, 49150, 35146, 49153, 35132, 49157, 35137, 49164, 35124,
+            49157, 35112, 49154, 35092, 49141, 35085, 49150, 35077, 49160, 35081, 49159, 35072, 49170, 35073, 49175, 35060, 49173, 35049, 49156, 35044,
+            49149, 35014, 49154, 35014, 49160, 35008, 49168, 34986, 49182, 34973, 49186, 34961, 49193, 34948, 49181, 34936, 49185, 34930, 49177, 34923,
+            49156, 34920, 49151, 34902, 49161, 34865, 49169, 34871, 49168, 34895, 49175, 34901, 49181, 34884, 49184, 34858, 49190, 34856, 49186, 34820,
+            49175, 34824, 49166, 34811, 49176, 34809, 49180, 34785, 49171, 34771, 49168, 34759, 49155, 34766, 49143, 34766, 49144, 34740, 49136, 34729,
+            49130, 34706, 49135, 34693, 49128, 34680, 49121, 34682, 49119, 34662, 49124, 34653, 49130, 34651, 49131, 34647, 49125, 34635, 49125, 34624,
+            49123, 34624, 49104, 34640, 49098, 34648, 49098, 34672, 49092, 34672, 49073, 34687, 49067, 34676, 49062, 34680, 49052, 34657, 49039, 34669,
+            49048, 34693, 48996, 34739, 48990, 34730, 48967, 34753, 48963, 34744, 48947, 34758, 48940, 34740, 48931, 34752, 48934, 34759, 48909, 34789,
+            48904, 34780, 48899, 34786, 48872, 34736, 48853, 34738, 48845, 34766, 48824, 34769, 48820, 34778, 48791, 34773, 48778, 34792, 48756, 34787,
+            48760, 34796, 48755, 34810, 48777, 34838, 48783, 34826, 48790, 34827, 48804, 34842, 48806, 34849, 48823, 34842, 48828, 34854, 48828, 34868,
+            48823, 34876, 48834, 34891, 48822, 34908, 48816, 34908, 48810, 34897, 48783, 34929, 48794, 34948, 48793, 34955, 48781, 34948, 48775, 34954,
+            48766, 34952, 48753, 34928, 48750, 34938, 48733, 34953, 48727, 34964, 48720, 34952, 48724, 34945, 48721, 34930, 48710, 34928, 48702, 34939,
+            48722, 34972, 48713, 34987, 48709, 34981, 48692, 35008, 48701, 35022, 48756, 35068, 48743, 35107, 48732, 35161, 48707, 35155, 48700, 35137,
+            48674, 35161, 48662, 35132, 48649, 35139, 48660, 35159, 48657, 35169, 48666, 35200, 48652, 35212, 48657, 35195, 48651, 35185, 48612, 35163,
+            48598, 35173, 48586, 35144, 48579, 35153, 48583, 35161, 48566, 35187, 48544, 35234, 48521, 35242, 48517, 35254, 48486, 35281, 48492, 35298,
+            48474, 35313, 48462, 35288, 48424, 35315, 48439, 35352, 48447, 35348, 48455, 35372, 48509, 35330, 48517, 35356, 48505, 35367, 48512, 35385,
+            48526, 35376
         ))
-    ),
-        "богодухівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50271, 35318, 50277, 35331, 50290, 35297, 50313, 35319, 50294, 35382, 50321, 35379, 50335, 35423, 50293, 35496, 50294, 35531, 50317, 35516,
-            50331, 35594, 50310, 35650, 50346, 35693, 50351, 35658, 50355, 35739, 50434, 35832, 50423, 35873, 50439, 35889, 50451, 36068, 50432, 36161,
-            50402, 36177, 50365, 36105, 50346, 36172, 50326, 36151, 50288, 36176, 50241, 36121, 50244, 36086, 50225, 36093, 50212, 36037, 50201, 36072,
-            50180, 36078, 50181, 36036, 50133, 36013, 50136, 35987, 50108, 35995, 50111, 35941, 50093, 35944, 50078, 35868, 50117, 35842, 50115, 35816,
-            50064, 35845, 50017, 35780, 49996, 35835, 49997, 35810, 49971, 35814, 49944, 35755, 49949, 35795, 49941, 35814, 49926, 35803, 49937, 35819,
-            49916, 35873, 49875, 35873, 49859, 35824, 49836, 35822, 49833, 35839, 49813, 35821, 49818, 35770, 49837, 35759, 49824, 35702, 49775, 35708,
-            49782, 35685, 49752, 35655, 49744, 35679, 49724, 35676, 49706, 35699, 49691, 35622, 49657, 35618, 49646, 35572, 49669, 35508, 49665, 35345,
-            49682, 35330, 49694, 35244, 49733, 35259, 49756, 35205, 49800, 35200, 49807, 35222, 49830, 35219, 49860, 35140, 49859, 35068, 49872, 35047,
-            49885, 35064, 49885, 34971, 49935, 34912, 49950, 34859, 49987, 34856, 50075, 34965, 50096, 34937, 50135, 34933, 50158, 34974, 50185, 34962,
-            50180, 35033, 50165, 35040, 50206, 35070, 50242, 35148, 50228, 35235, 50234, 35260, 50265, 35266, 50271, 35318
-        ))
-    ),
-        "куп’янський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50303, 37638, 50220, 37614, 50176, 37640, 50134, 37710, 50079, 37755, 50084, 37798, 50035, 37925, 49979, 37965, 49933, 38044, 49910, 38022,
-            49846, 38094, 49837, 38018, 49813, 38010, 49783, 38053, 49753, 37999, 49768, 37977, 49731, 37951, 49708, 37975, 49713, 38017, 49700, 37999,
-            49657, 38046, 49648, 37996, 49612, 37975, 49611, 37944, 49589, 37934, 49569, 37952, 49574, 37901, 49549, 37886, 49542, 37926, 49521, 37847,
-            49497, 37841, 49517, 37700, 49499, 37693, 49490, 37644, 49450, 37623, 49432, 37571, 49521, 37409, 49513, 37382, 49544, 37389, 49550, 37373,
-            49524, 37296, 49542, 37173, 49594, 37166, 49582, 37098, 49634, 37048, 49622, 37003, 49661, 36968, 49712, 37025, 49715, 36998, 49773, 36965,
-            49804, 37023, 49772, 37067, 49798, 37077, 49790, 37114, 49839, 37189, 49942, 37177, 49947, 37135, 49980, 37176, 50006, 37149, 50077, 37188,
-            50101, 37151, 50126, 37197, 50106, 37262, 50117, 37280, 50126, 37269, 50137, 37304, 50151, 37291, 50181, 37319, 50180, 37372, 50223, 37369,
-            50254, 37425, 50290, 37420, 50317, 37529, 50334, 37535, 50306, 37577, 50303, 37638
-        ))
-    ),
-        "лозівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49460, 35985, 49370, 36002, 49346, 36041, 49312, 36029, 49283, 36073, 49257, 36061, 49252, 36130, 49196, 36137, 49198, 36162, 49110, 36166,
-            49127, 36255, 49103, 36272, 49051, 36107, 48980, 36034, 49003, 35983, 48999, 35940, 48915, 36044, 48888, 36012, 48874, 36040, 48855, 36019,
-            48833, 36076, 48808, 36065, 48809, 36124, 48784, 36159, 48766, 36140, 48749, 36162, 48724, 36143, 48661, 36281, 48621, 36251, 48587, 36319,
-            48544, 36271, 48531, 36296, 48556, 36324, 48532, 36355, 48612, 36424, 48614, 36446, 48634, 36419, 48632, 36447, 48664, 36483, 48603, 36591,
-            48626, 36739, 48693, 36712, 48704, 36736, 48776, 36689, 48806, 36721, 48816, 36688, 48850, 36682, 48857, 36728, 48891, 36762, 48889, 36798,
-            48911, 36810, 48986, 36768, 48993, 36737, 49014, 36759, 49032, 36720, 49018, 36644, 49088, 36635, 49095, 36592, 49160, 36642, 49195, 36655,
-            49197, 36631, 49226, 36646, 49268, 36561, 49274, 36610, 49296, 36614, 49315, 36562, 49355, 36553, 49353, 36520, 49369, 36519, 49389, 36450,
-            49455, 36482, 49470, 36463, 49469, 36383, 49507, 36383, 49543, 36276, 49502, 36240, 49539, 36134, 49517, 36132, 49504, 35985, 49460, 35985
-        ))
-    ),
-        "харківський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49616, 36066, 49633, 35966, 49582, 35866, 49648, 35832, 49617, 35769, 49627, 35743, 49644, 35746, 49657, 35710, 49694, 35747, 49697, 35708,
-            49724, 35676, 49744, 35679, 49750, 35655, 49782, 35685, 49775, 35708, 49824, 35702, 49837, 35759, 49818, 35770, 49813, 35821, 49833, 35839,
-            49836, 35822, 49859, 35824, 49875, 35873, 49916, 35873, 49937, 35819, 49926, 35803, 49941, 35814, 49949, 35795, 49944, 35755, 49971, 35814,
-            49997, 35810, 49996, 35835, 50017, 35780, 50064, 35845, 50119, 35819, 50117, 35842, 50078, 35868, 50093, 35944, 50111, 35941, 50108, 35995,
-            50136, 35987, 50133, 36013, 50181, 36036, 50180, 36078, 50201, 36072, 50212, 36037, 50225, 36093, 50244, 36086, 50241, 36121, 50288, 36176,
-            50326, 36151, 50346, 36172, 50365, 36105, 50406, 36185, 50336, 36284, 50324, 36274, 50292, 36296, 50287, 36364, 50331, 36433, 50311, 36440,
-            50312, 36488, 50286, 36524, 50286, 36585, 50271, 36591, 50251, 36561, 50196, 36705, 50169, 36673, 50159, 36702, 50148, 36669, 50127, 36691,
-            50103, 36671, 50098, 36568, 50081, 36549, 50036, 36567, 50006, 36646, 49991, 36625, 49967, 36647, 49921, 36602, 49910, 36539, 49886, 36534,
-            49869, 36433, 49814, 36409, 49797, 36422, 49792, 36334, 49819, 36321, 49832, 36281, 49813, 36231, 49826, 36170, 49806, 36129, 49786, 36120,
-            49778, 36160, 49755, 36133, 49770, 36084, 49750, 35975, 49763, 35968, 49737, 35986, 49723, 36035, 49712, 36000, 49702, 36011, 49694, 36074,
-            49672, 36073, 49674, 36039, 49616, 36066
-        ))
-    ),
-        "чугуївський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49826, 37149, 49839, 37189, 49942, 37177, 49947, 37135, 49980, 37176, 50006, 37149, 50077, 37188, 50098, 37150, 50126, 37197, 50111, 37271,
-            50126, 37269, 50137, 37304, 50151, 37291, 50181, 37319, 50184, 37377, 50223, 37369, 50254, 37425, 50290, 37420, 50317, 37529, 50334, 37535,
-            50380, 37467, 50431, 37465, 50431, 37485, 50457, 37490, 50433, 37412, 50436, 37330, 50401, 37292, 50356, 37151, 50336, 36870, 50267, 36689,
-            50217, 36657, 50196, 36705, 50169, 36673, 50159, 36702, 50148, 36669, 50122, 36688, 50103, 36670, 50098, 36568, 50081, 36549, 50036, 36567,
-            50006, 36646, 49991, 36625, 49967, 36647, 49921, 36602, 49910, 36539, 49886, 36533, 49869, 36433, 49794, 36413, 49792, 36334, 49819, 36321,
-            49832, 36281, 49813, 36231, 49826, 36170, 49786, 36120, 49784, 36158, 49761, 36151, 49758, 35967, 49723, 36035, 49712, 36000, 49702, 36011,
-            49694, 36074, 49672, 36073, 49664, 36040, 49603, 36079, 49588, 36121, 49565, 36078, 49517, 36082, 49537, 36173, 49510, 36197, 49502, 36240,
-            49543, 36276, 49521, 36356, 49507, 36383, 49469, 36383, 49459, 36436, 49476, 36478, 49464, 36509, 49484, 36525, 49519, 36486, 49504, 36476,
-            49514, 36432, 49532, 36450, 49537, 36437, 49524, 36500, 49551, 36527, 49545, 36566, 49564, 36605, 49589, 36622, 49570, 36700, 49588, 36702,
-            49619, 36799, 49636, 36801, 49637, 36856, 49607, 36853, 49590, 36886, 49600, 36920, 49712, 37025, 49715, 36998, 49773, 36965, 49804, 37023,
-            49772, 37067, 49798, 37077, 49790, 37114, 49826, 37149
-        ))
-    ),
-        "ізюмський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49650, 36982, 49621, 37005, 49628, 37058, 49583, 37096, 49594, 37166, 49542, 37173, 49524, 37296, 49550, 37373, 49544, 37389, 49513, 37382,
-            49521, 37409, 49432, 37571, 49450, 37623, 49490, 37644, 49499, 37693, 49517, 37700, 49492, 37803, 49503, 37844, 49445, 37844, 49447, 37876,
-            49403, 37896, 49313, 37883, 49304, 37949, 49285, 37958, 49270, 37899, 49260, 37912, 49246, 37866, 49234, 37875, 49201, 37844, 49228, 37561,
-            49186, 37503, 49167, 37554, 49140, 37564, 49146, 37541, 49126, 37585, 49102, 37487, 49070, 37506, 49058, 37481, 49048, 37385, 49025, 37392,
-            49026, 37375, 48992, 37367, 49003, 37344, 48990, 37311, 48983, 37325, 48970, 37295, 48957, 37321, 48947, 37307, 48922, 37328, 48909, 37223,
-            48881, 37193, 48814, 37192, 48851, 37099, 48818, 37078, 48818, 37024, 48787, 36995, 48766, 37043, 48746, 37036, 48794, 36966, 48800, 36854,
-            48771, 36821, 48781, 36789, 48802, 36791, 48809, 36701, 48850, 36682, 48857, 36728, 48891, 36762, 48889, 36798, 48916, 36808, 48986, 36768,
-            48993, 36737, 49014, 36759, 49032, 36720, 49018, 36644, 49088, 36635, 49095, 36592, 49160, 36642, 49195, 36655, 49197, 36631, 49228, 36646,
-            49268, 36561, 49274, 36610, 49296, 36614, 49315, 36562, 49355, 36553, 49353, 36520, 49369, 36519, 49389, 36450, 49455, 36482, 49471, 36463,
-            49464, 36509, 49484, 36525, 49519, 36486, 49504, 36475, 49520, 36429, 49532, 36450, 49537, 36437, 49524, 36500, 49551, 36527, 49545, 36566,
-            49589, 36622, 49570, 36700, 49588, 36702, 49619, 36799, 49636, 36801, 49637, 36856, 49603, 36856, 49590, 36895, 49632, 36934, 49650, 36982
-        ))
-    )
     )
 
-    private fun _Херсонськ(): Map<String, CompactPolygon> = mapOf(
-        "бериславський" to     CompactPolygon(
+    private fun _r_kryvorizkyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            47022, 33068, 46973, 33022, 46960, 33052, 46908, 33064, 46903, 33006, 46865, 33015, 46860, 32977, 46832, 32986, 46836, 33022, 46742, 33046,
-            46784, 33142, 46757, 33331, 46789, 33307, 46845, 33308, 46842, 33357, 46807, 33414, 46839, 33494, 46840, 33591, 47019, 33694, 47087, 33797,
-            47153, 33834, 47223, 33935, 47312, 33998, 47460, 34017, 47458, 33953, 47516, 33939, 47485, 33644, 47514, 33636, 47502, 33588, 47529, 33576,
-            47562, 33609, 47600, 33580, 47587, 33474, 47544, 33486, 47524, 33323, 47494, 33349, 47483, 33314, 47518, 33279, 47543, 33287, 47533, 33216,
-            47577, 33233, 47579, 33093, 47528, 33095, 47543, 33142, 47515, 33147, 47508, 33123, 47420, 33138, 47412, 33072, 47475, 33067, 47468, 33047,
-            47444, 33054, 47442, 33034, 47391, 33036, 47385, 33123, 47334, 33137, 47322, 33103, 47280, 33105, 47238, 33184, 47231, 33127, 47210, 33143,
-            47203, 33130, 47223, 33072, 47178, 33038, 47197, 33004, 47190, 32961, 47121, 32907, 47087, 32917, 47040, 33027, 47070, 33052, 47062, 33073,
-            47100, 33103, 47108, 33082, 47137, 33105, 47117, 33156, 47022, 33068
+            47459, 33978, 47459, 33997, 47456, 34003, 47471, 34081, 47474, 34111, 47553, 34109, 47553, 34077, 47570, 34046, 47576, 34054, 47576, 34075,
+            47584, 34083, 47591, 34079, 47597, 34089, 47604, 34081, 47600, 34075, 47619, 34052, 47632, 34069, 47636, 34062, 47635, 34044, 47644, 34030,
+            47654, 34027, 47660, 34045, 47658, 34054, 47668, 34041, 47665, 34034, 47665, 34005, 47668, 33995, 47665, 33983, 47676, 33961, 47694, 33937,
+            47693, 33929, 47715, 33937, 47720, 33930, 47723, 33957, 47743, 33960, 47746, 34008, 47750, 34021, 47771, 34034, 47782, 34052, 47796, 34067,
+            47809, 34065, 47807, 34043, 47873, 34025, 47872, 34003, 47894, 34007, 47903, 34000, 47905, 34016, 47929, 34012, 47933, 34057, 47924, 34060,
+            47944, 34084, 47948, 34098, 47939, 34123, 47943, 34145, 47946, 34145, 47954, 34145, 47955, 34152, 47967, 34162, 47973, 34199, 48002, 34198,
+            48004, 34210, 48014, 34208, 48017, 34224, 48027, 34221, 48029, 34237, 48048, 34231, 48047, 34223, 48057, 34222, 48056, 34202, 48056, 34187,
+            48076, 34183, 48072, 34157, 48078, 34144, 48102, 34110, 48102, 34085, 48151, 34059, 48142, 34016, 48185, 34004, 48183, 33984, 48189, 33978,
+            48183, 33966, 48179, 33936, 48188, 33945, 48202, 33942, 48201, 33930, 48224, 33923, 48219, 33885, 48259, 33875, 48257, 33862, 48258, 33836,
+            48252, 33833, 48256, 33812, 48263, 33808, 48257, 33780, 48286, 33771, 48282, 33740, 48262, 33747, 48259, 33740, 48250, 33693, 48251, 33674,
+            48260, 33669, 48256, 33638, 48250, 33623, 48244, 33626, 48240, 33600, 48262, 33594, 48285, 33620, 48292, 33622, 48317, 33614, 48316, 33585,
+            48314, 33576, 48304, 33571, 48252, 33578, 48233, 33536, 48227, 33537, 48225, 33531, 48223, 33524, 48232, 33512, 48233, 33502, 48203, 33496,
+            48200, 33476, 48193, 33477, 48188, 33430, 48171, 33431, 48168, 33410, 48167, 33382, 48164, 33360, 48160, 33356, 48159, 33316, 48152, 33316,
+            48151, 33292, 48129, 33308, 48126, 33317, 48119, 33316, 48119, 33303, 48102, 33291, 48104, 33277, 48139, 33272, 48155, 33272, 48152, 33248,
+            48173, 33244, 48171, 33214, 48148, 33219, 48148, 33226, 48128, 33231, 48122, 33218, 48120, 33182, 48106, 33185, 48108, 33223, 48114, 33221,
+            48114, 33235, 48098, 33239, 48089, 33202, 48084, 33153, 48078, 33142, 48068, 33148, 48044, 33153, 48043, 33150, 48066, 33144, 48063, 33116,
+            48066, 33115, 48067, 33105, 48049, 33104, 48044, 33110, 48035, 33038, 48030, 33033, 48013, 33036, 48009, 33021, 48004, 33026, 47989, 33022,
+            47984, 33025, 47983, 33022, 47988, 33006, 47986, 32997, 47977, 32994, 47969, 32997, 47966, 33002, 47937, 33006, 47934, 32993, 47914, 33005,
+            47910, 33015, 47920, 33077, 47886, 33086, 47883, 33070, 47835, 33082, 47832, 33057, 47784, 33067, 47782, 33050, 47761, 33057, 47761, 33067,
+            47739, 33071, 47733, 33007, 47727, 33007, 47723, 32973, 47629, 32994, 47623, 32993, 47626, 33012, 47616, 33008, 47615, 32989, 47607, 32990,
+            47604, 32970, 47592, 32960, 47597, 33095, 47579, 33093, 47570, 33159, 47567, 33172, 47574, 33187, 47569, 33205, 47573, 33224, 47574, 33236,
+            47565, 33237, 47553, 33229, 47548, 33219, 47541, 33222, 47535, 33215, 47530, 33225, 47531, 33244, 47545, 33271, 47542, 33288, 47525, 33286,
+            47518, 33279, 47504, 33297, 47501, 33310, 47491, 33315, 47486, 33307, 47481, 33314, 47494, 33350, 47512, 33330, 47525, 33324, 47543, 33476,
+            47546, 33486, 47588, 33475, 47599, 33579, 47588, 33582, 47588, 33589, 47574, 33593, 47575, 33606, 47561, 33608, 47558, 33590, 47544, 33593,
+            47532, 33582, 47503, 33589, 47505, 33604, 47510, 33604, 47513, 33636, 47485, 33643, 47504, 33819, 47516, 33940, 47501, 33948, 47459, 33951,
+            47459, 33978
         ))
-    ),
-        "генічеський" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                46513, 34947, 46507, 34890, 46563, 34891, 46549, 34757, 46620, 34713, 46627, 34756, 46683, 34746, 46688, 34632, 46724, 34625, 46747, 34735,
-                46781, 34750, 46781, 34768, 46823, 34758, 46828, 34817, 46883, 34805, 46880, 34753, 46961, 34736, 46956, 34685, 46979, 34681, 46973, 34624,
-                46993, 34617, 46992, 34600, 47027, 34592, 47024, 34567, 47106, 34553, 47101, 34402, 47079, 34408, 47048, 34347, 46889, 34182, 46811, 34198,
-                46812, 34047, 46793, 34024, 46650, 34064, 46640, 33988, 46623, 33991, 46621, 33972, 46574, 33983, 46576, 34000, 46536, 33990, 46544, 34076,
-                46525, 34109, 46432, 34129, 46416, 33962, 46141, 33972, 46109, 34053, 46107, 34117, 46056, 34234, 46068, 34320, 45944, 34476, 45948, 34511,
-                45994, 34561, 45986, 34629, 45909, 34754, 45901, 34802, 45810, 34799, 45762, 34975, 45952, 34869, 46159, 34810, 46206, 34835, 46241, 34897,
-                46262, 35038, 46302, 35102, 46300, 35072, 46482, 35055, 46513, 34947
-            )),
-            ScaledRing(intArrayOf(
-                46265, 35275, 46137, 35167, 46078, 34982, 46147, 35038, 46188, 35213, 46221, 35223, 46265, 35275
-            ))
-    )),
-        "каховський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            46192, 33759, 46200, 33849, 46141, 33972, 46416, 33962, 46432, 34129, 46525, 34109, 46544, 34076, 46536, 33990, 46576, 34000, 46574, 33983,
-            46621, 33972, 46623, 33991, 46640, 33988, 46650, 34064, 46793, 34024, 46812, 34047, 46811, 34198, 46889, 34182, 47048, 34347, 47079, 34408,
-            47101, 34402, 47105, 34520, 47247, 34491, 47256, 34530, 47284, 34518, 47280, 34488, 47315, 34479, 47318, 34516, 47335, 34512, 47323, 34414,
-            47301, 34419, 47287, 34401, 47290, 34330, 47269, 34305, 47448, 34227, 47477, 34139, 47460, 34017, 47312, 33998, 47223, 33935, 47153, 33834,
-            47087, 33797, 47019, 33694, 46912, 33619, 46846, 33601, 46839, 33494, 46807, 33414, 46848, 33340, 46843, 33297, 46823, 33319, 46789, 33307,
-            46757, 33331, 46753, 33316, 46784, 33149, 46767, 33098, 46755, 33129, 46714, 33157, 46716, 33180, 46698, 33182, 46687, 33130, 46663, 33128,
-            46655, 33107, 46633, 33143, 46633, 33165, 46667, 33166, 46671, 33220, 46656, 33224, 46662, 33277, 46598, 33294, 46611, 33416, 46512, 33436,
-            46487, 33254, 46424, 33267, 46418, 33214, 46389, 33222, 46395, 33356, 46349, 33366, 46358, 33449, 46291, 33467, 46326, 33598, 46228, 33633,
-            46192, 33759
-        ))
-    ),
-        "скадовський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            46172, 32038, 46034, 32733, 46007, 33036, 46016, 33084, 46046, 32942, 46036, 32912, 46061, 32863, 46031, 32779, 46071, 32539, 46099, 32600,
-            46123, 32768, 46111, 33030, 46123, 33015, 46156, 33031, 46124, 33135, 46155, 33186, 46193, 33186, 46218, 33226, 46174, 33206, 46153, 33227,
-            46108, 33201, 46106, 33216, 46131, 33217, 46133, 33282, 46111, 33312, 46092, 33302, 46097, 33280, 46078, 33283, 46075, 33308, 46116, 33329,
-            46030, 33421, 46051, 33458, 46027, 33498, 46031, 33517, 46056, 33490, 46079, 33503, 46075, 33573, 46099, 33516, 46123, 33512, 46118, 33538,
-            46159, 33585, 46135, 33615, 46142, 33641, 46326, 33598, 46291, 33467, 46358, 33449, 46349, 33366, 46395, 33356, 46358, 33013, 46279, 33026,
-            46266, 32903, 46286, 32899, 46283, 32858, 46431, 32837, 46456, 32791, 46518, 32782, 46517, 32712, 46588, 32617, 46554, 32566, 46570, 32469,
-            46495, 32296, 46582, 31927, 46479, 31804, 46332, 31804, 46249, 31666, 46267, 31565, 46306, 31535, 46369, 31534, 46356, 31514, 46292, 31532,
-            46240, 31619, 46172, 32038
-        ))
-    ),
-        "херсонський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            46655, 31985, 46653, 31930, 46582, 31927, 46496, 32290, 46570, 32469, 46554, 32566, 46588, 32617, 46517, 32712, 46518, 32782, 46456, 32791,
-            46431, 32837, 46283, 32858, 46286, 32899, 46266, 32903, 46279, 33027, 46358, 33013, 46383, 33234, 46418, 33214, 46424, 33267, 46487, 33254,
-            46512, 33436, 46612, 33415, 46598, 33294, 46662, 33277, 46656, 33224, 46671, 33220, 46667, 33166, 46633, 33165, 46655, 33107, 46663, 33128,
-            46687, 33130, 46698, 33182, 46716, 33180, 46714, 33157, 46755, 33129, 46767, 33098, 46742, 33046, 46836, 33022, 46832, 32986, 46860, 32977,
-            46865, 33015, 46903, 33006, 46908, 33064, 46960, 33052, 47003, 32950, 46986, 32934, 46947, 32950, 46949, 32976, 46934, 32980, 46900, 32841,
-            46885, 32836, 46883, 32915, 46858, 32949, 46821, 32701, 46862, 32688, 46856, 32585, 46883, 32544, 46823, 32531, 46817, 32469, 46840, 32463,
-            46829, 32365, 46799, 32373, 46795, 32342, 46845, 32227, 46820, 32252, 46806, 32210, 46771, 32219, 46745, 32057, 46684, 32087, 46677, 32020,
-            46669, 32030, 46655, 31985
-        ))
-    )
     )
 
-    private fun _Хмельницьк(): Map<String, CompactPolygon> = mapOf(
-        "кам’янець-подільський" to     CompactPolygon(
+    private fun _r_nikopolskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            48954, 27108, 48991, 27098, 48984, 27043, 49036, 26941, 49021, 26914, 49076, 26848, 49060, 26802, 49075, 26678, 49049, 26655, 49028, 26678,
-            48994, 26633, 49011, 26588, 48984, 26631, 48979, 26619, 48996, 26544, 49024, 26561, 49043, 26543, 49067, 26443, 49111, 26420, 49134, 26444,
-            49149, 26413, 49142, 26379, 49175, 26297, 49144, 26287, 49149, 26260, 49139, 26274, 49115, 26266, 49173, 26217, 49158, 26190, 49133, 26206,
-            49078, 26192, 49072, 26216, 49056, 26183, 49006, 26216, 48996, 26176, 48983, 26212, 48974, 26177, 48955, 26208, 48915, 26184, 48910, 26224,
-            48859, 26200, 48819, 26234, 48815, 26259, 48813, 26226, 48790, 26233, 48797, 26207, 48756, 26246, 48752, 26223, 48736, 26244, 48697, 26238,
-            48688, 26220, 48668, 26279, 48647, 26273, 48658, 26308, 48640, 26288, 48630, 26324, 48623, 26293, 48588, 26360, 48569, 26336, 48560, 26364,
-            48542, 26361, 48565, 26380, 48541, 26411, 48545, 26488, 48453, 26569, 48458, 26622, 48508, 26616, 48486, 26669, 48494, 26713, 48539, 26675,
-            48538, 26624, 48555, 26623, 48560, 26661, 48533, 26727, 48556, 26743, 48587, 26729, 48548, 26780, 48567, 26795, 48595, 26779, 48609, 26801,
-            48606, 26824, 48558, 26841, 48542, 26879, 48591, 26981, 48573, 26997, 48557, 27089, 48583, 27170, 48569, 27251, 48623, 27257, 48602, 27320,
-            48629, 27372, 48699, 27414, 48727, 27399, 48740, 27417, 48765, 27390, 48797, 27428, 48812, 27411, 48882, 27415, 48900, 27393, 48926, 27397,
-            48935, 27319, 48909, 27291, 48922, 27203, 48949, 27182, 48954, 27108
+            47477, 34139, 47494, 34235, 47512, 34276, 47519, 34299, 47529, 34404, 47531, 34470, 47544, 34499, 47556, 34534, 47561, 34568, 47562, 34601,
+            47559, 34654, 47551, 34691, 47540, 34733, 47537, 34802, 47517, 34857, 47515, 34878, 47527, 34940, 47543, 34962, 47550, 34965, 47566, 34960,
+            47571, 34948, 47595, 34926, 47592, 34936, 47601, 34941, 47636, 34932, 47635, 34916, 47674, 34907, 47678, 34938, 47712, 34931, 47713, 34956,
+            47727, 34953, 47727, 34958, 47740, 34954, 47741, 34964, 47770, 34958, 47760, 34894, 47821, 34879, 47831, 34903, 47853, 34897, 47852, 34870,
+            47880, 34864, 47876, 34850, 47869, 34839, 47865, 34818, 47916, 34803, 47922, 34854, 47937, 34850, 47942, 34877, 47929, 34880, 47934, 34916,
+            47942, 34914, 47985, 34906, 47983, 34870, 48000, 34866, 48015, 34859, 48010, 34820, 47997, 34821, 47992, 34770, 47996, 34769, 47986, 34744,
+            48026, 34731, 48019, 34667, 48021, 34667, 48014, 34603, 47982, 34610, 47980, 34587, 47962, 34591, 47959, 34554, 47953, 34555, 47951, 34531,
+            47940, 34532, 47936, 34493, 47929, 34494, 47924, 34453, 47928, 34448, 47954, 34440, 47952, 34418, 47944, 34419, 47939, 34374, 47929, 34376,
+            47934, 34408, 47928, 34408, 47926, 34377, 47923, 34377, 47919, 34342, 47933, 34337, 47930, 34319, 47949, 34307, 47979, 34301, 47976, 34235,
+            47964, 34238, 47962, 34186, 47970, 34184, 47967, 34162, 47955, 34152, 47954, 34145, 47946, 34145, 47943, 34145, 47939, 34123, 47948, 34098,
+            47944, 34084, 47924, 34060, 47933, 34057, 47929, 34012, 47905, 34016, 47903, 34000, 47894, 34007, 47872, 34003, 47873, 34025, 47807, 34043,
+            47809, 34065, 47796, 34067, 47782, 34052, 47771, 34034, 47750, 34021, 47746, 34008, 47743, 33960, 47723, 33957, 47720, 33930, 47715, 33937,
+            47693, 33929, 47694, 33937, 47676, 33961, 47665, 33983, 47668, 33995, 47665, 34005, 47665, 34034, 47668, 34041, 47658, 34054, 47660, 34045,
+            47654, 34027, 47644, 34030, 47635, 34044, 47636, 34062, 47632, 34069, 47619, 34052, 47600, 34075, 47604, 34081, 47597, 34089, 47591, 34079,
+            47584, 34083, 47576, 34075, 47576, 34054, 47570, 34046, 47553, 34077, 47553, 34109, 47474, 34111, 47477, 34139
         ))
-    ),
-        "хмельницький" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49903, 27441, 49876, 27479, 49885, 27520, 49910, 27523, 49892, 27625, 49876, 27610, 49838, 27623, 49797, 27658, 49806, 27716, 49800, 27727,
-            49769, 27704, 49728, 27781, 49730, 27837, 49702, 27812, 49697, 27763, 49666, 27766, 49645, 27812, 49618, 27812, 49576, 27758, 49557, 27790,
-            49531, 27794, 49532, 27743, 49497, 27735, 49489, 27791, 49479, 27764, 49440, 27750, 49427, 27851, 49391, 27834, 49388, 27812, 49368, 27829,
-            49366, 27812, 49329, 27858, 49264, 27849, 49246, 27872, 49236, 27856, 49213, 27867, 49210, 27894, 49186, 27898, 49171, 27855, 49190, 27776,
-            49173, 27783, 49139, 27741, 49142, 27687, 49168, 27640, 49161, 27601, 49122, 27578, 49132, 27508, 49088, 27480, 49070, 27503, 49070, 27435,
-            49007, 27382, 48972, 27418, 48928, 27394, 48935, 27318, 48909, 27291, 48922, 27203, 48949, 27182, 48949, 27114, 48991, 27098, 48984, 27043,
-            49036, 26941, 49021, 26914, 49076, 26848, 49060, 26802, 49075, 26678, 49049, 26655, 49028, 26678, 48994, 26633, 49011, 26588, 48984, 26631,
-            48996, 26544, 49024, 26561, 49043, 26543, 49067, 26443, 49111, 26420, 49127, 26443, 49140, 26434, 49175, 26297, 49144, 26287, 49149, 26260,
-            49139, 26274, 49115, 26260, 49168, 26225, 49173, 26189, 49243, 26201, 49243, 26243, 49264, 26258, 49277, 26241, 49290, 26260, 49328, 26226,
-            49350, 26227, 49348, 26244, 49358, 26232, 49370, 26245, 49378, 26219, 49400, 26236, 49430, 26193, 49481, 26188, 49509, 26142, 49549, 26176,
-            49551, 26219, 49609, 26199, 49657, 26272, 49694, 26241, 49714, 26191, 49745, 26244, 49776, 26241, 49847, 26178, 49866, 26201, 49882, 26319,
-            49900, 26311, 49930, 26356, 49927, 26387, 49886, 26440, 49885, 26510, 49903, 26521, 49914, 26485, 49939, 26500, 49938, 26602, 49956, 26614,
-            49937, 26665, 49931, 26646, 49929, 26660, 49892, 26637, 49917, 26806, 49907, 26796, 49871, 26914, 49907, 26934, 49909, 26983, 49927, 26975,
-            49924, 27040, 49949, 27095, 49946, 27134, 49919, 27107, 49921, 27159, 49939, 27153, 49933, 27212, 49901, 27195, 49882, 27256, 49919, 27328,
-            49902, 27363, 49867, 27383, 49903, 27441
-        ))
-    ),
-        "шепетівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49903, 27441, 49876, 27479, 49883, 27517, 49910, 27523, 49908, 27549, 49935, 27548, 49949, 27576, 50012, 27546, 50006, 27612, 50037, 27642,
-            50034, 27681, 50077, 27669, 50086, 27615, 50115, 27639, 50146, 27631, 50158, 27678, 50193, 27665, 50170, 27621, 50199, 27623, 50216, 27593,
-            50259, 27597, 50225, 27521, 50288, 27395, 50307, 27417, 50333, 27364, 50332, 27316, 50368, 27321, 50393, 27248, 50493, 27301, 50492, 27268,
-            50513, 27259, 50532, 27207, 50562, 27196, 50561, 27131, 50595, 27118, 50584, 27079, 50551, 27073, 50559, 27018, 50523, 26983, 50546, 26900,
-            50509, 26857, 50523, 26827, 50503, 26818, 50502, 26778, 50477, 26760, 50468, 26787, 50462, 26743, 50477, 26734, 50445, 26737, 50446, 26717,
-            50417, 26713, 50420, 26692, 50365, 26648, 50368, 26602, 50340, 26587, 50330, 26553, 50317, 26561, 50307, 26523, 50262, 26502, 50265, 26396,
-            50231, 26324, 50184, 26287, 50175, 26212, 50154, 26209, 50143, 26244, 50131, 26235, 50103, 26274, 50098, 26199, 50067, 26201, 50048, 26227,
-            50025, 26176, 50016, 26211, 49993, 26202, 49972, 26142, 49922, 26166, 49898, 26133, 49865, 26213, 49882, 26319, 49900, 26311, 49919, 26332,
-            49929, 26381, 49889, 26431, 49885, 26510, 49903, 26521, 49914, 26485, 49939, 26500, 49938, 26602, 49956, 26614, 49937, 26665, 49931, 26646,
-            49929, 26660, 49892, 26637, 49917, 26806, 49907, 26796, 49871, 26914, 49907, 26934, 49909, 26983, 49927, 26975, 49924, 27040, 49949, 27095,
-            49946, 27134, 49919, 27107, 49921, 27159, 49939, 27153, 49933, 27212, 49901, 27195, 49882, 27256, 49919, 27328, 49902, 27363, 49867, 27383,
-            49903, 27441
-        ))
-    )
     )
 
-    private fun _Черкаськ(): Map<String, CompactPolygon> = mapOf(
-        "звенигородський" to     CompactPolygon(
+    private fun _r_kamyanskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            49142, 31536, 49126, 31530, 49102, 31621, 48972, 31624, 48946, 31678, 48976, 31693, 48986, 31726, 48963, 31719, 48936, 31770, 48931, 31698,
-            48896, 31690, 48908, 31639, 48888, 31581, 48906, 31595, 48913, 31582, 48829, 31559, 48764, 31423, 48754, 31436, 48743, 31424, 48756, 31412,
-            48728, 31385, 48742, 31358, 48726, 31330, 48759, 31310, 48748, 31261, 48768, 31216, 48728, 31114, 48761, 31038, 48772, 30950, 48744, 30882,
-            48770, 30753, 48752, 30637, 48719, 30609, 48721, 30576, 48725, 30544, 48786, 30467, 48809, 30488, 48821, 30479, 48854, 30537, 48873, 30460,
-            48896, 30446, 48915, 30482, 48934, 30469, 48964, 30488, 49017, 30561, 49038, 30535, 49083, 30553, 49088, 30537, 49143, 30568, 49155, 30560,
-            49142, 30479, 49182, 30476, 49192, 30394, 49212, 30391, 49200, 30495, 49253, 30515, 49302, 30421, 49330, 30414, 49335, 30442, 49358, 30449,
-            49365, 30473, 49328, 30516, 49327, 30547, 49370, 30607, 49332, 30729, 49359, 30909, 49395, 30937, 49416, 30921, 49422, 30994, 49472, 31029,
-            49457, 31044, 49474, 31040, 49486, 31089, 49445, 31143, 49425, 31134, 49418, 31216, 49395, 31217, 49396, 31192, 49385, 31247, 49442, 31370,
-            49425, 31332, 49410, 31403, 49354, 31423, 49328, 31382, 49359, 31312, 49333, 31304, 49327, 31281, 49262, 31283, 49202, 31393, 49198, 31462,
-            49162, 31483, 49142, 31536
+            48056, 34202, 48068, 34196, 48073, 34228, 48067, 34232, 48079, 34290, 48109, 34281, 48116, 34296, 48131, 34376, 48121, 34379, 48126, 34389,
+            48129, 34429, 48140, 34427, 48142, 34410, 48155, 34410, 48156, 34444, 48166, 34454, 48171, 34452, 48172, 34437, 48165, 34439, 48160, 34394,
+            48206, 34383, 48207, 34399, 48193, 34403, 48197, 34435, 48234, 34427, 48237, 34456, 48241, 34462, 48264, 34474, 48255, 34508, 48268, 34518,
+            48266, 34531, 48273, 34529, 48272, 34558, 48252, 34564, 48254, 34592, 48283, 34586, 48286, 34594, 48292, 34604, 48309, 34593, 48319, 34570,
+            48326, 34569, 48331, 34599, 48366, 34584, 48366, 34580, 48406, 34565, 48420, 34562, 48426, 34551, 48426, 34535, 48440, 34536, 48442, 34511,
+            48457, 34513, 48457, 34553, 48463, 34558, 48459, 34578, 48451, 34590, 48458, 34632, 48456, 34644, 48467, 34642, 48473, 34658, 48463, 34661,
+            48464, 34672, 48452, 34694, 48443, 34684, 48438, 34701, 48447, 34712, 48453, 34701, 48472, 34702, 48464, 34724, 48441, 34743, 48440, 34761,
+            48453, 34760, 48474, 34770, 48484, 34751, 48485, 34765, 48491, 34766, 48500, 34733, 48519, 34702, 48533, 34686, 48536, 34664, 48535, 34646,
+            48539, 34625, 48540, 34592, 48543, 34584, 48554, 34581, 48556, 34571, 48567, 34569, 48586, 34576, 48589, 34636, 48601, 34633, 48600, 34621,
+            48607, 34612, 48621, 34614, 48630, 34601, 48610, 34564, 48614, 34554, 48606, 34545, 48603, 34531, 48599, 34540, 48583, 34559, 48555, 34545,
+            48579, 34515, 48586, 34498, 48596, 34459, 48615, 34441, 48633, 34442, 48641, 34437, 48648, 34399, 48659, 34386, 48671, 34357, 48678, 34353,
+            48691, 34360, 48701, 34353, 48707, 34336, 48708, 34306, 48713, 34298, 48724, 34292, 48738, 34297, 48744, 34287, 48745, 34269, 48744, 34249,
+            48756, 34234, 48760, 34203, 48779, 34175, 48775, 34149, 48785, 34126, 48800, 34122, 48814, 34128, 48823, 34120, 48826, 34107, 48823, 34082,
+            48829, 34064, 48836, 34055, 48846, 34033, 48858, 34030, 48867, 34007, 48865, 33985, 48879, 33945, 48880, 33927, 48903, 33892, 48889, 33890,
+            48843, 33875, 48837, 33862, 48802, 33849, 48779, 33852, 48772, 33848, 48771, 33829, 48776, 33819, 48803, 33810, 48800, 33792, 48794, 33795,
+            48792, 33773, 48798, 33771, 48795, 33750, 48789, 33743, 48787, 33724, 48809, 33720, 48814, 33704, 48809, 33691, 48815, 33673, 48793, 33657,
+            48789, 33619, 48792, 33605, 48799, 33602, 48797, 33582, 48781, 33588, 48781, 33578, 48754, 33586, 48748, 33593, 48752, 33608, 48727, 33620,
+            48726, 33648, 48721, 33650, 48723, 33683, 48692, 33730, 48694, 33747, 48681, 33750, 48688, 33804, 48662, 33800, 48656, 33755, 48625, 33762,
+            48615, 33743, 48614, 33724, 48586, 33659, 48599, 33649, 48597, 33629, 48602, 33626, 48599, 33610, 48567, 33622, 48560, 33589, 48575, 33584,
+            48568, 33510, 48558, 33510, 48560, 33501, 48557, 33482, 48549, 33483, 48546, 33472, 48536, 33480, 48534, 33469, 48473, 33483, 48429, 33488,
+            48404, 33487, 48404, 33497, 48394, 33498, 48393, 33483, 48388, 33482, 48384, 33469, 48370, 33468, 48370, 33474, 48359, 33459, 48350, 33462,
+            48348, 33476, 48326, 33471, 48329, 33497, 48332, 33504, 48328, 33516, 48293, 33509, 48285, 33518, 48279, 33514, 48276, 33531, 48256, 33534,
+            48253, 33540, 48238, 33546, 48252, 33578, 48304, 33571, 48314, 33576, 48316, 33585, 48317, 33614, 48292, 33622, 48285, 33620, 48262, 33594,
+            48240, 33600, 48244, 33626, 48250, 33623, 48256, 33638, 48260, 33669, 48251, 33674, 48250, 33693, 48259, 33740, 48262, 33747, 48282, 33740,
+            48286, 33771, 48257, 33780, 48263, 33808, 48256, 33812, 48252, 33833, 48258, 33836, 48257, 33862, 48259, 33875, 48219, 33885, 48224, 33923,
+            48201, 33930, 48202, 33942, 48188, 33945, 48179, 33936, 48183, 33966, 48189, 33978, 48183, 33984, 48185, 34004, 48142, 34016, 48151, 34059,
+            48102, 34085, 48102, 34110, 48078, 34144, 48072, 34157, 48076, 34183, 48056, 34187, 48056, 34202
         ))
-    ),
-        "золотоніський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49948, 31899, 49962, 31918, 50019, 31900, 50052, 31987, 50056, 31904, 50101, 31911, 50125, 31975, 50158, 31934, 50152, 31965, 50201, 31993,
-            50188, 32056, 50228, 32118, 50213, 32112, 50165, 32177, 50142, 32299, 50120, 32304, 50115, 32250, 50097, 32277, 50083, 32262, 50039, 32314,
-            50058, 32334, 50048, 32350, 49981, 32379, 49960, 32428, 49903, 32414, 49888, 32435, 49874, 32374, 49796, 32450, 49805, 32504, 49774, 32514,
-            49774, 32556, 49703, 32574, 49657, 32709, 49606, 32711, 49579, 32753, 49524, 32751, 49499, 32678, 49448, 32673, 49436, 32651, 49425, 32679,
-            49385, 32690, 49372, 32737, 49353, 32738, 49381, 32547, 49408, 32510, 49349, 32463, 49341, 32479, 49319, 32440, 49398, 32293, 49392, 32198,
-            49415, 32155, 49464, 32130, 49475, 32034, 49483, 32045, 49550, 31940, 49573, 31823, 49634, 31762, 49651, 31640, 49697, 31690, 49708, 31677,
-            49751, 31700, 49758, 31684, 49757, 31718, 49776, 31720, 49776, 31693, 49844, 31708, 49847, 31728, 49853, 31716, 49893, 31752, 49894, 31774,
-            49920, 31771, 49966, 31813, 49962, 31890, 49948, 31899
-        ))
-    ),
-        "уманський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49212, 30416, 49212, 30391, 49192, 30394, 49182, 30476, 49142, 30479, 49155, 30560, 49143, 30568, 49088, 30537, 49083, 30553, 49038, 30535,
-            49017, 30561, 48964, 30488, 48934, 30469, 48915, 30482, 48896, 30446, 48873, 30460, 48854, 30537, 48821, 30479, 48809, 30488, 48786, 30467,
-            48725, 30544, 48732, 30560, 48698, 30611, 48663, 30599, 48654, 30552, 48628, 30529, 48606, 30571, 48567, 30567, 48574, 30403, 48527, 30386,
-            48505, 30255, 48489, 30256, 48480, 30221, 48504, 30163, 48452, 30113, 48483, 30050, 48473, 29961, 48492, 29967, 48492, 30001, 48520, 29993,
-            48519, 30021, 48573, 30006, 48594, 29948, 48614, 29990, 48632, 29993, 48670, 29947, 48700, 29861, 48735, 29868, 48737, 29884, 48763, 29867,
-            48786, 29766, 48847, 29762, 48855, 29732, 48898, 29709, 48908, 29736, 48912, 29687, 48937, 29652, 48960, 29652, 49001, 29696, 49027, 29685,
-            49012, 29639, 49057, 29606, 49047, 29630, 49097, 29651, 49089, 29687, 49112, 29678, 49123, 29734, 49142, 29712, 49203, 29726, 49225, 29704,
-            49227, 29754, 49208, 29727, 49180, 29760, 49186, 29883, 49200, 29877, 49252, 29956, 49312, 29947, 49315, 30007, 49334, 30026, 49325, 30071,
-            49270, 30112, 49289, 30123, 49303, 30107, 49335, 30149, 49328, 30200, 49275, 30190, 49255, 30367, 49236, 30376, 49303, 30398, 49302, 30439,
-            49290, 30465, 49274, 30459, 49253, 30515, 49200, 30495, 49212, 30416
-        ))
-    ),
-        "черкаський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            49340, 32392, 49398, 32293, 49392, 32198, 49415, 32155, 49464, 32130, 49475, 32034, 49483, 32045, 49550, 31940, 49573, 31823, 49634, 31762,
-            49643, 31651, 49651, 31640, 49697, 31690, 49708, 31677, 49751, 31700, 49758, 31684, 49757, 31718, 49776, 31720, 49776, 31693, 49790, 31693,
-            49844, 31708, 49847, 31728, 49857, 31615, 49906, 31613, 49907, 31581, 49844, 31501, 49892, 31434, 49936, 31425, 49974, 31445, 49990, 31422,
-            49977, 31289, 49973, 31305, 49952, 31289, 49956, 31334, 49949, 31348, 49936, 31334, 49907, 31380, 49852, 31208, 49832, 31221, 49790, 31190,
-            49777, 31217, 49757, 31205, 49733, 31222, 49702, 31196, 49695, 31217, 49604, 31136, 49584, 31129, 49581, 31153, 49572, 31140, 49555, 31154,
-            49557, 31109, 49498, 31095, 49482, 31063, 49474, 31113, 49449, 31120, 49445, 31143, 49424, 31135, 49418, 31216, 49395, 31217, 49396, 31192,
-            49385, 31247, 49442, 31370, 49425, 31332, 49410, 31403, 49354, 31423, 49328, 31382, 49359, 31312, 49333, 31304, 49327, 31281, 49262, 31283,
-            49202, 31393, 49198, 31462, 49162, 31483, 49141, 31537, 49126, 31530, 49102, 31621, 48972, 31624, 48946, 31678, 48976, 31693, 48986, 31726,
-            48955, 31730, 48962, 31745, 48935, 31771, 48950, 31805, 48906, 31918, 48880, 31921, 48910, 31954, 48931, 32027, 48919, 32093, 48905, 32086,
-            48912, 32146, 48945, 32154, 48951, 32131, 48966, 32135, 48973, 32178, 48996, 32188, 48987, 32218, 49059, 32234, 49059, 32262, 49078, 32260,
-            49085, 32283, 49072, 32365, 49039, 32371, 49026, 32397, 49053, 32443, 49034, 32476, 49010, 32471, 49012, 32498, 48939, 32522, 48942, 32552,
-            48967, 32539, 48953, 32653, 48957, 32680, 48986, 32676, 48965, 32733, 48992, 32874, 49011, 32828, 49028, 32843, 49075, 32829, 49075, 32814,
-            49095, 32896, 49127, 32890, 49142, 32777, 49167, 32757, 49245, 32859, 49233, 32764, 49257, 32714, 49253, 32610, 49276, 32597, 49328, 32468,
-            49319, 32440, 49340, 32392
-        ))
-    )
     )
 
-    private fun _Чернівецьк(): Map<String, CompactPolygon> = mapOf(
-        "вижницький" to     CompactPolygon(listOf(
-            ScaledRing(intArrayOf(
-                47952, 25428, 47964, 25417, 47937, 25446, 47952, 25428
-            )),
-            ScaledRing(intArrayOf(
-                47868, 24980, 47897, 24945, 47920, 24957, 47947, 24919, 48027, 24911, 48087, 24995, 48113, 24981, 48111, 25035, 48132, 25067, 48157, 25067,
-                48162, 25093, 48182, 25090, 48182, 25138, 48225, 25107, 48247, 25181, 48367, 25315, 48392, 25382, 48400, 25510, 48358, 25663, 48334, 25649,
-                48323, 25660, 48298, 25613, 48254, 25597, 48266, 25520, 48250, 25514, 48250, 25479, 48179, 25453, 48117, 25468, 48116, 25387, 48100, 25367,
-                48076, 25376, 48043, 25327, 48009, 25366, 47974, 25351, 47926, 25443, 47896, 25237, 47792, 25168, 47755, 25116, 47746, 25055, 47725, 25040,
-                47727, 24923, 47794, 24947, 47853, 24997, 47868, 24980
-            ))
-    )),
-        "дністровський" to     CompactPolygon(
+    private fun _r_pavlohradskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            48574, 27137, 48569, 27251, 48623, 27257, 48602, 27320, 48629, 27353, 48625, 27392, 48590, 27457, 48507, 27479, 48470, 27534, 48449, 27467,
-            48409, 27447, 48411, 27384, 48442, 27374, 48444, 27320, 48372, 27286, 48395, 27192, 48379, 27124, 48435, 27085, 48425, 27014, 48411, 27040,
-            48376, 27047, 48380, 27005, 48359, 26995, 48363, 26932, 48420, 26871, 48418, 26775, 48399, 26754, 48410, 26720, 48405, 26709, 48354, 26765,
-            48344, 26824, 48304, 26826, 48291, 26795, 48324, 26758, 48313, 26737, 48360, 26695, 48356, 26683, 48327, 26696, 48274, 26616, 48248, 26630,
-            48246, 26586, 48219, 26572, 48210, 26530, 48347, 26464, 48357, 26418, 48330, 26391, 48362, 26392, 48349, 26358, 48366, 26319, 48350, 26299,
-            48365, 26263, 48336, 26245, 48335, 26210, 48356, 26227, 48372, 26208, 48385, 26225, 48442, 26163, 48471, 26104, 48465, 26079, 48499, 26056,
-            48474, 26085, 48483, 26114, 48521, 26095, 48556, 26128, 48600, 26096, 48620, 26115, 48598, 26145, 48545, 26147, 48528, 26169, 48540, 26268,
-            48510, 26300, 48507, 26355, 48535, 26392, 48547, 26482, 48458, 26554, 48451, 26594, 48464, 26626, 48507, 26612, 48486, 26669, 48495, 26713,
-            48539, 26675, 48538, 26624, 48555, 26623, 48560, 26661, 48533, 26727, 48556, 26743, 48587, 26729, 48548, 26780, 48567, 26795, 48595, 26779,
-            48609, 26801, 48606, 26824, 48581, 26821, 48543, 26876, 48591, 26977, 48557, 27089, 48574, 27137
+            48337, 35719, 48341, 35728, 48338, 35750, 48321, 35756, 48313, 35748, 48310, 35762, 48302, 35754, 48293, 35759, 48286, 35788, 48310, 35785,
+            48313, 35815, 48355, 35806, 48357, 35828, 48377, 35824, 48380, 35839, 48385, 35841, 48391, 35884, 48403, 35866, 48409, 35890, 48350, 36103,
+            48458, 36046, 48451, 36058, 48446, 36080, 48448, 36089, 48440, 36106, 48426, 36100, 48420, 36111, 48425, 36124, 48431, 36125, 48440, 36160,
+            48439, 36186, 48449, 36202, 48446, 36209, 48479, 36248, 48483, 36242, 48522, 36287, 48532, 36296, 48544, 36272, 48587, 36319, 48622, 36252,
+            48626, 36260, 48641, 36269, 48649, 36268, 48659, 36284, 48663, 36266, 48724, 36143, 48749, 36163, 48766, 36140, 48768, 36157, 48781, 36152,
+            48785, 36157, 48808, 36124, 48808, 36069, 48825, 36071, 48835, 36077, 48843, 36053, 48844, 36041, 48854, 36020, 48874, 36040, 48887, 36012,
+            48917, 36044, 48940, 35995, 48946, 36004, 48960, 35977, 48970, 35989, 49000, 35940, 48999, 35937, 48986, 35935, 48980, 35930, 48973, 35936,
+            48974, 35922, 48969, 35912, 48975, 35884, 48963, 35879, 48957, 35854, 48947, 35856, 48951, 35830, 48942, 35818, 48942, 35811, 48940, 35808,
+            48937, 35807, 48924, 35819, 48914, 35811, 48893, 35816, 48876, 35808, 48876, 35755, 48886, 35757, 48882, 35703, 48888, 35644, 48882, 35637,
+            48872, 35636, 48869, 35650, 48847, 35685, 48843, 35680, 48848, 35669, 48831, 35647, 48811, 35679, 48802, 35670, 48795, 35682, 48781, 35666,
+            48769, 35661, 48760, 35677, 48738, 35676, 48734, 35675, 48705, 35642, 48707, 35636, 48700, 35626, 48702, 35618, 48688, 35599, 48684, 35603,
+            48669, 35582, 48663, 35593, 48642, 35555, 48638, 35567, 48630, 35563, 48631, 35547, 48618, 35544, 48619, 35550, 48595, 35555, 48600, 35526,
+            48563, 35540, 48564, 35543, 48539, 35553, 48532, 35520, 48499, 35534, 48504, 35566, 48520, 35560, 48529, 35610, 48543, 35606, 48546, 35619,
+            48523, 35638, 48511, 35615, 48502, 35621, 48478, 35648, 48491, 35671, 48462, 35707, 48472, 35726, 48465, 35733, 48472, 35748, 48465, 35763,
+            48436, 35793, 48427, 35777, 48405, 35784, 48401, 35733, 48386, 35748, 48368, 35716, 48383, 35702, 48380, 35692, 48369, 35700, 48361, 35679,
+            48335, 35702, 48333, 35708, 48336, 35708, 48337, 35719
         ))
-    ),
-        "чернівецький" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            48202, 26425, 48214, 26524, 48347, 26464, 48357, 26418, 48330, 26391, 48362, 26392, 48349, 26358, 48366, 26319, 48350, 26299, 48365, 26263,
-            48336, 26245, 48335, 26210, 48356, 26227, 48372, 26208, 48385, 26225, 48442, 26163, 48471, 26104, 48465, 26079, 48499, 26056, 48474, 26085,
-            48483, 26114, 48521, 26095, 48540, 26122, 48539, 26091, 48585, 26044, 48607, 26066, 48646, 26056, 48646, 26034, 48610, 26021, 48621, 25975,
-            48587, 25909, 48597, 25849, 48620, 25855, 48671, 25799, 48670, 25767, 48633, 25738, 48663, 25711, 48670, 25639, 48635, 25585, 48590, 25587,
-            48527, 25609, 48413, 25599, 48413, 25620, 48379, 25622, 48358, 25663, 48334, 25649, 48323, 25660, 48298, 25613, 48254, 25597, 48266, 25520,
-            48250, 25514, 48250, 25479, 48179, 25453, 48117, 25468, 48116, 25387, 48100, 25367, 48076, 25376, 48039, 25326, 48019, 25362, 47974, 25351,
-            47926, 25443, 47950, 25643, 47939, 25775, 47978, 25915, 47978, 26101, 48002, 26194, 48051, 26212, 48077, 26267, 48159, 26334, 48185, 26334,
-            48202, 26425
-        ))
-    )
     )
 
-    private fun _Чернігівськ(): Map<String, CompactPolygon> = mapOf(
-        "корюківський" to     CompactPolygon(
+    private fun _r_beryslavskyi(): CompactPolygon = CompactPolygon(
         ScaledRing(intArrayOf(
-            51849, 32865, 51871, 32847, 51857, 32802, 51888, 32813, 51904, 32759, 51918, 32770, 51933, 32753, 51901, 32664, 51917, 32630, 51970, 32627,
-            51965, 32516, 51989, 32506, 51971, 32466, 51998, 32441, 51982, 32417, 52009, 32432, 52002, 32420, 52039, 32369, 52060, 32381, 52055, 32291,
-            52082, 32218, 52066, 32199, 52069, 32147, 52044, 32134, 52034, 32096, 52053, 31962, 52042, 31917, 52075, 31961, 52111, 31858, 52099, 31817,
-            52070, 31810, 52066, 31778, 52034, 31767, 52026, 31802, 51994, 31800, 51967, 31759, 51941, 31808, 51908, 31816, 51921, 31706, 51901, 31663,
-            51883, 31662, 51869, 31694, 51811, 31636, 51792, 31674, 51780, 31652, 51744, 31759, 51730, 31733, 51730, 31781, 51629, 31805, 51609, 31878,
-            51581, 31882, 51541, 31846, 51505, 31850, 51505, 31817, 51495, 31834, 51479, 31821, 51446, 31839, 51426, 31818, 51413, 31857, 51370, 31891,
-            51363, 31964, 51348, 31972, 51368, 31984, 51361, 32023, 51380, 32031, 51401, 32123, 51372, 32226, 51392, 32230, 51419, 32293, 51404, 32354,
-            51428, 32395, 51410, 32386, 51388, 32454, 51426, 32612, 51446, 32603, 51448, 32563, 51461, 32567, 51441, 32719, 51474, 32733, 51484, 32625,
-            51522, 32609, 51523, 32633, 51538, 32628, 51557, 32655, 51542, 32677, 51577, 32787, 51571, 32847, 51580, 32831, 51608, 32836, 51607, 32819,
-            51623, 32827, 51613, 32810, 51628, 32747, 51640, 32764, 51635, 32719, 51667, 32717, 51679, 32687, 51725, 32699, 51735, 32767, 51770, 32749,
-            51774, 32714, 51815, 32684, 51822, 32730, 51842, 32712, 51849, 32865
-        ))
-    ),
-        "новгород-сіверський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            52369, 33237, 52350, 33306, 52370, 33396, 52346, 33429, 52316, 33387, 52303, 33402, 52267, 33386, 52258, 33359, 52233, 33367, 52217, 33317,
-            52202, 33331, 52185, 33310, 52162, 33337, 52136, 33324, 52147, 33339, 52123, 33417, 52088, 33438, 52089, 33500, 52038, 33500, 52026, 33429,
-            52051, 33402, 52032, 33317, 52013, 33304, 51999, 33349, 51955, 33394, 51931, 33355, 51912, 33188, 51902, 33172, 51886, 33180, 51864, 33123,
-            51816, 33147, 51773, 33079, 51700, 33170, 51691, 33144, 51681, 33166, 51678, 33141, 51645, 33126, 51642, 33154, 51607, 33155, 51581, 33222,
-            51569, 33159, 51514, 33193, 51494, 33136, 51428, 33113, 51417, 33135, 51404, 33119, 51382, 33133, 51390, 33092, 51366, 33108, 51371, 33062,
-            51391, 33039, 51404, 33057, 51410, 33046, 51396, 33017, 51343, 33042, 51339, 33081, 51320, 33014, 51335, 32962, 51362, 32997, 51394, 32928,
-            51403, 32947, 51399, 32906, 51420, 32899, 51408, 32868, 51435, 32820, 51433, 32746, 51447, 32722, 51474, 32733, 51484, 32625, 51521, 32609,
-            51523, 32633, 51538, 32628, 51557, 32655, 51542, 32677, 51577, 32787, 51571, 32847, 51580, 32831, 51608, 32836, 51607, 32819, 51623, 32827,
-            51613, 32810, 51628, 32747, 51640, 32764, 51635, 32719, 51667, 32717, 51679, 32687, 51725, 32699, 51735, 32767, 51770, 32749, 51774, 32714,
-            51815, 32684, 51822, 32730, 51842, 32712, 51849, 32865, 51862, 32863, 51872, 32828, 51857, 32802, 51888, 32813, 51904, 32759, 51918, 32770,
-            51933, 32753, 51901, 32664, 51917, 32630, 51970, 32627, 51965, 32516, 51989, 32506, 51971, 32466, 51998, 32441, 51982, 32417, 52009, 32432,
-            52002, 32420, 52039, 32369, 52058, 32384, 52055, 32291, 52081, 32222, 52146, 32368, 52152, 32324, 52183, 32347, 52224, 32324, 52245, 32347,
-            52248, 32402, 52270, 32383, 52278, 32393, 52277, 32369, 52328, 32356, 52338, 32401, 52315, 32489, 52327, 32550, 52248, 32701, 52267, 32755,
-            52259, 32817, 52279, 32834, 52274, 32885, 52245, 32887, 52245, 32902, 52272, 32996, 52331, 33060, 52303, 33067, 52345, 33134, 52341, 33170,
-            52373, 33170, 52369, 33237
-        ))
-    ),
-        "ніжинський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50762, 32115, 50767, 32068, 50725, 32058, 50699, 32019, 50710, 31922, 50655, 31879, 50640, 31885, 50606, 31782, 50559, 31782, 50563, 31683,
-            50553, 31647, 50521, 31630, 50520, 31553, 50536, 31523, 50522, 31522, 50500, 31445, 50531, 31364, 50501, 31330, 50528, 31319, 50589, 31166,
-            50607, 31166, 50613, 31228, 50645, 31199, 50667, 31224, 50697, 31218, 50725, 31165, 50752, 31240, 50792, 31186, 50813, 31249, 50866, 31318,
-            50869, 31299, 50900, 31300, 50903, 31316, 50908, 31303, 50931, 31356, 50952, 31316, 50983, 31373, 51027, 31269, 51045, 31317, 51072, 31279,
-            51103, 31316, 51100, 31383, 51121, 31389, 51125, 31423, 51178, 31441, 51191, 31525, 51203, 31490, 51233, 31544, 51242, 31622, 51225, 31659,
-            51250, 31741, 51235, 31876, 51293, 31926, 51292, 31982, 51312, 31985, 51326, 32029, 51354, 31987, 51371, 31998, 51361, 32023, 51380, 32031,
-            51401, 32135, 51372, 32226, 51392, 32230, 51419, 32293, 51404, 32354, 51428, 32394, 51410, 32386, 51392, 32414, 51391, 32474, 51426, 32612,
-            51446, 32603, 51457, 32555, 51461, 32572, 51435, 32820, 51408, 32868, 51420, 32899, 51399, 32906, 51403, 32947, 51394, 32928, 51362, 32997,
-            51333, 32965, 51322, 33079, 51292, 33042, 51290, 33076, 51267, 33058, 51255, 33069, 51227, 33030, 51206, 33042, 51188, 32977, 51163, 32960,
-            51143, 32993, 51090, 32943, 51082, 33041, 51040, 33084, 50968, 32979, 50940, 32984, 50950, 33012, 50935, 33019, 50931, 32971, 50917, 32976,
-            50891, 32935, 50859, 32835, 50889, 32776, 50932, 32758, 50950, 32692, 51005, 32687, 51025, 32534, 51065, 32526, 51084, 32494, 51077, 32435,
-            51040, 32397, 51015, 32409, 51017, 32373, 50998, 32364, 51030, 32333, 51001, 32273, 51019, 32263, 51018, 32233, 51031, 32260, 51034, 32191,
-            50998, 32165, 50981, 32092, 50954, 32107, 50934, 32057, 50899, 32069, 50875, 32042, 50864, 32073, 50841, 32067, 50802, 32114, 50772, 32101,
-            50762, 32115
-        ))
-    ),
-        "прилуцький" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            50643, 33118, 50602, 33103, 50596, 33123, 50542, 33050, 50520, 33065, 50502, 33023, 50471, 33016, 50476, 32973, 50445, 32966, 50424, 32913,
-            50409, 32917, 50371, 32790, 50347, 32793, 50358, 32671, 50370, 32672, 50346, 32526, 50369, 32487, 50399, 32493, 50428, 32339, 50379, 32290,
-            50374, 32252, 50347, 32255, 50348, 32143, 50376, 32155, 50375, 32075, 50413, 32102, 50402, 32046, 50458, 32022, 50467, 31973, 50482, 31979,
-            50486, 31963, 50496, 32047, 50541, 32063, 50544, 31952, 50632, 31859, 50640, 31885, 50655, 31879, 50710, 31922, 50699, 32019, 50725, 32058,
-            50767, 32068, 50762, 32115, 50772, 32101, 50802, 32114, 50841, 32067, 50864, 32073, 50875, 32042, 50899, 32069, 50934, 32057, 50954, 32107,
-            50981, 32092, 50998, 32165, 51034, 32191, 51031, 32260, 51018, 32233, 51019, 32263, 51001, 32273, 51030, 32333, 50998, 32364, 51017, 32373,
-            51015, 32409, 51040, 32397, 51077, 32435, 51084, 32494, 51065, 32526, 51025, 32534, 51005, 32687, 50950, 32692, 50932, 32758, 50889, 32776,
-            50859, 32834, 50891, 32935, 50917, 32976, 50931, 32971, 50935, 33019, 50950, 33012, 50940, 32984, 50966, 32979, 51000, 33034, 50981, 33079,
-            51007, 33118, 50961, 33137, 50962, 33200, 50901, 33211, 50888, 33170, 50868, 33184, 50851, 33170, 50849, 33185, 50828, 33155, 50800, 33169,
-            50792, 33156, 50747, 33190, 50732, 33240, 50711, 33136, 50655, 33147, 50643, 33118
-        ))
-    ),
-        "чернігівський" to     CompactPolygon(
-        ScaledRing(intArrayOf(
-            51906, 30804, 51904, 30750, 51837, 30695, 51826, 30654, 51791, 30670, 51764, 30612, 51760, 30651, 51714, 30625, 51707, 30563, 51663, 30564,
-            51671, 30519, 51658, 30535, 51627, 30509, 51605, 30557, 51599, 30506, 51579, 30554, 51570, 30527, 51542, 30546, 51548, 30582, 51511, 30568,
-            51466, 30623, 51446, 30579, 51424, 30592, 51428, 30622, 51376, 30656, 51359, 30635, 51343, 30657, 51312, 30594, 51305, 30622, 51284, 30613,
-            51263, 30539, 51233, 30558, 51227, 30505, 51202, 30531, 51187, 30517, 51180, 30541, 51165, 30490, 51111, 30517, 51092, 30482, 51074, 30510,
-            51019, 30499, 51027, 30601, 51010, 30603, 51003, 30642, 50964, 30645, 50902, 30684, 50874, 30772, 50831, 30777, 50810, 30761, 50816, 30737,
-            50771, 30740, 50764, 30837, 50786, 30871, 50754, 30831, 50745, 30864, 50774, 30889, 50757, 30951, 50765, 31070, 50781, 31079, 50774, 31127,
-            50750, 31122, 50738, 31149, 50734, 31202, 50752, 31240, 50792, 31186, 50813, 31249, 50866, 31318, 50869, 31299, 50900, 31300, 50903, 31316,
-            50908, 31303, 50931, 31356, 50952, 31316, 50983, 31373, 51028, 31268, 51045, 31317, 51072, 31279, 51103, 31316, 51098, 31381, 51121, 31389,
-            51125, 31423, 51178, 31441, 51191, 31525, 51203, 31490, 51233, 31544, 51242, 31622, 51225, 31659, 51250, 31741, 51235, 31876, 51293, 31926,
-            51292, 31982, 51312, 31985, 51326, 32029, 51354, 31987, 51368, 31998, 51348, 31972, 51363, 31964, 51370, 31891, 51413, 31857, 51416, 31825,
-            51430, 31818, 51446, 31839, 51479, 31821, 51495, 31834, 51505, 31817, 51505, 31850, 51541, 31846, 51581, 31882, 51609, 31878, 51629, 31805,
-            51730, 31781, 51730, 31733, 51744, 31759, 51780, 31652, 51792, 31674, 51810, 31636, 51869, 31694, 51883, 31662, 51901, 31663, 51921, 31706,
-            51908, 31816, 51941, 31808, 51967, 31759, 51994, 31800, 52026, 31802, 52034, 31767, 52066, 31778, 52070, 31810, 52099, 31817, 52116, 31489,
-            52141, 31452, 52143, 31404, 52134, 31377, 52121, 31387, 52106, 31325, 52052, 31298, 52042, 31253, 52051, 31219, 52071, 31216, 52078, 31161,
-            52103, 31140, 52078, 30993, 52090, 30950, 52075, 30952, 52072, 30932, 52055, 30949, 52013, 30940, 52003, 30896, 51989, 30911, 51985, 30886,
-            51969, 30890, 51948, 30806, 51921, 30825, 51906, 30804
+            46827, 33310, 46845, 33293, 46850, 33310, 46844, 33314, 46848, 33340, 46840, 33341, 46842, 33357, 46836, 33359, 46837, 33371, 46826, 33374,
+            46829, 33394, 46821, 33394, 46804, 33419, 46825, 33456, 46837, 33489, 46841, 33518, 46837, 33542, 46838, 33570, 46850, 33597, 46871, 33611,
+            46895, 33614, 46912, 33620, 46928, 33647, 46961, 33670, 46984, 33681, 47004, 33687, 47019, 33694, 47032, 33695, 47040, 33707, 47049, 33736,
+            47055, 33751, 47089, 33799, 47117, 33818, 47145, 33828, 47163, 33832, 47180, 33878, 47196, 33906, 47211, 33926, 47246, 33960, 47290, 33982,
+            47320, 33991, 47332, 34000, 47356, 33994, 47386, 33997, 47459, 33998, 47459, 33978, 47459, 33951, 47501, 33948, 47516, 33940, 47504, 33819,
+            47485, 33643, 47513, 33636, 47510, 33604, 47505, 33604, 47503, 33589, 47532, 33582, 47544, 33593, 47558, 33590, 47561, 33608, 47575, 33606,
+            47574, 33593, 47588, 33589, 47588, 33582, 47599, 33579, 47588, 33475, 47546, 33486, 47543, 33476, 47525, 33324, 47512, 33330, 47494, 33350,
+            47481, 33314, 47486, 33307, 47491, 33315, 47501, 33310, 47504, 33297, 47518, 33279, 47525, 33286, 47542, 33288, 47545, 33271, 47531, 33244,
+            47530, 33225, 47535, 33215, 47541, 33222, 47548, 33219, 47553, 33229, 47565, 33237, 47574, 33236, 47573, 33224, 47569, 33205, 47574, 33187,
+            47567, 33172, 47570, 33159, 47579, 33093, 47554, 33089, 47528, 33096, 47544, 33142, 47515, 33149, 47508, 33124, 47480, 33131, 47477, 33123,
+            47420, 33137, 47413, 33071, 47474, 33070, 47468, 33046, 47444, 33053, 47442, 33033, 47426, 33037, 47425, 33028, 47398, 33038, 47380, 33040,
+            47391, 33122, 47345, 33133, 47333, 33138, 47329, 33132, 47323, 33103, 47303, 33111, 47294, 33111, 47291, 33103, 47279, 33105, 47282, 33120,
+            47277, 33122, 47272, 33141, 47267, 33138, 47238, 33182, 47232, 33164, 47235, 33155, 47230, 33144, 47233, 33133, 47228, 33128, 47217, 33131,
+            47210, 33144, 47203, 33131, 47205, 33114, 47220, 33104, 47223, 33091, 47222, 33074, 47218, 33066, 47198, 33066, 47191, 33054, 47189, 33042,
+            47178, 33039, 47182, 33015, 47190, 33014, 47196, 33006, 47190, 33003, 47190, 32961, 47174, 32955, 47152, 32934, 47143, 32917, 47130, 32917,
+            47120, 32907, 47115, 32911, 47107, 32913, 47093, 32909, 47086, 32915, 47080, 32931, 47021, 33070, 46972, 33024, 46960, 33052, 46946, 33052,
+            46907, 33064, 46907, 33045, 46902, 33006, 46865, 33015, 46860, 32978, 46831, 32986, 46836, 33023, 46744, 33046, 46767, 33097, 46780, 33128,
+            46784, 33145, 46782, 33158, 46770, 33202, 46764, 33251, 46751, 33289, 46756, 33326, 46776, 33326, 46775, 33315, 46790, 33309, 46803, 33315,
+            46821, 33320, 46827, 33310
         ))
     )
+
+    private fun _r_dzhankoiskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            45792, 34490, 45798, 34495, 45800, 34474, 45792, 34490
+        )),
+        ScaledRing(intArrayOf(
+            45888, 34781, 45901, 34778, 45899, 34773, 45888, 34781
+        )),
+        ScaledRing(intArrayOf(
+            46083, 34085, 46088, 34089, 46107, 34080, 46083, 34085
+        )),
+        ScaledRing(intArrayOf(
+            45948, 34471, 45938, 34465, 45946, 34448, 45954, 34441, 45941, 34438, 45936, 34428, 45930, 34436, 45921, 34434, 45911, 34440, 45904, 34434,
+            45894, 34440, 45884, 34434, 45882, 34426, 45893, 34434, 45912, 34426, 45910, 34414, 45892, 34418, 45902, 34406, 45909, 34410, 45915, 34403,
+            45902, 34390, 45900, 34377, 45916, 34387, 45923, 34381, 45937, 34385, 45938, 34396, 45925, 34387, 45917, 34394, 45920, 34402, 45930, 34398,
+            45924, 34419, 45933, 34418, 45940, 34407, 45946, 34435, 45959, 34440, 45958, 34430, 45973, 34405, 45985, 34395, 45998, 34394, 46021, 34373,
+            46018, 34367, 46037, 34357, 46036, 34344, 46031, 34346, 46022, 34321, 46020, 34335, 46006, 34331, 46002, 34336, 45991, 34328, 46006, 34308,
+            46002, 34304, 46001, 34284, 46020, 34274, 46038, 34280, 46040, 34286, 46050, 34279, 46046, 34271, 46042, 34281, 46036, 34259, 46028, 34257,
+            46016, 34243, 46001, 34236, 46010, 34225, 46021, 34225, 46019, 34236, 46031, 34238, 46046, 34213, 46040, 34212, 46050, 34186, 46054, 34156,
+            46050, 34148, 46055, 34137, 46068, 34134, 46063, 34128, 46068, 34109, 46050, 34103, 46062, 34118, 46053, 34116, 46044, 34135, 46028, 34145,
+            46028, 34152, 46016, 34174, 46027, 34163, 46023, 34186, 46013, 34181, 46003, 34197, 45982, 34206, 45962, 34207, 45955, 34220, 45948, 34215,
+            45957, 34204, 45948, 34196, 45949, 34170, 45946, 34180, 45940, 34176, 45946, 34167, 45939, 34151, 45952, 34154, 45957, 34143, 45954, 34121,
+            45983, 34103, 45984, 34130, 45977, 34127, 45970, 34140, 45984, 34160, 45993, 34179, 46000, 34186, 45999, 34162, 45993, 34150, 46009, 34164,
+            46019, 34156, 46028, 34128, 46035, 34129, 46043, 34111, 46045, 34091, 46067, 34087, 46059, 34075, 46068, 34061, 46080, 34063, 46057, 34043,
+            46052, 34079, 46031, 34071, 46022, 34082, 46028, 34086, 46021, 34093, 46016, 34086, 46000, 34082, 45996, 34079, 45993, 34075, 45990, 34061,
+            45984, 34056, 45969, 34069, 45962, 34070, 45961, 34071, 45958, 34072, 45945, 34086, 45948, 34094, 45941, 34107, 45930, 34092, 45925, 34097,
+            45908, 34096, 45908, 34108, 45912, 34131, 45879, 34132, 45879, 34153, 45854, 34153, 45859, 34123, 45854, 34115, 45856, 34100, 45852, 34102,
+            45820, 34103, 45820, 34079, 45799, 34079, 45797, 34100, 45785, 34101, 45784, 34121, 45762, 34118, 45763, 34100, 45718, 34100, 45694, 34111,
+            45684, 34110, 45680, 34102, 45667, 34101, 45666, 34077, 45650, 34071, 45650, 34063, 45632, 34063, 45630, 34102, 45614, 34102, 45614, 34140,
+            45581, 34142, 45581, 34160, 45599, 34160, 45598, 34181, 45628, 34190, 45626, 34255, 45552, 34256, 45552, 34281, 45560, 34282, 45559, 34319,
+            45563, 34335, 45550, 34329, 45550, 34403, 45561, 34403, 45561, 34417, 45568, 34418, 45566, 34462, 45547, 34462, 45547, 34506, 45543, 34516,
+            45522, 34520, 45522, 34574, 45548, 34573, 45558, 34592, 45563, 34586, 45569, 34595, 45557, 34612, 45566, 34612, 45566, 34696, 45585, 34696,
+            45584, 34702, 45584, 34797, 45602, 34798, 45602, 34758, 45610, 34759, 45611, 34716, 45624, 34717, 45643, 34729, 45643, 34743, 45635, 34807,
+            45655, 34808, 45666, 34811, 45678, 34829, 45701, 34848, 45713, 34861, 45725, 34847, 45728, 34858, 45738, 34866, 45743, 34878, 45750, 34873,
+            45745, 34861, 45736, 34810, 45734, 34787, 45728, 34780, 45721, 34761, 45722, 34743, 45716, 34734, 45706, 34693, 45716, 34690, 45722, 34671,
+            45748, 34708, 45749, 34731, 45745, 34738, 45752, 34744, 45768, 34747, 45770, 34760, 45782, 34768, 45792, 34782, 45804, 34767, 45799, 34753,
+            45813, 34750, 45816, 34757, 45824, 34749, 45817, 34726, 45814, 34704, 45801, 34659, 45811, 34666, 45829, 34671, 45857, 34674, 45863, 34687,
+            45870, 34714, 45879, 34734, 45877, 34746, 45865, 34760, 45876, 34771, 45902, 34761, 45894, 34760, 45899, 34751, 45886, 34732, 45879, 34691,
+            45872, 34662, 45862, 34641, 45838, 34612, 45820, 34573, 45813, 34576, 45795, 34546, 45788, 34526, 45790, 34503, 45785, 34511, 45784, 34495,
+            45789, 34494, 45784, 34476, 45795, 34475, 45802, 34460, 45799, 34486, 45806, 34489, 45806, 34510, 45821, 34516, 45828, 34532, 45842, 34552,
+            45865, 34554, 45868, 34569, 45889, 34628, 45900, 34628, 45918, 34635, 45903, 34622, 45889, 34618, 45905, 34612, 45925, 34617, 45924, 34634,
+            45919, 34636, 45935, 34650, 45945, 34648, 45954, 34637, 45966, 34600, 45989, 34563, 45989, 34553, 45981, 34567, 45970, 34552, 45953, 34560,
+            45942, 34572, 45918, 34583, 45911, 34569, 45928, 34536, 45915, 34527, 45898, 34522, 45884, 34511, 45864, 34476, 45876, 34475, 45880, 34484,
+            45898, 34475, 45920, 34490, 45926, 34486, 45938, 34470, 45947, 34475, 45948, 34471
+        )),
+        ScaledRing(intArrayOf(
+            46028, 34326, 46029, 34338, 46034, 34323, 46028, 34326
+        ))
+    ))
+
+    private fun _r_mariupolskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            46883, 37062, 46892, 37090, 46907, 37125, 46913, 37163, 46931, 37189, 46934, 37206, 46950, 37234, 46948, 37248, 46931, 37293, 46917, 37313,
+            46903, 37320, 46883, 37325, 46873, 37307, 46878, 37308, 46868, 37292, 46876, 37317, 46889, 37336, 46910, 37358, 46947, 37391, 46979, 37432,
+            47004, 37456, 47024, 37471, 47043, 37491, 47048, 37501, 47071, 37520, 47080, 37538, 47086, 37575, 47085, 37586, 47091, 37599, 47091, 37620,
+            47095, 37627, 47091, 37648, 47081, 37687, 47080, 37708, 47084, 37748, 47088, 37768, 47086, 37792, 47092, 37822, 47102, 37843, 47107, 37863,
+            47112, 37859, 47110, 37828, 47135, 37802, 47146, 37797, 47151, 37837, 47163, 37838, 47164, 37862, 47160, 37875, 47195, 37877, 47196, 37883,
+            47210, 37882, 47214, 37824, 47236, 37824, 47235, 37850, 47272, 37860, 47274, 37839, 47282, 37793, 47306, 37808, 47310, 37823, 47304, 37832,
+            47312, 37838, 47320, 37826, 47344, 37832, 47344, 37858, 47352, 37858, 47350, 37840, 47360, 37840, 47364, 37849, 47365, 37699, 47345, 37696,
+            47345, 37702, 47332, 37700, 47339, 37634, 47348, 37636, 47355, 37622, 47357, 37597, 47363, 37595, 47363, 37584, 47370, 37591, 47357, 37408,
+            47363, 37405, 47372, 37416, 47385, 37423, 47393, 37408, 47401, 37409, 47417, 37358, 47397, 37335, 47403, 37334, 47408, 37321, 47420, 37310,
+            47421, 37292, 47424, 37281, 47436, 37284, 47442, 37258, 47448, 37253, 47466, 37265, 47469, 37245, 47458, 37239, 47455, 37244, 47436, 37236,
+            47437, 37232, 47373, 37195, 47356, 37203, 47342, 37162, 47369, 37151, 47380, 37142, 47376, 37107, 47341, 37124, 47330, 37093, 47326, 37095,
+            47323, 37081, 47314, 37082, 47299, 37037, 47314, 37027, 47311, 36947, 47320, 36946, 47320, 36927, 47292, 36936, 47243, 36945, 47228, 36949,
+            47229, 36956, 47202, 36963, 47201, 36932, 47207, 36932, 47206, 36883, 47200, 36890, 47200, 36854, 47192, 36860, 47191, 36859, 47183, 36876,
+            47172, 36889, 47175, 36900, 47168, 36906, 47166, 36915, 47173, 36921, 47162, 36924, 47166, 36936, 47158, 36939, 47160, 36948, 47150, 36958,
+            47141, 36972, 47136, 36970, 47125, 36982, 47129, 36999, 47115, 37001, 47114, 37011, 47102, 37004, 47098, 37011, 47085, 37007, 47080, 36984,
+            47076, 36999, 47047, 37081, 47059, 37098, 47039, 37125, 47008, 37090, 46982, 37140, 46960, 37103, 46968, 37092, 46928, 37021, 46922, 37029,
+            46894, 37054, 46883, 37062
+        ))
+    )
+
+    private fun _r_donetskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            47617, 38356, 47617, 38456, 47644, 38457, 47644, 38616, 47653, 38630, 47669, 38629, 47670, 38665, 47699, 38666, 47699, 38729, 47691, 38730,
+            47686, 38739, 47681, 38736, 47685, 38751, 47686, 38772, 47720, 38773, 47735, 38776, 47737, 38789, 47769, 38790, 47776, 38796, 47778, 38789,
+            47792, 38784, 47797, 38791, 47815, 38790, 47815, 38828, 47827, 38830, 47841, 38825, 47850, 38830, 47851, 38842, 47865, 38843, 47870, 38833,
+            47879, 38775, 47871, 38776, 47865, 38748, 47914, 38736, 47920, 38704, 47911, 38673, 47916, 38653, 47928, 38651, 47932, 38644, 47917, 38607,
+            47938, 38595, 47961, 38596, 47960, 38559, 47932, 38560, 47930, 38558, 47936, 38526, 47955, 38522, 47957, 38518, 47949, 38505, 47953, 38495,
+            47945, 38464, 47940, 38465, 47937, 38448, 47948, 38434, 47958, 38392, 47965, 38391, 47968, 38379, 47978, 38377, 47987, 38364, 48032, 38357,
+            48026, 38339, 48042, 38336, 48056, 38305, 48054, 38296, 48063, 38298, 48068, 38292, 48062, 38275, 48069, 38264, 48077, 38287, 48075, 38313,
+            48071, 38336, 48073, 38340, 48079, 38337, 48087, 38338, 48093, 38329, 48088, 38318, 48094, 38306, 48096, 38318, 48108, 38314, 48105, 38293,
+            48110, 38300, 48111, 38304, 48123, 38312, 48131, 38294, 48124, 38294, 48125, 38281, 48139, 38271, 48137, 38265, 48126, 38264, 48126, 38248,
+            48109, 38247, 48102, 38257, 48100, 38230, 48088, 38229, 48088, 38211, 48079, 38228, 48071, 38231, 48070, 38219, 48079, 38216, 48083, 38197,
+            48092, 38176, 48087, 38152, 48100, 38171, 48104, 38186, 48117, 38208, 48123, 38222, 48134, 38225, 48135, 38182, 48146, 38184, 48147, 38169,
+            48154, 38167, 48165, 38150, 48179, 38140, 48171, 38124, 48155, 38081, 48157, 38077, 48143, 38056, 48144, 38041, 48165, 38038, 48158, 38027,
+            48175, 38002, 48193, 37999, 48199, 37985, 48193, 37976, 48196, 37967, 48196, 37948, 48184, 37934, 48172, 37934, 48164, 37896, 48144, 37895,
+            48140, 37876, 48148, 37873, 48146, 37842, 48156, 37832, 48163, 37841, 48180, 37848, 48180, 37822, 48184, 37818, 48163, 37790, 48148, 37775,
+            48142, 37777, 48142, 37800, 48120, 37808, 48112, 37801, 48106, 37776, 48114, 37753, 48125, 37750, 48123, 37716, 48119, 37717, 48116, 37690,
+            48062, 37700, 48058, 37706, 48051, 37695, 48054, 37687, 48033, 37656, 48020, 37659, 48015, 37674, 48010, 37670, 48003, 37679, 47998, 37652,
+            48006, 37624, 48056, 37614, 48052, 37557, 48038, 37558, 48036, 37562, 48008, 37562, 48008, 37552, 47979, 37554, 47977, 37560, 47968, 37543,
+            47940, 37529, 47932, 37554, 47918, 37540, 47908, 37547, 47868, 37547, 47866, 37602, 47887, 37594, 47890, 37608, 47923, 37611, 47923, 37628,
+            47919, 37630, 47920, 37656, 47910, 37661, 47910, 37681, 47900, 37694, 47893, 37694, 47903, 37720, 47897, 37721, 47903, 37783, 47903, 37798,
+            47897, 37792, 47884, 37796, 47885, 37822, 47903, 37810, 47908, 37853, 47904, 37861, 47895, 37863, 47896, 37872, 47887, 37879, 47885, 37907,
+            47872, 37913, 47868, 37904, 47853, 37913, 47833, 37910, 47835, 37934, 47841, 37922, 47857, 37948, 47854, 37962, 47862, 37965, 47856, 37978,
+            47853, 38004, 47844, 38006, 47832, 38029, 47813, 38029, 47814, 38063, 47821, 38064, 47821, 38094, 47832, 38090, 47837, 38098, 47830, 38121,
+            47831, 38129, 47820, 38127, 47806, 38143, 47815, 38160, 47835, 38183, 47810, 38207, 47806, 38230, 47814, 38235, 47816, 38258, 47786, 38234,
+            47784, 38225, 47768, 38217, 47769, 38190, 47772, 38177, 47759, 38165, 47761, 38191, 47731, 38190, 47730, 38208, 47724, 38211, 47723, 38225,
+            47715, 38229, 47705, 38253, 47688, 38283, 47703, 38303, 47703, 38317, 47688, 38320, 47688, 38326, 47666, 38329, 47654, 38327, 47652, 38340,
+            47631, 38340, 47627, 38358, 47617, 38356
+        ))
+    )
+
+    private fun _r_kramatorskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48356, 37738, 48356, 37744, 48361, 37748, 48364, 37772, 48377, 37793, 48367, 37813, 48368, 37814, 48378, 37796, 48380, 37784, 48392, 37769,
+            48404, 37770, 48413, 37781, 48432, 37777, 48414, 37786, 48404, 37782, 48393, 37807, 48406, 37803, 48417, 37817, 48410, 37845, 48416, 37855,
+            48405, 37874, 48417, 37879, 48409, 37896, 48416, 37897, 48413, 37924, 48419, 37935, 48404, 37931, 48370, 37913, 48366, 37926, 48360, 37931,
+            48356, 37930, 48360, 37936, 48360, 37941, 48367, 37957, 48377, 37953, 48380, 37971, 48374, 37983, 48383, 37988, 48390, 37973, 48399, 37964,
+            48410, 37964, 48446, 37959, 48451, 37941, 48458, 37954, 48454, 37959, 48458, 38005, 48468, 38010, 48476, 38007, 48473, 37968, 48461, 37970,
+            48461, 37955, 48470, 37950, 48475, 37959, 48490, 37964, 48486, 37915, 48495, 37909, 48504, 37920, 48528, 37898, 48531, 37881, 48544, 37876,
+            48549, 37853, 48555, 37851, 48543, 37836, 48548, 37812, 48579, 37812, 48582, 37804, 48596, 37801, 48601, 37813, 48600, 37826, 48631, 37822,
+            48634, 37815, 48649, 37816, 48660, 37835, 48676, 37837, 48678, 37818, 48693, 37799, 48695, 37798, 48721, 37814, 48738, 37812, 48753, 37824,
+            48761, 37819, 48804, 37864, 48794, 37885, 48788, 37910, 48795, 37916, 48796, 37935, 48819, 37930, 48818, 37915, 48837, 37910, 48841, 37916,
+            48843, 37939, 48848, 37940, 48848, 37960, 48844, 37997, 48845, 38005, 48860, 38001, 48870, 38039, 48882, 38035, 48891, 38043, 48892, 38032,
+            48886, 38021, 48898, 38006, 48906, 38024, 48934, 38045, 48936, 38041, 48944, 38039, 48946, 38004, 48974, 38031, 48965, 38053, 48976, 38058,
+            48985, 38053, 48991, 38076, 48992, 38098, 49000, 38098, 49042, 38071, 49059, 38056, 49064, 38062, 49096, 38067, 49134, 38084, 49148, 38082,
+            49147, 38066, 49151, 38044, 49139, 38040, 49127, 38039, 49130, 37980, 49136, 37959, 49142, 37955, 49139, 37946, 49146, 37922, 49160, 37893,
+            49166, 37902, 49175, 37893, 49184, 37908, 49192, 37936, 49206, 37924, 49203, 37916, 49214, 37909, 49212, 37890, 49219, 37890, 49221, 37880,
+            49237, 37872, 49236, 37865, 49222, 37850, 49202, 37842, 49206, 37826, 49207, 37798, 49203, 37798, 49220, 37710, 49233, 37621, 49230, 37600,
+            49230, 37566, 49218, 37551, 49196, 37510, 49183, 37499, 49165, 37558, 49150, 37567, 49145, 37561, 49144, 37543, 49134, 37564, 49135, 37571,
+            49125, 37584, 49111, 37542, 49106, 37500, 49101, 37488, 49091, 37501, 49080, 37509, 49070, 37506, 49064, 37496, 49063, 37479, 49055, 37467,
+            49062, 37465, 49053, 37452, 49062, 37450, 49063, 37418, 49054, 37410, 49049, 37384, 49034, 37385, 49027, 37391, 49026, 37375, 48994, 37372,
+            48992, 37359, 48998, 37358, 49004, 37345, 48994, 37336, 48990, 37313, 48977, 37316, 48981, 37307, 48970, 37294, 48953, 37320, 48951, 37307,
+            48939, 37316, 48935, 37334, 48923, 37328, 48923, 37312, 48918, 37299, 48923, 37298, 48923, 37269, 48907, 37266, 48910, 37244, 48908, 37226,
+            48896, 37221, 48885, 37210, 48881, 37196, 48870, 37190, 48850, 37194, 48815, 37192, 48826, 37156, 48833, 37152, 48833, 37141, 48842, 37149,
+            48843, 37131, 48851, 37098, 48818, 37078, 48814, 37068, 48815, 37035, 48817, 37025, 48802, 37019, 48804, 37012, 48787, 36995, 48775, 37024,
+            48768, 37025, 48767, 37042, 48753, 37038, 48750, 37032, 48775, 36988, 48793, 36968, 48796, 36948, 48792, 36945, 48794, 36923, 48798, 36921,
+            48800, 36854, 48773, 36839, 48771, 36820, 48778, 36816, 48781, 36788, 48790, 36784, 48803, 36790, 48797, 36765, 48803, 36730, 48805, 36719,
+            48786, 36704, 48775, 36688, 48768, 36692, 48767, 36709, 48756, 36711, 48745, 36719, 48737, 36715, 48707, 36732, 48695, 36731, 48694, 36711,
+            48685, 36720, 48680, 36717, 48669, 36725, 48661, 36722, 48646, 36735, 48597, 36747, 48601, 36779, 48597, 36780, 48597, 36806, 48569, 36810,
+            48566, 36824, 48569, 36859, 48550, 36872, 48551, 36883, 48543, 36885, 48544, 36901, 48531, 36904, 48534, 36942, 48541, 36943, 48545, 36993,
+            48537, 36995, 48539, 37004, 48550, 37004, 48551, 37017, 48565, 37016, 48566, 37022, 48560, 37053, 48572, 37057, 48582, 37048, 48583, 37068,
+            48601, 37064, 48608, 37100, 48591, 37106, 48593, 37130, 48598, 37141, 48590, 37164, 48608, 37162, 48608, 37198, 48601, 37202, 48604, 37220,
+            48598, 37223, 48601, 37253, 48568, 37259, 48569, 37300, 48598, 37298, 48580, 37334, 48579, 37328, 48556, 37346, 48559, 37367, 48536, 37368,
+            48538, 37398, 48528, 37389, 48512, 37389, 48501, 37373, 48483, 37361, 48480, 37377, 48475, 37434, 48458, 37429, 48443, 37433, 48444, 37442,
+            48426, 37445, 48425, 37432, 48411, 37432, 48411, 37447, 48384, 37453, 48384, 37443, 48348, 37452, 48353, 37470, 48342, 37485, 48335, 37473,
+            48318, 37493, 48340, 37539, 48333, 37563, 48304, 37594, 48308, 37608, 48279, 37600, 48276, 37617, 48282, 37636, 48274, 37641, 48269, 37685,
+            48261, 37689, 48264, 37720, 48309, 37710, 48323, 37739, 48323, 37749, 48339, 37736, 48356, 37738
+        ))
+    )
+
+    private fun _r_pokrovskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            47812, 37522, 47821, 37522, 47819, 37526, 47823, 37540, 47839, 37541, 47838, 37547, 47857, 37547, 47868, 37543, 47868, 37547, 47908, 37547,
+            47918, 37540, 47932, 37554, 47940, 37529, 47968, 37543, 47977, 37560, 47979, 37554, 48008, 37552, 48008, 37562, 48036, 37562, 48038, 37558,
+            48052, 37557, 48056, 37614, 48006, 37624, 47998, 37652, 48003, 37679, 48010, 37670, 48015, 37674, 48020, 37659, 48033, 37656, 48054, 37687,
+            48051, 37695, 48058, 37706, 48062, 37700, 48116, 37690, 48119, 37717, 48123, 37716, 48125, 37750, 48114, 37753, 48106, 37776, 48112, 37801,
+            48120, 37808, 48142, 37800, 48142, 37777, 48148, 37775, 48163, 37790, 48184, 37818, 48180, 37822, 48180, 37848, 48163, 37841, 48156, 37832,
+            48146, 37842, 48148, 37873, 48140, 37876, 48144, 37895, 48164, 37896, 48172, 37934, 48184, 37934, 48196, 37948, 48209, 37956, 48209, 37932,
+            48212, 37921, 48216, 37935, 48230, 37934, 48232, 37894, 48250, 37890, 48254, 37927, 48267, 37921, 48263, 37909, 48289, 37905, 48288, 37894,
+            48296, 37887, 48307, 37886, 48307, 37904, 48318, 37906, 48324, 37940, 48331, 37940, 48333, 37927, 48342, 37922, 48341, 37913, 48352, 37907,
+            48352, 37903, 48356, 37894, 48354, 37883, 48359, 37868, 48370, 37851, 48368, 37822, 48387, 37823, 48393, 37807, 48386, 37810, 48380, 37803,
+            48368, 37818, 48348, 37849, 48348, 37825, 48363, 37816, 48367, 37813, 48365, 37803, 48376, 37791, 48364, 37772, 48361, 37748, 48356, 37744,
+            48356, 37738, 48339, 37736, 48323, 37749, 48323, 37739, 48309, 37710, 48264, 37720, 48261, 37689, 48269, 37685, 48274, 37641, 48282, 37636,
+            48276, 37617, 48279, 37600, 48308, 37608, 48304, 37594, 48333, 37563, 48340, 37539, 48318, 37493, 48335, 37473, 48342, 37485, 48353, 37470,
+            48348, 37452, 48384, 37443, 48384, 37453, 48411, 37447, 48411, 37432, 48425, 37432, 48426, 37445, 48444, 37442, 48443, 37433, 48458, 37429,
+            48475, 37434, 48480, 37377, 48483, 37361, 48501, 37373, 48512, 37389, 48528, 37389, 48538, 37398, 48536, 37368, 48559, 37367, 48556, 37346,
+            48579, 37328, 48580, 37334, 48598, 37298, 48569, 37300, 48568, 37259, 48601, 37253, 48598, 37223, 48604, 37220, 48601, 37202, 48608, 37198,
+            48608, 37162, 48590, 37164, 48598, 37141, 48593, 37130, 48591, 37106, 48608, 37100, 48601, 37064, 48583, 37068, 48582, 37048, 48572, 37057,
+            48560, 37053, 48566, 37022, 48565, 37016, 48551, 37017, 48550, 37004, 48539, 37004, 48537, 36995, 48545, 36993, 48541, 36943, 48534, 36942,
+            48531, 36904, 48522, 36907, 48517, 36850, 48487, 36856, 48485, 36830, 48443, 36836, 48444, 36847, 48418, 36851, 48421, 36836, 48413, 36826,
+            48409, 36835, 48406, 36821, 48369, 36827, 48366, 36813, 48349, 36816, 48348, 36809, 48312, 36817, 48317, 36871, 48305, 36874, 48309, 36912,
+            48194, 36936, 48193, 36905, 48180, 36893, 48183, 36873, 48077, 36896, 48064, 36881, 48063, 36881, 48073, 36992, 48078, 36992, 48090, 37113,
+            48096, 37112, 48100, 37154, 48069, 37159, 48068, 37154, 48043, 37158, 48027, 37162, 48021, 37177, 48007, 37175, 48009, 37160, 48007, 37141,
+            47996, 37132, 47994, 37169, 47982, 37167, 47982, 37158, 47960, 37153, 47966, 37127, 47964, 37119, 47969, 37096, 47978, 37093, 47978, 37078,
+            47973, 37076, 47934, 37069, 47928, 37146, 47917, 37145, 47912, 37222, 47906, 37213, 47895, 37206, 47895, 37184, 47885, 37183, 47884, 37207,
+            47877, 37214, 47868, 37260, 47835, 37251, 47819, 37271, 47805, 37268, 47804, 37290, 47825, 37294, 47823, 37306, 47828, 37308, 47820, 37353,
+            47823, 37358, 47806, 37410, 47806, 37428, 47800, 37429, 47802, 37472, 47810, 37472, 47812, 37522
+        ))
+    )
+
+    private fun _r_volnovaskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            47357, 37408, 47357, 37421, 47367, 37539, 47370, 37591, 47363, 37584, 47363, 37595, 47357, 37597, 47355, 37622, 47348, 37636, 47339, 37634,
+            47332, 37700, 47345, 37702, 47345, 37696, 47365, 37699, 47364, 37849, 47366, 37850, 47373, 37842, 47377, 37842, 47382, 37845, 47392, 37859,
+            47411, 37859, 47414, 37881, 47416, 37962, 47444, 37961, 47444, 37927, 47448, 37927, 47448, 37881, 47450, 37872, 47467, 37891, 47481, 37890,
+            47481, 37867, 47484, 37854, 47496, 37843, 47536, 37836, 47536, 37813, 47564, 37812, 47564, 37847, 47580, 37846, 47580, 37823, 47593, 37824,
+            47594, 37816, 47625, 37816, 47638, 37822, 47660, 37784, 47653, 37763, 47663, 37755, 47668, 37763, 47664, 37775, 47693, 37726, 47711, 37690,
+            47691, 37662, 47691, 37657, 47704, 37648, 47705, 37629, 47698, 37628, 47705, 37602, 47722, 37618, 47752, 37612, 47754, 37607, 47780, 37604,
+            47781, 37609, 47814, 37605, 47806, 37587, 47815, 37565, 47810, 37472, 47802, 37472, 47800, 37429, 47806, 37428, 47806, 37410, 47823, 37358,
+            47820, 37353, 47828, 37308, 47823, 37306, 47825, 37294, 47804, 37290, 47805, 37268, 47819, 37271, 47835, 37251, 47868, 37260, 47877, 37214,
+            47884, 37207, 47885, 37183, 47895, 37184, 47895, 37206, 47906, 37213, 47912, 37222, 47917, 37145, 47928, 37146, 47934, 37069, 47973, 37076,
+            47978, 37078, 47978, 37093, 47969, 37096, 47964, 37119, 47966, 37127, 47960, 37153, 47982, 37158, 47982, 37167, 47994, 37169, 47996, 37132,
+            48007, 37141, 48009, 37160, 48007, 37175, 48021, 37177, 48027, 37162, 48043, 37158, 48068, 37154, 48069, 37159, 48100, 37154, 48096, 37112,
+            48090, 37113, 48078, 36992, 48073, 36992, 48063, 36881, 48061, 36881, 48051, 36876, 48052, 36858, 48032, 36854, 48037, 36843, 48034, 36832,
+            48040, 36812, 48052, 36803, 48047, 36773, 48055, 36764, 48049, 36754, 48053, 36741, 48062, 36748, 48071, 36726, 48079, 36725, 48085, 36715,
+            48080, 36712, 48086, 36694, 48091, 36669, 48088, 36664, 48096, 36649, 48089, 36652, 48089, 36630, 48083, 36622, 48090, 36608, 48085, 36604,
+            48082, 36587, 48066, 36588, 48062, 36579, 48053, 36586, 48044, 36577, 48036, 36577, 48020, 36590, 48015, 36572, 48000, 36590, 47998, 36576,
+            47956, 36586, 47961, 36628, 47920, 36640, 47917, 36616, 47921, 36590, 47911, 36592, 47906, 36543, 47877, 36550, 47880, 36577, 47848, 36585,
+            47851, 36605, 47838, 36608, 47818, 36599, 47816, 36589, 47785, 36587, 47784, 36594, 47793, 36672, 47730, 36686, 47732, 36700, 47678, 36713,
+            47685, 36792, 47676, 36780, 47673, 36785, 47665, 36774, 47668, 36768, 47666, 36752, 47662, 36754, 47659, 36718, 47631, 36725, 47634, 36765,
+            47623, 36765, 47622, 36745, 47606, 36747, 47607, 36761, 47600, 36764, 47624, 36831, 47545, 36895, 47575, 36944, 47554, 36968, 47561, 36980,
+            47539, 37002, 47551, 37023, 47492, 37077, 47497, 37085, 47469, 37130, 47456, 37157, 47484, 37179, 47480, 37196, 47468, 37188, 47469, 37245,
+            47466, 37265, 47448, 37253, 47442, 37258, 47436, 37284, 47424, 37281, 47421, 37292, 47420, 37310, 47408, 37321, 47403, 37334, 47397, 37335,
+            47417, 37358, 47401, 37409, 47393, 37408, 47385, 37423, 47372, 37416, 47363, 37405, 47357, 37408
+        ))
+    )
+
+    private fun _r_bakhmutskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            48454, 37959, 48458, 37954, 48451, 37941, 48446, 37959, 48454, 37959
+        )),
+        ScaledRing(intArrayOf(
+            48367, 37813, 48377, 37793, 48376, 37791, 48365, 37803, 48367, 37813
+        )),
+        ScaledRing(intArrayOf(
+            48370, 37913, 48404, 37931, 48419, 37935, 48413, 37924, 48416, 37897, 48409, 37896, 48417, 37879, 48405, 37874, 48416, 37855, 48410, 37845,
+            48417, 37817, 48406, 37803, 48393, 37807, 48387, 37823, 48368, 37822, 48370, 37851, 48359, 37868, 48354, 37883, 48356, 37894, 48352, 37903,
+            48355, 37918, 48353, 37927, 48358, 37931, 48364, 37928, 48370, 37913
+        )),
+        ScaledRing(intArrayOf(
+            48393, 37807, 48394, 37799, 48404, 37782, 48414, 37786, 48432, 37777, 48413, 37781, 48404, 37770, 48392, 37769, 48380, 37784, 48378, 37796,
+            48368, 37814, 48363, 37816, 48348, 37825, 48348, 37849, 48368, 37818, 48380, 37803, 48386, 37810, 48393, 37807
+        )),
+        ScaledRing(intArrayOf(
+            48468, 38010, 48467, 38019, 48475, 38022, 48475, 38035, 48445, 38032, 48436, 38024, 48415, 38042, 48414, 38056, 48420, 38057, 48413, 38096,
+            48401, 38109, 48393, 38104, 48394, 38118, 48399, 38124, 48400, 38152, 48394, 38157, 48400, 38172, 48406, 38173, 48413, 38192, 48404, 38202,
+            48398, 38199, 48361, 38208, 48366, 38255, 48373, 38261, 48396, 38252, 48397, 38272, 48389, 38274, 48390, 38316, 48397, 38316, 48399, 38328,
+            48388, 38346, 48402, 38345, 48410, 38334, 48412, 38337, 48409, 38352, 48417, 38352, 48413, 38373, 48413, 38397, 48431, 38391, 48429, 38381,
+            48443, 38375, 48443, 38360, 48438, 38343, 48455, 38312, 48465, 38320, 48476, 38290, 48475, 38305, 48491, 38298, 48498, 38313, 48509, 38318,
+            48537, 38285, 48546, 38279, 48637, 38264, 48633, 38234, 48652, 38231, 48656, 38239, 48658, 38269, 48664, 38271, 48665, 38290, 48681, 38285,
+            48684, 38314, 48689, 38309, 48705, 38315, 48713, 38304, 48715, 38326, 48736, 38319, 48738, 38281, 48750, 38263, 48773, 38276, 48774, 38284,
+            48804, 38279, 48805, 38316, 48828, 38312, 48825, 38271, 48834, 38270, 48843, 38259, 48840, 38222, 48859, 38230, 48935, 38225, 48929, 38196,
+            48932, 38169, 48933, 38142, 48928, 38139, 48928, 38124, 48927, 38115, 48936, 38082, 48933, 38060, 48934, 38045, 48906, 38024, 48898, 38006,
+            48886, 38021, 48892, 38032, 48891, 38043, 48882, 38035, 48870, 38039, 48860, 38001, 48845, 38005, 48844, 37997, 48848, 37960, 48848, 37940,
+            48843, 37939, 48841, 37916, 48837, 37910, 48818, 37915, 48819, 37930, 48796, 37935, 48795, 37916, 48788, 37910, 48794, 37885, 48804, 37864,
+            48761, 37819, 48753, 37824, 48738, 37812, 48721, 37814, 48708, 37805, 48694, 37798, 48678, 37818, 48676, 37837, 48660, 37835, 48649, 37816,
+            48634, 37815, 48631, 37822, 48600, 37826, 48601, 37813, 48596, 37801, 48582, 37804, 48579, 37812, 48548, 37812, 48543, 37836, 48555, 37851,
+            48549, 37853, 48544, 37876, 48531, 37881, 48528, 37898, 48504, 37920, 48495, 37909, 48486, 37915, 48490, 37964, 48475, 37959, 48470, 37950,
+            48461, 37955, 48461, 37970, 48473, 37968, 48476, 38007, 48468, 38010
+        ))
+    ))
+
+    private fun _r_horlivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48196, 37948, 48196, 37967, 48193, 37976, 48199, 37985, 48193, 37999, 48175, 38002, 48158, 38027, 48165, 38038, 48144, 38041, 48143, 38056,
+            48157, 38077, 48155, 38081, 48171, 38124, 48179, 38140, 48165, 38150, 48154, 38167, 48147, 38169, 48146, 38184, 48135, 38182, 48134, 38225,
+            48123, 38222, 48117, 38208, 48104, 38186, 48100, 38171, 48087, 38152, 48092, 38176, 48083, 38197, 48079, 38216, 48070, 38219, 48071, 38231,
+            48079, 38228, 48088, 38211, 48088, 38229, 48100, 38230, 48102, 38257, 48109, 38247, 48126, 38248, 48126, 38264, 48137, 38265, 48139, 38271,
+            48125, 38281, 48124, 38294, 48131, 38294, 48123, 38312, 48111, 38304, 48110, 38300, 48105, 38293, 48108, 38314, 48096, 38318, 48094, 38306,
+            48088, 38318, 48093, 38329, 48087, 38338, 48079, 38337, 48073, 38340, 48071, 38336, 48075, 38313, 48077, 38287, 48069, 38264, 48062, 38275,
+            48068, 38292, 48063, 38298, 48054, 38296, 48056, 38305, 48042, 38336, 48026, 38339, 48032, 38357, 47987, 38364, 47978, 38377, 47968, 38379,
+            47965, 38391, 47958, 38392, 47948, 38434, 47937, 38448, 47940, 38465, 47945, 38464, 47953, 38495, 47949, 38505, 47957, 38518, 47955, 38522,
+            47936, 38526, 47930, 38558, 47932, 38560, 47960, 38559, 47961, 38595, 47938, 38595, 47917, 38607, 47932, 38644, 47928, 38651, 47916, 38653,
+            47911, 38673, 47920, 38704, 47914, 38736, 47865, 38748, 47871, 38776, 47879, 38775, 47870, 38833, 47865, 38843, 47867, 38878, 47876, 38880,
+            47872, 38904, 47876, 38913, 47873, 38943, 47869, 38955, 47869, 39074, 47895, 39065, 47941, 39092, 47942, 39084, 47953, 39075, 47946, 39058,
+            47953, 39054, 47956, 39039, 47987, 39044, 48007, 39040, 48016, 38862, 48014, 38837, 48036, 38821, 48038, 38826, 48047, 38815, 48063, 38830,
+            48067, 38825, 48078, 38829, 48066, 38817, 48074, 38799, 48085, 38820, 48089, 38807, 48116, 38820, 48118, 38802, 48132, 38767, 48134, 38738,
+            48146, 38691, 48159, 38695, 48159, 38672, 48164, 38671, 48162, 38638, 48172, 38606, 48180, 38598, 48191, 38610, 48205, 38612, 48217, 38596,
+            48234, 38589, 48236, 38588, 48242, 38587, 48252, 38590, 48265, 38578, 48274, 38559, 48272, 38542, 48279, 38427, 48288, 38424, 48298, 38433,
+            48308, 38426, 48316, 38438, 48340, 38434, 48347, 38462, 48360, 38471, 48363, 38494, 48368, 38473, 48379, 38469, 48379, 38448, 48397, 38438,
+            48418, 38440, 48424, 38436, 48444, 38434, 48448, 38434, 48440, 38401, 48434, 38403, 48431, 38391, 48413, 38397, 48413, 38373, 48417, 38352,
+            48409, 38352, 48412, 38337, 48410, 38334, 48402, 38345, 48388, 38346, 48399, 38328, 48397, 38316, 48390, 38316, 48389, 38274, 48397, 38272,
+            48396, 38252, 48373, 38261, 48366, 38255, 48361, 38208, 48398, 38199, 48404, 38202, 48413, 38192, 48406, 38173, 48400, 38172, 48394, 38157,
+            48400, 38152, 48399, 38124, 48394, 38118, 48393, 38104, 48401, 38109, 48413, 38096, 48420, 38057, 48414, 38056, 48415, 38042, 48436, 38024,
+            48445, 38032, 48475, 38035, 48475, 38022, 48467, 38019, 48468, 38010, 48458, 38005, 48454, 37959, 48446, 37959, 48410, 37964, 48399, 37964,
+            48390, 37973, 48383, 37988, 48374, 37983, 48380, 37971, 48377, 37953, 48367, 37957, 48360, 37941, 48360, 37936, 48356, 37930, 48353, 37927,
+            48355, 37918, 48352, 37907, 48341, 37913, 48342, 37922, 48333, 37927, 48331, 37940, 48324, 37940, 48318, 37906, 48307, 37904, 48307, 37886,
+            48296, 37887, 48288, 37894, 48289, 37905, 48263, 37909, 48267, 37921, 48254, 37927, 48250, 37890, 48232, 37894, 48230, 37934, 48216, 37935,
+            48212, 37921, 48209, 37932, 48209, 37956, 48196, 37948
+        ))
+    )
+
+    private fun _r_kalmiuskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            47107, 37863, 47110, 37899, 47087, 37976, 47093, 37971, 47098, 37999, 47090, 38026, 47091, 38035, 47108, 38054, 47113, 38064, 47107, 38092,
+            47102, 38103, 47080, 38127, 47068, 38134, 47051, 38134, 47042, 38113, 47037, 38109, 47055, 38147, 47069, 38166, 47092, 38186, 47119, 38230,
+            47125, 38228, 47139, 38236, 47208, 38237, 47218, 38242, 47230, 38233, 47233, 38254, 47238, 38261, 47239, 38288, 47256, 38288, 47256, 38324,
+            47269, 38334, 47281, 38323, 47297, 38333, 47299, 38327, 47306, 38336, 47305, 38221, 47327, 38221, 47344, 38231, 47350, 38245, 47364, 38246,
+            47373, 38258, 47374, 38287, 47391, 38287, 47392, 38303, 47475, 38302, 47476, 38289, 47507, 38293, 47508, 38286, 47544, 38285, 47545, 38307,
+            47553, 38311, 47576, 38311, 47576, 38351, 47617, 38350, 47617, 38356, 47627, 38358, 47631, 38340, 47652, 38340, 47654, 38327, 47666, 38329,
+            47688, 38326, 47688, 38320, 47703, 38317, 47703, 38303, 47688, 38283, 47705, 38253, 47715, 38229, 47723, 38225, 47724, 38211, 47730, 38208,
+            47731, 38190, 47761, 38191, 47759, 38165, 47772, 38177, 47769, 38190, 47768, 38217, 47784, 38225, 47786, 38234, 47816, 38258, 47814, 38235,
+            47806, 38230, 47810, 38207, 47835, 38183, 47815, 38160, 47806, 38143, 47820, 38127, 47831, 38129, 47830, 38121, 47837, 38098, 47832, 38090,
+            47821, 38094, 47821, 38064, 47814, 38063, 47813, 38029, 47832, 38029, 47844, 38006, 47853, 38004, 47856, 37978, 47862, 37965, 47854, 37962,
+            47857, 37948, 47841, 37922, 47835, 37934, 47833, 37910, 47853, 37913, 47868, 37904, 47872, 37913, 47885, 37907, 47887, 37879, 47896, 37872,
+            47895, 37863, 47904, 37861, 47908, 37853, 47903, 37810, 47885, 37822, 47884, 37796, 47897, 37792, 47903, 37798, 47903, 37783, 47897, 37721,
+            47903, 37720, 47893, 37694, 47900, 37694, 47910, 37681, 47910, 37661, 47920, 37656, 47919, 37630, 47923, 37628, 47923, 37611, 47890, 37608,
+            47887, 37594, 47866, 37602, 47868, 37543, 47857, 37547, 47838, 37547, 47839, 37541, 47823, 37540, 47819, 37526, 47821, 37522, 47812, 37522,
+            47815, 37565, 47806, 37587, 47814, 37605, 47781, 37609, 47780, 37604, 47754, 37607, 47752, 37612, 47722, 37618, 47705, 37602, 47698, 37628,
+            47705, 37629, 47704, 37648, 47691, 37657, 47691, 37662, 47711, 37690, 47693, 37726, 47664, 37775, 47668, 37763, 47663, 37755, 47653, 37763,
+            47660, 37784, 47638, 37822, 47625, 37816, 47594, 37816, 47593, 37824, 47580, 37823, 47580, 37846, 47564, 37847, 47564, 37812, 47536, 37813,
+            47536, 37836, 47496, 37843, 47484, 37854, 47481, 37867, 47481, 37890, 47467, 37891, 47450, 37872, 47448, 37881, 47448, 37927, 47444, 37927,
+            47444, 37961, 47416, 37962, 47414, 37881, 47411, 37859, 47392, 37859, 47389, 37857, 47380, 37843, 47375, 37841, 47373, 37842, 47365, 37850,
+            47360, 37840, 47350, 37840, 47352, 37858, 47344, 37858, 47344, 37832, 47320, 37826, 47312, 37838, 47304, 37832, 47310, 37823, 47306, 37808,
+            47282, 37793, 47274, 37839, 47272, 37860, 47235, 37850, 47236, 37824, 47214, 37824, 47210, 37882, 47196, 37883, 47195, 37877, 47160, 37875,
+            47164, 37862, 47163, 37838, 47151, 37837, 47146, 37797, 47135, 37802, 47110, 37828, 47112, 37859, 47107, 37863
+        ))
+    )
+
+    private fun _r_sievierodonetskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48503, 38474, 48515, 38484, 48536, 38479, 48532, 38464, 48571, 38448, 48564, 38408, 48576, 38403, 48597, 38403, 48597, 38415, 48608, 38410,
+            48631, 38436, 48636, 38426, 48644, 38439, 48640, 38454, 48646, 38473, 48654, 38485, 48656, 38479, 48647, 38467, 48650, 38455, 48644, 38422,
+            48658, 38424, 48656, 38405, 48664, 38407, 48674, 38421, 48678, 38422, 48683, 38450, 48690, 38447, 48687, 38463, 48696, 38463, 48696, 38473,
+            48689, 38491, 48685, 38486, 48686, 38469, 48678, 38470, 48678, 38481, 48672, 38479, 48676, 38498, 48681, 38505, 48675, 38526, 48674, 38550,
+            48664, 38548, 48661, 38568, 48682, 38575, 48684, 38564, 48687, 38532, 48718, 38521, 48716, 38517, 48724, 38503, 48726, 38517, 48732, 38523,
+            48745, 38523, 48751, 38504, 48762, 38521, 48771, 38520, 48780, 38510, 48770, 38501, 48777, 38484, 48786, 38484, 48783, 38494, 48784, 38518,
+            48773, 38529, 48780, 38556, 48765, 38577, 48757, 38595, 48757, 38618, 48771, 38629, 48765, 38652, 48760, 38646, 48747, 38661, 48754, 38676,
+            48712, 38687, 48708, 38702, 48712, 38717, 48702, 38763, 48675, 38825, 48671, 38843, 48682, 38851, 48695, 38869, 48694, 38883, 48738, 38898,
+            48747, 38898, 48751, 38902, 48750, 38882, 48749, 38858, 48752, 38796, 48760, 38800, 48757, 38790, 48764, 38787, 48770, 38764, 48764, 38757,
+            48767, 38743, 48761, 38729, 48759, 38695, 48774, 38656, 48784, 38660, 48800, 38692, 48809, 38667, 48815, 38663, 48820, 38676, 48829, 38666,
+            48828, 38686, 48839, 38690, 48846, 38670, 48858, 38661, 48874, 38723, 48884, 38700, 48894, 38710, 48927, 38764, 48939, 38761, 48933, 38771,
+            48972, 38824, 49003, 38820, 49003, 38801, 49009, 38801, 49009, 38813, 49016, 38822, 49055, 38817, 49057, 38751, 49050, 38746, 49046, 38714,
+            49052, 38705, 49045, 38690, 49067, 38693, 49068, 38722, 49090, 38719, 49090, 38701, 49105, 38692, 49159, 38689, 49166, 38666, 49174, 38659,
+            49173, 38637, 49175, 38614, 49187, 38626, 49197, 38624, 49195, 38605, 49202, 38592, 49200, 38547, 49206, 38545, 49205, 38525, 49199, 38527,
+            49196, 38511, 49203, 38504, 49219, 38515, 49246, 38478, 49252, 38484, 49270, 38485, 49271, 38475, 49299, 38478, 49297, 38446, 49306, 38441,
+            49299, 38424, 49289, 38428, 49280, 38423, 49269, 38401, 49263, 38361, 49253, 38364, 49253, 38356, 49204, 38356, 49201, 38394, 49191, 38394,
+            49190, 38372, 49185, 38372, 49182, 38309, 49188, 38309, 49182, 38237, 49179, 38216, 49183, 38207, 49176, 38194, 49184, 38187, 49199, 38146,
+            49194, 38095, 49180, 38102, 49180, 38054, 49169, 38050, 49153, 38030, 49147, 38066, 49148, 38082, 49134, 38084, 49096, 38067, 49064, 38062,
+            49059, 38056, 49042, 38071, 49000, 38098, 48992, 38098, 48991, 38076, 48985, 38053, 48976, 38058, 48965, 38053, 48974, 38031, 48946, 38004,
+            48944, 38039, 48936, 38041, 48933, 38060, 48936, 38082, 48927, 38115, 48928, 38124, 48928, 38139, 48933, 38142, 48932, 38169, 48929, 38196,
+            48935, 38225, 48859, 38230, 48840, 38222, 48843, 38259, 48834, 38270, 48825, 38271, 48828, 38312, 48805, 38316, 48804, 38279, 48774, 38284,
+            48773, 38276, 48750, 38263, 48738, 38281, 48736, 38319, 48715, 38326, 48713, 38304, 48705, 38315, 48689, 38309, 48684, 38314, 48681, 38285,
+            48665, 38290, 48664, 38271, 48658, 38269, 48656, 38239, 48652, 38231, 48633, 38234, 48637, 38264, 48546, 38279, 48537, 38285, 48509, 38318,
+            48498, 38313, 48491, 38298, 48475, 38305, 48476, 38290, 48465, 38320, 48455, 38312, 48438, 38343, 48443, 38360, 48443, 38375, 48429, 38381,
+            48434, 38403, 48440, 38401, 48448, 38434, 48465, 38430, 48472, 38452, 48487, 38461, 48503, 38474
+        ))
+    )
+
+    private fun _r_luhanskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48217, 39506, 48226, 39508, 48223, 39540, 48208, 39534, 48206, 39569, 48192, 39570, 48194, 39580, 48214, 39597, 48238, 39604, 48240, 39613,
+            48258, 39625, 48255, 39647, 48265, 39655, 48265, 39635, 48269, 39669, 48279, 39678, 48274, 39663, 48289, 39668, 48294, 39684, 48293, 39704,
+            48298, 39704, 48313, 39698, 48318, 39701, 48320, 39689, 48339, 39689, 48340, 39662, 48350, 39667, 48355, 39660, 48373, 39685, 48389, 39691,
+            48377, 39660, 48376, 39634, 48382, 39623, 48409, 39612, 48429, 39609, 48435, 39605, 48455, 39605, 48456, 39613, 48465, 39615, 48467, 39634,
+            48489, 39644, 48496, 39642, 48495, 39622, 48535, 39614, 48572, 39610, 48575, 39612, 48574, 39604, 48582, 39600, 48585, 39607, 48590, 39607,
+            48594, 39600, 48593, 39592, 48588, 39582, 48580, 39575, 48584, 39566, 48592, 39568, 48598, 39560, 48595, 39551, 48584, 39544, 48586, 39531,
+            48594, 39537, 48600, 39528, 48612, 39529, 48622, 39516, 48633, 39518, 48632, 39496, 48628, 39492, 48628, 39468, 48638, 39468, 48640, 39456,
+            48654, 39454, 48659, 39422, 48659, 39410, 48673, 39411, 48680, 39391, 48685, 39388, 48688, 39376, 48700, 39356, 48710, 39349, 48720, 39372,
+            48728, 39353, 48734, 39357, 48756, 39345, 48767, 39354, 48769, 39327, 48777, 39325, 48772, 39306, 48761, 39290, 48751, 39286, 48754, 39273,
+            48744, 39267, 48744, 39254, 48731, 39256, 48716, 39250, 48712, 39229, 48701, 39206, 48707, 39194, 48686, 39178, 48690, 39166, 48678, 39163,
+            48678, 39156, 48661, 39139, 48661, 39124, 48651, 39104, 48652, 39076, 48648, 39076, 48641, 39072, 48609, 39068, 48601, 39088, 48588, 39079,
+            48592, 39114, 48584, 39116, 48577, 39105, 48567, 39099, 48565, 39119, 48555, 39138, 48547, 39125, 48544, 39068, 48541, 39064, 48539, 39081,
+            48532, 39082, 48526, 39067, 48514, 39064, 48497, 39074, 48492, 39085, 48471, 39090, 48472, 39061, 48468, 39059, 48470, 39040, 48478, 39044,
+            48479, 39037, 48488, 39043, 48490, 39035, 48474, 39016, 48479, 39014, 48478, 39001, 48469, 38995, 48465, 39010, 48461, 38983, 48462, 38958,
+            48439, 38964, 48431, 38955, 48414, 38955, 48413, 38941, 48395, 38936, 48395, 38930, 48389, 38928, 48387, 38916, 48385, 38914, 48359, 38916,
+            48356, 38931, 48364, 38958, 48374, 38962, 48374, 38995, 48371, 39001, 48353, 39002, 48355, 39032, 48354, 39044, 48291, 39052, 48291, 39074,
+            48286, 39077, 48288, 39107, 48293, 39114, 48293, 39148, 48230, 39206, 48229, 39217, 48212, 39262, 48212, 39271, 48214, 39286, 48212, 39294,
+            48219, 39315, 48234, 39325, 48233, 39345, 48236, 39362, 48233, 39370, 48223, 39373, 48220, 39366, 48205, 39363, 48202, 39356, 48195, 39365,
+            48194, 39377, 48183, 39387, 48173, 39422, 48205, 39428, 48214, 39440, 48202, 39450, 48206, 39463, 48202, 39475, 48220, 39488, 48217, 39506
+        ))
+    )
+
+    private fun _r_starobilskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49093, 38815, 49120, 38879, 49098, 39139, 49128, 39144, 49117, 39188, 49127, 39243, 49118, 39247, 49106, 39227, 49094, 39242, 49088, 39276,
+            49100, 39307, 49065, 39392, 49057, 39431, 49064, 39446, 49074, 39447, 49078, 39433, 49093, 39449, 49104, 39444, 49105, 39463, 49087, 39468,
+            49086, 39502, 49072, 39501, 49015, 39534, 48991, 39534, 48976, 39586, 49004, 39624, 48983, 39650, 48990, 39676, 49001, 39663, 49013, 39678,
+            49017, 39673, 49036, 39685, 49040, 39672, 49050, 39692, 49042, 39741, 49040, 39767, 49060, 39805, 49058, 39819, 49064, 39880, 49057, 39910,
+            49056, 39938, 49071, 39942, 49082, 39938, 49107, 39959, 49124, 39972, 49179, 40031, 49187, 40077, 49203, 40094, 49212, 40108, 49230, 40123,
+            49240, 40137, 49237, 40178, 49242, 40208, 49251, 40222, 49260, 40227, 49281, 40186, 49303, 40184, 49330, 40192, 49346, 40200, 49356, 40170,
+            49373, 40156, 49378, 40143, 49386, 40114, 49410, 40078, 49430, 40062, 49446, 40046, 49454, 40030, 49499, 40042, 49520, 40039, 49559, 40140,
+            49569, 40170, 49596, 40140, 49616, 40136, 49599, 40065, 49607, 40057, 49597, 39952, 49574, 39935, 49558, 39892, 49564, 39839, 49558, 39806,
+            49577, 39777, 49597, 39750, 49606, 39714, 49605, 39696, 49612, 39686, 49615, 39660, 49634, 39639, 49691, 39614, 49718, 39591, 49734, 39610,
+            49739, 39545, 49756, 39479, 49760, 39444, 49754, 39414, 49738, 39379, 49741, 39358, 49753, 39308, 49755, 39285, 49768, 39274, 49768, 39265,
+            49777, 39251, 49799, 39238, 49807, 39228, 49840, 39227, 49885, 39189, 49888, 39179, 49862, 39132, 49837, 39109, 49819, 39070, 49816, 39068,
+            49822, 39027, 49808, 38986, 49805, 38966, 49796, 38949, 49801, 38939, 49797, 38930, 49805, 38921, 49815, 38918, 49819, 38910, 49819, 38889,
+            49795, 38840, 49786, 38839, 49778, 38795, 49764, 38798, 49714, 38777, 49707, 38816, 49718, 38822, 49714, 38843, 49724, 38850, 49720, 38863,
+            49724, 38869, 49719, 38886, 49727, 38891, 49709, 38912, 49701, 38930, 49686, 38941, 49682, 38957, 49660, 38950, 49652, 38933, 49651, 38945,
+            49641, 38946, 49639, 38922, 49636, 38914, 49626, 38930, 49630, 38944, 49621, 38940, 49621, 38908, 49582, 38895, 49558, 38898, 49542, 38906,
+            49532, 38918, 49512, 38919, 49504, 38916, 49491, 38900, 49471, 38902, 49453, 38884, 49448, 38870, 49428, 38864, 49427, 38872, 49414, 38896,
+            49398, 38902, 49398, 38894, 49380, 38892, 49379, 38855, 49370, 38814, 49355, 38768, 49370, 38712, 49362, 38691, 49372, 38678, 49394, 38673,
+            49396, 38683, 49427, 38671, 49435, 38638, 49427, 38627, 49427, 38612, 49417, 38609, 49418, 38596, 49411, 38587, 49398, 38589, 49390, 38618,
+            49363, 38625, 49354, 38621, 49342, 38607, 49342, 38585, 49324, 38582, 49299, 38566, 49288, 38551, 49278, 38551, 49278, 38540, 49284, 38537,
+            49282, 38517, 49284, 38477, 49271, 38475, 49270, 38485, 49252, 38484, 49246, 38478, 49219, 38515, 49203, 38504, 49196, 38511, 49199, 38527,
+            49205, 38525, 49206, 38545, 49200, 38547, 49202, 38592, 49195, 38605, 49197, 38624, 49187, 38626, 49175, 38614, 49173, 38637, 49174, 38659,
+            49166, 38666, 49159, 38689, 49105, 38692, 49090, 38701, 49090, 38719, 49068, 38722, 49067, 38693, 49045, 38690, 49052, 38705, 49046, 38714,
+            49050, 38746, 49057, 38751, 49055, 38817, 49093, 38815
+        ))
+    )
+
+    private fun _r_svativskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49153, 38030, 49169, 38050, 49180, 38054, 49180, 38102, 49194, 38095, 49199, 38146, 49184, 38187, 49176, 38194, 49183, 38207, 49179, 38216,
+            49182, 38237, 49188, 38309, 49182, 38309, 49185, 38372, 49190, 38372, 49191, 38394, 49201, 38394, 49204, 38356, 49253, 38356, 49253, 38364,
+            49263, 38361, 49269, 38401, 49280, 38423, 49289, 38428, 49299, 38424, 49306, 38441, 49297, 38446, 49299, 38478, 49284, 38477, 49282, 38517,
+            49284, 38537, 49278, 38540, 49278, 38551, 49288, 38551, 49299, 38566, 49324, 38582, 49342, 38585, 49342, 38607, 49354, 38621, 49363, 38625,
+            49390, 38618, 49398, 38589, 49411, 38587, 49418, 38596, 49417, 38609, 49427, 38612, 49427, 38627, 49435, 38638, 49427, 38671, 49396, 38683,
+            49394, 38673, 49372, 38678, 49362, 38691, 49370, 38712, 49355, 38768, 49370, 38814, 49379, 38855, 49380, 38892, 49398, 38894, 49398, 38902,
+            49414, 38896, 49427, 38872, 49428, 38864, 49448, 38870, 49453, 38884, 49471, 38902, 49491, 38900, 49504, 38916, 49512, 38919, 49532, 38918,
+            49542, 38906, 49558, 38898, 49582, 38895, 49621, 38908, 49621, 38940, 49630, 38944, 49626, 38930, 49636, 38914, 49639, 38922, 49641, 38946,
+            49651, 38945, 49652, 38933, 49660, 38950, 49682, 38957, 49686, 38941, 49701, 38930, 49709, 38912, 49727, 38891, 49719, 38886, 49724, 38869,
+            49720, 38863, 49724, 38850, 49714, 38843, 49718, 38822, 49707, 38816, 49714, 38777, 49764, 38798, 49778, 38795, 49786, 38839, 49795, 38840,
+            49819, 38889, 49819, 38910, 49830, 38913, 49844, 38912, 49849, 38905, 49859, 38918, 49860, 38909, 49869, 38902, 49866, 38869, 49869, 38856,
+            49865, 38852, 49868, 38836, 49876, 38831, 49883, 38795, 49882, 38781, 49896, 38768, 49898, 38744, 49905, 38734, 49927, 38724, 49935, 38694,
+            49962, 38686, 49984, 38718, 49993, 38703, 50008, 38686, 50006, 38680, 49992, 38677, 49974, 38680, 49972, 38667, 49956, 38647, 49974, 38616,
+            49977, 38583, 49959, 38527, 49963, 38510, 49963, 38489, 49983, 38479, 49983, 38465, 49995, 38469, 50001, 38434, 49982, 38416, 49992, 38397,
+            50006, 38351, 50019, 38354, 50036, 38352, 50058, 38335, 50086, 38329, 50089, 38314, 50087, 38301, 50074, 38278, 50073, 38256, 50080, 38178,
+            50057, 38186, 50024, 38190, 50023, 38186, 49979, 38222, 49969, 38195, 49962, 38198, 49952, 38163, 49942, 38171, 49922, 38127, 49930, 38129,
+            49943, 38124, 49924, 38058, 49916, 38046, 49900, 38033, 49857, 38080, 49846, 38094, 49836, 38076, 49839, 38048, 49837, 38019, 49813, 38009,
+            49800, 38036, 49792, 38056, 49784, 38054, 49783, 38036, 49778, 38034, 49766, 38012, 49757, 38010, 49753, 37998, 49755, 37983, 49768, 37976,
+            49748, 37961, 49730, 37951, 49718, 37961, 49708, 37974, 49715, 37989, 49715, 38017, 49704, 38018, 49701, 37999, 49696, 38014, 49679, 38016,
+            49669, 38030, 49663, 38029, 49658, 38047, 49648, 37999, 49644, 37987, 49628, 37996, 49627, 37982, 49612, 37974, 49611, 37945, 49594, 37942,
+            49595, 37935, 49584, 37939, 49569, 37953, 49570, 37923, 49574, 37901, 49549, 37885, 49548, 37928, 49534, 37919, 49519, 37886, 49520, 37848,
+            49508, 37843, 49503, 37846, 49493, 37839, 49487, 37851, 49446, 37845, 49447, 37877, 49436, 37880, 49418, 37878, 49403, 37897, 49328, 37878,
+            49313, 37883, 49303, 37947, 49285, 37958, 49281, 37948, 49277, 37912, 49270, 37899, 49260, 37911, 49253, 37897, 49246, 37868, 49237, 37872,
+            49221, 37880, 49219, 37890, 49212, 37890, 49214, 37909, 49203, 37916, 49206, 37924, 49192, 37936, 49184, 37908, 49175, 37893, 49166, 37902,
+            49160, 37893, 49146, 37922, 49139, 37946, 49142, 37955, 49136, 37959, 49130, 37980, 49127, 38039, 49139, 38040, 49151, 38044, 49153, 38030
+        ))
+    )
+
+    private fun _r_rovenkivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            47866, 39432, 47886, 39426, 47892, 39443, 47900, 39444, 47899, 39498, 47938, 39435, 47969, 39396, 47987, 39391, 48013, 39395, 48024, 39420,
+            48027, 39439, 48033, 39447, 48030, 39458, 48044, 39464, 48048, 39472, 48048, 39456, 48050, 39443, 48069, 39424, 48081, 39426, 48088, 39412,
+            48086, 39431, 48095, 39424, 48136, 39422, 48137, 39418, 48126, 39391, 48137, 39391, 48144, 39375, 48161, 39389, 48183, 39390, 48194, 39377,
+            48195, 39365, 48202, 39356, 48205, 39363, 48220, 39366, 48223, 39373, 48233, 39370, 48236, 39362, 48233, 39345, 48234, 39325, 48219, 39315,
+            48212, 39294, 48214, 39286, 48212, 39271, 48211, 39265, 48229, 39217, 48230, 39206, 48293, 39148, 48293, 39114, 48288, 39107, 48286, 39077,
+            48291, 39074, 48291, 39052, 48347, 39044, 48354, 39045, 48354, 39043, 48353, 39002, 48371, 39001, 48374, 38995, 48374, 38962, 48364, 38958,
+            48356, 38931, 48359, 38916, 48386, 38915, 48388, 38917, 48389, 38928, 48395, 38930, 48393, 38894, 48385, 38892, 48383, 38870, 48375, 38868,
+            48372, 38839, 48355, 38834, 48356, 38814, 48338, 38811, 48328, 38811, 48316, 38802, 48295, 38813, 48298, 38801, 48294, 38764, 48289, 38763,
+            48284, 38734, 48271, 38687, 48238, 38587, 48235, 38588, 48234, 38589, 48217, 38596, 48205, 38612, 48191, 38610, 48180, 38598, 48172, 38606,
+            48162, 38638, 48164, 38671, 48159, 38672, 48159, 38695, 48146, 38691, 48134, 38738, 48132, 38767, 48118, 38802, 48116, 38820, 48089, 38807,
+            48085, 38820, 48074, 38799, 48066, 38817, 48078, 38829, 48067, 38825, 48063, 38830, 48047, 38815, 48038, 38826, 48036, 38821, 48014, 38837,
+            48016, 38862, 48007, 39040, 47987, 39044, 47956, 39039, 47953, 39054, 47946, 39058, 47953, 39075, 47942, 39084, 47941, 39092, 47895, 39065,
+            47869, 39074, 47869, 39083, 47852, 39083, 47851, 39110, 47842, 39110, 47842, 39149, 47851, 39149, 47852, 39162, 47847, 39172, 47854, 39181,
+            47853, 39236, 47860, 39234, 47867, 39242, 47867, 39352, 47873, 39356, 47871, 39387, 47830, 39412, 47839, 39439, 47844, 39432, 47855, 39441,
+            47855, 39437, 47857, 39431, 47866, 39432
+        ))
+    )
+
+    private fun _r_shchastynskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48589, 39670, 48587, 39688, 48596, 39670, 48604, 39671, 48609, 39660, 48622, 39670, 48636, 39692, 48648, 39693, 48659, 39710, 48667, 39711,
+            48669, 39702, 48684, 39723, 48689, 39716, 48702, 39718, 48706, 39705, 48725, 39710, 48728, 39720, 48740, 39725, 48744, 39738, 48752, 39736,
+            48751, 39726, 48770, 39744, 48764, 39766, 48771, 39764, 48784, 39772, 48785, 39780, 48800, 39786, 48810, 39780, 48824, 39786, 48824, 39797,
+            48836, 39792, 48844, 39805, 48839, 39807, 48831, 39828, 48834, 39830, 48821, 39885, 48796, 39948, 48793, 39976, 48870, 40081, 48874, 40072,
+            48904, 40058, 48909, 40061, 48914, 40045, 48915, 40029, 48902, 40018, 48901, 40004, 48868, 39993, 48872, 39962, 48880, 39945, 48885, 39942,
+            48896, 39924, 48890, 39852, 48902, 39845, 48901, 39834, 48893, 39836, 48886, 39827, 48896, 39818, 48904, 39823, 48915, 39805, 48912, 39793,
+            48925, 39774, 48937, 39781, 48950, 39774, 48968, 39758, 48976, 39759, 48987, 39746, 48976, 39729, 49000, 39699, 48990, 39678, 48983, 39650,
+            49004, 39624, 48976, 39586, 48991, 39534, 49015, 39534, 49072, 39501, 49086, 39502, 49087, 39468, 49105, 39463, 49104, 39444, 49093, 39449,
+            49078, 39433, 49074, 39447, 49064, 39446, 49057, 39431, 49065, 39392, 49100, 39307, 49088, 39276, 49094, 39242, 49106, 39227, 49118, 39247,
+            49127, 39243, 49117, 39188, 49128, 39144, 49098, 39139, 49120, 38879, 49093, 38815, 49064, 38816, 49016, 38822, 49009, 38813, 49009, 38801,
+            49003, 38801, 49003, 38820, 48972, 38824, 48933, 38771, 48939, 38761, 48927, 38764, 48894, 38710, 48884, 38700, 48874, 38723, 48858, 38661,
+            48846, 38670, 48839, 38690, 48828, 38686, 48829, 38666, 48820, 38676, 48815, 38663, 48809, 38667, 48800, 38692, 48784, 38660, 48774, 38656,
+            48759, 38695, 48761, 38729, 48767, 38743, 48764, 38757, 48770, 38764, 48764, 38787, 48757, 38790, 48760, 38800, 48752, 38796, 48749, 38858,
+            48750, 38882, 48751, 38894, 48748, 38911, 48745, 38919, 48748, 38934, 48746, 38938, 48740, 38934, 48735, 38938, 48734, 38957, 48747, 38960,
+            48744, 38981, 48723, 39001, 48714, 38987, 48711, 38997, 48698, 39004, 48694, 39017, 48684, 39016, 48663, 39028, 48660, 39011, 48653, 39033,
+            48648, 39039, 48647, 39052, 48652, 39079, 48651, 39104, 48661, 39124, 48661, 39139, 48678, 39156, 48678, 39163, 48690, 39166, 48686, 39178,
+            48707, 39194, 48701, 39206, 48712, 39229, 48716, 39250, 48731, 39256, 48744, 39254, 48744, 39267, 48754, 39273, 48751, 39286, 48761, 39290,
+            48772, 39306, 48777, 39325, 48769, 39327, 48767, 39354, 48756, 39345, 48734, 39357, 48728, 39353, 48720, 39372, 48710, 39349, 48698, 39358,
+            48688, 39377, 48685, 39388, 48680, 39391, 48673, 39411, 48659, 39410, 48659, 39422, 48654, 39454, 48640, 39456, 48638, 39468, 48628, 39468,
+            48628, 39492, 48632, 39496, 48633, 39518, 48622, 39516, 48612, 39529, 48600, 39528, 48594, 39537, 48586, 39531, 48584, 39544, 48595, 39551,
+            48598, 39560, 48592, 39568, 48584, 39566, 48580, 39575, 48586, 39579, 48591, 39586, 48594, 39596, 48592, 39603, 48587, 39608, 48585, 39607,
+            48582, 39600, 48574, 39604, 48575, 39612, 48578, 39616, 48586, 39620, 48581, 39634, 48589, 39670
+        ))
+    )
+
+    private fun _r_dovzhanskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            47866, 39432, 47856, 39432, 47854, 39438, 47856, 39446, 47852, 39446, 47860, 39465, 47860, 39478, 47826, 39521, 47833, 39535, 47825, 39542,
+            47837, 39566, 47837, 39622, 47839, 39625, 47833, 39652, 47828, 39738, 47847, 39757, 47847, 39764, 47871, 39764, 47871, 39796, 47919, 39794,
+            47936, 39806, 47951, 39807, 47951, 39822, 47955, 39825, 47968, 39816, 47981, 39824, 47984, 39817, 48001, 39816, 48012, 39792, 48040, 39776,
+            48041, 39884, 48049, 39884, 48059, 39848, 48067, 39834, 48079, 39869, 48109, 39874, 48117, 39871, 48134, 39897, 48149, 39907, 48180, 39910,
+            48181, 39937, 48229, 39942, 48223, 40003, 48225, 40010, 48242, 40006, 48254, 40021, 48300, 39993, 48317, 39989, 48315, 39977, 48307, 39971,
+            48291, 39937, 48280, 39935, 48272, 39926, 48272, 39911, 48281, 39915, 48291, 39910, 48304, 39887, 48309, 39887, 48310, 39841, 48329, 39840,
+            48333, 39846, 48335, 39886, 48342, 39918, 48347, 39918, 48346, 39943, 48354, 39947, 48363, 39932, 48384, 39943, 48388, 39938, 48377, 39932,
+            48377, 39920, 48391, 39907, 48396, 39919, 48404, 39907, 48420, 39912, 48428, 39897, 48442, 39889, 48448, 39898, 48464, 39856, 48474, 39846,
+            48502, 39848, 48502, 39861, 48508, 39867, 48536, 39855, 48553, 39852, 48561, 39855, 48571, 39845, 48578, 39821, 48586, 39824, 48584, 39808,
+            48593, 39792, 48592, 39774, 48582, 39753, 48590, 39746, 48585, 39720, 48588, 39703, 48586, 39686, 48589, 39670, 48581, 39634, 48586, 39620,
+            48578, 39616, 48572, 39610, 48535, 39614, 48495, 39622, 48496, 39642, 48489, 39644, 48467, 39634, 48465, 39615, 48456, 39613, 48455, 39605,
+            48435, 39605, 48429, 39609, 48409, 39612, 48382, 39623, 48376, 39634, 48377, 39660, 48389, 39691, 48373, 39685, 48355, 39660, 48350, 39667,
+            48340, 39662, 48339, 39689, 48320, 39689, 48318, 39701, 48313, 39698, 48298, 39704, 48294, 39705, 48294, 39684, 48289, 39668, 48274, 39663,
+            48279, 39678, 48269, 39669, 48265, 39635, 48265, 39655, 48255, 39647, 48258, 39625, 48240, 39613, 48238, 39604, 48214, 39597, 48194, 39580,
+            48192, 39570, 48206, 39569, 48208, 39534, 48223, 39540, 48226, 39508, 48217, 39506, 48220, 39488, 48202, 39475, 48206, 39463, 48202, 39450,
+            48214, 39440, 48205, 39428, 48173, 39422, 48183, 39390, 48161, 39389, 48144, 39375, 48137, 39391, 48126, 39391, 48137, 39418, 48136, 39422,
+            48095, 39424, 48086, 39431, 48088, 39412, 48081, 39426, 48069, 39424, 48050, 39443, 48048, 39456, 48048, 39472, 48044, 39464, 48030, 39458,
+            48033, 39447, 48027, 39439, 48024, 39420, 48013, 39395, 47987, 39391, 47969, 39396, 47938, 39435, 47899, 39498, 47900, 39444, 47892, 39443,
+            47886, 39426, 47866, 39432
+        ))
+    )
+
+    private fun _r_alchevskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48238, 38587, 48271, 38687, 48284, 38734, 48289, 38763, 48294, 38764, 48298, 38801, 48295, 38813, 48316, 38802, 48328, 38811, 48338, 38811,
+            48356, 38814, 48355, 38834, 48372, 38839, 48375, 38868, 48383, 38870, 48385, 38892, 48393, 38894, 48395, 38936, 48413, 38941, 48414, 38955,
+            48431, 38955, 48439, 38964, 48462, 38958, 48461, 38983, 48465, 39010, 48469, 38995, 48478, 39001, 48479, 39014, 48474, 39016, 48490, 39035,
+            48488, 39043, 48479, 39037, 48478, 39044, 48470, 39040, 48468, 39059, 48472, 39061, 48471, 39090, 48492, 39085, 48497, 39074, 48514, 39064,
+            48526, 39067, 48532, 39082, 48539, 39081, 48541, 39064, 48544, 39068, 48547, 39125, 48555, 39138, 48565, 39119, 48567, 39099, 48577, 39105,
+            48584, 39116, 48592, 39114, 48588, 39079, 48601, 39088, 48609, 39068, 48641, 39072, 48648, 39076, 48652, 39076, 48647, 39052, 48647, 39040,
+            48648, 39038, 48653, 39033, 48660, 39011, 48663, 39028, 48684, 39016, 48694, 39017, 48698, 39004, 48711, 38997, 48714, 38987, 48723, 39001,
+            48744, 38981, 48747, 38960, 48734, 38957, 48735, 38938, 48740, 38934, 48745, 38938, 48747, 38937, 48747, 38929, 48745, 38919, 48751, 38902,
+            48747, 38898, 48738, 38898, 48694, 38883, 48695, 38869, 48682, 38851, 48671, 38843, 48675, 38825, 48702, 38763, 48712, 38717, 48708, 38702,
+            48712, 38687, 48754, 38676, 48747, 38661, 48760, 38646, 48765, 38652, 48771, 38629, 48757, 38618, 48757, 38595, 48765, 38577, 48780, 38556,
+            48773, 38529, 48784, 38518, 48783, 38494, 48786, 38484, 48777, 38484, 48770, 38501, 48780, 38510, 48771, 38520, 48762, 38521, 48751, 38504,
+            48745, 38523, 48732, 38523, 48726, 38517, 48724, 38503, 48716, 38517, 48718, 38521, 48687, 38532, 48684, 38564, 48682, 38575, 48661, 38568,
+            48664, 38548, 48674, 38550, 48675, 38526, 48681, 38505, 48676, 38498, 48672, 38479, 48678, 38481, 48678, 38470, 48686, 38469, 48685, 38486,
+            48689, 38491, 48696, 38473, 48696, 38463, 48687, 38463, 48690, 38447, 48683, 38450, 48678, 38422, 48674, 38421, 48664, 38407, 48656, 38405,
+            48658, 38424, 48644, 38422, 48650, 38455, 48647, 38467, 48656, 38479, 48654, 38485, 48646, 38473, 48640, 38454, 48644, 38439, 48636, 38426,
+            48631, 38436, 48608, 38410, 48597, 38415, 48597, 38403, 48576, 38403, 48564, 38408, 48571, 38448, 48532, 38464, 48536, 38479, 48515, 38484,
+            48503, 38474, 48487, 38461, 48472, 38452, 48465, 38430, 48452, 38434, 48444, 38434, 48424, 38436, 48418, 38440, 48397, 38438, 48379, 38448,
+            48379, 38469, 48368, 38473, 48363, 38494, 48360, 38471, 48347, 38462, 48340, 38434, 48316, 38438, 48308, 38426, 48298, 38433, 48288, 38424,
+            48279, 38427, 48272, 38542, 48274, 38559, 48265, 38578, 48252, 38590, 48242, 38587, 48238, 38587
+        ))
+    )
+
+    private fun _r_zolochivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49617, 24931, 49617, 24946, 49615, 24952, 49627, 24962, 49641, 24966, 49636, 24983, 49645, 24990, 49653, 24987, 49666, 24994, 49700, 25000,
+            49735, 25022, 49730, 25046, 49712, 25067, 49728, 25088, 49729, 25095, 49746, 25116, 49770, 25075, 49778, 25077, 49779, 25087, 49787, 25090,
+            49799, 25084, 49827, 25085, 49821, 25097, 49815, 25135, 49818, 25143, 49828, 25144, 49836, 25157, 49831, 25172, 49838, 25180, 49830, 25211,
+            49826, 25213, 49825, 25241, 49832, 25247, 49837, 25262, 49829, 25271, 49827, 25286, 49833, 25294, 49840, 25290, 49850, 25300, 49856, 25316,
+            49859, 25336, 49864, 25339, 49868, 25376, 49875, 25371, 49878, 25382, 49897, 25389, 49914, 25376, 49927, 25387, 49935, 25387, 49937, 25402,
+            49934, 25416, 49941, 25428, 49948, 25404, 49955, 25402, 49970, 25412, 49985, 25402, 49996, 25361, 50025, 25311, 50042, 25294, 50117, 25211,
+            50131, 25197, 50157, 25208, 50167, 25202, 50180, 25215, 50188, 25203, 50202, 25170, 50209, 25167, 50223, 25168, 50224, 25184, 50231, 25178,
+            50249, 25191, 50247, 25207, 50261, 25203, 50280, 25207, 50283, 25200, 50290, 25172, 50291, 25164, 50283, 25123, 50288, 25110, 50296, 25070,
+            50301, 25055, 50296, 25057, 50291, 25047, 50282, 25043, 50280, 25033, 50267, 25038, 50248, 25040, 50241, 25033, 50224, 25027, 50223, 25021,
+            50219, 25016, 50209, 25006, 50201, 24995, 50194, 24986, 50197, 24976, 50190, 24963, 50187, 24934, 50178, 24909, 50184, 24882, 50178, 24872,
+            50175, 24848, 50179, 24836, 50161, 24830, 50162, 24859, 50159, 24869, 50153, 24855, 50148, 24820, 50152, 24814, 50149, 24799, 50142, 24797,
+            50144, 24787, 50140, 24758, 50143, 24750, 50136, 24724, 50138, 24710, 50142, 24668, 50134, 24660, 50136, 24637, 50120, 24629, 50125, 24597,
+            50116, 24593, 50118, 24573, 50114, 24572, 50119, 24523, 50107, 24525, 50097, 24557, 50073, 24552, 50077, 24506, 50080, 24494, 50078, 24467,
+            50064, 24464, 50053, 24473, 50060, 24491, 50050, 24500, 50039, 24498, 50033, 24511, 50033, 24538, 50022, 24552, 50010, 24551, 50012, 24535,
+            50022, 24497, 50019, 24481, 50000, 24478, 49991, 24473, 49982, 24454, 49982, 24442, 49976, 24452, 49958, 24451, 49946, 24433, 49934, 24442,
+            49898, 24438, 49897, 24418, 49900, 24389, 49888, 24388, 49891, 24363, 49878, 24351, 49869, 24355, 49858, 24397, 49848, 24448, 49847, 24451,
+            49852, 24483, 49855, 24488, 49866, 24502, 49858, 24515, 49858, 24537, 49848, 24564, 49842, 24593, 49825, 24619, 49809, 24614, 49804, 24599,
+            49794, 24620, 49777, 24612, 49764, 24617, 49762, 24635, 49752, 24641, 49751, 24656, 49743, 24665, 49734, 24697, 49721, 24703, 49708, 24696,
+            49706, 24701, 49718, 24721, 49718, 24771, 49709, 24784, 49680, 24787, 49675, 24827, 49687, 24829, 49684, 24845, 49676, 24853, 49659, 24852,
+            49664, 24844, 49660, 24820, 49650, 24825, 49645, 24842, 49628, 24840, 49623, 24847, 49614, 24843, 49601, 24846, 49598, 24863, 49609, 24873,
+            49602, 24885, 49600, 24903, 49611, 24899, 49614, 24912, 49609, 24928, 49608, 24940, 49617, 24931
+        ))
+    )
+
+    private fun _r_sambirskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48844, 23154, 48860, 23162, 48868, 23159, 48875, 23131, 48876, 23111, 48899, 23075, 48919, 23083, 48933, 23105, 48937, 23116, 48964, 23126,
+            49000, 23125, 49012, 23115, 49020, 23134, 49030, 23127, 49035, 23138, 49028, 23152, 49036, 23189, 49032, 23204, 49041, 23219, 49054, 23216,
+            49086, 23187, 49102, 23165, 49114, 23178, 49122, 23172, 49132, 23175, 49154, 23173, 49162, 23191, 49181, 23216, 49188, 23204, 49201, 23215,
+            49210, 23184, 49243, 23142, 49258, 23151, 49263, 23163, 49282, 23148, 49291, 23129, 49292, 23117, 49301, 23111, 49308, 23119, 49318, 23106,
+            49326, 23115, 49338, 23111, 49339, 23128, 49346, 23147, 49362, 23156, 49367, 23195, 49357, 23204, 49354, 23217, 49366, 23236, 49368, 23233,
+            49387, 23242, 49392, 23252, 49407, 23258, 49430, 23250, 49437, 23268, 49461, 23283, 49458, 23313, 49455, 23321, 49455, 23345, 49463, 23358,
+            49458, 23368, 49460, 23386, 49471, 23404, 49483, 23399, 49485, 23428, 49495, 23472, 49490, 23497, 49491, 23523, 49498, 23554, 49511, 23568,
+            49517, 23562, 49546, 23569, 49539, 23584, 49531, 23638, 49544, 23645, 49550, 23650, 49568, 23656, 49576, 23632, 49588, 23622, 49595, 23606,
+            49603, 23607, 49613, 23624, 49626, 23626, 49639, 23631, 49643, 23625, 49650, 23625, 49657, 23631, 49660, 23626, 49653, 23614, 49652, 23600,
+            49638, 23588, 49642, 23572, 49658, 23573, 49664, 23565, 49664, 23522, 49674, 23526, 49689, 23497, 49707, 23486, 49706, 23464, 49701, 23460,
+            49681, 23435, 49684, 23426, 49696, 23419, 49714, 23439, 49719, 23432, 49728, 23439, 49749, 23446, 49754, 23438, 49753, 23427, 49761, 23397,
+            49746, 23386, 49739, 23395, 49718, 23391, 49714, 23380, 49710, 23392, 49702, 23390, 49686, 23378, 49689, 23362, 49680, 23350, 49680, 23341,
+            49671, 23336, 49674, 23315, 49660, 23309, 49653, 23310, 49652, 23280, 49643, 23265, 49652, 23239, 49647, 23232, 49644, 23214, 49650, 23178,
+            49655, 23179, 49651, 23143, 49647, 23147, 49651, 23114, 49649, 23094, 49635, 23077, 49644, 23070, 49642, 23061, 49650, 23046, 49639, 23040,
+            49636, 23050, 49631, 23051, 49632, 23040, 49625, 23030, 49629, 23010, 49624, 22992, 49640, 22973, 49646, 22993, 49653, 22984, 49661, 22973,
+            49666, 22968, 49673, 22968, 49683, 22952, 49686, 22947, 49690, 22932, 49684, 22910, 49687, 22906, 49697, 22922, 49709, 22911, 49709, 22862,
+            49720, 22851, 49710, 22848, 49695, 22822, 49693, 22804, 49677, 22788, 49656, 22783, 49631, 22750, 49582, 22695, 49572, 22685, 49549, 22675,
+            49539, 22663, 49530, 22641, 49509, 22652, 49498, 22670, 49495, 22697, 49492, 22699, 49436, 22714, 49399, 22733, 49361, 22747, 49336, 22743,
+            49317, 22751, 49299, 22744, 49248, 22739, 49242, 22720, 49226, 22714, 49221, 22719, 49216, 22746, 49211, 22734, 49198, 22729, 49196, 22722,
+            49175, 22708, 49165, 22718, 49183, 22734, 49180, 22755, 49170, 22743, 49158, 22740, 49153, 22752, 49158, 22789, 49138, 22794, 49130, 22815,
+            49120, 22829, 49112, 22830, 49110, 22839, 49115, 22852, 49105, 22856, 49097, 22875, 49095, 22892, 49083, 22884, 49077, 22868, 49067, 22865,
+            49050, 22875, 49040, 22867, 49038, 22881, 49032, 22875, 49025, 22879, 49020, 22893, 49007, 22890, 49003, 22868, 49000, 22878, 49005, 22896,
+            48984, 22917, 48969, 22920, 48965, 22910, 48969, 22899, 48957, 22875, 48944, 22873, 48924, 22887, 48909, 22893, 48902, 22903, 48880, 22952,
+            48873, 22971, 48849, 22974, 48836, 22987, 48830, 23001, 48846, 23021, 48851, 23046, 48846, 23060, 48854, 23069, 48853, 23079, 48854, 23085,
+            48862, 23100, 48852, 23131, 48845, 23136, 48844, 23154
+        ))
+    )
+
+    private fun _r_drohobytskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49119, 23675, 49135, 23698, 49148, 23711, 49150, 23717, 49153, 23709, 49192, 23757, 49210, 23787, 49237, 23839, 49246, 23817, 49257, 23808,
+            49255, 23803, 49261, 23786, 49254, 23777, 49243, 23774, 49234, 23760, 49242, 23732, 49243, 23696, 49240, 23684, 49253, 23691, 49264, 23671,
+            49283, 23669, 49280, 23681, 49299, 23704, 49307, 23729, 49324, 23744, 49333, 23744, 49338, 23773, 49337, 23781, 49352, 23789, 49350, 23773,
+            49361, 23772, 49370, 23792, 49378, 23793, 49379, 23806, 49402, 23799, 49400, 23792, 49408, 23787, 49420, 23794, 49420, 23784, 49428, 23791,
+            49433, 23787, 49449, 23801, 49453, 23772, 49462, 23766, 49447, 23760, 49449, 23737, 49466, 23734, 49469, 23745, 49476, 23740, 49484, 23750,
+            49478, 23783, 49494, 23790, 49499, 23739, 49501, 23719, 49516, 23714, 49519, 23686, 49518, 23673, 49522, 23648, 49530, 23639, 49531, 23640,
+            49539, 23584, 49546, 23569, 49517, 23562, 49511, 23568, 49498, 23554, 49491, 23523, 49490, 23497, 49495, 23472, 49485, 23428, 49483, 23399,
+            49471, 23404, 49460, 23386, 49458, 23368, 49463, 23358, 49455, 23345, 49455, 23321, 49458, 23313, 49461, 23283, 49437, 23268, 49430, 23250,
+            49407, 23258, 49392, 23252, 49387, 23242, 49368, 23233, 49366, 23236, 49354, 23217, 49357, 23204, 49367, 23195, 49362, 23156, 49346, 23147,
+            49339, 23128, 49338, 23111, 49326, 23115, 49318, 23106, 49308, 23119, 49301, 23111, 49292, 23117, 49291, 23129, 49282, 23148, 49263, 23163,
+            49258, 23151, 49243, 23142, 49210, 23184, 49201, 23215, 49188, 23204, 49181, 23216, 49162, 23191, 49154, 23173, 49132, 23175, 49122, 23172,
+            49114, 23178, 49102, 23165, 49086, 23187, 49054, 23216, 49031, 23249, 49048, 23269, 49058, 23271, 49064, 23281, 49075, 23288, 49092, 23288,
+            49116, 23282, 49129, 23274, 49136, 23280, 49139, 23303, 49153, 23308, 49147, 23336, 49141, 23335, 49136, 23353, 49154, 23377, 49174, 23391,
+            49187, 23377, 49201, 23354, 49205, 23365, 49203, 23378, 49209, 23392, 49230, 23431, 49230, 23445, 49214, 23443, 49198, 23450, 49190, 23463,
+            49189, 23501, 49186, 23513, 49162, 23554, 49167, 23580, 49150, 23608, 49140, 23621, 49133, 23646, 49119, 23675
+        ))
+    )
+
+    private fun _r_lvivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49530, 23724, 49534, 23725, 49536, 23737, 49533, 23748, 49534, 23776, 49515, 23774, 49510, 23788, 49532, 23800, 49523, 23811, 49518, 23806,
+            49514, 23817, 49527, 23813, 49532, 23818, 49552, 23789, 49571, 23781, 49579, 23783, 49583, 23792, 49598, 23799, 49596, 23810, 49604, 23819,
+            49603, 23830, 49590, 23839, 49589, 23851, 49580, 23847, 49578, 23897, 49571, 23916, 49571, 23930, 49581, 23936, 49588, 23955, 49595, 23960,
+            49599, 23931, 49607, 23929, 49612, 23918, 49632, 23912, 49631, 23927, 49652, 23940, 49639, 23967, 49633, 23959, 49632, 23994, 49626, 24017,
+            49630, 24029, 49640, 24032, 49644, 24047, 49623, 24091, 49609, 24088, 49596, 24102, 49588, 24124, 49588, 24154, 49575, 24166, 49578, 24177,
+            49578, 24210, 49569, 24222, 49559, 24221, 49551, 24251, 49555, 24254, 49546, 24273, 49537, 24302, 49522, 24315, 49508, 24310, 49496, 24332,
+            49500, 24351, 49495, 24383, 49499, 24393, 49494, 24404, 49504, 24413, 49502, 24443, 49508, 24445, 49526, 24441, 49536, 24434, 49552, 24460,
+            49553, 24480, 49560, 24473, 49554, 24505, 49547, 24506, 49542, 24522, 49539, 24510, 49529, 24511, 49524, 24520, 49522, 24541, 49526, 24546,
+            49535, 24573, 49527, 24579, 49515, 24598, 49508, 24616, 49510, 24621, 49498, 24638, 49500, 24652, 49506, 24655, 49499, 24670, 49494, 24698,
+            49497, 24721, 49531, 24720, 49547, 24729, 49571, 24719, 49573, 24766, 49572, 24791, 49586, 24802, 49587, 24814, 49593, 24830, 49580, 24835,
+            49582, 24841, 49599, 24833, 49601, 24846, 49614, 24843, 49623, 24847, 49628, 24840, 49645, 24842, 49650, 24825, 49660, 24820, 49664, 24844,
+            49659, 24852, 49676, 24853, 49684, 24845, 49687, 24829, 49675, 24827, 49680, 24787, 49709, 24784, 49718, 24771, 49718, 24721, 49706, 24701,
+            49708, 24696, 49721, 24703, 49734, 24697, 49743, 24665, 49751, 24656, 49752, 24641, 49762, 24635, 49764, 24617, 49777, 24612, 49794, 24620,
+            49804, 24599, 49809, 24614, 49825, 24619, 49842, 24593, 49848, 24564, 49858, 24537, 49858, 24515, 49866, 24502, 49853, 24485, 49846, 24454,
+            49848, 24448, 49858, 24397, 49869, 24355, 49878, 24351, 49891, 24363, 49888, 24388, 49900, 24389, 49897, 24418, 49898, 24438, 49934, 24442,
+            49946, 24433, 49958, 24451, 49976, 24452, 49982, 24442, 49982, 24454, 49991, 24473, 50000, 24478, 50019, 24481, 50022, 24497, 50012, 24535,
+            50010, 24551, 50022, 24552, 50033, 24538, 50033, 24511, 50039, 24498, 50050, 24500, 50060, 24491, 50053, 24473, 50064, 24464, 50078, 24467,
+            50080, 24488, 50079, 24498, 50077, 24506, 50073, 24552, 50097, 24557, 50107, 24525, 50119, 24523, 50126, 24517, 50135, 24451, 50129, 24442,
+            50135, 24430, 50130, 24417, 50150, 24446, 50159, 24457, 50170, 24425, 50170, 24382, 50157, 24364, 50161, 24350, 50176, 24352, 50185, 24340,
+            50194, 24320, 50196, 24274, 50199, 24253, 50197, 24243, 50171, 24232, 50162, 24216, 50134, 24202, 50144, 24177, 50151, 24176, 50159, 24148,
+            50139, 24132, 50116, 24134, 50114, 24130, 50116, 24098, 50132, 24092, 50146, 24093, 50150, 24089, 50157, 24062, 50161, 24058, 50172, 24065,
+            50185, 24086, 50194, 24094, 50203, 24091, 50203, 24050, 50199, 24027, 50202, 23974, 50210, 23964, 50221, 23972, 50223, 23957, 50220, 23937,
+            50224, 23926, 50224, 23909, 50256, 23885, 50257, 23842, 50269, 23814, 50277, 23814, 50278, 23804, 50289, 23807, 50300, 23795, 50303, 23751,
+            50300, 23751, 50302, 23713, 50297, 23712, 50296, 23698, 50301, 23684, 50320, 23673, 50329, 23675, 50321, 23639, 50305, 23631, 50299, 23611,
+            50266, 23581, 50257, 23559, 50233, 23511, 50218, 23470, 50193, 23440, 50186, 23463, 50185, 23488, 50172, 23489, 50157, 23503, 50152, 23514,
+            50174, 23523, 50172, 23532, 50176, 23548, 50173, 23562, 50175, 23577, 50152, 23591, 50153, 23619, 50150, 23633, 50141, 23632, 50134, 23620,
+            50132, 23643, 50118, 23656, 50119, 23661, 50106, 23671, 50094, 23705, 50087, 23714, 50088, 23725, 50074, 23746, 50070, 23771, 50054, 23774,
+            50036, 23784, 50026, 23809, 50005, 23813, 49995, 23811, 49992, 23837, 49981, 23868, 49976, 23893, 49946, 23914, 49942, 23924, 49931, 23920,
+            49929, 23930, 49922, 23932, 49912, 23925, 49898, 23923, 49896, 23902, 49899, 23888, 49888, 23881, 49879, 23862, 49861, 23871, 49862, 23889,
+            49853, 23891, 49845, 23873, 49854, 23866, 49856, 23848, 49847, 23839, 49845, 23820, 49847, 23803, 49840, 23797, 49842, 23770, 49845, 23766,
+            49842, 23751, 49843, 23715, 49855, 23715, 49860, 23695, 49851, 23692, 49843, 23678, 49845, 23665, 49842, 23652, 49832, 23644, 49840, 23611,
+            49844, 23611, 49854, 23583, 49876, 23585, 49881, 23570, 49877, 23553, 49867, 23533, 49856, 23532, 49844, 23508, 49836, 23504, 49818, 23474,
+            49818, 23455, 49822, 23444, 49809, 23445, 49803, 23462, 49797, 23459, 49791, 23444, 49779, 23442, 49777, 23458, 49762, 23455, 49754, 23438,
+            49749, 23446, 49728, 23439, 49719, 23432, 49714, 23439, 49696, 23419, 49684, 23426, 49681, 23435, 49701, 23460, 49706, 23464, 49707, 23486,
+            49689, 23497, 49674, 23526, 49664, 23522, 49664, 23565, 49658, 23573, 49642, 23572, 49638, 23588, 49652, 23600, 49653, 23614, 49660, 23626,
+            49657, 23631, 49650, 23625, 49643, 23625, 49639, 23631, 49626, 23626, 49613, 23624, 49603, 23607, 49595, 23606, 49588, 23622, 49576, 23632,
+            49568, 23656, 49550, 23650, 49544, 23645, 49531, 23638, 49531, 23640, 49530, 23639, 49522, 23648, 49518, 23673, 49519, 23686, 49516, 23714,
+            49501, 23719, 49499, 23739, 49504, 23765, 49520, 23756, 49530, 23724
+        ))
+    )
+
+    private fun _r_stryiskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48723, 23492, 48734, 23513, 48725, 23536, 48726, 23547, 48759, 23558, 48786, 23580, 48796, 23570, 48803, 23569, 48822, 23553, 48829, 23564,
+            48853, 23569, 48865, 23575, 48873, 23583, 48874, 23607, 48883, 23608, 48883, 23595, 48889, 23576, 48911, 23564, 48927, 23569, 48954, 23586,
+            48965, 23580, 48974, 23565, 48992, 23592, 49000, 23598, 49013, 23624, 49026, 23623, 49030, 23639, 49023, 23650, 49029, 23664, 49043, 23677,
+            49060, 23680, 49067, 23686, 49074, 23678, 49088, 23683, 49091, 23686, 49098, 23695, 49099, 23707, 49094, 23720, 49104, 23738, 49111, 23738,
+            49114, 23748, 49124, 23752, 49124, 23764, 49117, 23773, 49120, 23783, 49108, 23800, 49109, 23824, 49113, 23828, 49109, 23878, 49100, 23905,
+            49124, 23934, 49130, 23957, 49141, 23970, 49134, 23987, 49129, 24006, 49119, 24012, 49117, 24019, 49130, 24041, 49147, 24058, 49145, 24080,
+            49148, 24087, 49139, 24119, 49141, 24139, 49131, 24145, 49127, 24168, 49136, 24165, 49144, 24172, 49138, 24196, 49149, 24210, 49144, 24232,
+            49165, 24277, 49170, 24305, 49180, 24334, 49181, 24354, 49186, 24356, 49190, 24384, 49182, 24391, 49168, 24416, 49175, 24435, 49190, 24431,
+            49198, 24438, 49207, 24438, 49229, 24450, 49232, 24430, 49227, 24386, 49234, 24358, 49234, 24348, 49243, 24344, 49253, 24352, 49273, 24354,
+            49280, 24364, 49291, 24340, 49276, 24307, 49289, 24299, 49316, 24301, 49310, 24342, 49323, 24358, 49308, 24380, 49325, 24392, 49351, 24396,
+            49355, 24392, 49366, 24408, 49374, 24429, 49381, 24437, 49394, 24407, 49396, 24388, 49408, 24390, 49412, 24375, 49437, 24372, 49442, 24383,
+            49445, 24411, 49473, 24419, 49474, 24413, 49494, 24404, 49499, 24393, 49495, 24383, 49500, 24351, 49496, 24332, 49508, 24310, 49522, 24315,
+            49537, 24302, 49546, 24273, 49555, 24254, 49551, 24251, 49559, 24221, 49569, 24222, 49578, 24210, 49578, 24177, 49575, 24166, 49588, 24154,
+            49588, 24124, 49596, 24102, 49609, 24088, 49623, 24091, 49644, 24047, 49640, 24032, 49630, 24029, 49626, 24017, 49632, 23994, 49633, 23959,
+            49639, 23967, 49652, 23940, 49631, 23927, 49632, 23912, 49612, 23918, 49607, 23929, 49599, 23931, 49595, 23960, 49588, 23955, 49581, 23936,
+            49571, 23930, 49571, 23916, 49578, 23897, 49580, 23847, 49589, 23851, 49590, 23839, 49603, 23830, 49604, 23819, 49596, 23810, 49598, 23799,
+            49583, 23792, 49579, 23783, 49571, 23781, 49552, 23789, 49532, 23818, 49527, 23813, 49514, 23817, 49518, 23806, 49523, 23811, 49532, 23800,
+            49510, 23788, 49515, 23774, 49534, 23776, 49533, 23748, 49536, 23737, 49534, 23725, 49530, 23724, 49520, 23756, 49504, 23765, 49499, 23739,
+            49494, 23790, 49478, 23783, 49484, 23750, 49476, 23740, 49469, 23745, 49466, 23734, 49449, 23737, 49447, 23760, 49462, 23766, 49453, 23772,
+            49449, 23801, 49433, 23787, 49428, 23791, 49420, 23784, 49420, 23794, 49408, 23787, 49400, 23792, 49402, 23799, 49379, 23806, 49378, 23793,
+            49370, 23792, 49361, 23772, 49350, 23773, 49352, 23789, 49337, 23781, 49338, 23773, 49333, 23744, 49324, 23744, 49307, 23729, 49299, 23704,
+            49280, 23681, 49283, 23669, 49264, 23671, 49253, 23691, 49240, 23684, 49243, 23696, 49242, 23732, 49234, 23760, 49243, 23774, 49254, 23777,
+            49261, 23786, 49255, 23803, 49257, 23808, 49246, 23817, 49237, 23839, 49210, 23787, 49192, 23757, 49153, 23709, 49150, 23717, 49148, 23711,
+            49130, 23692, 49119, 23675, 49133, 23646, 49140, 23621, 49150, 23608, 49167, 23580, 49162, 23554, 49186, 23513, 49189, 23501, 49190, 23463,
+            49198, 23450, 49214, 23443, 49230, 23445, 49230, 23431, 49209, 23392, 49203, 23378, 49205, 23365, 49201, 23354, 49187, 23377, 49174, 23391,
+            49154, 23377, 49136, 23353, 49141, 23335, 49147, 23336, 49153, 23308, 49139, 23303, 49136, 23280, 49129, 23274, 49116, 23282, 49092, 23288,
+            49075, 23288, 49064, 23281, 49058, 23271, 49048, 23269, 49031, 23249, 49054, 23216, 49041, 23219, 49032, 23204, 49036, 23189, 49028, 23152,
+            49035, 23138, 49030, 23127, 49020, 23134, 49012, 23115, 49000, 23125, 48964, 23126, 48937, 23116, 48933, 23105, 48919, 23083, 48899, 23075,
+            48876, 23111, 48875, 23131, 48868, 23159, 48860, 23162, 48844, 23154, 48845, 23136, 48834, 23136, 48832, 23153, 48810, 23172, 48802, 23180,
+            48793, 23181, 48781, 23190, 48762, 23200, 48762, 23229, 48759, 23245, 48760, 23262, 48767, 23280, 48774, 23288, 48761, 23312, 48753, 23320,
+            48756, 23338, 48766, 23356, 48772, 23360, 48766, 23370, 48744, 23379, 48735, 23396, 48737, 23411, 48729, 23425, 48725, 23461, 48720, 23471,
+            48723, 23492
+        ))
+    )
+
+    private fun _r_chervonohradskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            50119, 24523, 50114, 24572, 50118, 24573, 50116, 24593, 50125, 24597, 50120, 24629, 50136, 24637, 50134, 24660, 50142, 24668, 50138, 24710,
+            50136, 24726, 50143, 24750, 50140, 24758, 50144, 24787, 50142, 24797, 50149, 24799, 50152, 24814, 50148, 24820, 50153, 24855, 50159, 24869,
+            50162, 24859, 50161, 24830, 50179, 24836, 50175, 24848, 50178, 24872, 50184, 24882, 50178, 24909, 50187, 24934, 50190, 24963, 50197, 24976,
+            50194, 24986, 50201, 24995, 50209, 25006, 50223, 25020, 50224, 25027, 50241, 25033, 50248, 25040, 50267, 25038, 50280, 25033, 50282, 25043,
+            50291, 25047, 50296, 25057, 50305, 25054, 50311, 25056, 50329, 25060, 50337, 25054, 50343, 25060, 50346, 25030, 50342, 25017, 50350, 25008,
+            50360, 24988, 50390, 24941, 50378, 24929, 50371, 24938, 50345, 24938, 50344, 24904, 50346, 24886, 50358, 24888, 50360, 24866, 50350, 24859,
+            50351, 24842, 50346, 24790, 50338, 24778, 50343, 24713, 50358, 24713, 50374, 24721, 50386, 24706, 50399, 24673, 50404, 24651, 50411, 24654,
+            50409, 24629, 50413, 24597, 50456, 24598, 50460, 24589, 50466, 24599, 50500, 24587, 50493, 24584, 50489, 24561, 50493, 24554, 50504, 24552,
+            50512, 24558, 50522, 24548, 50534, 24546, 50553, 24529, 50555, 24505, 50543, 24472, 50540, 24449, 50558, 24416, 50559, 24408, 50576, 24398,
+            50586, 24413, 50593, 24400, 50609, 24382, 50597, 24365, 50599, 24324, 50573, 24319, 50575, 24285, 50580, 24265, 50580, 24250, 50585, 24234,
+            50589, 24221, 50608, 24200, 50614, 24202, 50616, 24191, 50619, 24183, 50618, 24173, 50625, 24172, 50628, 24169, 50632, 24171, 50646, 24147,
+            50646, 24138, 50646, 24129, 50648, 24129, 50647, 24120, 50634, 24103, 50636, 24097, 50618, 24092, 50599, 24098, 50578, 24090, 50562, 24091,
+            50504, 24070, 50452, 24037, 50445, 24035, 50436, 24006, 50412, 23996, 50414, 23942, 50406, 23844, 50406, 23803, 50401, 23777, 50388, 23729,
+            50378, 23707, 50371, 23698, 50356, 23690, 50331, 23686, 50329, 23675, 50320, 23673, 50301, 23684, 50296, 23698, 50297, 23712, 50302, 23713,
+            50300, 23751, 50303, 23751, 50300, 23795, 50289, 23807, 50278, 23804, 50277, 23814, 50269, 23814, 50257, 23842, 50256, 23885, 50224, 23909,
+            50224, 23926, 50220, 23937, 50223, 23957, 50221, 23972, 50210, 23964, 50202, 23974, 50199, 24027, 50203, 24050, 50203, 24091, 50194, 24094,
+            50185, 24086, 50172, 24065, 50161, 24058, 50157, 24062, 50150, 24089, 50146, 24093, 50132, 24092, 50116, 24098, 50114, 24130, 50116, 24134,
+            50139, 24132, 50159, 24148, 50151, 24176, 50144, 24177, 50134, 24202, 50162, 24216, 50171, 24232, 50197, 24243, 50199, 24253, 50196, 24274,
+            50194, 24320, 50185, 24340, 50176, 24352, 50161, 24350, 50157, 24364, 50170, 24382, 50170, 24425, 50159, 24457, 50150, 24446, 50130, 24417,
+            50135, 24430, 50129, 24442, 50135, 24451, 50126, 24517, 50119, 24523
+        ))
+    )
+
+    private fun _r_yavorivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49636, 23050, 49639, 23040, 49650, 23046, 49642, 23061, 49644, 23070, 49635, 23077, 49649, 23094, 49651, 23114, 49647, 23147, 49651, 23143,
+            49655, 23179, 49650, 23178, 49644, 23214, 49647, 23232, 49652, 23239, 49643, 23265, 49652, 23280, 49653, 23310, 49660, 23309, 49674, 23315,
+            49671, 23336, 49680, 23341, 49680, 23350, 49689, 23362, 49686, 23378, 49702, 23390, 49710, 23392, 49714, 23380, 49718, 23391, 49739, 23395,
+            49746, 23386, 49761, 23397, 49753, 23427, 49754, 23438, 49758, 23439, 49762, 23455, 49777, 23458, 49779, 23442, 49791, 23444, 49797, 23459,
+            49803, 23462, 49809, 23445, 49822, 23444, 49818, 23455, 49818, 23474, 49836, 23504, 49844, 23508, 49856, 23532, 49867, 23533, 49874, 23546,
+            49880, 23560, 49881, 23570, 49876, 23585, 49854, 23583, 49844, 23611, 49840, 23611, 49832, 23644, 49842, 23652, 49845, 23665, 49843, 23678,
+            49851, 23692, 49860, 23695, 49855, 23715, 49843, 23715, 49842, 23751, 49845, 23766, 49842, 23770, 49840, 23797, 49847, 23803, 49845, 23820,
+            49847, 23839, 49856, 23848, 49854, 23866, 49845, 23873, 49853, 23891, 49862, 23889, 49861, 23871, 49879, 23862, 49888, 23881, 49899, 23888,
+            49896, 23902, 49898, 23923, 49912, 23925, 49922, 23932, 49929, 23930, 49931, 23920, 49942, 23924, 49946, 23914, 49976, 23893, 49981, 23868,
+            49992, 23837, 49995, 23811, 50005, 23813, 50026, 23809, 50036, 23784, 50054, 23774, 50070, 23771, 50074, 23746, 50088, 23725, 50087, 23714,
+            50094, 23705, 50106, 23671, 50119, 23661, 50118, 23656, 50132, 23643, 50134, 23620, 50141, 23632, 50150, 23633, 50153, 23619, 50152, 23591,
+            50175, 23577, 50173, 23562, 50176, 23548, 50172, 23532, 50174, 23523, 50152, 23514, 50157, 23503, 50172, 23489, 50185, 23488, 50186, 23463,
+            50193, 23440, 50183, 23427, 50159, 23381, 50135, 23344, 50113, 23315, 50102, 23293, 50101, 23280, 50087, 23280, 50079, 23264, 50055, 23240,
+            50048, 23216, 50030, 23213, 49971, 23143, 49956, 23116, 49942, 23108, 49928, 23093, 49881, 23033, 49842, 22996, 49838, 22970, 49811, 22956,
+            49805, 22961, 49792, 22931, 49766, 22899, 49752, 22896, 49740, 22873, 49720, 22851, 49709, 22862, 49709, 22911, 49697, 22922, 49687, 22906,
+            49684, 22910, 49689, 22926, 49690, 22936, 49686, 22947, 49683, 22952, 49673, 22968, 49664, 22970, 49653, 22984, 49646, 22993, 49640, 22973,
+            49624, 22992, 49629, 23010, 49625, 23030, 49632, 23040, 49631, 23051, 49636, 23050
+        ))
+    )
+
+    private fun _r_nadvirnianskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48119, 24555, 48140, 24578, 48145, 24589, 48164, 24608, 48156, 24612, 48159, 24634, 48168, 24646, 48183, 24637, 48196, 24645, 48214, 24665,
+            48224, 24667, 48236, 24682, 48244, 24671, 48256, 24665, 48270, 24676, 48269, 24685, 48280, 24739, 48302, 24733, 48320, 24747, 48325, 24756,
+            48337, 24746, 48352, 24748, 48358, 24742, 48375, 24748, 48379, 24732, 48398, 24715, 48415, 24722, 48421, 24703, 48428, 24715, 48438, 24744,
+            48443, 24771, 48459, 24786, 48463, 24781, 48465, 24772, 48479, 24756, 48481, 24770, 48495, 24764, 48513, 24763, 48547, 24800, 48560, 24792,
+            48561, 24774, 48570, 24775, 48603, 24767, 48618, 24769, 48628, 24823, 48639, 24824, 48639, 24812, 48679, 24816, 48680, 24795, 48685, 24779,
+            48693, 24780, 48715, 24750, 48722, 24732, 48740, 24724, 48751, 24693, 48754, 24664, 48760, 24642, 48741, 24639, 48732, 24627, 48723, 24616,
+            48714, 24598, 48726, 24557, 48706, 24549, 48685, 24518, 48680, 24517, 48672, 24510, 48667, 24478, 48661, 24477, 48651, 24494, 48642, 24447,
+            48638, 24393, 48631, 24369, 48617, 24374, 48615, 24356, 48606, 24338, 48604, 24310, 48591, 24300, 48598, 24291, 48591, 24279, 48588, 24263,
+            48566, 24249, 48562, 24251, 48549, 24240, 48528, 24209, 48520, 24192, 48520, 24180, 48531, 24137, 48529, 24132, 48504, 24121, 48498, 24116,
+            48496, 24116, 48481, 24142, 48468, 24126, 48454, 24125, 48438, 24135, 48434, 24146, 48409, 24141, 48401, 24153, 48388, 24151, 48384, 24164,
+            48377, 24170, 48375, 24182, 48367, 24181, 48364, 24201, 48366, 24209, 48357, 24222, 48358, 24244, 48352, 24260, 48371, 24274, 48382, 24290,
+            48391, 24282, 48400, 24285, 48393, 24315, 48388, 24321, 48383, 24353, 48374, 24359, 48358, 24352, 48350, 24359, 48348, 24379, 48336, 24393,
+            48332, 24415, 48326, 24416, 48304, 24445, 48283, 24485, 48275, 24495, 48244, 24484, 48239, 24504, 48228, 24536, 48216, 24548, 48214, 24536,
+            48200, 24520, 48195, 24526, 48187, 24512, 48177, 24521, 48160, 24502, 48153, 24506, 48143, 24526, 48134, 24532, 48125, 24532, 48123, 24534,
+            48119, 24555
+        ))
+    )
+
+    private fun _r_kaluskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48826, 24337, 48834, 24345, 48841, 24352, 48854, 24358, 48870, 24371, 48863, 24384, 48864, 24392, 48876, 24401, 48881, 24413, 48895, 24423,
+            48900, 24435, 48925, 24454, 48937, 24475, 48962, 24496, 48971, 24513, 48977, 24515, 48985, 24527, 49000, 24539, 49005, 24528, 49008, 24539,
+            49020, 24564, 49029, 24558, 49038, 24570, 49050, 24536, 49058, 24527, 49070, 24547, 49083, 24560, 49102, 24553, 49115, 24556, 49143, 24552,
+            49161, 24504, 49180, 24514, 49180, 24532, 49183, 24558, 49193, 24572, 49195, 24552, 49210, 24551, 49218, 24540, 49224, 24528, 49225, 24524,
+            49220, 24516, 49228, 24486, 49223, 24465, 49231, 24462, 49231, 24448, 49229, 24450, 49207, 24438, 49198, 24438, 49190, 24431, 49175, 24435,
+            49168, 24416, 49182, 24391, 49190, 24384, 49186, 24356, 49181, 24354, 49180, 24334, 49170, 24305, 49165, 24277, 49144, 24232, 49149, 24210,
+            49138, 24196, 49144, 24172, 49136, 24165, 49127, 24168, 49131, 24145, 49141, 24139, 49139, 24119, 49148, 24087, 49145, 24080, 49147, 24058,
+            49130, 24041, 49117, 24019, 49119, 24012, 49129, 24006, 49134, 23987, 49141, 23970, 49130, 23957, 49124, 23934, 49100, 23905, 49109, 23878,
+            49113, 23828, 49109, 23824, 49108, 23800, 49120, 23783, 49117, 23773, 49124, 23764, 49124, 23752, 49114, 23748, 49111, 23738, 49104, 23738,
+            49094, 23720, 49099, 23707, 49099, 23698, 49096, 23692, 49088, 23683, 49074, 23678, 49067, 23686, 49060, 23680, 49043, 23677, 49029, 23664,
+            49023, 23650, 49030, 23639, 49026, 23623, 49013, 23624, 49000, 23598, 48992, 23592, 48974, 23565, 48965, 23580, 48954, 23586, 48927, 23569,
+            48911, 23564, 48889, 23576, 48883, 23595, 48883, 23608, 48874, 23607, 48873, 23583, 48865, 23575, 48853, 23569, 48829, 23564, 48822, 23553,
+            48803, 23569, 48796, 23570, 48786, 23580, 48759, 23558, 48726, 23547, 48725, 23571, 48719, 23594, 48707, 23599, 48706, 23612, 48708, 23621,
+            48705, 23632, 48700, 23638, 48689, 23641, 48685, 23639, 48672, 23664, 48663, 23676, 48648, 23687, 48639, 23706, 48638, 23730, 48646, 23742,
+            48643, 23779, 48632, 23796, 48619, 23797, 48610, 23785, 48599, 23796, 48593, 23792, 48581, 23804, 48579, 23836, 48567, 23834, 48556, 23851,
+            48556, 23869, 48554, 23891, 48562, 23906, 48557, 23911, 48552, 23929, 48541, 23916, 48533, 23914, 48514, 23925, 48493, 23918, 48483, 23907,
+            48471, 23914, 48465, 23927, 48464, 23944, 48460, 23956, 48459, 23964, 48466, 23978, 48475, 23975, 48506, 23998, 48505, 24020, 48502, 24033,
+            48512, 24046, 48518, 24065, 48514, 24077, 48527, 24089, 48526, 24101, 48534, 24111, 48532, 24124, 48545, 24128, 48566, 24100, 48576, 24105,
+            48586, 24100, 48608, 24097, 48615, 24107, 48628, 24103, 48650, 24107, 48638, 24139, 48645, 24147, 48654, 24147, 48663, 24156, 48663, 24163,
+            48673, 24177, 48679, 24174, 48693, 24194, 48694, 24216, 48705, 24224, 48712, 24237, 48718, 24235, 48725, 24246, 48751, 24238, 48752, 24245,
+            48766, 24245, 48782, 24257, 48784, 24267, 48809, 24307, 48803, 24314, 48806, 24327, 48826, 24337
+        ))
+    )
+
+    private fun _r_ivano_frankivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48685, 24518, 48706, 24549, 48726, 24557, 48714, 24598, 48723, 24616, 48732, 24627, 48741, 24639, 48760, 24642, 48754, 24664, 48751, 24693,
+            48740, 24724, 48749, 24742, 48766, 24754, 48765, 24766, 48775, 24787, 48788, 24803, 48785, 24805, 48788, 24810, 48791, 24819, 48780, 24829,
+            48769, 24852, 48770, 24862, 48764, 24871, 48759, 24903, 48770, 24910, 48760, 24940, 48744, 24971, 48729, 24970, 48732, 24994, 48736, 24995,
+            48762, 24977, 48764, 24982, 48744, 25004, 48738, 25014, 48730, 25040, 48715, 25056, 48705, 25055, 48689, 25070, 48693, 25074, 48674, 25098,
+            48674, 25122, 48658, 25149, 48651, 25155, 48649, 25145, 48641, 25178, 48650, 25187, 48646, 25196, 48656, 25205, 48652, 25221, 48676, 25243,
+            48691, 25237, 48712, 25211, 48723, 25232, 48732, 25256, 48761, 25252, 48782, 25225, 48792, 25243, 48802, 25237, 48815, 25238, 48826, 25257,
+            48828, 25265, 48828, 25287, 48827, 25314, 48831, 25321, 48840, 25327, 48845, 25324, 48847, 25320, 48844, 25302, 48848, 25290, 48860, 25284,
+            48866, 25265, 48867, 25239, 48864, 25236, 48849, 25228, 48849, 25209, 48878, 25228, 48911, 25230, 48921, 25238, 48928, 25237, 48931, 25227,
+            48923, 25212, 48922, 25207, 48927, 25192, 48922, 25191, 48916, 25198, 48913, 25197, 48903, 25183, 48895, 25167, 48881, 25173, 48872, 25172,
+            48865, 25159, 48877, 25134, 48884, 25135, 48891, 25136, 48917, 25120, 48928, 25121, 48936, 25141, 48945, 25147, 48964, 25111, 48985, 25108,
+            48995, 25117, 48997, 25107, 48980, 25092, 48983, 25090, 48987, 25068, 48992, 25065, 48998, 25042, 49012, 25020, 48999, 24987, 48993, 24964,
+            49010, 24969, 49028, 24943, 49045, 24915, 49050, 24902, 49062, 24904, 49072, 24915, 49080, 24913, 49082, 24927, 49076, 24963, 49072, 24970,
+            49072, 24992, 49079, 24986, 49083, 24975, 49090, 24980, 49098, 24975, 49117, 24985, 49127, 24958, 49126, 24953, 49129, 24904, 49140, 24892,
+            49148, 24879, 49161, 24865, 49162, 24858, 49179, 24859, 49200, 24889, 49217, 24901, 49229, 24930, 49237, 24927, 49243, 24900, 49258, 24869,
+            49263, 24844, 49283, 24841, 49284, 24831, 49318, 24828, 49325, 24839, 49346, 24852, 49348, 24861, 49353, 24845, 49363, 24834, 49386, 24829,
+            49391, 24810, 49382, 24795, 49385, 24781, 49389, 24777, 49394, 24775, 49414, 24776, 49424, 24770, 49432, 24771, 49438, 24767, 49450, 24751,
+            49467, 24744, 49482, 24724, 49491, 24730, 49497, 24721, 49494, 24698, 49499, 24670, 49506, 24655, 49500, 24652, 49498, 24638, 49510, 24621,
+            49508, 24616, 49515, 24598, 49527, 24579, 49535, 24573, 49526, 24546, 49522, 24541, 49524, 24520, 49529, 24511, 49539, 24510, 49542, 24522,
+            49547, 24506, 49554, 24505, 49560, 24473, 49553, 24480, 49552, 24460, 49536, 24434, 49526, 24441, 49508, 24445, 49502, 24443, 49504, 24413,
+            49494, 24404, 49474, 24413, 49473, 24419, 49445, 24411, 49442, 24383, 49437, 24372, 49412, 24375, 49408, 24390, 49396, 24388, 49394, 24407,
+            49381, 24437, 49374, 24429, 49366, 24408, 49355, 24392, 49351, 24396, 49325, 24392, 49308, 24380, 49323, 24358, 49310, 24342, 49316, 24301,
+            49289, 24299, 49276, 24307, 49291, 24340, 49280, 24364, 49273, 24354, 49253, 24352, 49243, 24344, 49234, 24348, 49234, 24358, 49227, 24386,
+            49232, 24430, 49231, 24448, 49231, 24462, 49223, 24465, 49228, 24486, 49220, 24516, 49225, 24525, 49218, 24540, 49210, 24551, 49195, 24552,
+            49193, 24572, 49183, 24558, 49180, 24532, 49180, 24514, 49161, 24504, 49143, 24552, 49115, 24556, 49102, 24553, 49083, 24560, 49070, 24547,
+            49058, 24527, 49050, 24536, 49038, 24570, 49029, 24558, 49020, 24564, 49008, 24539, 49005, 24528, 49000, 24539, 48985, 24527, 48977, 24515,
+            48971, 24513, 48962, 24496, 48937, 24475, 48925, 24454, 48900, 24435, 48895, 24423, 48881, 24413, 48876, 24401, 48864, 24392, 48863, 24384,
+            48870, 24371, 48854, 24358, 48839, 24350, 48826, 24337, 48806, 24327, 48803, 24314, 48809, 24307, 48784, 24267, 48782, 24257, 48766, 24245,
+            48752, 24245, 48751, 24238, 48725, 24246, 48718, 24235, 48712, 24237, 48705, 24224, 48694, 24216, 48693, 24194, 48679, 24174, 48673, 24177,
+            48663, 24163, 48663, 24156, 48654, 24147, 48645, 24147, 48638, 24139, 48650, 24107, 48628, 24103, 48615, 24107, 48608, 24097, 48586, 24100,
+            48576, 24105, 48566, 24100, 48545, 24128, 48532, 24124, 48529, 24132, 48531, 24137, 48520, 24180, 48520, 24192, 48528, 24209, 48549, 24240,
+            48562, 24251, 48566, 24249, 48588, 24263, 48591, 24279, 48598, 24291, 48591, 24300, 48604, 24310, 48606, 24338, 48615, 24356, 48617, 24374,
+            48631, 24369, 48638, 24393, 48642, 24447, 48651, 24494, 48661, 24477, 48667, 24478, 48672, 24510, 48680, 24517, 48685, 24518
+        ))
+    )
+
+    private fun _r_verkhovynskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            47971, 24565, 47965, 24583, 47945, 24602, 47952, 24610, 47951, 24625, 47930, 24637, 47924, 24635, 47919, 24652, 47911, 24652, 47909, 24661,
+            47896, 24673, 47878, 24666, 47865, 24671, 47858, 24685, 47853, 24703, 47840, 24706, 47839, 24720, 47844, 24733, 47830, 24753, 47839, 24764,
+            47837, 24778, 47824, 24784, 47825, 24792, 47821, 24828, 47806, 24822, 47795, 24836, 47780, 24836, 47775, 24852, 47765, 24856, 47753, 24878,
+            47724, 24883, 47726, 24922, 47750, 24927, 47759, 24936, 47782, 24942, 47798, 24949, 47801, 24956, 47825, 24974, 47826, 24980, 47857, 24996,
+            47860, 24981, 47867, 24985, 47876, 24971, 47878, 24959, 47888, 24955, 47894, 24949, 47903, 24949, 47909, 24960, 47919, 24956, 47922, 24948,
+            47928, 24947, 47931, 24943, 47936, 24933, 47938, 24925, 47948, 24918, 47994, 24910, 48001, 24912, 48011, 24920, 48014, 24912, 48019, 24911,
+            48028, 24912, 48031, 24920, 48040, 24933, 48050, 24941, 48075, 24974, 48079, 24985, 48092, 24993, 48109, 24979, 48112, 24980, 48114, 24982,
+            48121, 24998, 48110, 25029, 48116, 25039, 48126, 25037, 48130, 25044, 48132, 25065, 48147, 25073, 48159, 25066, 48161, 25089, 48180, 25044,
+            48190, 25038, 48201, 25021, 48203, 24999, 48198, 24988, 48210, 24968, 48216, 24971, 48225, 24955, 48217, 24951, 48213, 24932, 48215, 24919,
+            48196, 24902, 48203, 24888, 48209, 24886, 48223, 24852, 48230, 24846, 48225, 24837, 48229, 24824, 48224, 24789, 48234, 24774, 48249, 24778,
+            48254, 24767, 48266, 24759, 48262, 24749, 48273, 24736, 48279, 24734, 48269, 24685, 48270, 24676, 48256, 24665, 48244, 24671, 48236, 24682,
+            48224, 24667, 48214, 24665, 48196, 24645, 48183, 24637, 48168, 24646, 48159, 24634, 48156, 24612, 48164, 24608, 48145, 24589, 48140, 24578,
+            48119, 24555, 48114, 24559, 48105, 24560, 48102, 24573, 48092, 24586, 48086, 24597, 48081, 24602, 48075, 24605, 48060, 24624, 48047, 24628,
+            48038, 24611, 48035, 24597, 48020, 24578, 47999, 24572, 47996, 24565, 47971, 24565
+        ))
+    )
+
+    private fun _r_uzhhorodskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48389, 22345, 48404, 22352, 48402, 22360, 48391, 22356, 48373, 22369, 48392, 22393, 48384, 22408, 48392, 22419, 48385, 22432, 48378, 22455,
+            48377, 22484, 48389, 22487, 48390, 22498, 48401, 22506, 48416, 22464, 48421, 22466, 48433, 22448, 48431, 22432, 48441, 22437, 48442, 22424,
+            48471, 22373, 48475, 22360, 48486, 22383, 48488, 22401, 48477, 22444, 48484, 22480, 48490, 22482, 48496, 22513, 48489, 22514, 48491, 22529,
+            48488, 22551, 48483, 22558, 48495, 22559, 48499, 22578, 48512, 22584, 48531, 22556, 48554, 22556, 48564, 22573, 48579, 22620, 48578, 22628,
+            48592, 22638, 48601, 22654, 48620, 22653, 48627, 22666, 48651, 22669, 48647, 22698, 48640, 22702, 48638, 22717, 48631, 22732, 48632, 22749,
+            48636, 22770, 48634, 22790, 48612, 22820, 48615, 22850, 48624, 22859, 48640, 22861, 48660, 22850, 48666, 22857, 48688, 22849, 48707, 22868,
+            48723, 22863, 48739, 22872, 48749, 22871, 48759, 22898, 48771, 22894, 48778, 22886, 48793, 22882, 48811, 22872, 48816, 22881, 48828, 22881,
+            48842, 22873, 48861, 22852, 48870, 22835, 48878, 22836, 48901, 22862, 48909, 22866, 48922, 22860, 48930, 22881, 48944, 22873, 48957, 22875,
+            48969, 22899, 48965, 22910, 48969, 22920, 48984, 22917, 49005, 22896, 49000, 22878, 49003, 22868, 49003, 22847, 49026, 22833, 49026, 22813,
+            49035, 22808, 49047, 22786, 49054, 22766, 49044, 22753, 49053, 22717, 49050, 22698, 49040, 22686, 49042, 22674, 49048, 22669, 49047, 22659,
+            49060, 22639, 49081, 22624, 49084, 22604, 49093, 22599, 49097, 22583, 49080, 22552, 49028, 22549, 49022, 22537, 49008, 22544, 48996, 22516,
+            49000, 22503, 48992, 22477, 48976, 22475, 48973, 22464, 48929, 22423, 48919, 22431, 48912, 22423, 48885, 22420, 48877, 22394, 48860, 22380,
+            48839, 22379, 48834, 22375, 48824, 22383, 48799, 22387, 48796, 22380, 48783, 22373, 48780, 22364, 48767, 22346, 48751, 22342, 48741, 22361,
+            48726, 22360, 48706, 22345, 48684, 22339, 48683, 22324, 48677, 22302, 48662, 22283, 48647, 22250, 48639, 22249, 48627, 22239, 48620, 22229,
+            48621, 22215, 48609, 22198, 48610, 22189, 48589, 22173, 48568, 22160, 48522, 22157, 48434, 22137, 48414, 22138, 48404, 22144, 48404, 22154,
+            48410, 22157, 48416, 22187, 48424, 22201, 48425, 22214, 48411, 22236, 48410, 22265, 48392, 22253, 48388, 22241, 48380, 22253, 48361, 22267,
+            48354, 22300, 48354, 22317, 48365, 22319, 48373, 22329, 48376, 22344, 48383, 22346, 48389, 22345
+        ))
+    )
+
+    private fun _r_khersonskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            46358, 33013, 46382, 33232, 46388, 33221, 46419, 33213, 46424, 33267, 46487, 33253, 46507, 33417, 46512, 33435, 46555, 33423, 46561, 33428,
+            46613, 33416, 46599, 33293, 46662, 33277, 46656, 33224, 46671, 33220, 46667, 33173, 46645, 33177, 46643, 33172, 46630, 33173, 46630, 33153,
+            46653, 33114, 46674, 33137, 46685, 33130, 46692, 33151, 46688, 33155, 46697, 33182, 46716, 33179, 46713, 33156, 46749, 33130, 46753, 33130,
+            46768, 33099, 46744, 33046, 46836, 33023, 46831, 32986, 46860, 32978, 46865, 33015, 46902, 33006, 46907, 33045, 46907, 33064, 46946, 33052,
+            46960, 33052, 47003, 32950, 46986, 32933, 46970, 32942, 46946, 32949, 46950, 32977, 46935, 32980, 46927, 32922, 46911, 32926, 46900, 32841,
+            46884, 32835, 46876, 32857, 46885, 32916, 46867, 32921, 46869, 32946, 46859, 32949, 46841, 32814, 46834, 32815, 46830, 32774, 46824, 32778,
+            46821, 32768, 46828, 32764, 46827, 32745, 46822, 32700, 46863, 32690, 46854, 32620, 46858, 32610, 46855, 32586, 46863, 32572, 46873, 32572,
+            46870, 32546, 46882, 32544, 46882, 32535, 46871, 32535, 46851, 32541, 46849, 32524, 46823, 32530, 46817, 32471, 46842, 32464, 46830, 32365,
+            46798, 32374, 46795, 32347, 46816, 32297, 46815, 32294, 46846, 32226, 46819, 32251, 46811, 32238, 46805, 32210, 46770, 32220, 46764, 32168,
+            46752, 32171, 46746, 32114, 46752, 32107, 46745, 32057, 46729, 32063, 46729, 32076, 46684, 32086, 46684, 32072, 46677, 32018, 46667, 32030,
+            46664, 31986, 46656, 31982, 46641, 31998, 46630, 32016, 46614, 32058, 46617, 32086, 46610, 32104, 46597, 32118, 46557, 32137, 46574, 32179,
+            46578, 32210, 46591, 32244, 46590, 32258, 46577, 32290, 46563, 32306, 46553, 32300, 46546, 32303, 46544, 32288, 46529, 32286, 46534, 32300,
+            46526, 32289, 46525, 32296, 46512, 32298, 46508, 32282, 46502, 32283, 46498, 32309, 46500, 32317, 46527, 32377, 46535, 32392, 46543, 32415,
+            46556, 32435, 46568, 32466, 46581, 32474, 46602, 32475, 46611, 32470, 46626, 32480, 46629, 32487, 46634, 32519, 46627, 32548, 46611, 32553,
+            46598, 32546, 46602, 32581, 46624, 32615, 46634, 32635, 46661, 32667, 46658, 32675, 46675, 32723, 46672, 32753, 46673, 32777, 46684, 32811,
+            46687, 32825, 46671, 32827, 46652, 32782, 46655, 32778, 46652, 32729, 46636, 32712, 46630, 32710, 46619, 32682, 46618, 32668, 46608, 32646,
+            46598, 32641, 46586, 32626, 46573, 32632, 46559, 32647, 46545, 32653, 46541, 32678, 46535, 32698, 46523, 32701, 46518, 32712, 46523, 32770,
+            46519, 32782, 46479, 32786, 46457, 32791, 46452, 32814, 46430, 32835, 46348, 32840, 46342, 32845, 46282, 32857, 46286, 32898, 46265, 32902,
+            46279, 33027, 46358, 33013
+        ))
+    )
+
+    private fun _r_henicheskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            46252, 35264, 46233, 35244, 46229, 35232, 46224, 35234, 46217, 35221, 46200, 35222, 46188, 35212, 46178, 35178, 46165, 35146, 46152, 35094,
+            46154, 35079, 46152, 35061, 46144, 35036, 46143, 35048, 46150, 35068, 46145, 35069, 46148, 35084, 46141, 35081, 46142, 35062, 46135, 35066,
+            46130, 35054, 46136, 35039, 46136, 35028, 46124, 35029, 46114, 35015, 46104, 35023, 46108, 35007, 46103, 34990, 46096, 34990, 46094, 35000,
+            46088, 34999, 46089, 34987, 46079, 34986, 46077, 35004, 46103, 35083, 46106, 35101, 46122, 35144, 46139, 35173, 46152, 35188, 46186, 35219,
+            46228, 35247, 46250, 35269, 46252, 35264
+        )),
+        ScaledRing(intArrayOf(
+            46167, 34149, 46190, 34141, 46185, 34131, 46168, 34142, 46167, 34149
+        )),
+        ScaledRing(intArrayOf(
+            45986, 34825, 45995, 34828, 46006, 34828, 46002, 34823, 45986, 34825
+        )),
+        ScaledRing(intArrayOf(
+            45931, 34756, 45949, 34756, 45948, 34751, 45931, 34756
+        )),
+        ScaledRing(intArrayOf(
+            46127, 34187, 46140, 34181, 46119, 34179, 46117, 34172, 46096, 34166, 46078, 34179, 46073, 34204, 46081, 34209, 46101, 34207, 46110, 34216,
+            46112, 34212, 46108, 34199, 46112, 34204, 46126, 34203, 46127, 34187
+        )),
+        ScaledRing(intArrayOf(
+            46108, 34312, 46100, 34303, 46099, 34311, 46108, 34312
+        )),
+        ScaledRing(intArrayOf(
+            45988, 34450, 45987, 34444, 46002, 34429, 45974, 34450, 45988, 34450
+        )),
+        ScaledRing(intArrayOf(
+            45996, 34723, 46011, 34703, 46012, 34681, 46005, 34685, 45999, 34698, 45978, 34732, 45984, 34738, 45975, 34747, 45980, 34761, 45999, 34765,
+            46003, 34756, 45996, 34740, 45996, 34723
+        )),
+        ScaledRing(intArrayOf(
+            45763, 34974, 45802, 34947, 45883, 34900, 45972, 34862, 46022, 34848, 46119, 34831, 46143, 34824, 46149, 34818, 46137, 34797, 46121, 34803,
+            46129, 34816, 46120, 34819, 46099, 34818, 46096, 34807, 46083, 34804, 46073, 34788, 46075, 34778, 46092, 34765, 46106, 34762, 46096, 34727,
+            46097, 34713, 46103, 34682, 46102, 34670, 46092, 34682, 46085, 34705, 46073, 34716, 46066, 34718, 46055, 34707, 46047, 34712, 46048, 34721,
+            46037, 34740, 46027, 34750, 46009, 34759, 46010, 34765, 46037, 34766, 46049, 34773, 46054, 34781, 46050, 34799, 46041, 34809, 46028, 34817,
+            46004, 34821, 46009, 34830, 46006, 34832, 45986, 34826, 45982, 34843, 45963, 34848, 45967, 34852, 45935, 34868, 45950, 34843, 45957, 34837,
+            45942, 34836, 45928, 34851, 45916, 34848, 45912, 34837, 45900, 34843, 45875, 34840, 45850, 34829, 45833, 34816, 45819, 34825, 45821, 34848,
+            45832, 34865, 45847, 34868, 45857, 34875, 45860, 34892, 45851, 34906, 45814, 34930, 45783, 34938, 45759, 34964, 45763, 34974
+        )),
+        ScaledRing(intArrayOf(
+            46122, 34468, 46122, 34440, 46120, 34430, 46106, 34418, 46095, 34395, 46079, 34402, 46061, 34405, 46060, 34414, 46078, 34417, 46087, 34410,
+            46088, 34420, 46098, 34427, 46100, 34445, 46114, 34449, 46122, 34468
+        )),
+        ScaledRing(intArrayOf(
+            46188, 34236, 46188, 34227, 46181, 34218, 46173, 34223, 46169, 34218, 46155, 34216, 46154, 34199, 46115, 34208, 46112, 34216, 46106, 34220,
+            46099, 34237, 46089, 34243, 46081, 34239, 46072, 34224, 46064, 34241, 46064, 34252, 46076, 34248, 46079, 34266, 46087, 34267, 46089, 34276,
+            46101, 34274, 46085, 34264, 46088, 34250, 46096, 34252, 46094, 34264, 46102, 34255, 46101, 34266, 46121, 34265, 46128, 34276, 46143, 34274,
+            46148, 34269, 46140, 34260, 46110, 34260, 46104, 34248, 46111, 34234, 46124, 34234, 46139, 34242, 46155, 34238, 46161, 34250, 46182, 34244,
+            46188, 34236
+        )),
+        ScaledRing(intArrayOf(
+            46159, 34791, 46159, 34775, 46148, 34769, 46153, 34780, 46155, 34785, 46153, 34793, 46155, 34794, 46159, 34791
+        )),
+        ScaledRing(intArrayOf(
+            46163, 34800, 46153, 34795, 46152, 34791, 46154, 34785, 46147, 34786, 46141, 34775, 46134, 34781, 46150, 34797, 46151, 34814, 46162, 34809,
+            46163, 34800
+        )),
+        ScaledRing(intArrayOf(
+            46210, 33973, 46179, 33998, 46155, 34011, 46120, 34042, 46139, 34044, 46159, 34066, 46142, 34087, 46124, 34087, 46123, 34101, 46138, 34115,
+            46140, 34121, 46134, 34137, 46114, 34152, 46123, 34159, 46131, 34152, 46129, 34166, 46135, 34164, 46142, 34142, 46153, 34141, 46162, 34129,
+            46160, 34146, 46172, 34137, 46180, 34123, 46173, 34103, 46184, 34125, 46214, 34142, 46209, 34156, 46193, 34169, 46168, 34167, 46163, 34154,
+            46158, 34160, 46149, 34151, 46140, 34161, 46151, 34183, 46163, 34186, 46159, 34194, 46164, 34206, 46176, 34210, 46190, 34197, 46189, 34188,
+            46207, 34173, 46238, 34158, 46255, 34152, 46258, 34140, 46266, 34151, 46283, 34153, 46291, 34159, 46291, 34174, 46283, 34188, 46256, 34214,
+            46245, 34214, 46237, 34231, 46196, 34259, 46185, 34260, 46174, 34281, 46158, 34296, 46146, 34291, 46122, 34302, 46107, 34297, 46105, 34305,
+            46113, 34304, 46108, 34319, 46130, 34319, 46141, 34323, 46163, 34342, 46170, 34341, 46177, 34330, 46168, 34325, 46168, 34315, 46183, 34311,
+            46192, 34303, 46204, 34304, 46220, 34313, 46228, 34332, 46203, 34338, 46188, 34354, 46199, 34366, 46198, 34380, 46184, 34402, 46170, 34418,
+            46169, 34431, 46155, 34438, 46155, 34452, 46141, 34473, 46136, 34503, 46142, 34507, 46148, 34525, 46148, 34537, 46158, 34521, 46159, 34530,
+            46172, 34520, 46185, 34520, 46196, 34531, 46197, 34545, 46190, 34557, 46175, 34567, 46167, 34590, 46151, 34591, 46131, 34586, 46117, 34589,
+            46101, 34580, 46092, 34568, 46084, 34570, 46087, 34557, 46099, 34552, 46098, 34565, 46110, 34560, 46118, 34549, 46127, 34549, 46130, 34537,
+            46118, 34505, 46101, 34500, 46090, 34489, 46113, 34487, 46124, 34481, 46125, 34469, 46116, 34474, 46096, 34457, 46092, 34441, 46086, 34437,
+            46069, 34444, 46051, 34447, 46047, 34457, 46050, 34464, 46048, 34480, 46042, 34480, 46033, 34469, 46029, 34457, 46044, 34467, 46047, 34446,
+            46046, 34433, 46032, 34419, 46018, 34417, 46014, 34422, 46019, 34432, 46012, 34440, 46010, 34467, 46001, 34481, 45987, 34470, 45957, 34483,
+            45971, 34494, 45983, 34495, 45998, 34518, 45998, 34525, 45989, 34540, 45982, 34543, 45994, 34555, 46009, 34588, 46040, 34612, 46068, 34624,
+            46079, 34636, 46092, 34644, 46127, 34630, 46147, 34606, 46168, 34598, 46172, 34607, 46170, 34624, 46174, 34630, 46182, 34664, 46184, 34691,
+            46181, 34708, 46169, 34732, 46174, 34761, 46167, 34765, 46170, 34774, 46161, 34775, 46160, 34786, 46164, 34801, 46162, 34813, 46169, 34822,
+            46192, 34825, 46209, 34840, 46239, 34896, 46252, 34970, 46255, 34999, 46269, 35056, 46287, 35089, 46302, 35104, 46299, 35072, 46355, 35063,
+            46376, 35059, 46383, 35071, 46482, 35054, 46479, 35022, 46504, 34949, 46512, 34948, 46506, 34890, 46537, 34884, 46538, 34897, 46566, 34891,
+            46551, 34757, 46584, 34749, 46581, 34723, 46620, 34713, 46627, 34757, 46683, 34746, 46678, 34684, 46692, 34681, 46688, 34634, 46725, 34626,
+            46728, 34660, 46740, 34658, 46748, 34735, 46758, 34735, 46758, 34750, 46780, 34750, 46781, 34766, 46823, 34758, 46829, 34818, 46834, 34814,
+            46883, 34805, 46880, 34752, 46961, 34736, 46956, 34688, 46979, 34683, 46973, 34623, 46993, 34620, 46992, 34599, 47027, 34591, 47024, 34568,
+            47106, 34552, 47101, 34401, 47078, 34407, 47049, 34348, 47021, 34315, 47016, 34324, 46888, 34181, 46811, 34198, 46802, 34110, 46818, 34107,
+            46810, 34034, 46794, 34037, 46793, 34027, 46772, 34032, 46768, 34029, 46685, 34045, 46663, 34050, 46660, 34062, 46649, 34065, 46640, 33987,
+            46626, 33989, 46625, 33980, 46619, 33981, 46618, 33972, 46584, 33978, 46579, 33974, 46573, 33990, 46574, 34000, 46557, 34003, 46556, 33985,
+            46536, 33989, 46544, 34079, 46526, 34108, 46432, 34127, 46416, 33961, 46370, 33964, 46370, 33972, 46290, 33968, 46210, 33973
+        ))
+    ))
+
+    private fun _r_simferopolskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            45227, 34085, 45248, 34097, 45248, 34068, 45232, 34067, 45233, 34020, 45217, 34017, 45217, 34000, 45190, 33999, 45191, 33973, 45236, 33973,
+            45244, 33979, 45244, 33933, 45191, 33955, 45190, 33895, 45163, 33896, 45160, 33914, 45132, 33913, 45132, 33898, 45106, 33897, 45105, 33863,
+            45102, 33846, 45094, 33846, 45094, 33773, 45077, 33771, 45076, 33797, 45060, 33800, 45044, 33797, 45041, 33785, 45041, 33706, 45039, 33706,
+            45038, 33676, 45024, 33673, 45020, 33681, 44988, 33681, 44988, 33660, 44992, 33659, 44991, 33603, 44979, 33604, 44974, 33598, 44947, 33608,
+            44926, 33612, 44932, 33646, 44909, 33647, 44914, 33670, 44914, 33687, 44897, 33714, 44911, 33740, 44908, 33752, 44898, 33752, 44898, 33796,
+            44901, 33813, 44898, 33832, 44921, 33833, 44921, 33874, 44911, 33897, 44902, 33898, 44902, 33919, 44880, 33940, 44884, 33955, 44874, 33968,
+            44873, 34011, 44858, 34005, 44852, 34036, 44833, 34049, 44831, 34029, 44824, 34027, 44831, 34012, 44826, 34000, 44815, 34006, 44783, 34054,
+            44756, 34073, 44730, 34113, 44750, 34125, 44758, 34137, 44761, 34152, 44765, 34152, 44777, 34172, 44775, 34208, 44781, 34228, 44798, 34228,
+            44794, 34265, 44786, 34265, 44763, 34279, 44765, 34282, 44767, 34292, 44760, 34293, 44769, 34314, 44760, 34314, 44747, 34323, 44766, 34366,
+            44774, 34370, 44778, 34381, 44788, 34378, 44792, 34383, 44794, 34403, 44803, 34419, 44812, 34424, 44818, 34444, 44837, 34476, 44854, 34478,
+            44863, 34456, 44870, 34455, 44866, 34421, 44879, 34406, 44868, 34404, 44879, 34398, 44880, 34388, 44892, 34385, 44888, 34379, 44893, 34372,
+            44889, 34364, 44900, 34357, 44895, 34348, 44897, 34344, 44894, 34344, 44893, 34339, 44889, 34337, 44890, 34327, 44908, 34313, 44913, 34304,
+            44927, 34302, 44940, 34291, 44951, 34306, 44966, 34301, 44990, 34288, 44990, 34279, 45023, 34276, 45028, 34284, 45045, 34282, 45054, 34272,
+            45065, 34275, 45086, 34275, 45086, 34263, 45093, 34266, 45107, 34264, 45107, 34279, 45113, 34279, 45146, 34252, 45141, 34226, 45155, 34212,
+            45151, 34204, 45187, 34190, 45225, 34190, 45227, 34085
+        ))
+    )
+
+    private fun _r_feodosiiskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            45260, 35375, 45264, 35378, 45271, 35365, 45260, 35375
+        )),
+        ScaledRing(intArrayOf(
+            44813, 34731, 44811, 34750, 44818, 34762, 44820, 34830, 44817, 34847, 44822, 34864, 44822, 34884, 44818, 34893, 44823, 34920, 44830, 34920,
+            44833, 34936, 44838, 34941, 44842, 34968, 44837, 34986, 44832, 34991, 44836, 34998, 44831, 35030, 44816, 35051, 44802, 35048, 44797, 35075,
+            44793, 35080, 44807, 35099, 44809, 35110, 44820, 35117, 44824, 35130, 44832, 35128, 44858, 35135, 44877, 35144, 44896, 35158, 44902, 35167,
+            44911, 35195, 44914, 35225, 44920, 35240, 44938, 35252, 44956, 35249, 44965, 35260, 44970, 35273, 44968, 35291, 44970, 35323, 44966, 35329,
+            44967, 35343, 44957, 35355, 44948, 35382, 44955, 35390, 44955, 35372, 44970, 35363, 44977, 35355, 44992, 35361, 44997, 35373, 45002, 35395,
+            45014, 35425, 45023, 35412, 45025, 35391, 45037, 35384, 45056, 35390, 45066, 35399, 45097, 35446, 45108, 35472, 45118, 35501, 45130, 35560,
+            45132, 35528, 45142, 35529, 45170, 35513, 45172, 35428, 45215, 35425, 45218, 35463, 45246, 35458, 45267, 35451, 45258, 35415, 45259, 35388,
+            45245, 35367, 45236, 35366, 45231, 35356, 45241, 35359, 45252, 35334, 45260, 35336, 45266, 35358, 45273, 35366, 45283, 35355, 45292, 35320,
+            45299, 35305, 45307, 35274, 45314, 35266, 45303, 35240, 45319, 35252, 45335, 35213, 45341, 35205, 45344, 35164, 45334, 35149, 45334, 35136,
+            45340, 35120, 45358, 35089, 45378, 35067, 45393, 35056, 45428, 35036, 45439, 35027, 45426, 35027, 45429, 35034, 45398, 35044, 45381, 35056,
+            45380, 35060, 45399, 35044, 45413, 35043, 45398, 35050, 45379, 35063, 45361, 35082, 45364, 35070, 45360, 35032, 45364, 35006, 45358, 34998,
+            45359, 34981, 45364, 34970, 45381, 34954, 45397, 34978, 45396, 35004, 45406, 35008, 45427, 35011, 45444, 35022, 45447, 35038, 45456, 35051,
+            45463, 35085, 45482, 35108, 45490, 35111, 45491, 35100, 45522, 35094, 45535, 35083, 45533, 35076, 45548, 35071, 45557, 35078, 45562, 35072,
+            45564, 35057, 45570, 35054, 45561, 35029, 45562, 35013, 45534, 35009, 45500, 35003, 45498, 34998, 45493, 34921, 45465, 34918, 45440, 34925,
+            45442, 34893, 45447, 34842, 45428, 34855, 45429, 34800, 45422, 34800, 45422, 34784, 45429, 34776, 45422, 34776, 45422, 34757, 45398, 34779,
+            45383, 34817, 45372, 34817, 45372, 34806, 45359, 34806, 45359, 34758, 45314, 34758, 45314, 34767, 45287, 34766, 45287, 34726, 45270, 34725,
+            45269, 34714, 45261, 34697, 45244, 34691, 45226, 34682, 45226, 34674, 45189, 34672, 45189, 34695, 45206, 34698, 45214, 34716, 45216, 34736,
+            45224, 34737, 45224, 34769, 45161, 34768, 45161, 34786, 45180, 34791, 45178, 34865, 45161, 34864, 45160, 34891, 45133, 34888, 45132, 34863,
+            45106, 34864, 45080, 34862, 45078, 34872, 45083, 34880, 45079, 34889, 45079, 34923, 45067, 34924, 45061, 34919, 45048, 34927, 45050, 34947,
+            45059, 34964, 45046, 34971, 45031, 34962, 45011, 34957, 45008, 34939, 45000, 34938, 44997, 34930, 45002, 34921, 44993, 34909, 45002, 34893,
+            45001, 34883, 44948, 34879, 44945, 34857, 44932, 34829, 44923, 34837, 44914, 34826, 44911, 34809, 44899, 34801, 44894, 34756, 44887, 34754,
+            44881, 34742, 44849, 34723, 44828, 34722, 44813, 34731
+        )),
+        ScaledRing(intArrayOf(
+            45575, 35075, 45575, 35073, 45566, 35076, 45558, 35085, 45539, 35092, 45526, 35100, 45514, 35101, 45493, 35110, 45522, 35103, 45540, 35092,
+            45555, 35088, 45561, 35084, 45566, 35077, 45575, 35075
+        ))
+    ))
+
+    private fun _r_perekopskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            46080, 34063, 46088, 34054, 46094, 34029, 46100, 34020, 46099, 33977, 46094, 33946, 46083, 33943, 46083, 33932, 46071, 33951, 46075, 33962,
+            46066, 33960, 46074, 33977, 46067, 33978, 46073, 33988, 46064, 33992, 46065, 33978, 46056, 33953, 46039, 33961, 46036, 33969, 46030, 33965,
+            46040, 33937, 46044, 33947, 46064, 33937, 46062, 33947, 46071, 33937, 46070, 33925, 46062, 33913, 46053, 33908, 46032, 33911, 46022, 33907,
+            46033, 33900, 46033, 33889, 46045, 33886, 46043, 33902, 46056, 33894, 46075, 33892, 46090, 33876, 46102, 33851, 46105, 33823, 46116, 33828,
+            46108, 33838, 46110, 33847, 46120, 33840, 46126, 33852, 46139, 33858, 46141, 33865, 46151, 33866, 46175, 33845, 46177, 33837, 46164, 33847,
+            46166, 33827, 46179, 33822, 46181, 33836, 46185, 33827, 46179, 33805, 46175, 33810, 46155, 33812, 46151, 33830, 46145, 33829, 46144, 33815,
+            46133, 33814, 46119, 33800, 46126, 33784, 46140, 33780, 46145, 33771, 46139, 33763, 46137, 33750, 46122, 33746, 46127, 33718, 46114, 33714,
+            46089, 33741, 46079, 33726, 46076, 33712, 46063, 33715, 46062, 33668, 46070, 33666, 46071, 33626, 46054, 33614, 46010, 33621, 45983, 33632,
+            45959, 33632, 45949, 33618, 45943, 33628, 45942, 33639, 45949, 33639, 45955, 33662, 45956, 33688, 45951, 33722, 45951, 33748, 45930, 33760,
+            45923, 33759, 45927, 33749, 45926, 33725, 45907, 33695, 45909, 33682, 45901, 33677, 45870, 33682, 45850, 33687, 45863, 33662, 45873, 33656,
+            45873, 33639, 45879, 33637, 45890, 33615, 45883, 33594, 45867, 33579, 45869, 33566, 45838, 33548, 45835, 33535, 45848, 33530, 45841, 33510,
+            45841, 33500, 45849, 33499, 45855, 33489, 45850, 33474, 45837, 33472, 45834, 33454, 45824, 33447, 45830, 33430, 45825, 33415, 45834, 33428,
+            45839, 33447, 45845, 33454, 45836, 33428, 45799, 33376, 45784, 33351, 45772, 33320, 45755, 33264, 45751, 33243, 45754, 33218, 45763, 33196,
+            45779, 33174, 45793, 33167, 45742, 33155, 45720, 33140, 45718, 33128, 45712, 33116, 45714, 33099, 45696, 33100, 45697, 33124, 45680, 33126,
+            45678, 33112, 45662, 33114, 45663, 33154, 45659, 33154, 45659, 33204, 45608, 33204, 45608, 33228, 45557, 33232, 45553, 33320, 45512, 33318,
+            45479, 33334, 45478, 33374, 45491, 33374, 45515, 33361, 45526, 33360, 45525, 33393, 45507, 33391, 45503, 33448, 45510, 33448, 45509, 33464,
+            45464, 33458, 45465, 33443, 45456, 33441, 45456, 33429, 45432, 33430, 45433, 33501, 45446, 33507, 45443, 33551, 45434, 33551, 45434, 33577,
+            45403, 33574, 45403, 33598, 45426, 33597, 45427, 33607, 45436, 33610, 45434, 33642, 45441, 33651, 45473, 33647, 45478, 33525, 45519, 33539,
+            45525, 33536, 45558, 33538, 45558, 33528, 45572, 33533, 45573, 33540, 45587, 33574, 45628, 33578, 45628, 33599, 45667, 33603, 45700, 33601,
+            45748, 33604, 45748, 33658, 45721, 33656, 45721, 33696, 45705, 33695, 45704, 33715, 45720, 33704, 45734, 33703, 45742, 33720, 45749, 33744,
+            45773, 33733, 45776, 33767, 45806, 33767, 45808, 33810, 45803, 33812, 45798, 33879, 45785, 33880, 45782, 33895, 45785, 33916, 45787, 33971,
+            45768, 33973, 45767, 34012, 45780, 34030, 45785, 34013, 45805, 34013, 45802, 34079, 45820, 34079, 45820, 34103, 45852, 34102, 45856, 34100,
+            45854, 34115, 45859, 34123, 45854, 34153, 45879, 34153, 45879, 34132, 45912, 34131, 45908, 34108, 45908, 34096, 45925, 34097, 45930, 34092,
+            45941, 34107, 45948, 34094, 45945, 34086, 45958, 34072, 45961, 34071, 45962, 34070, 45969, 34069, 45984, 34056, 45990, 34061, 45994, 34076,
+            46000, 34082, 46016, 34086, 46021, 34093, 46028, 34086, 46022, 34082, 46031, 34071, 46052, 34079, 46057, 34043, 46080, 34063
+        )),
+        ScaledRing(intArrayOf(
+            45865, 33518, 45879, 33538, 45869, 33519, 45865, 33518
+        )),
+        ScaledRing(intArrayOf(
+            46082, 33924, 46101, 33928, 46101, 33908, 46087, 33916, 46082, 33924
+        ))
+    ))
+
+    private fun _r_bilohirskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            45241, 34318, 45280, 34316, 45281, 34292, 45286, 34292, 45285, 34217, 45266, 34216, 45268, 34208, 45256, 34206, 45253, 34187, 45225, 34186,
+            45225, 34190, 45187, 34190, 45151, 34204, 45155, 34212, 45141, 34226, 45146, 34252, 45113, 34279, 45107, 34279, 45107, 34264, 45093, 34266,
+            45086, 34263, 45086, 34275, 45065, 34275, 45054, 34272, 45045, 34282, 45028, 34284, 45023, 34276, 44990, 34279, 44990, 34288, 44966, 34301,
+            44951, 34306, 44940, 34291, 44927, 34302, 44913, 34304, 44908, 34313, 44890, 34327, 44889, 34337, 44893, 34339, 44894, 34344, 44897, 34344,
+            44895, 34348, 44900, 34357, 44889, 34364, 44893, 34372, 44888, 34379, 44892, 34385, 44880, 34388, 44879, 34398, 44868, 34404, 44879, 34406,
+            44866, 34421, 44870, 34455, 44863, 34456, 44856, 34474, 44865, 34485, 44868, 34501, 44865, 34536, 44888, 34536, 44887, 34571, 44877, 34604,
+            44865, 34588, 44860, 34597, 44842, 34607, 44846, 34623, 44853, 34624, 44851, 34632, 44859, 34646, 44862, 34642, 44873, 34658, 44880, 34650,
+            44876, 34670, 44878, 34675, 44872, 34692, 44889, 34694, 44901, 34701, 44897, 34725, 44887, 34729, 44881, 34742, 44887, 34754, 44894, 34756,
+            44899, 34801, 44911, 34809, 44914, 34826, 44923, 34837, 44932, 34829, 44945, 34857, 44948, 34879, 45001, 34883, 45002, 34893, 44993, 34909,
+            45002, 34921, 44997, 34930, 45000, 34938, 45008, 34939, 45011, 34957, 45031, 34962, 45046, 34971, 45059, 34964, 45050, 34947, 45048, 34927,
+            45061, 34919, 45067, 34924, 45079, 34923, 45079, 34889, 45083, 34880, 45078, 34872, 45080, 34862, 45106, 34864, 45132, 34863, 45133, 34888,
+            45160, 34891, 45161, 34864, 45178, 34865, 45180, 34791, 45161, 34786, 45161, 34768, 45224, 34769, 45224, 34737, 45216, 34736, 45214, 34716,
+            45206, 34698, 45189, 34695, 45189, 34672, 45226, 34674, 45226, 34682, 45244, 34691, 45261, 34697, 45269, 34714, 45270, 34725, 45287, 34725,
+            45287, 34766, 45314, 34767, 45314, 34758, 45359, 34758, 45359, 34806, 45372, 34806, 45372, 34817, 45383, 34817, 45398, 34779, 45422, 34757,
+            45422, 34776, 45429, 34776, 45422, 34784, 45422, 34800, 45429, 34800, 45428, 34855, 45447, 34842, 45442, 34893, 45440, 34925, 45465, 34918,
+            45493, 34921, 45498, 34998, 45500, 35003, 45534, 35009, 45562, 35013, 45561, 35029, 45570, 35054, 45577, 35060, 45583, 35026, 45594, 35026,
+            45596, 35033, 45607, 35038, 45619, 35038, 45612, 35045, 45608, 35054, 45575, 35073, 45575, 35075, 45606, 35058, 45615, 35042, 45637, 35029,
+            45649, 34983, 45663, 34962, 45674, 34960, 45687, 34964, 45678, 34932, 45680, 34914, 45671, 34897, 45678, 34876, 45671, 34868, 45680, 34869,
+            45682, 34877, 45693, 34876, 45691, 34895, 45714, 34872, 45713, 34861, 45701, 34848, 45678, 34829, 45666, 34811, 45655, 34808, 45635, 34807,
+            45643, 34743, 45643, 34729, 45624, 34717, 45611, 34716, 45610, 34759, 45602, 34758, 45602, 34798, 45584, 34797, 45584, 34702, 45585, 34696,
+            45566, 34696, 45566, 34612, 45557, 34612, 45569, 34595, 45563, 34586, 45558, 34592, 45548, 34573, 45522, 34574, 45522, 34562, 45504, 34562,
+            45496, 34550, 45452, 34572, 45448, 34548, 45443, 34550, 45434, 34527, 45430, 34531, 45405, 34536, 45406, 34580, 45387, 34580, 45387, 34601,
+            45351, 34601, 45352, 34608, 45330, 34608, 45330, 34543, 45304, 34542, 45304, 34558, 45288, 34557, 45254, 34558, 45254, 34532, 45239, 34534,
+            45237, 34553, 45227, 34559, 45210, 34544, 45210, 34521, 45225, 34519, 45226, 34448, 45217, 34432, 45216, 34381, 45208, 34381, 45209, 34331,
+            45235, 34324, 45241, 34318
+        )),
+        ScaledRing(intArrayOf(
+            45651, 34989, 45675, 34983, 45674, 34976, 45651, 34989
+        ))
+    ))
+
+    private fun _r_yevpatoriiskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            45714, 33099, 45705, 33069, 45692, 33045, 45688, 33025, 45674, 33002, 45679, 32999, 45656, 32943, 45650, 32935, 45640, 32908, 45596, 32832,
+            45584, 32819, 45584, 32838, 45577, 32845, 45558, 32836, 45549, 32826, 45559, 32819, 45554, 32803, 45563, 32790, 45557, 32771, 45542, 32735,
+            45532, 32724, 45530, 32712, 45518, 32712, 45512, 32690, 45523, 32693, 45509, 32652, 45493, 32620, 45480, 32584, 45456, 32542, 45450, 32541,
+            45437, 32525, 45419, 32496, 45407, 32490, 45402, 32480, 45391, 32480, 45386, 32492, 45384, 32508, 45371, 32515, 45361, 32512, 45347, 32494,
+            45335, 32553, 45335, 32569, 45331, 32575, 45325, 32617, 45318, 32624, 45315, 32650, 45323, 32674, 45334, 32683, 45344, 32710, 45356, 32731,
+            45365, 32756, 45369, 32833, 45369, 32856, 45362, 32908, 45336, 32970, 45312, 33009, 45299, 33026, 45274, 33067, 45247, 33098, 45233, 33108,
+            45227, 33123, 45218, 33136, 45204, 33148, 45184, 33185, 45182, 33205, 45168, 33236, 45148, 33259, 45148, 33283, 45161, 33297, 45173, 33305,
+            45175, 33320, 45173, 33344, 45182, 33362, 45186, 33377, 45196, 33381, 45196, 33403, 45184, 33434, 45142, 33501, 45134, 33512, 45092, 33555,
+            45074, 33568, 45045, 33584, 45007, 33600, 44991, 33603, 44992, 33659, 44988, 33660, 44988, 33681, 45020, 33681, 45024, 33673, 45038, 33676,
+            45039, 33706, 45041, 33706, 45041, 33785, 45044, 33797, 45060, 33800, 45076, 33797, 45077, 33771, 45094, 33773, 45094, 33846, 45102, 33846,
+            45105, 33863, 45106, 33897, 45132, 33898, 45132, 33913, 45160, 33914, 45163, 33896, 45190, 33895, 45191, 33955, 45209, 33947, 45259, 33928,
+            45290, 33913, 45289, 33883, 45334, 33890, 45335, 33915, 45355, 33918, 45371, 33915, 45398, 33903, 45398, 33801, 45424, 33801, 45424, 33816,
+            45440, 33816, 45439, 33737, 45417, 33732, 45416, 33706, 45431, 33703, 45433, 33681, 45446, 33678, 45443, 33650, 45441, 33651, 45434, 33642,
+            45436, 33610, 45427, 33607, 45426, 33597, 45403, 33598, 45403, 33574, 45434, 33577, 45434, 33551, 45443, 33551, 45446, 33507, 45433, 33501,
+            45432, 33430, 45456, 33429, 45456, 33441, 45465, 33443, 45464, 33458, 45509, 33464, 45510, 33448, 45503, 33448, 45507, 33391, 45525, 33393,
+            45526, 33360, 45515, 33361, 45491, 33374, 45478, 33374, 45479, 33334, 45512, 33318, 45553, 33320, 45557, 33232, 45608, 33228, 45608, 33204,
+            45659, 33204, 45659, 33154, 45663, 33154, 45662, 33114, 45678, 33112, 45680, 33126, 45697, 33124, 45696, 33100, 45714, 33099
+        ))
+    )
+
+    private fun _r_kerchenskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            45249, 36574, 45264, 36556, 45279, 36545, 45279, 36539, 45256, 36556, 45249, 36574
+        )),
+        ScaledRing(intArrayOf(
+            45130, 35560, 45130, 35585, 45127, 35610, 45113, 35670, 45097, 35718, 45072, 35770, 45057, 35787, 45042, 35810, 45033, 35817, 45020, 35812,
+            45018, 35823, 45011, 35834, 45003, 35831, 44998, 35837, 45004, 35869, 45010, 35879, 45019, 35911, 45020, 35930, 45012, 35956, 45022, 35982,
+            45042, 36003, 45050, 36035, 45048, 36077, 45036, 36158, 45034, 36200, 45028, 36224, 45051, 36256, 45059, 36310, 45059, 36369, 45071, 36406,
+            45075, 36412, 45084, 36437, 45096, 36452, 45106, 36451, 45123, 36427, 45139, 36420, 45161, 36417, 45173, 36405, 45216, 36403, 45234, 36418,
+            45244, 36421, 45264, 36436, 45259, 36429, 45265, 36420, 45267, 36428, 45275, 36415, 45286, 36418, 45294, 36429, 45306, 36480, 45318, 36495,
+            45323, 36478, 45341, 36470, 45361, 36483, 45364, 36503, 45352, 36520, 45351, 36534, 45345, 36545, 45348, 36566, 45347, 36603, 45356, 36610,
+            45360, 36621, 45369, 36634, 45375, 36632, 45382, 36647, 45390, 36642, 45397, 36625, 45413, 36606, 45421, 36614, 45438, 36596, 45440, 36574,
+            45428, 36568, 45424, 36556, 45426, 36533, 45454, 36484, 45459, 36448, 45446, 36434, 45444, 36426, 45449, 36402, 45468, 36371, 45473, 36355,
+            45482, 36342, 45474, 36340, 45471, 36317, 45480, 36296, 45481, 36285, 45475, 36250, 45475, 36238, 45470, 36199, 45472, 36191, 45462, 36125,
+            45448, 36084, 45441, 36072, 45434, 36070, 45424, 36074, 45407, 36073, 45384, 36049, 45375, 36028, 45370, 36003, 45370, 35975, 45374, 35958,
+            45385, 35925, 45404, 35889, 45418, 35871, 45437, 35851, 45450, 35847, 45453, 35860, 45461, 35873, 45469, 35869, 45473, 35850, 45466, 35824,
+            45454, 35817, 45443, 35827, 45435, 35822, 45423, 35801, 45403, 35772, 45398, 35756, 45388, 35748, 45382, 35761, 45369, 35757, 45361, 35747,
+            45352, 35728, 45341, 35728, 45332, 35716, 45330, 35684, 45315, 35610, 45301, 35574, 45293, 35550, 45283, 35525, 45291, 35497, 45305, 35461,
+            45336, 35402, 45367, 35356, 45409, 35306, 45457, 35255, 45525, 35194, 45584, 35123, 45639, 35069, 45677, 35036, 45763, 34974, 45759, 34964,
+            45758, 34967, 45715, 34985, 45702, 34998, 45680, 35005, 45682, 35014, 45674, 35027, 45661, 35041, 45640, 35054, 45623, 35062, 45621, 35077,
+            45603, 35094, 45596, 35095, 45577, 35122, 45567, 35134, 45544, 35150, 45528, 35179, 45491, 35214, 45485, 35224, 45446, 35255, 45428, 35276,
+            45415, 35285, 45412, 35293, 45388, 35306, 45393, 35320, 45367, 35341, 45356, 35347, 45352, 35363, 45339, 35386, 45311, 35408, 45314, 35410,
+            45311, 35437, 45301, 35460, 45291, 35468, 45281, 35463, 45268, 35482, 45272, 35464, 45260, 35459, 45267, 35451, 45246, 35458, 45218, 35463,
+            45215, 35425, 45172, 35428, 45170, 35513, 45142, 35529, 45132, 35528, 45130, 35560
+        ))
+    ))
+
+    private fun _r_skadovskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            46510, 32150, 46496, 32158, 46488, 32192, 46496, 32168, 46510, 32150
+        )),
+        ScaledRing(intArrayOf(
+            46508, 32111, 46505, 32094, 46500, 32095, 46508, 32111
+        )),
+        ScaledRing(intArrayOf(
+            46478, 32299, 46480, 32309, 46487, 32281, 46481, 32286, 46474, 32278, 46471, 32290, 46479, 32290, 46478, 32299
+        )),
+        ScaledRing(intArrayOf(
+            46067, 32562, 46066, 32548, 46058, 32622, 46050, 32664, 46044, 32688, 46035, 32736, 46027, 32798, 46021, 32832, 46015, 32902, 46011, 32918,
+            46014, 32956, 46008, 33036, 46012, 33048, 46011, 33067, 46021, 33057, 46029, 33032, 46024, 33025, 46030, 33004, 46030, 32976, 46047, 32942,
+            46037, 32929, 46038, 32907, 46061, 32861, 46055, 32856, 46051, 32837, 46037, 32812, 46030, 32786, 46036, 32735, 46044, 32707, 46044, 32692,
+            46055, 32661, 46053, 32655, 46061, 32621, 46063, 32592, 46067, 32562
+        )),
+        ScaledRing(intArrayOf(
+            46143, 32185, 46158, 32118, 46166, 32077, 46170, 32072, 46173, 32042, 46167, 32057, 46159, 32106, 46143, 32185
+        )),
+        ScaledRing(intArrayOf(
+            46245, 31617, 46249, 31600, 46258, 31581, 46279, 31551, 46294, 31540, 46317, 31534, 46337, 31538, 46366, 31535, 46366, 31523, 46356, 31516,
+            46335, 31512, 46321, 31515, 46303, 31523, 46288, 31536, 46272, 31554, 46256, 31579, 46240, 31615, 46228, 31666, 46195, 31855, 46178, 31976,
+            46184, 31972, 46183, 31947, 46192, 31888, 46197, 31873, 46196, 31854, 46203, 31833, 46204, 31812, 46210, 31788, 46210, 31773, 46216, 31752,
+            46217, 31733, 46224, 31695, 46229, 31677, 46235, 31641, 46236, 31654, 46250, 31678, 46245, 31646, 46245, 31617
+        )),
+        ScaledRing(intArrayOf(
+            46479, 31806, 46461, 31887, 46438, 31954, 46446, 31946, 46448, 31931, 46454, 31928, 46446, 31948, 46451, 31943, 46443, 31981, 46455, 31989,
+            46452, 32015, 46439, 32030, 46416, 32038, 46400, 32057, 46386, 32066, 46378, 32041, 46385, 32025, 46359, 32004, 46351, 31987, 46343, 31959,
+            46336, 31921, 46335, 31887, 46332, 31860, 46334, 31835, 46328, 31805, 46311, 31779, 46308, 31762, 46300, 31761, 46294, 31774, 46288, 31771,
+            46274, 31783, 46265, 31783, 46277, 31794, 46268, 31816, 46274, 31828, 46270, 31842, 46272, 31860, 46265, 31874, 46278, 31890, 46298, 31893,
+            46306, 31877, 46315, 31893, 46297, 31898, 46294, 31932, 46286, 31946, 46265, 31957, 46256, 31974, 46254, 31993, 46265, 31998, 46262, 32005,
+            46252, 31997, 46247, 32029, 46252, 32032, 46258, 32053, 46248, 32063, 46250, 32075, 46242, 32083, 46223, 32090, 46204, 32127, 46203, 32148,
+            46199, 32164, 46204, 32172, 46195, 32179, 46198, 32166, 46176, 32193, 46184, 32195, 46182, 32205, 46190, 32207, 46186, 32236, 46191, 32262,
+            46184, 32263, 46181, 32246, 46184, 32238, 46172, 32247, 46175, 32237, 46170, 32229, 46153, 32237, 46132, 32228, 46098, 32372, 46075, 32486,
+            46066, 32542, 46072, 32538, 46081, 32546, 46099, 32602, 46099, 32615, 46103, 32625, 46106, 32648, 46099, 32675, 46108, 32707, 46109, 32736,
+            46116, 32742, 46122, 32768, 46114, 32791, 46117, 32812, 46110, 32829, 46114, 32837, 46116, 32876, 46111, 32889, 46106, 32940, 46111, 32965,
+            46109, 33010, 46110, 33027, 46118, 33026, 46115, 33017, 46123, 33015, 46125, 33026, 46138, 33031, 46151, 33016, 46156, 33032, 46154, 33066,
+            46136, 33082, 46132, 33105, 46124, 33129, 46136, 33147, 46141, 33160, 46156, 33183, 46172, 33194, 46182, 33194, 46186, 33186, 46194, 33187,
+            46190, 33197, 46194, 33207, 46218, 33225, 46202, 33223, 46196, 33211, 46183, 33213, 46174, 33206, 46153, 33226, 46141, 33208, 46122, 33205,
+            46114, 33197, 46104, 33211, 46121, 33206, 46132, 33217, 46139, 33256, 46133, 33284, 46122, 33307, 46114, 33311, 46096, 33309, 46092, 33290,
+            46097, 33280, 46081, 33282, 46075, 33295, 46076, 33309, 46090, 33308, 46107, 33316, 46116, 33330, 46096, 33346, 46090, 33360, 46092, 33372,
+            46076, 33365, 46058, 33390, 46034, 33416, 46038, 33416, 46041, 33448, 46049, 33461, 46048, 33467, 46034, 33485, 46027, 33499, 46031, 33511,
+            46062, 33490, 46076, 33498, 46082, 33518, 46074, 33553, 46076, 33561, 46083, 33550, 46099, 33515, 46108, 33510, 46123, 33510, 46116, 33523,
+            46118, 33538, 46128, 33555, 46125, 33541, 46136, 33547, 46138, 33566, 46152, 33571, 46158, 33579, 46158, 33594, 46147, 33610, 46135, 33615,
+            46140, 33636, 46226, 33614, 46228, 33632, 46230, 33631, 46328, 33605, 46319, 33535, 46299, 33539, 46290, 33466, 46358, 33448, 46348, 33366,
+            46395, 33355, 46358, 33013, 46279, 33027, 46265, 32902, 46286, 32898, 46282, 32857, 46342, 32845, 46348, 32840, 46430, 32835, 46452, 32814,
+            46457, 32791, 46479, 32786, 46519, 32782, 46523, 32770, 46518, 32712, 46523, 32701, 46535, 32698, 46541, 32678, 46545, 32653, 46559, 32647,
+            46573, 32632, 46586, 32626, 46591, 32621, 46577, 32599, 46571, 32579, 46556, 32573, 46559, 32561, 46551, 32533, 46552, 32517, 46559, 32501,
+            46568, 32493, 46571, 32481, 46568, 32466, 46556, 32435, 46543, 32415, 46535, 32392, 46527, 32377, 46500, 32317, 46498, 32309, 46492, 32316,
+            46490, 32286, 46485, 32294, 46478, 32321, 46468, 32322, 46475, 32333, 46484, 32339, 46483, 32352, 46491, 32366, 46489, 32378, 46496, 32406,
+            46493, 32424, 46480, 32419, 46472, 32405, 46463, 32368, 46463, 32346, 46467, 32305, 46477, 32262, 46479, 32238, 46478, 32204, 46493, 32152,
+            46499, 32123, 46498, 32078, 46489, 32046, 46487, 32023, 46492, 31977, 46500, 31945, 46508, 31924, 46509, 31908, 46518, 31902, 46517, 31884,
+            46511, 31883, 46517, 31858, 46498, 31846, 46499, 31822, 46489, 31810, 46479, 31806
+        ))
+    ))
+
+    private fun _r_kakhovskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            46230, 33631, 46239, 33639, 46238, 33629, 46230, 33631
+        )),
+        ScaledRing(intArrayOf(
+            46328, 33605, 46240, 33628, 46239, 33649, 46236, 33647, 46224, 33661, 46235, 33665, 46224, 33681, 46218, 33678, 46208, 33694, 46206, 33710,
+            46199, 33719, 46201, 33740, 46209, 33743, 46212, 33726, 46224, 33727, 46229, 33719, 46213, 33709, 46218, 33693, 46226, 33684, 46229, 33693,
+            46219, 33700, 46232, 33718, 46242, 33725, 46240, 33752, 46244, 33768, 46254, 33771, 46257, 33780, 46238, 33806, 46223, 33838, 46226, 33868,
+            46230, 33881, 46237, 33879, 46229, 33895, 46220, 33895, 46227, 33924, 46222, 33946, 46210, 33973, 46290, 33968, 46370, 33972, 46370, 33964,
+            46416, 33961, 46432, 34127, 46526, 34108, 46544, 34079, 46536, 33989, 46556, 33985, 46557, 34003, 46574, 34000, 46573, 33990, 46579, 33974,
+            46584, 33978, 46618, 33972, 46619, 33981, 46625, 33980, 46626, 33989, 46640, 33987, 46649, 34065, 46660, 34062, 46663, 34050, 46685, 34045,
+            46768, 34029, 46772, 34032, 46793, 34027, 46794, 34037, 46810, 34034, 46818, 34107, 46802, 34110, 46811, 34198, 46888, 34181, 47016, 34324,
+            47021, 34315, 47049, 34348, 47078, 34407, 47101, 34401, 47105, 34520, 47247, 34492, 47251, 34530, 47268, 34527, 47267, 34523, 47284, 34518,
+            47280, 34488, 47315, 34480, 47318, 34514, 47325, 34507, 47336, 34513, 47338, 34500, 47333, 34494, 47323, 34414, 47301, 34420, 47298, 34400,
+            47288, 34402, 47284, 34370, 47294, 34358, 47290, 34330, 47268, 34306, 47274, 34293, 47333, 34281, 47362, 34272, 47360, 34261, 47391, 34252,
+            47394, 34257, 47430, 34244, 47442, 34236, 47454, 34215, 47469, 34171, 47477, 34139, 47471, 34081, 47456, 34003, 47459, 33998, 47386, 33997,
+            47356, 33994, 47332, 34000, 47320, 33991, 47290, 33982, 47246, 33960, 47211, 33926, 47196, 33906, 47180, 33878, 47163, 33832, 47145, 33828,
+            47117, 33818, 47089, 33799, 47055, 33751, 47049, 33736, 47040, 33707, 47032, 33695, 47019, 33694, 47004, 33687, 46984, 33681, 46961, 33670,
+            46928, 33647, 46912, 33620, 46895, 33614, 46871, 33611, 46850, 33597, 46838, 33570, 46837, 33542, 46841, 33518, 46837, 33489, 46825, 33456,
+            46804, 33419, 46821, 33394, 46829, 33394, 46826, 33374, 46837, 33371, 46836, 33359, 46842, 33357, 46840, 33341, 46848, 33340, 46844, 33314,
+            46850, 33310, 46845, 33293, 46827, 33310, 46824, 33318, 46820, 33320, 46803, 33315, 46790, 33309, 46775, 33315, 46776, 33326, 46756, 33326,
+            46751, 33293, 46752, 33285, 46764, 33251, 46770, 33202, 46784, 33147, 46780, 33128, 46768, 33099, 46753, 33130, 46749, 33130, 46713, 33156,
+            46716, 33179, 46697, 33182, 46688, 33155, 46692, 33151, 46685, 33130, 46674, 33137, 46653, 33114, 46630, 33153, 46630, 33173, 46643, 33172,
+            46645, 33177, 46667, 33173, 46671, 33220, 46656, 33224, 46662, 33277, 46599, 33293, 46613, 33416, 46561, 33428, 46555, 33423, 46512, 33435,
+            46507, 33417, 46487, 33253, 46424, 33267, 46419, 33213, 46388, 33221, 46382, 33232, 46395, 33355, 46348, 33366, 46358, 33448, 46290, 33466,
+            46299, 33539, 46319, 33535, 46328, 33605
+        ))
+    ))
+
+    private fun _r_khmelnytskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48944, 27400, 48956, 27413, 48972, 27417, 48974, 27408, 48996, 27395, 49000, 27401, 49008, 27383, 49026, 27403, 49055, 27416, 49054, 27427,
+            49064, 27429, 49062, 27441, 49070, 27439, 49070, 27464, 49068, 27502, 49073, 27500, 49090, 27480, 49096, 27492, 49108, 27503, 49122, 27493,
+            49131, 27507, 49132, 27512, 49127, 27517, 49123, 27538, 49130, 27536, 49139, 27534, 49130, 27548, 49120, 27574, 49134, 27597, 49140, 27592,
+            49157, 27594, 49162, 27602, 49162, 27623, 49168, 27641, 49141, 27686, 49145, 27695, 49140, 27706, 49149, 27713, 49140, 27739, 49153, 27758,
+            49172, 27779, 49190, 27775, 49190, 27781, 49178, 27791, 49186, 27804, 49188, 27817, 49180, 27822, 49178, 27844, 49172, 27854, 49175, 27870,
+            49178, 27883, 49186, 27896, 49192, 27896, 49209, 27893, 49215, 27886, 49213, 27877, 49214, 27869, 49237, 27855, 49242, 27869, 49245, 27871,
+            49248, 27871, 49253, 27860, 49262, 27857, 49266, 27850, 49297, 27864, 49311, 27853, 49326, 27858, 49349, 27840, 49355, 27814, 49368, 27812,
+            49368, 27829, 49375, 27829, 49375, 27818, 49388, 27811, 49391, 27832, 49407, 27832, 49421, 27848, 49429, 27850, 49430, 27850, 49425, 27834,
+            49423, 27826, 49439, 27804, 49435, 27792, 49442, 27780, 49444, 27765, 49439, 27751, 49452, 27744, 49462, 27755, 49478, 27764, 49477, 27777,
+            49492, 27789, 49492, 27748, 49496, 27732, 49500, 27736, 49510, 27734, 49531, 27742, 49530, 27746, 49531, 27761, 49521, 27775, 49531, 27792,
+            49545, 27784, 49553, 27795, 49562, 27782, 49574, 27758, 49583, 27760, 49596, 27772, 49600, 27789, 49621, 27800, 49616, 27810, 49641, 27811,
+            49653, 27794, 49666, 27767, 49697, 27762, 49700, 27811, 49709, 27805, 49729, 27835, 49734, 27816, 49728, 27808, 49726, 27788, 49728, 27782,
+            49734, 27772, 49743, 27763, 49755, 27750, 49769, 27703, 49780, 27708, 49788, 27721, 49799, 27727, 49805, 27717, 49808, 27699, 49803, 27692,
+            49808, 27668, 49796, 27662, 49801, 27657, 49812, 27642, 49825, 27639, 49835, 27628, 49844, 27622, 49873, 27616, 49876, 27610, 49892, 27625,
+            49894, 27618, 49890, 27596, 49896, 27596, 49910, 27569, 49902, 27564, 49902, 27561, 49902, 27550, 49904, 27547, 49908, 27548, 49909, 27523,
+            49903, 27519, 49886, 27520, 49882, 27508, 49878, 27480, 49892, 27460, 49910, 27448, 49896, 27433, 49886, 27416, 49878, 27414, 49867, 27383,
+            49870, 27374, 49877, 27367, 49901, 27364, 49909, 27355, 49910, 27338, 49916, 27340, 49919, 27324, 49905, 27312, 49904, 27303, 49889, 27284,
+            49885, 27252, 49896, 27250, 49893, 27223, 49901, 27196, 49909, 27190, 49918, 27206, 49933, 27211, 49937, 27174, 49926, 27172, 49923, 27164,
+            49925, 27133, 49938, 27139, 49944, 27134, 49949, 27098, 49944, 27086, 49944, 27066, 49937, 27068, 49937, 27057, 49925, 27040, 49931, 27019,
+            49926, 27015, 49928, 26981, 49917, 26968, 49911, 26982, 49902, 26946, 49905, 26936, 49892, 26925, 49889, 26914, 49874, 26915, 49884, 26893,
+            49883, 26869, 49895, 26848, 49907, 26801, 49917, 26803, 49913, 26786, 49918, 26770, 49902, 26749, 49909, 26731, 49909, 26712, 49901, 26711,
+            49896, 26695, 49892, 26638, 49929, 26661, 49933, 26648, 49938, 26665, 49945, 26660, 49957, 26614, 49939, 26602, 49944, 26543, 49939, 26534,
+            49945, 26527, 49938, 26498, 49933, 26489, 49915, 26489, 49909, 26514, 49901, 26517, 49884, 26510, 49893, 26481, 49890, 26467, 49895, 26450,
+            49885, 26446, 49893, 26427, 49904, 26424, 49914, 26392, 49926, 26388, 49931, 26374, 49926, 26356, 49916, 26347, 49914, 26326, 49900, 26316,
+            49884, 26314, 49881, 26285, 49876, 26272, 49877, 26230, 49874, 26231, 49872, 26214, 49866, 26214, 49866, 26200, 49846, 26177, 49836, 26185,
+            49823, 26197, 49819, 26206, 49806, 26217, 49798, 26219, 49792, 26228, 49782, 26224, 49778, 26230, 49771, 26237, 49745, 26243, 49735, 26215,
+            49713, 26192, 49708, 26197, 49707, 26210, 49693, 26241, 49682, 26250, 49666, 26270, 49661, 26271, 49656, 26275, 49653, 26261, 49643, 26267,
+            49633, 26255, 49638, 26240, 49637, 26232, 49624, 26226, 49620, 26217, 49610, 26209, 49608, 26200, 49588, 26214, 49580, 26208, 49570, 26214,
+            49562, 26215, 49554, 26219, 49551, 26218, 49546, 26207, 49545, 26201, 49547, 26199, 49555, 26197, 49550, 26176, 49531, 26158, 49520, 26157,
+            49514, 26145, 49507, 26152, 49496, 26162, 49488, 26180, 49480, 26189, 49457, 26190, 49440, 26202, 49427, 26199, 49407, 26228, 49400, 26234,
+            49383, 26229, 49380, 26223, 49378, 26222, 49369, 26244, 49367, 26243, 49364, 26235, 49354, 26243, 49347, 26243, 49345, 26226, 49324, 26227,
+            49312, 26249, 49296, 26249, 49289, 26261, 49285, 26250, 49276, 26257, 49277, 26245, 49271, 26245, 49262, 26258, 49253, 26243, 49243, 26244,
+            49246, 26222, 49244, 26206, 49221, 26202, 49219, 26190, 49212, 26196, 49196, 26184, 49181, 26195, 49172, 26190, 49167, 26209, 49172, 26218,
+            49163, 26218, 49166, 26222, 49168, 26223, 49168, 26226, 49156, 26236, 49138, 26254, 49124, 26253, 49116, 26259, 49114, 26265, 49120, 26271,
+            49130, 26260, 49137, 26272, 49154, 26265, 49146, 26280, 49151, 26281, 49174, 26298, 49165, 26318, 49176, 26326, 49160, 26351, 49156, 26348,
+            49144, 26387, 49149, 26414, 49135, 26445, 49125, 26443, 49111, 26419, 49079, 26441, 49066, 26444, 49045, 26499, 49039, 26544, 49029, 26557,
+            49018, 26563, 49011, 26560, 49007, 26544, 48992, 26544, 48993, 26557, 48985, 26582, 48979, 26619, 48984, 26627, 48997, 26606, 49000, 26591,
+            49011, 26590, 49014, 26609, 48993, 26631, 49027, 26677, 49049, 26655, 49064, 26679, 49067, 26667, 49073, 26679, 49074, 26720, 49069, 26741,
+            49075, 26741, 49076, 26762, 49070, 26773, 49070, 26803, 49078, 26797, 49071, 26816, 49076, 26829, 49074, 26846, 49062, 26853, 49045, 26896,
+            49038, 26898, 49025, 26888, 49014, 26931, 49033, 26934, 49024, 26948, 49026, 26955, 49010, 26994, 49016, 27004, 49010, 27014, 49000, 27016,
+            48995, 27040, 48983, 27044, 48992, 27054, 48989, 27065, 48990, 27097, 48978, 27110, 48964, 27108, 48960, 27134, 48954, 27140, 48948, 27184,
+            48931, 27188, 48919, 27210, 48926, 27232, 48920, 27261, 48914, 27273, 48909, 27292, 48920, 27287, 48928, 27301, 48934, 27297, 48936, 27339,
+            48931, 27353, 48937, 27383, 48932, 27387, 48935, 27396, 48944, 27400
+        ))
+    )
+
+    private fun _r_kamyanets_podilskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48451, 26592, 48454, 26617, 48468, 26627, 48495, 26608, 48508, 26612, 48509, 26628, 48505, 26637, 48486, 26656, 48485, 26693, 48489, 26710,
+            48494, 26714, 48510, 26705, 48524, 26680, 48540, 26675, 48543, 26664, 48536, 26626, 48541, 26619, 48548, 26618, 48552, 26619, 48561, 26639,
+            48560, 26660, 48553, 26677, 48532, 26705, 48530, 26716, 48538, 26740, 48557, 26743, 48567, 26739, 48574, 26724, 48586, 26723, 48583, 26743,
+            48575, 26750, 48555, 26755, 48548, 26761, 48546, 26780, 48551, 26787, 48567, 26795, 48588, 26778, 48598, 26780, 48606, 26792, 48611, 26806,
+            48610, 26818, 48605, 26825, 48590, 26821, 48576, 26824, 48557, 26841, 48545, 26863, 48541, 26883, 48551, 26905, 48565, 26915, 48574, 26926,
+            48576, 26939, 48576, 26968, 48587, 26980, 48587, 26989, 48575, 26995, 48569, 27004, 48557, 27096, 48557, 27108, 48564, 27126, 48576, 27140,
+            48582, 27166, 48579, 27192, 48568, 27217, 48565, 27234, 48568, 27254, 48574, 27261, 48589, 27259, 48608, 27239, 48612, 27238, 48620, 27243,
+            48625, 27254, 48625, 27275, 48612, 27296, 48604, 27302, 48601, 27310, 48600, 27322, 48604, 27334, 48618, 27344, 48629, 27353, 48631, 27364,
+            48629, 27373, 48650, 27380, 48661, 27388, 48682, 27392, 48687, 27407, 48695, 27406, 48696, 27416, 48706, 27414, 48727, 27401, 48740, 27413,
+            48753, 27393, 48764, 27390, 48767, 27408, 48774, 27404, 48779, 27414, 48790, 27418, 48795, 27428, 48812, 27411, 48825, 27418, 48840, 27418,
+            48850, 27413, 48858, 27416, 48882, 27416, 48891, 27404, 48899, 27395, 48925, 27396, 48932, 27387, 48937, 27383, 48931, 27353, 48936, 27339,
+            48934, 27297, 48928, 27301, 48920, 27287, 48909, 27292, 48914, 27273, 48920, 27261, 48926, 27232, 48919, 27210, 48931, 27188, 48948, 27184,
+            48954, 27140, 48960, 27134, 48964, 27108, 48978, 27110, 48990, 27097, 48989, 27065, 48992, 27054, 48983, 27044, 48995, 27040, 49000, 27016,
+            49010, 27014, 49016, 27004, 49010, 26994, 49026, 26955, 49024, 26948, 49033, 26934, 49014, 26931, 49025, 26888, 49038, 26898, 49045, 26896,
+            49062, 26853, 49074, 26846, 49076, 26829, 49071, 26816, 49078, 26797, 49070, 26803, 49070, 26773, 49076, 26762, 49075, 26741, 49069, 26741,
+            49074, 26720, 49073, 26679, 49067, 26667, 49064, 26679, 49049, 26655, 49027, 26677, 48993, 26631, 49014, 26609, 49011, 26590, 49000, 26591,
+            48997, 26606, 48984, 26627, 48979, 26619, 48985, 26582, 48993, 26557, 48992, 26544, 49007, 26544, 49011, 26560, 49018, 26563, 49029, 26557,
+            49039, 26544, 49045, 26499, 49066, 26444, 49079, 26441, 49111, 26419, 49125, 26443, 49135, 26445, 49149, 26414, 49144, 26387, 49156, 26348,
+            49160, 26351, 49176, 26326, 49165, 26318, 49174, 26298, 49151, 26281, 49146, 26280, 49154, 26265, 49137, 26272, 49130, 26260, 49120, 26271,
+            49114, 26265, 49116, 26259, 49124, 26253, 49138, 26254, 49156, 26236, 49159, 26230, 49169, 26224, 49163, 26218, 49172, 26218, 49167, 26209,
+            49157, 26204, 49162, 26196, 49160, 26191, 49156, 26190, 49148, 26198, 49137, 26196, 49133, 26205, 49128, 26196, 49112, 26203, 49097, 26204,
+            49080, 26197, 49073, 26196, 49073, 26212, 49066, 26207, 49061, 26188, 49054, 26185, 49032, 26209, 49024, 26199, 49013, 26214, 49006, 26216,
+            49000, 26208, 49003, 26187, 48996, 26178, 48989, 26183, 48987, 26209, 48984, 26213, 48980, 26211, 48976, 26205, 48974, 26196, 48978, 26184,
+            48977, 26181, 48973, 26177, 48970, 26177, 48968, 26180, 48959, 26203, 48952, 26208, 48932, 26194, 48918, 26198, 48917, 26184, 48908, 26189,
+            48904, 26196, 48904, 26202, 48911, 26211, 48909, 26224, 48904, 26224, 48896, 26206, 48880, 26215, 48874, 26207, 48865, 26213, 48857, 26203,
+            48851, 26219, 48834, 26223, 48818, 26241, 48821, 26252, 48818, 26259, 48816, 26260, 48810, 26256, 48807, 26249, 48809, 26242, 48813, 26229,
+            48808, 26227, 48792, 26238, 48794, 26219, 48801, 26216, 48796, 26209, 48780, 26216, 48779, 26233, 48769, 26239, 48762, 26231, 48754, 26246,
+            48750, 26235, 48747, 26228, 48740, 26244, 48728, 26237, 48718, 26241, 48713, 26233, 48702, 26234, 48697, 26241, 48692, 26226, 48691, 26223,
+            48682, 26226, 48681, 26239, 48681, 26247, 48669, 26248, 48673, 26269, 48670, 26279, 48648, 26272, 48649, 26289, 48656, 26301, 48650, 26310,
+            48639, 26289, 48635, 26299, 48636, 26318, 48628, 26323, 48625, 26314, 48627, 26298, 48626, 26295, 48623, 26294, 48621, 26295, 48609, 26328,
+            48599, 26329, 48595, 26343, 48585, 26343, 48588, 26357, 48583, 26361, 48574, 26344, 48569, 26337, 48566, 26338, 48563, 26344, 48560, 26353,
+            48559, 26366, 48546, 26359, 48542, 26370, 48546, 26377, 48561, 26376, 48564, 26383, 48557, 26393, 48543, 26408, 48540, 26414, 48541, 26421,
+            48547, 26434, 48545, 26440, 48538, 26445, 48546, 26476, 48545, 26487, 48537, 26496, 48521, 26502, 48491, 26532, 48459, 26554, 48455, 26561,
+            48452, 26575, 48451, 26592
+        ))
+    )
+
+    private fun _r_kurmanskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            45581, 34142, 45614, 34140, 45614, 34102, 45630, 34102, 45632, 34063, 45650, 34063, 45650, 34071, 45666, 34077, 45667, 34101, 45680, 34102,
+            45684, 34110, 45694, 34111, 45718, 34100, 45763, 34100, 45762, 34118, 45784, 34121, 45785, 34101, 45797, 34100, 45799, 34079, 45802, 34079,
+            45805, 34013, 45785, 34013, 45780, 34030, 45767, 34012, 45768, 33973, 45787, 33971, 45785, 33916, 45782, 33895, 45785, 33880, 45798, 33879,
+            45803, 33812, 45808, 33810, 45806, 33767, 45776, 33767, 45773, 33733, 45749, 33744, 45742, 33720, 45734, 33703, 45720, 33704, 45704, 33715,
+            45705, 33695, 45721, 33696, 45721, 33656, 45748, 33658, 45748, 33604, 45700, 33601, 45667, 33603, 45628, 33599, 45628, 33578, 45587, 33574,
+            45573, 33540, 45572, 33533, 45558, 33528, 45558, 33538, 45525, 33536, 45519, 33539, 45478, 33525, 45473, 33647, 45443, 33650, 45446, 33678,
+            45433, 33681, 45431, 33703, 45416, 33706, 45417, 33732, 45439, 33737, 45440, 33816, 45424, 33816, 45424, 33801, 45398, 33801, 45398, 33903,
+            45371, 33915, 45355, 33918, 45335, 33915, 45334, 33890, 45289, 33883, 45290, 33913, 45274, 33921, 45244, 33933, 45244, 33979, 45236, 33973,
+            45191, 33973, 45190, 33999, 45217, 34000, 45217, 34017, 45233, 34020, 45232, 34067, 45248, 34068, 45248, 34097, 45227, 34085, 45225, 34186,
+            45253, 34187, 45256, 34206, 45268, 34208, 45266, 34216, 45285, 34217, 45286, 34292, 45281, 34292, 45280, 34316, 45241, 34318, 45235, 34324,
+            45209, 34331, 45208, 34381, 45216, 34381, 45217, 34432, 45226, 34448, 45225, 34519, 45210, 34521, 45210, 34544, 45227, 34559, 45237, 34553,
+            45239, 34534, 45254, 34532, 45254, 34558, 45288, 34557, 45304, 34558, 45304, 34542, 45330, 34543, 45330, 34608, 45352, 34608, 45351, 34601,
+            45387, 34601, 45387, 34580, 45406, 34580, 45405, 34536, 45430, 34531, 45434, 34527, 45443, 34550, 45448, 34548, 45452, 34572, 45496, 34550,
+            45504, 34562, 45522, 34562, 45522, 34520, 45543, 34516, 45547, 34506, 45547, 34462, 45566, 34462, 45568, 34418, 45561, 34417, 45561, 34403,
+            45550, 34403, 45550, 34329, 45563, 34335, 45559, 34319, 45560, 34282, 45552, 34281, 45552, 34256, 45626, 34255, 45628, 34190, 45598, 34181,
+            45599, 34160, 45581, 34160, 45581, 34142
+        ))
+    )
+
+    private fun _r_shepetivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49872, 26214, 49874, 26231, 49877, 26230, 49876, 26272, 49881, 26285, 49884, 26314, 49900, 26316, 49914, 26326, 49916, 26347, 49926, 26356,
+            49931, 26374, 49926, 26388, 49914, 26392, 49904, 26424, 49893, 26427, 49885, 26446, 49895, 26450, 49890, 26467, 49893, 26481, 49884, 26510,
+            49901, 26517, 49909, 26514, 49915, 26489, 49933, 26489, 49938, 26498, 49945, 26527, 49939, 26534, 49944, 26543, 49939, 26602, 49957, 26614,
+            49945, 26660, 49938, 26665, 49933, 26648, 49929, 26661, 49892, 26638, 49896, 26695, 49901, 26711, 49909, 26712, 49909, 26731, 49902, 26749,
+            49918, 26770, 49913, 26786, 49917, 26803, 49907, 26801, 49895, 26848, 49883, 26869, 49884, 26893, 49874, 26915, 49889, 26914, 49892, 26925,
+            49905, 26936, 49902, 26946, 49911, 26982, 49917, 26968, 49928, 26981, 49926, 27015, 49931, 27019, 49925, 27040, 49937, 27057, 49937, 27068,
+            49944, 27066, 49944, 27086, 49949, 27098, 49944, 27134, 49938, 27139, 49925, 27133, 49923, 27164, 49926, 27172, 49937, 27174, 49933, 27211,
+            49918, 27206, 49909, 27190, 49901, 27196, 49893, 27223, 49896, 27250, 49885, 27252, 49889, 27284, 49904, 27303, 49905, 27312, 49919, 27324,
+            49916, 27340, 49910, 27338, 49909, 27355, 49901, 27364, 49877, 27367, 49871, 27373, 49868, 27381, 49867, 27386, 49878, 27413, 49879, 27415,
+            49886, 27416, 49896, 27433, 49910, 27448, 49892, 27460, 49878, 27480, 49882, 27508, 49886, 27520, 49903, 27519, 49909, 27523, 49908, 27548,
+            49924, 27550, 49934, 27548, 49935, 27556, 49945, 27557, 49947, 27574, 49961, 27565, 49983, 27562, 49999, 27546, 50012, 27547, 50013, 27560,
+            50021, 27563, 50015, 27592, 50006, 27609, 50038, 27641, 50034, 27658, 50026, 27657, 50026, 27671, 50035, 27679, 50049, 27681, 50057, 27675,
+            50066, 27676, 50080, 27660, 50087, 27615, 50104, 27631, 50106, 27622, 50114, 27624, 50115, 27641, 50123, 27627, 50134, 27632, 50146, 27632,
+            50145, 27648, 50153, 27653, 50153, 27671, 50159, 27680, 50173, 27663, 50194, 27665, 50188, 27635, 50173, 27642, 50171, 27623, 50198, 27621,
+            50195, 27613, 50215, 27608, 50215, 27594, 50230, 27595, 50230, 27600, 50243, 27602, 50259, 27596, 50259, 27578, 50246, 27563, 50246, 27542,
+            50225, 27525, 50238, 27492, 50257, 27481, 50257, 27459, 50263, 27443, 50276, 27443, 50274, 27413, 50285, 27401, 50295, 27402, 50295, 27417,
+            50306, 27415, 50332, 27363, 50332, 27317, 50340, 27314, 50358, 27324, 50369, 27319, 50393, 27249, 50419, 27257, 50458, 27292, 50476, 27291,
+            50493, 27302, 50490, 27272, 50494, 27265, 50499, 27261, 50511, 27261, 50514, 27258, 50532, 27207, 50552, 27196, 50562, 27195, 50564, 27153,
+            50560, 27134, 50561, 27130, 50563, 27128, 50570, 27125, 50588, 27131, 50595, 27120, 50586, 27104, 50588, 27091, 50583, 27080, 50562, 27065,
+            50556, 27077, 50551, 27061, 50559, 27018, 50541, 27010, 50534, 26989, 50524, 26982, 50529, 26967, 50531, 26937, 50546, 26901, 50535, 26882,
+            50522, 26874, 50509, 26855, 50521, 26826, 50503, 26818, 50502, 26780, 50490, 26776, 50484, 26768, 50478, 26768, 50471, 26763, 50475, 26790,
+            50468, 26786, 50460, 26766, 50460, 26742, 50469, 26748, 50480, 26746, 50478, 26736, 50463, 26735, 50458, 26728, 50452, 26739, 50445, 26737,
+            50446, 26717, 50416, 26712, 50420, 26693, 50389, 26683, 50392, 26661, 50365, 26649, 50371, 26621, 50368, 26602, 50340, 26587, 50329, 26553,
+            50322, 26563, 50316, 26560, 50317, 26546, 50308, 26547, 50304, 26520, 50297, 26523, 50281, 26494, 50267, 26493, 50260, 26472, 50260, 26453,
+            50264, 26455, 50261, 26421, 50265, 26397, 50260, 26385, 50252, 26379, 50251, 26362, 50239, 26350, 50231, 26326, 50216, 26316, 50213, 26306,
+            50198, 26305, 50187, 26291, 50183, 26282, 50178, 26270, 50180, 26258, 50172, 26231, 50181, 26220, 50175, 26211, 50165, 26221, 50157, 26219,
+            50154, 26209, 50146, 26223, 50142, 26243, 50132, 26235, 50113, 26274, 50102, 26273, 50102, 26246, 50098, 26201, 50081, 26201, 50076, 26207,
+            50067, 26201, 50060, 26222, 50046, 26227, 50046, 26218, 50037, 26217, 50036, 26199, 50026, 26177, 50016, 26211, 49992, 26201, 49994, 26169,
+            49986, 26168, 49976, 26148, 49960, 26144, 49926, 26163, 49906, 26135, 49898, 26135, 49890, 26160, 49881, 26164, 49872, 26191, 49866, 26200,
+            49866, 26214, 49872, 26214
+        ))
+    )
+
+    private fun _r_holovanivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48158, 30621, 48166, 30621, 48173, 30656, 48185, 30648, 48189, 30690, 48196, 30717, 48188, 30722, 48192, 30786, 48168, 30793, 48170, 30816,
+            48179, 30816, 48192, 30823, 48182, 30827, 48184, 30848, 48163, 30855, 48162, 30876, 48166, 30892, 48165, 30905, 48168, 30930, 48181, 30931,
+            48185, 30944, 48183, 30957, 48186, 30990, 48223, 30980, 48232, 31053, 48220, 31056, 48224, 31091, 48237, 31087, 48239, 31104, 48257, 31100,
+            48267, 31091, 48271, 31117, 48282, 31123, 48284, 31132, 48302, 31125, 48296, 31069, 48300, 31062, 48295, 31021, 48314, 31016, 48316, 31035,
+            48321, 31027, 48349, 31020, 48348, 31007, 48380, 31000, 48378, 30973, 48387, 30969, 48383, 30939, 48396, 30934, 48390, 30900, 48383, 30902,
+            48378, 30852, 48383, 30844, 48393, 30846, 48416, 30825, 48432, 30840, 48440, 30838, 48442, 30823, 48454, 30808, 48466, 30826, 48463, 30832,
+            48464, 30848, 48494, 30882, 48521, 30884, 48523, 30932, 48553, 30922, 48554, 30984, 48603, 30984, 48604, 31064, 48612, 31098, 48592, 31110,
+            48597, 31134, 48592, 31138, 48592, 31164, 48596, 31162, 48601, 31200, 48673, 31146, 48687, 31185, 48692, 31190, 48697, 31179, 48714, 31233,
+            48692, 31246, 48696, 31266, 48730, 31252, 48731, 31258, 48743, 31253, 48750, 31262, 48765, 31254, 48768, 31246, 48768, 31216, 48758, 31212,
+            48762, 31175, 48757, 31167, 48742, 31152, 48746, 31138, 48738, 31132, 48736, 31119, 48729, 31118, 48728, 31115, 48730, 31107, 48738, 31103,
+            48740, 31096, 48738, 31089, 48732, 31088, 48736, 31069, 48745, 31071, 48756, 31057, 48752, 31048, 48760, 31041, 48762, 31020, 48758, 31003,
+            48765, 30996, 48762, 30978, 48763, 30962, 48770, 30957, 48772, 30942, 48764, 30947, 48762, 30939, 48762, 30902, 48747, 30897, 48746, 30885,
+            48750, 30877, 48753, 30850, 48751, 30830, 48763, 30821, 48769, 30811, 48757, 30805, 48771, 30754, 48760, 30751, 48761, 30718, 48767, 30698,
+            48752, 30638, 48739, 30636, 48740, 30624, 48720, 30610, 48723, 30588, 48721, 30576, 48699, 30602, 48698, 30612, 48678, 30601, 48663, 30598,
+            48654, 30555, 48629, 30532, 48606, 30571, 48596, 30559, 48592, 30568, 48581, 30564, 48578, 30570, 48568, 30568, 48572, 30542, 48566, 30526,
+            48569, 30486, 48565, 30476, 48584, 30453, 48574, 30404, 48543, 30387, 48528, 30387, 48523, 30328, 48512, 30306, 48507, 30257, 48490, 30258,
+            48480, 30221, 48504, 30165, 48494, 30150, 48486, 30157, 48473, 30142, 48471, 30132, 48463, 30123, 48454, 30121, 48453, 30116, 48452, 30110,
+            48455, 30091, 48466, 30082, 48469, 30072, 48480, 30055, 48482, 30044, 48478, 30003, 48472, 30003, 48472, 29968, 48462, 29964, 48463, 29954,
+            48454, 29954, 48450, 29951, 48440, 29927, 48440, 29907, 48428, 29885, 48431, 29883, 48427, 29863, 48417, 29871, 48370, 29787, 48361, 29805,
+            48350, 29812, 48347, 29805, 48332, 29805, 48329, 29784, 48316, 29782, 48309, 29769, 48304, 29774, 48296, 29763, 48299, 29751, 48278, 29762,
+            48272, 29774, 48259, 29776, 48256, 29771, 48242, 29782, 48226, 29772, 48209, 29781, 48208, 29786, 48201, 29794, 48207, 29806, 48214, 29841,
+            48206, 29860, 48195, 29873, 48189, 29876, 48184, 29892, 48204, 29904, 48234, 29930, 48218, 29976, 48230, 29990, 48221, 29992, 48209, 30009,
+            48196, 30001, 48182, 30008, 48186, 30019, 48185, 30023, 48179, 30033, 48172, 30033, 48154, 30046, 48151, 30063, 48147, 30064, 48146, 30068,
+            48147, 30081, 48140, 30106, 48147, 30129, 48144, 30152, 48146, 30166, 48154, 30187, 48149, 30196, 48148, 30213, 48141, 30242, 48148, 30262,
+            48140, 30286, 48143, 30303, 48143, 30324, 48148, 30329, 48160, 30329, 48166, 30348, 48174, 30366, 48175, 30371, 48174, 30384, 48166, 30393,
+            48163, 30415, 48172, 30437, 48163, 30470, 48170, 30500, 48159, 30504, 48178, 30525, 48164, 30549, 48156, 30554, 48158, 30621
+        ))
+    )
+
+    private fun _r_oleksandriiskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48171, 33214, 48173, 33244, 48152, 33248, 48155, 33272, 48139, 33272, 48104, 33277, 48102, 33291, 48119, 33303, 48119, 33316, 48126, 33317,
+            48129, 33308, 48151, 33292, 48152, 33316, 48159, 33316, 48160, 33356, 48164, 33360, 48167, 33382, 48168, 33410, 48171, 33431, 48188, 33430,
+            48193, 33477, 48200, 33476, 48203, 33496, 48233, 33502, 48232, 33512, 48223, 33524, 48227, 33537, 48233, 33536, 48238, 33546, 48253, 33540,
+            48256, 33534, 48276, 33531, 48279, 33514, 48285, 33518, 48293, 33509, 48328, 33516, 48332, 33504, 48329, 33497, 48326, 33471, 48348, 33476,
+            48350, 33462, 48359, 33459, 48370, 33474, 48370, 33468, 48384, 33469, 48388, 33482, 48393, 33483, 48394, 33498, 48404, 33497, 48404, 33487,
+            48429, 33488, 48473, 33483, 48534, 33469, 48536, 33480, 48546, 33472, 48549, 33483, 48557, 33482, 48560, 33501, 48558, 33510, 48568, 33510,
+            48575, 33584, 48560, 33589, 48567, 33622, 48599, 33610, 48602, 33626, 48597, 33629, 48599, 33649, 48586, 33659, 48614, 33724, 48615, 33743,
+            48625, 33762, 48656, 33755, 48662, 33800, 48688, 33804, 48681, 33750, 48694, 33747, 48692, 33730, 48723, 33683, 48721, 33650, 48726, 33648,
+            48727, 33620, 48752, 33608, 48748, 33593, 48754, 33586, 48781, 33578, 48781, 33588, 48797, 33582, 48799, 33602, 48792, 33605, 48789, 33619,
+            48793, 33657, 48815, 33673, 48809, 33691, 48814, 33704, 48809, 33720, 48787, 33724, 48789, 33743, 48795, 33750, 48798, 33771, 48792, 33773,
+            48794, 33795, 48800, 33792, 48803, 33810, 48776, 33819, 48771, 33829, 48772, 33848, 48779, 33852, 48802, 33849, 48837, 33862, 48843, 33875,
+            48889, 33890, 48903, 33892, 48914, 33862, 48931, 33835, 48938, 33808, 48941, 33778, 48946, 33758, 48941, 33739, 48940, 33717, 48948, 33695,
+            48969, 33669, 48979, 33664, 48974, 33637, 48962, 33634, 48948, 33613, 48943, 33599, 48938, 33611, 48917, 33589, 48919, 33567, 48912, 33572,
+            48913, 33547, 48931, 33537, 48926, 33498, 48916, 33484, 48915, 33475, 48934, 33479, 48940, 33473, 48952, 33477, 48957, 33424, 48961, 33408,
+            48952, 33399, 48927, 33401, 48949, 33353, 48953, 33348, 48948, 33333, 48949, 33320, 48957, 33314, 48961, 33326, 48992, 33304, 49010, 33300,
+            49027, 33332, 49054, 33314, 49066, 33299, 49079, 33308, 49084, 33289, 49082, 33279, 49092, 33265, 49098, 33274, 49097, 33289, 49119, 33302,
+            49124, 33288, 49135, 33275, 49132, 33267, 49149, 33262, 49165, 33242, 49164, 33236, 49146, 33244, 49085, 33244, 49079, 33242, 49085, 33227,
+            49077, 33223, 49074, 33204, 49082, 33190, 49088, 33197, 49098, 33184, 49096, 33163, 49102, 33153, 49113, 33156, 49123, 33150, 49128, 33157,
+            49160, 33129, 49165, 33120, 49182, 33108, 49183, 33090, 49188, 33079, 49185, 33057, 49186, 33032, 49198, 33021, 49204, 32992, 49216, 32983,
+            49228, 32988, 49238, 32985, 49245, 32972, 49233, 32929, 49235, 32886, 49245, 32856, 49230, 32847, 49215, 32816, 49189, 32780, 49171, 32769,
+            49166, 32758, 49157, 32759, 49149, 32766, 49142, 32785, 49120, 32889, 49096, 32890, 49092, 32864, 49074, 32813, 49066, 32830, 49033, 32836,
+            49027, 32842, 49016, 32837, 49015, 32826, 49009, 32838, 49012, 32845, 48999, 32860, 49001, 32871, 48993, 32872, 48991, 32843, 48981, 32845,
+            48977, 32796, 48971, 32795, 48966, 32733, 48944, 32738, 48939, 32750, 48936, 32739, 48929, 32747, 48932, 32753, 48929, 32769, 48891, 32778,
+            48896, 32789, 48895, 32807, 48887, 32815, 48898, 32829, 48882, 32858, 48884, 32872, 48816, 32886, 48814, 32853, 48808, 32854, 48802, 32785,
+            48771, 32792, 48727, 32801, 48723, 32799, 48721, 32779, 48705, 32783, 48705, 32805, 48690, 32809, 48688, 32764, 48662, 32770, 48660, 32753,
+            48642, 32782, 48645, 32792, 48622, 32799, 48626, 32818, 48620, 32819, 48627, 32850, 48636, 32853, 48616, 32856, 48612, 32826, 48613, 32810,
+            48603, 32802, 48606, 32781, 48596, 32781, 48578, 32774, 48577, 32764, 48560, 32764, 48558, 32753, 48544, 32759, 48544, 32776, 48515, 32780,
+            48512, 32772, 48500, 32784, 48494, 32776, 48481, 32778, 48475, 32789, 48460, 32794, 48454, 32782, 48433, 32843, 48441, 32848, 48447, 32883,
+            48465, 32920, 48475, 32917, 48478, 32957, 48476, 32958, 48482, 33017, 48504, 33013, 48508, 33046, 48495, 33044, 48462, 33051, 48464, 33091,
+            48447, 33094, 48448, 33104, 48436, 33105, 48433, 33078, 48410, 33084, 48402, 33075, 48382, 33078, 48380, 33071, 48370, 33068, 48371, 33043,
+            48318, 33054, 48324, 33106, 48293, 33112, 48293, 33118, 48276, 33121, 48278, 33137, 48251, 33142, 48252, 33148, 48232, 33153, 48231, 33146,
+            48188, 33157, 48185, 33155, 48183, 33138, 48152, 33146, 48153, 33163, 48142, 33165, 48145, 33185, 48158, 33185, 48161, 33216, 48171, 33214
+        ))
+    )
+
+    private fun _r_novoukrainskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48113, 31419, 48121, 31418, 48127, 31457, 48130, 31485, 48087, 31498, 48081, 31474, 48064, 31468, 48066, 31488, 48052, 31492, 48055, 31503,
+            48068, 31511, 48071, 31552, 48108, 31540, 48110, 31559, 48103, 31568, 48106, 31583, 48128, 31582, 48135, 31632, 48115, 31643, 48120, 31685,
+            48093, 31696, 48103, 31766, 48107, 31765, 48114, 31822, 48107, 31828, 48112, 31886, 48126, 31883, 48129, 31915, 48138, 31914, 48140, 31970,
+            48139, 31977, 48124, 31978, 48126, 31998, 48132, 32012, 48132, 32027, 48137, 32026, 48134, 32013, 48150, 32008, 48148, 31995, 48156, 31992,
+            48153, 31971, 48164, 31969, 48163, 31952, 48187, 31943, 48190, 31956, 48218, 31945, 48220, 31938, 48242, 31924, 48274, 31913, 48278, 31933,
+            48314, 31930, 48314, 31939, 48335, 31935, 48336, 31944, 48368, 31934, 48369, 31926, 48442, 31918, 48439, 31886, 48470, 31881, 48477, 31868,
+            48476, 31854, 48496, 31857, 48496, 31871, 48530, 31872, 48542, 31901, 48537, 31919, 48541, 31925, 48540, 31942, 48534, 31957, 48543, 31945,
+            48562, 31942, 48580, 31916, 48595, 31950, 48598, 31966, 48590, 31970, 48599, 31986, 48608, 31981, 48606, 31972, 48646, 31955, 48654, 31941,
+            48668, 31959, 48695, 31944, 48698, 31952, 48688, 31961, 48688, 31974, 48692, 32018, 48700, 32016, 48713, 32075, 48729, 32053, 48738, 32048,
+            48742, 32059, 48745, 32047, 48799, 32016, 48806, 31954, 48813, 31902, 48824, 31917, 48835, 31917, 48848, 31927, 48875, 31907, 48888, 31912,
+            48897, 31919, 48907, 31918, 48919, 31876, 48936, 31837, 48935, 31826, 48944, 31807, 48940, 31797, 48934, 31768, 48926, 31754, 48935, 31726,
+            48932, 31700, 48918, 31698, 48896, 31688, 48901, 31680, 48900, 31644, 48908, 31639, 48906, 31621, 48894, 31601, 48887, 31582, 48892, 31579,
+            48906, 31593, 48911, 31581, 48901, 31569, 48896, 31578, 48890, 31569, 48885, 31579, 48874, 31583, 48863, 31559, 48857, 31570, 48838, 31558,
+            48829, 31560, 48817, 31529, 48804, 31529, 48788, 31469, 48763, 31425, 48754, 31438, 48744, 31424, 48756, 31420, 48755, 31411, 48748, 31413,
+            48735, 31394, 48748, 31394, 48743, 31388, 48729, 31385, 48731, 31371, 48732, 31370, 48734, 31370, 48741, 31365, 48743, 31357, 48728, 31355,
+            48726, 31330, 48732, 31320, 48736, 31325, 48748, 31313, 48756, 31314, 48757, 31293, 48754, 31271, 48743, 31253, 48732, 31258, 48730, 31252,
+            48696, 31266, 48692, 31246, 48714, 31233, 48697, 31179, 48692, 31190, 48687, 31185, 48673, 31146, 48601, 31200, 48596, 31162, 48592, 31164,
+            48592, 31138, 48597, 31134, 48592, 31110, 48612, 31098, 48604, 31064, 48603, 30984, 48554, 30984, 48553, 30922, 48523, 30932, 48521, 30884,
+            48494, 30882, 48464, 30848, 48463, 30832, 48466, 30826, 48454, 30808, 48442, 30823, 48440, 30838, 48432, 30840, 48416, 30825, 48393, 30846,
+            48383, 30844, 48378, 30852, 48383, 30902, 48390, 30900, 48396, 30934, 48383, 30939, 48387, 30969, 48378, 30973, 48380, 31000, 48348, 31007,
+            48349, 31020, 48321, 31027, 48316, 31035, 48314, 31016, 48295, 31021, 48300, 31062, 48296, 31069, 48302, 31125, 48284, 31132, 48282, 31123,
+            48271, 31117, 48267, 31091, 48257, 31100, 48239, 31104, 48237, 31087, 48224, 31091, 48230, 31138, 48222, 31140, 48223, 31163, 48194, 31192,
+            48183, 31176, 48170, 31198, 48172, 31220, 48117, 31236, 48124, 31255, 48135, 31308, 48136, 31319, 48114, 31323, 48119, 31347, 48120, 31367,
+            48132, 31382, 48131, 31388, 48109, 31396, 48113, 31419
+        ))
+    )
+
+    private fun _r_kropyvnytskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            47810, 31961, 47816, 32017, 47813, 32019, 47818, 32057, 47805, 32061, 47806, 32076, 47796, 32079, 47796, 32086, 47782, 32089, 47785, 32109,
+            47756, 32115, 47758, 32136, 47748, 32140, 47756, 32156, 47751, 32161, 47760, 32230, 47792, 32221, 47794, 32239, 47815, 32238, 47824, 32300,
+            47813, 32321, 47804, 32330, 47797, 32346, 47791, 32354, 47789, 32365, 47796, 32378, 47800, 32398, 47800, 32404, 47798, 32403, 47796, 32397,
+            47794, 32402, 47796, 32412, 47801, 32417, 47798, 32426, 47789, 32432, 47801, 32518, 47813, 32623, 47816, 32625, 47819, 32658, 47830, 32658,
+            47853, 32681, 47854, 32668, 47872, 32663, 47874, 32684, 47907, 32676, 47906, 32656, 47921, 32652, 47932, 32745, 47945, 32736, 47952, 32742,
+            47947, 32698, 47982, 32690, 47992, 32788, 47980, 32801, 47974, 32802, 47979, 32812, 47986, 32863, 47982, 32865, 47985, 32894, 48021, 32886,
+            48024, 32873, 48032, 32871, 48029, 32882, 48032, 32917, 48038, 32914, 48043, 32946, 48036, 32951, 48049, 32990, 48020, 32999, 48000, 33002,
+            47989, 33005, 47983, 33023, 47984, 33025, 47989, 33022, 48004, 33026, 48009, 33021, 48013, 33036, 48030, 33033, 48035, 33038, 48044, 33110,
+            48049, 33104, 48066, 33105, 48067, 33108, 48066, 33115, 48063, 33116, 48066, 33144, 48043, 33150, 48044, 33153, 48068, 33148, 48078, 33142,
+            48084, 33153, 48089, 33202, 48098, 33239, 48114, 33235, 48114, 33221, 48108, 33223, 48106, 33185, 48120, 33182, 48122, 33218, 48128, 33231,
+            48148, 33226, 48148, 33219, 48161, 33216, 48158, 33185, 48145, 33185, 48142, 33165, 48153, 33163, 48152, 33146, 48183, 33138, 48185, 33155,
+            48231, 33146, 48232, 33153, 48252, 33148, 48251, 33142, 48278, 33137, 48276, 33121, 48293, 33118, 48293, 33112, 48324, 33106, 48318, 33054,
+            48371, 33043, 48370, 33068, 48380, 33071, 48382, 33078, 48402, 33075, 48410, 33084, 48433, 33078, 48436, 33105, 48448, 33104, 48447, 33094,
+            48464, 33091, 48462, 33051, 48495, 33044, 48508, 33046, 48504, 33013, 48482, 33017, 48476, 32958, 48478, 32957, 48475, 32917, 48465, 32920,
+            48447, 32883, 48441, 32848, 48433, 32843, 48454, 32782, 48460, 32794, 48475, 32789, 48481, 32778, 48494, 32776, 48500, 32784, 48512, 32772,
+            48515, 32780, 48544, 32776, 48544, 32759, 48558, 32753, 48560, 32764, 48577, 32764, 48578, 32774, 48596, 32781, 48606, 32781, 48603, 32802,
+            48613, 32810, 48612, 32826, 48616, 32856, 48636, 32853, 48627, 32850, 48620, 32819, 48626, 32818, 48622, 32799, 48645, 32792, 48642, 32782,
+            48660, 32753, 48662, 32770, 48688, 32764, 48690, 32809, 48705, 32805, 48705, 32783, 48721, 32779, 48723, 32799, 48727, 32801, 48771, 32792,
+            48802, 32785, 48808, 32854, 48814, 32853, 48816, 32886, 48884, 32872, 48882, 32858, 48898, 32829, 48887, 32815, 48895, 32807, 48896, 32789,
+            48891, 32778, 48929, 32769, 48932, 32753, 48929, 32747, 48936, 32739, 48939, 32750, 48944, 32738, 48978, 32730, 48976, 32698, 48983, 32695,
+            48982, 32681, 48986, 32676, 48984, 32670, 48977, 32667, 48961, 32675, 48954, 32655, 48956, 32638, 48955, 32608, 48964, 32606, 48960, 32593,
+            48954, 32594, 48951, 32582, 48958, 32577, 48957, 32568, 48966, 32553, 48966, 32538, 48962, 32541, 48953, 32541, 48940, 32551, 48940, 32521,
+            48951, 32522, 48958, 32513, 48980, 32515, 48989, 32503, 49000, 32498, 49015, 32501, 49016, 32495, 49006, 32475, 49031, 32467, 49033, 32473,
+            49041, 32460, 49039, 32453, 49051, 32444, 49040, 32434, 49042, 32428, 49028, 32419, 49028, 32398, 49039, 32371, 49052, 32377, 49071, 32368,
+            49070, 32354, 49079, 32352, 49080, 32318, 49075, 32316, 49074, 32299, 49086, 32283, 49079, 32283, 49081, 32268, 49077, 32260, 49060, 32263,
+            49062, 32241, 49060, 32235, 49037, 32232, 48989, 32219, 48991, 32196, 48998, 32184, 48973, 32178, 48966, 32135, 48955, 32136, 48945, 32153,
+            48918, 32152, 48912, 32146, 48912, 32112, 48904, 32104, 48907, 32087, 48920, 32093, 48921, 32080, 48918, 32050, 48932, 32029, 48915, 32008,
+            48918, 31998, 48908, 31961, 48906, 31946, 48881, 31921, 48888, 31912, 48875, 31907, 48848, 31927, 48835, 31917, 48824, 31917, 48813, 31902,
+            48806, 31954, 48799, 32016, 48745, 32047, 48742, 32059, 48738, 32048, 48729, 32053, 48713, 32075, 48700, 32016, 48692, 32018, 48688, 31974,
+            48688, 31961, 48698, 31952, 48695, 31944, 48668, 31959, 48654, 31941, 48646, 31955, 48606, 31972, 48608, 31981, 48599, 31986, 48590, 31970,
+            48598, 31966, 48595, 31950, 48580, 31916, 48562, 31942, 48543, 31945, 48534, 31957, 48540, 31942, 48541, 31925, 48537, 31919, 48542, 31901,
+            48530, 31872, 48496, 31871, 48496, 31857, 48476, 31854, 48477, 31868, 48470, 31881, 48439, 31886, 48442, 31918, 48369, 31926, 48368, 31934,
+            48336, 31944, 48335, 31935, 48314, 31939, 48314, 31930, 48278, 31933, 48274, 31913, 48242, 31924, 48220, 31938, 48218, 31945, 48190, 31956,
+            48187, 31943, 48163, 31952, 48164, 31969, 48153, 31971, 48156, 31992, 48148, 31995, 48150, 32008, 48134, 32013, 48137, 32026, 48132, 32027,
+            48132, 32012, 48126, 31998, 48124, 31978, 48139, 31977, 48140, 31970, 48138, 31914, 48129, 31915, 48126, 31883, 48112, 31886, 48107, 31828,
+            48114, 31822, 48107, 31765, 48043, 31783, 48036, 31728, 48008, 31734, 47943, 31754, 47945, 31766, 47960, 31781, 47954, 31783, 47960, 31803,
+            47962, 31844, 47915, 31854, 47919, 31872, 47909, 31876, 47894, 31884, 47882, 31880, 47866, 31890, 47865, 31857, 47851, 31860, 47848, 31853,
+            47838, 31857, 47828, 31870, 47823, 31869, 47817, 31828, 47785, 31838, 47783, 31840, 47786, 31875, 47788, 31875, 47799, 31964, 47810, 31961
+        ))
+    )
+
+    private fun _r_voznesenskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            47158, 31273, 47160, 31288, 47145, 31294, 47143, 31307, 47142, 31361, 47146, 31382, 47233, 31355, 47237, 31324, 47240, 31323, 47245, 31369,
+            47252, 31369, 47257, 31414, 47253, 31422, 47301, 31406, 47303, 31446, 47296, 31502, 47280, 31551, 47293, 31584, 47303, 31578, 47333, 31657,
+            47338, 31663, 47348, 31636, 47371, 31609, 47379, 31592, 47390, 31593, 47397, 31618, 47405, 31616, 47426, 31592, 47440, 31603, 47446, 31650,
+            47435, 31654, 47444, 31721, 47451, 31727, 47456, 31718, 47461, 31728, 47476, 31730, 47483, 31745, 47494, 31745, 47510, 31755, 47512, 31769,
+            47518, 31781, 47528, 31785, 47536, 31801, 47551, 31793, 47561, 31777, 47564, 31786, 47580, 31782, 47580, 31793, 47569, 31808, 47562, 31804,
+            47568, 31884, 47555, 31888, 47560, 31948, 47541, 31953, 47544, 31991, 47533, 31998, 47552, 32100, 47556, 32109, 47564, 32110, 47566, 32122,
+            47577, 32121, 47586, 32117, 47590, 32154, 47612, 32150, 47614, 32171, 47591, 32175, 47594, 32223, 47618, 32217, 47616, 32192, 47667, 32184,
+            47707, 32176, 47711, 32220, 47757, 32208, 47751, 32161, 47756, 32156, 47748, 32140, 47758, 32136, 47756, 32115, 47785, 32109, 47782, 32089,
+            47796, 32086, 47796, 32079, 47806, 32076, 47805, 32061, 47818, 32057, 47813, 32019, 47816, 32017, 47810, 31961, 47799, 31964, 47788, 31875,
+            47786, 31875, 47783, 31840, 47785, 31838, 47817, 31828, 47823, 31869, 47828, 31870, 47838, 31857, 47848, 31853, 47851, 31860, 47865, 31857,
+            47866, 31890, 47882, 31880, 47894, 31884, 47909, 31876, 47919, 31872, 47915, 31854, 47962, 31844, 47960, 31803, 47954, 31783, 47960, 31781,
+            47945, 31766, 47943, 31754, 48008, 31734, 48036, 31728, 48043, 31783, 48103, 31766, 48093, 31696, 48120, 31685, 48115, 31643, 48135, 31632,
+            48128, 31582, 48106, 31583, 48103, 31568, 48110, 31559, 48108, 31540, 48071, 31552, 48068, 31511, 48055, 31503, 48052, 31492, 48066, 31488,
+            48064, 31468, 48081, 31474, 48087, 31498, 48130, 31485, 48127, 31457, 48121, 31418, 48113, 31419, 48110, 31403, 48098, 31408, 48096, 31399,
+            48039, 31413, 48038, 31401, 48015, 31406, 48016, 31419, 47999, 31423, 48001, 31435, 47972, 31441, 47972, 31443, 47850, 31478, 47846, 31446,
+            47809, 31455, 47807, 31442, 47777, 31452, 47771, 31418, 47792, 31409, 47787, 31375, 47763, 31384, 47750, 31292, 47765, 31277, 47787, 31259,
+            47798, 31257, 47834, 31266, 47849, 31276, 47851, 31293, 47843, 31294, 47833, 31305, 47835, 31314, 47846, 31299, 47855, 31302, 47851, 31273,
+            47837, 31267, 47838, 31261, 47810, 31258, 47810, 31246, 47817, 31233, 47824, 31236, 47832, 31224, 47832, 31233, 47848, 31225, 47854, 31232,
+            47865, 31219, 47882, 31213, 47884, 31231, 47890, 31254, 47918, 31242, 47910, 31191, 47915, 31189, 47902, 31095, 47892, 31100, 47881, 31113,
+            47878, 31097, 47891, 31088, 47885, 31048, 47875, 31048, 47868, 30998, 47875, 30995, 47872, 30972, 47865, 30974, 47861, 30937, 47865, 30935,
+            47851, 30886, 47856, 30883, 47851, 30866, 47846, 30869, 47840, 30849, 47832, 30847, 47821, 30772, 47793, 30780, 47789, 30751, 47764, 30759,
+            47767, 30784, 47739, 30792, 47732, 30768, 47721, 30768, 47713, 30746, 47702, 30755, 47700, 30740, 47690, 30752, 47647, 30777, 47649, 30789,
+            47636, 30793, 47635, 30782, 47623, 30775, 47596, 30779, 47584, 30778, 47579, 30745, 47560, 30753, 47554, 30770, 47546, 30773, 47553, 30800,
+            47547, 30804, 47548, 30826, 47536, 30832, 47545, 30876, 47534, 30880, 47533, 30874, 47508, 30881, 47503, 30852, 47481, 30859, 47480, 30854,
+            47444, 30865, 47444, 30848, 47420, 30851, 47425, 30886, 47404, 30893, 47401, 30874, 47358, 30886, 47359, 30901, 47346, 30908, 47341, 30889,
+            47338, 30890, 47334, 30869, 47318, 30876, 47320, 30893, 47276, 30908, 47289, 30998, 47267, 30988, 47270, 31008, 47239, 31019, 47248, 31080,
+            47253, 31079, 47265, 31169, 47256, 31175, 47255, 31168, 47223, 31178, 47218, 31146, 47182, 31157, 47177, 31123, 47189, 31118, 47188, 31109,
+            47166, 31116, 47165, 31107, 47155, 31110, 47157, 31128, 47153, 31130, 47157, 31162, 47154, 31198, 47172, 31201, 47177, 31247, 47170, 31249,
+            47172, 31268, 47158, 31273
+        ))
+    )
+
+    private fun _r_bashtanskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            46882, 32544, 46870, 32546, 46873, 32572, 46863, 32572, 46855, 32586, 46858, 32610, 46854, 32620, 46863, 32690, 46822, 32700, 46827, 32745,
+            46828, 32764, 46821, 32768, 46824, 32778, 46830, 32774, 46834, 32815, 46841, 32814, 46859, 32949, 46869, 32946, 46867, 32921, 46885, 32916,
+            46876, 32857, 46884, 32835, 46900, 32841, 46911, 32926, 46927, 32922, 46935, 32980, 46950, 32977, 46946, 32949, 46970, 32942, 46986, 32933,
+            47003, 32950, 46972, 33024, 47021, 33070, 47080, 32931, 47086, 32915, 47091, 32910, 47097, 32909, 47115, 32911, 47120, 32907, 47130, 32917,
+            47143, 32917, 47152, 32934, 47174, 32955, 47190, 32961, 47190, 33003, 47196, 33006, 47190, 33014, 47182, 33015, 47178, 33039, 47189, 33042,
+            47191, 33054, 47198, 33066, 47218, 33066, 47222, 33074, 47223, 33091, 47220, 33104, 47205, 33114, 47203, 33131, 47210, 33144, 47217, 33131,
+            47228, 33128, 47233, 33133, 47230, 33144, 47235, 33155, 47232, 33164, 47238, 33182, 47267, 33138, 47272, 33141, 47277, 33122, 47282, 33120,
+            47279, 33105, 47291, 33103, 47294, 33111, 47303, 33111, 47323, 33103, 47329, 33132, 47333, 33138, 47345, 33133, 47391, 33122, 47380, 33040,
+            47398, 33038, 47425, 33028, 47426, 33037, 47442, 33033, 47444, 33053, 47468, 33046, 47474, 33070, 47413, 33071, 47420, 33137, 47477, 33123,
+            47480, 33131, 47508, 33124, 47515, 33149, 47544, 33142, 47528, 33096, 47554, 33089, 47597, 33095, 47592, 32960, 47604, 32970, 47607, 32990,
+            47615, 32989, 47616, 33008, 47626, 33012, 47623, 32993, 47629, 32994, 47723, 32973, 47727, 33007, 47733, 33007, 47739, 33071, 47761, 33067,
+            47761, 33057, 47782, 33050, 47784, 33067, 47802, 33064, 47832, 33057, 47835, 33082, 47883, 33070, 47886, 33086, 47920, 33077, 47910, 33015,
+            47914, 33005, 47934, 32993, 47937, 33006, 47966, 33002, 47969, 32997, 47977, 32994, 47986, 32997, 47988, 33006, 48000, 33002, 48020, 32999,
+            48049, 32990, 48036, 32951, 48043, 32946, 48038, 32914, 48032, 32917, 48029, 32882, 48032, 32871, 48024, 32873, 48021, 32886, 47985, 32894,
+            47982, 32865, 47986, 32863, 47979, 32812, 47974, 32802, 47980, 32801, 47992, 32788, 47982, 32690, 47947, 32698, 47952, 32742, 47945, 32736,
+            47932, 32745, 47921, 32652, 47906, 32656, 47907, 32676, 47874, 32684, 47872, 32663, 47854, 32668, 47853, 32681, 47830, 32658, 47819, 32658,
+            47816, 32625, 47813, 32623, 47801, 32518, 47789, 32432, 47798, 32426, 47795, 32409, 47795, 32398, 47797, 32397, 47799, 32404, 47800, 32398,
+            47796, 32378, 47789, 32365, 47791, 32354, 47797, 32346, 47804, 32330, 47813, 32321, 47824, 32300, 47815, 32238, 47794, 32239, 47792, 32221,
+            47760, 32230, 47757, 32208, 47711, 32220, 47707, 32176, 47667, 32184, 47616, 32192, 47618, 32217, 47594, 32223, 47591, 32175, 47614, 32171,
+            47612, 32150, 47590, 32154, 47586, 32117, 47577, 32121, 47561, 32123, 47564, 32158, 47544, 32162, 47523, 32149, 47515, 32147, 47514, 32120,
+            47510, 32129, 47505, 32129, 47497, 32121, 47498, 32116, 47501, 32113, 47492, 32111, 47488, 32094, 47490, 32078, 47489, 32049, 47443, 32059,
+            47444, 32070, 47429, 32073, 47427, 32083, 47416, 32108, 47416, 32118, 47345, 32133, 47342, 32106, 47277, 32124, 47272, 32087, 47211, 32104,
+            47209, 32097, 47166, 32112, 47168, 32114, 47178, 32178, 47176, 32180, 47183, 32228, 47173, 32241, 47161, 32225, 47154, 32228, 47148, 32218,
+            47144, 32239, 47158, 32337, 47136, 32320, 47142, 32377, 47134, 32379, 47155, 32551, 47111, 32563, 47112, 32570, 47088, 32580, 47090, 32601,
+            47030, 32616, 47028, 32604, 47010, 32609, 47002, 32544, 47020, 32539, 47018, 32528, 46960, 32544, 46957, 32517, 46929, 32526, 46935, 32568,
+            46924, 32567, 46914, 32575, 46905, 32575, 46890, 32567, 46888, 32551, 46882, 32544
+        ))
+    )
+
+    private fun _r_pervomaiskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            47647, 30777, 47690, 30752, 47700, 30740, 47702, 30755, 47713, 30746, 47721, 30768, 47732, 30768, 47739, 30792, 47767, 30784, 47764, 30759,
+            47789, 30751, 47793, 30780, 47821, 30772, 47832, 30847, 47840, 30849, 47846, 30869, 47851, 30866, 47856, 30883, 47851, 30886, 47865, 30935,
+            47861, 30937, 47865, 30974, 47872, 30972, 47875, 30995, 47868, 30998, 47875, 31048, 47885, 31048, 47891, 31088, 47878, 31097, 47881, 31113,
+            47892, 31100, 47902, 31095, 47915, 31189, 47910, 31191, 47918, 31242, 47890, 31254, 47884, 31231, 47882, 31213, 47865, 31219, 47854, 31232,
+            47848, 31225, 47832, 31233, 47832, 31224, 47824, 31236, 47817, 31233, 47810, 31246, 47810, 31258, 47838, 31261, 47837, 31267, 47851, 31273,
+            47855, 31302, 47846, 31299, 47835, 31314, 47833, 31305, 47843, 31294, 47851, 31293, 47849, 31276, 47834, 31266, 47798, 31257, 47787, 31259,
+            47765, 31277, 47750, 31292, 47763, 31384, 47787, 31375, 47792, 31409, 47771, 31418, 47777, 31452, 47807, 31442, 47809, 31455, 47846, 31446,
+            47850, 31478, 47972, 31443, 47972, 31441, 48001, 31435, 47999, 31423, 48016, 31419, 48015, 31406, 48038, 31401, 48039, 31413, 48096, 31399,
+            48098, 31408, 48110, 31403, 48109, 31396, 48131, 31388, 48132, 31382, 48120, 31367, 48119, 31347, 48114, 31323, 48136, 31319, 48135, 31308,
+            48124, 31255, 48117, 31236, 48172, 31220, 48170, 31198, 48183, 31176, 48194, 31192, 48223, 31163, 48222, 31140, 48230, 31138, 48220, 31056,
+            48232, 31053, 48231, 31043, 48223, 30980, 48186, 30990, 48183, 30957, 48185, 30944, 48181, 30931, 48168, 30930, 48165, 30905, 48166, 30892,
+            48162, 30876, 48163, 30855, 48184, 30848, 48182, 30827, 48192, 30823, 48179, 30816, 48170, 30816, 48168, 30793, 48192, 30786, 48188, 30722,
+            48196, 30717, 48189, 30690, 48185, 30648, 48173, 30656, 48166, 30621, 48158, 30621, 48156, 30554, 48164, 30549, 48178, 30525, 48159, 30504,
+            48170, 30500, 48163, 30470, 48172, 30437, 48163, 30415, 48166, 30393, 48174, 30384, 48174, 30367, 48169, 30359, 48166, 30348, 48160, 30329,
+            48148, 30329, 48143, 30324, 48142, 30307, 48116, 30313, 48112, 30357, 48103, 30357, 48098, 30327, 48103, 30326, 48106, 30314, 48095, 30322,
+            48098, 30299, 48092, 30283, 48085, 30282, 48089, 30250, 48078, 30245, 48071, 30234, 48067, 30208, 48056, 30224, 48060, 30234, 48028, 30256,
+            48022, 30258, 48013, 30226, 47982, 30250, 47968, 30246, 47951, 30280, 47930, 30309, 47924, 30299, 47836, 30321, 47809, 30333, 47820, 30422,
+            47801, 30428, 47802, 30438, 47789, 30440, 47787, 30417, 47761, 30424, 47758, 30396, 47753, 30389, 47734, 30394, 47671, 30415, 47671, 30410,
+            47635, 30420, 47641, 30463, 47617, 30471, 47631, 30557, 47626, 30560, 47626, 30573, 47635, 30612, 47624, 30617, 47634, 30663, 47618, 30665,
+            47617, 30660, 47601, 30659, 47602, 30697, 47608, 30719, 47638, 30708, 47647, 30777
+        ))
+    )
+
+    private fun _r_mykolaivskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            46406, 31748, 46421, 31729, 46387, 31751, 46369, 31771, 46374, 31776, 46386, 31757, 46384, 31770, 46406, 31748
+        )),
+        ScaledRing(intArrayOf(
+            46627, 31176, 46622, 31207, 46612, 31231, 46609, 31252, 46612, 31268, 46611, 31291, 46601, 31351, 46614, 31354, 46623, 31370, 46623, 31392,
+            46619, 31407, 46627, 31418, 46625, 31429, 46625, 31482, 46619, 31516, 46600, 31550, 46620, 31565, 46641, 31594, 46648, 31626, 46649, 31656,
+            46639, 31703, 46628, 31728, 46624, 31772, 46619, 31785, 46609, 31796, 46622, 31827, 46631, 31870, 46637, 31887, 46645, 31898, 46657, 31904,
+            46678, 31900, 46690, 31906, 46713, 31908, 46730, 31924, 46730, 31904, 46744, 31888, 46769, 31871, 46792, 31872, 46811, 31882, 46834, 31910,
+            46840, 31912, 46851, 31942, 46866, 31964, 46858, 31983, 46850, 31985, 46841, 31973, 46830, 31946, 46816, 31954, 46807, 31951, 46795, 31940,
+            46790, 31922, 46783, 31934, 46776, 31935, 46775, 31945, 46765, 31945, 46747, 31935, 46746, 31945, 46736, 31952, 46728, 31965, 46714, 31973,
+            46694, 31973, 46681, 31970, 46656, 31982, 46664, 31986, 46667, 32030, 46677, 32018, 46684, 32072, 46684, 32086, 46729, 32076, 46729, 32063,
+            46745, 32057, 46752, 32107, 46746, 32114, 46752, 32171, 46764, 32168, 46770, 32220, 46805, 32210, 46811, 32238, 46819, 32251, 46846, 32226,
+            46815, 32294, 46816, 32297, 46795, 32347, 46798, 32374, 46830, 32365, 46842, 32464, 46817, 32471, 46823, 32530, 46849, 32524, 46851, 32541,
+            46881, 32534, 46882, 32544, 46888, 32551, 46890, 32567, 46905, 32575, 46914, 32575, 46924, 32567, 46935, 32568, 46929, 32526, 46957, 32517,
+            46960, 32544, 47018, 32528, 47020, 32539, 47002, 32544, 47010, 32609, 47028, 32604, 47030, 32616, 47090, 32601, 47088, 32580, 47112, 32570,
+            47111, 32563, 47155, 32551, 47134, 32379, 47142, 32377, 47136, 32320, 47158, 32337, 47144, 32239, 47148, 32218, 47154, 32228, 47161, 32225,
+            47173, 32241, 47183, 32228, 47176, 32180, 47178, 32178, 47168, 32114, 47166, 32112, 47209, 32097, 47211, 32104, 47272, 32087, 47277, 32124,
+            47342, 32106, 47345, 32133, 47416, 32118, 47416, 32108, 47427, 32083, 47429, 32073, 47444, 32070, 47443, 32059, 47489, 32049, 47490, 32078,
+            47488, 32094, 47492, 32111, 47501, 32113, 47497, 32118, 47498, 32123, 47501, 32127, 47507, 32130, 47511, 32127, 47514, 32120, 47515, 32147,
+            47523, 32149, 47544, 32162, 47564, 32158, 47561, 32123, 47566, 32122, 47564, 32110, 47556, 32109, 47552, 32100, 47533, 31998, 47544, 31991,
+            47541, 31953, 47560, 31948, 47555, 31888, 47568, 31884, 47562, 31804, 47569, 31808, 47580, 31793, 47580, 31782, 47564, 31786, 47561, 31777,
+            47551, 31793, 47536, 31801, 47528, 31785, 47518, 31781, 47512, 31769, 47510, 31755, 47494, 31745, 47483, 31745, 47476, 31730, 47461, 31728,
+            47456, 31718, 47451, 31727, 47444, 31721, 47435, 31654, 47446, 31650, 47440, 31603, 47426, 31592, 47405, 31616, 47397, 31618, 47390, 31593,
+            47379, 31592, 47371, 31609, 47348, 31636, 47338, 31663, 47333, 31657, 47303, 31578, 47293, 31584, 47280, 31551, 47296, 31502, 47303, 31446,
+            47301, 31406, 47253, 31422, 47257, 31414, 47252, 31369, 47245, 31369, 47240, 31323, 47237, 31324, 47233, 31355, 47146, 31382, 47142, 31361,
+            47143, 31307, 47145, 31294, 47160, 31288, 47158, 31273, 47092, 31293, 47082, 31302, 47082, 31293, 47048, 31304, 47047, 31294, 47032, 31296,
+            47024, 31290, 47021, 31268, 47028, 31266, 47023, 31230, 46992, 31243, 46978, 31140, 46989, 31136, 46982, 31087, 46975, 31088, 46968, 31041,
+            46963, 31019, 46954, 31014, 46945, 31015, 46923, 31040, 46898, 31039, 46897, 31040, 46899, 31058, 46891, 31080, 46872, 31102, 46844, 31111,
+            46844, 31139, 46834, 31157, 46805, 31151, 46785, 31156, 46768, 31177, 46761, 31174, 46746, 31151, 46737, 31150, 46715, 31164, 46709, 31179,
+            46681, 31178, 46663, 31184, 46658, 31196, 46651, 31176, 46648, 31178, 46643, 31188, 46634, 31177, 46627, 31176
+        )),
+        ScaledRing(intArrayOf(
+            46517, 31858, 46521, 31840, 46520, 31828, 46527, 31815, 46526, 31804, 46537, 31776, 46542, 31772, 46547, 31753, 46544, 31714, 46545, 31710,
+            46536, 31660, 46539, 31631, 46537, 31577, 46546, 31549, 46559, 31524, 46538, 31550, 46501, 31615, 46471, 31657, 46447, 31686, 46436, 31709,
+            46449, 31695, 46466, 31698, 46480, 31714, 46487, 31740, 46487, 31766, 46479, 31806, 46489, 31810, 46499, 31822, 46498, 31846, 46517, 31858
+        ))
+    ))
+
+    private fun _r_podilskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48080, 28856, 48079, 28841, 48070, 28850, 48066, 28843, 48061, 28852, 48035, 28840, 48027, 28856, 48006, 28887, 48001, 28878, 47960, 28926,
+            47979, 28961, 47962, 28993, 47956, 29013, 47943, 29033, 47947, 29039, 47943, 29052, 47947, 29086, 47970, 29078, 47968, 29091, 47960, 29098,
+            47973, 29096, 47977, 29084, 47983, 29092, 47982, 29131, 47994, 29125, 47994, 29175, 47967, 29180, 47964, 29185, 47920, 29192, 47884, 29200,
+            47886, 29213, 47896, 29216, 47891, 29224, 47886, 29216, 47890, 29273, 47888, 29281, 47875, 29267, 47866, 29240, 47859, 29236, 47855, 29224,
+            47841, 29215, 47835, 29207, 47818, 29199, 47798, 29219, 47797, 29233, 47811, 29247, 47802, 29276, 47751, 29248, 47739, 29215, 47719, 29204,
+            47698, 29222, 47684, 29231, 47682, 29219, 47658, 29220, 47658, 29210, 47642, 29209, 47642, 29234, 47627, 29219, 47629, 29209, 47612, 29218,
+            47602, 29201, 47598, 29203, 47586, 29186, 47572, 29184, 47568, 29171, 47571, 29166, 47554, 29117, 47507, 29152, 47519, 29185, 47493, 29183,
+            47490, 29191, 47480, 29184, 47475, 29188, 47459, 29157, 47453, 29162, 47465, 29186, 47460, 29193, 47449, 29182, 47439, 29188, 47436, 29183,
+            47426, 29192, 47462, 29242, 47415, 29244, 47435, 29272, 47436, 29289, 47449, 29317, 47370, 29337, 47380, 29391, 47354, 29398, 47345, 29383,
+            47300, 29398, 47305, 29423, 47292, 29427, 47294, 29446, 47300, 29445, 47306, 29486, 47332, 29483, 47349, 29492, 47356, 29487, 47365, 29517,
+            47370, 29574, 47389, 29570, 47390, 29583, 47418, 29577, 47421, 29609, 47437, 29603, 47446, 29619, 47453, 29616, 47454, 29608, 47456, 29598,
+            47452, 29591, 47459, 29576, 47475, 29572, 47478, 29586, 47493, 29584, 47496, 29602, 47509, 29600, 47523, 29713, 47519, 29718, 47526, 29768,
+            47532, 29826, 47470, 29845, 47475, 29889, 47460, 29892, 47466, 29940, 47438, 29949, 47438, 29977, 47435, 29978, 47440, 29998, 47442, 30042,
+            47441, 30054, 47436, 30056, 47441, 30106, 47452, 30121, 47462, 30125, 47467, 30138, 47481, 30128, 47480, 30118, 47496, 30113, 47503, 30164,
+            47533, 30156, 47532, 30169, 47541, 30225, 47545, 30219, 47554, 30222, 47566, 30276, 47566, 30295, 47558, 30297, 47582, 30483, 47641, 30463,
+            47635, 30420, 47671, 30410, 47671, 30415, 47734, 30394, 47753, 30389, 47758, 30396, 47761, 30424, 47787, 30417, 47789, 30440, 47802, 30438,
+            47801, 30428, 47820, 30422, 47809, 30333, 47836, 30321, 47924, 30299, 47930, 30309, 47951, 30280, 47968, 30246, 47982, 30250, 48013, 30226,
+            48022, 30258, 48028, 30256, 48060, 30234, 48056, 30224, 48067, 30208, 48071, 30234, 48078, 30245, 48089, 30250, 48085, 30282, 48092, 30283,
+            48098, 30299, 48095, 30322, 48106, 30314, 48103, 30326, 48098, 30327, 48103, 30357, 48112, 30357, 48116, 30313, 48142, 30307, 48143, 30303,
+            48140, 30286, 48148, 30262, 48141, 30242, 48148, 30213, 48149, 30196, 48154, 30187, 48146, 30166, 48144, 30152, 48147, 30129, 48140, 30106,
+            48147, 30081, 48146, 30066, 48151, 30063, 48154, 30046, 48172, 30033, 48179, 30033, 48186, 30021, 48182, 30008, 48196, 30001, 48209, 30009,
+            48221, 29992, 48230, 29990, 48218, 29976, 48234, 29930, 48204, 29904, 48184, 29892, 48188, 29877, 48195, 29873, 48206, 29860, 48214, 29839,
+            48207, 29806, 48201, 29794, 48208, 29786, 48203, 29774, 48201, 29764, 48203, 29722, 48193, 29692, 48187, 29683, 48196, 29665, 48194, 29656,
+            48167, 29675, 48126, 29672, 48121, 29656, 48116, 29668, 48108, 29664, 48112, 29653, 48112, 29637, 48124, 29639, 48132, 29601, 48119, 29598,
+            48116, 29589, 48102, 29588, 48104, 29574, 48098, 29570, 48101, 29543, 48099, 29526, 48100, 29512, 48106, 29493, 48108, 29478, 48123, 29471,
+            48123, 29449, 48114, 29391, 48104, 29384, 48096, 29387, 48090, 29374, 48095, 29367, 48089, 29352, 48096, 29351, 48095, 29334, 48086, 29312,
+            48091, 29304, 48090, 29277, 48094, 29264, 48107, 29265, 48112, 29258, 48108, 29236, 48104, 29231, 48109, 29219, 48118, 29205, 48120, 29204,
+            48125, 29219, 48122, 29237, 48130, 29240, 48132, 29261, 48138, 29253, 48149, 29252, 48141, 29241, 48142, 29213, 48134, 29208, 48134, 29194,
+            48141, 29185, 48140, 29166, 48141, 29142, 48150, 29155, 48156, 29145, 48154, 29131, 48194, 29077, 48194, 29065, 48192, 29063, 48184, 29061,
+            48172, 29046, 48156, 29045, 48150, 29051, 48133, 29034, 48126, 29032, 48130, 29020, 48148, 29009, 48152, 28994, 48145, 28984, 48152, 28976,
+            48157, 28944, 48126, 28933, 48095, 28928, 48082, 28873, 48074, 28874, 48070, 28867, 48080, 28856
+        ))
+    )
+
+    private fun _r_bolhradskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            45496, 28769, 45590, 28738, 45602, 28820, 45599, 28835, 45607, 28882, 45617, 28878, 45628, 28947, 45644, 28937, 45649, 28942, 45656, 28986,
+            45698, 28973, 45698, 28998, 45702, 29022, 45730, 29013, 45737, 29019, 45735, 29044, 45754, 29057, 45752, 29075, 45783, 29065, 45786, 29082,
+            45800, 29079, 45812, 29154, 45816, 29166, 45793, 29183, 45736, 29192, 45737, 29202, 45721, 29202, 45720, 29211, 45712, 29214, 45705, 29208,
+            45732, 29321, 45738, 29377, 45752, 29410, 45792, 29404, 45779, 29482, 45792, 29482, 45792, 29467, 45866, 29438, 45915, 29465, 45910, 29499,
+            45922, 29596, 45950, 29591, 45946, 29561, 46000, 29557, 46044, 29551, 46038, 29503, 46095, 29534, 46143, 29532, 46152, 29525, 46147, 29475,
+            46159, 29474, 46160, 29483, 46195, 29484, 46199, 29517, 46190, 29552, 46198, 29610, 46206, 29602, 46212, 29626, 46234, 29623, 46275, 29612,
+            46273, 29598, 46294, 29593, 46287, 29531, 46308, 29458, 46314, 29416, 46324, 29383, 46339, 29414, 46360, 29483, 46374, 29472, 46383, 29450,
+            46398, 29440, 46402, 29417, 46426, 29399, 46425, 29396, 46459, 29376, 46459, 29379, 46504, 29351, 46496, 29331, 46482, 29338, 46474, 29336,
+            46465, 29308, 46448, 29318, 46444, 29306, 46415, 29324, 46408, 29303, 46417, 29296, 46406, 29265, 46394, 29268, 46376, 29240, 46386, 29207,
+            46417, 29246, 46432, 29227, 46458, 29229, 46464, 29220, 46485, 29255, 46500, 29250, 46499, 29241, 46558, 29236, 46544, 29162, 46516, 29164,
+            46512, 29063, 46507, 29063, 46506, 29039, 46494, 29039, 46491, 29034, 46489, 28982, 46481, 28978, 46479, 28989, 46480, 29023, 46462, 29026,
+            46460, 28998, 46458, 28931, 46452, 28937, 46431, 28941, 46376, 28966, 46343, 28987, 46345, 28990, 46323, 28998, 46316, 29004, 46318, 28985,
+            46265, 28953, 46260, 28952, 46196, 29067, 46094, 28950, 46049, 29005, 46004, 28979, 45970, 28776, 45960, 28780, 45957, 28757, 45934, 28763,
+            45928, 28755, 45832, 28786, 45818, 28697, 45780, 28709, 45766, 28625, 45772, 28586, 45769, 28581, 45755, 28591, 45740, 28595, 45730, 28589,
+            45726, 28564, 45736, 28555, 45733, 28534, 45737, 28520, 45700, 28505, 45684, 28483, 45678, 28480, 45660, 28486, 45665, 28516, 45554, 28553,
+            45527, 28624, 45525, 28647, 45521, 28658, 45500, 28654, 45491, 28647, 45477, 28644, 45473, 28641, 45471, 28642, 45471, 28650, 45466, 28656,
+            45475, 28705, 45484, 28704, 45496, 28769
+        ))
+    )
+
+    private fun _r_berezivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            46947, 30796, 46955, 30840, 46945, 30862, 46922, 30864, 46926, 30895, 46904, 30904, 46902, 30892, 46883, 30899, 46884, 30909, 46874, 30913,
+            46877, 30942, 46884, 30942, 46889, 30978, 46896, 30977, 46900, 31003, 46910, 31004, 46910, 31039, 46923, 31040, 46945, 31015, 46954, 31014,
+            46963, 31019, 46968, 31041, 46975, 31088, 46982, 31087, 46989, 31136, 46978, 31140, 46992, 31243, 47023, 31230, 47028, 31266, 47021, 31268,
+            47024, 31290, 47032, 31296, 47047, 31294, 47048, 31304, 47082, 31293, 47082, 31302, 47092, 31293, 47172, 31268, 47170, 31249, 47177, 31247,
+            47172, 31201, 47154, 31198, 47157, 31162, 47153, 31130, 47157, 31128, 47155, 31110, 47165, 31107, 47166, 31116, 47188, 31109, 47189, 31118,
+            47177, 31123, 47182, 31157, 47218, 31146, 47223, 31178, 47255, 31168, 47256, 31175, 47265, 31169, 47253, 31079, 47248, 31080, 47239, 31019,
+            47270, 31008, 47267, 30988, 47289, 30998, 47276, 30908, 47320, 30893, 47318, 30876, 47334, 30869, 47338, 30890, 47341, 30889, 47346, 30908,
+            47359, 30901, 47358, 30886, 47401, 30874, 47404, 30893, 47425, 30886, 47420, 30851, 47444, 30848, 47444, 30865, 47480, 30854, 47481, 30859,
+            47503, 30852, 47508, 30881, 47533, 30874, 47534, 30880, 47545, 30876, 47536, 30832, 47548, 30826, 47547, 30804, 47553, 30800, 47546, 30773,
+            47554, 30770, 47560, 30753, 47579, 30745, 47584, 30778, 47596, 30779, 47623, 30775, 47635, 30782, 47636, 30793, 47649, 30789, 47638, 30708,
+            47609, 30719, 47608, 30718, 47602, 30702, 47601, 30659, 47617, 30660, 47618, 30665, 47634, 30663, 47624, 30617, 47635, 30612, 47626, 30573,
+            47626, 30560, 47631, 30557, 47617, 30471, 47582, 30483, 47558, 30297, 47566, 30295, 47566, 30276, 47554, 30222, 47545, 30219, 47541, 30225,
+            47532, 30169, 47533, 30156, 47503, 30164, 47496, 30113, 47480, 30118, 47481, 30128, 47467, 30138, 47462, 30125, 47452, 30121, 47441, 30106,
+            47436, 30056, 47441, 30054, 47442, 30042, 47440, 29998, 47427, 29953, 47424, 29953, 47414, 29881, 47363, 29890, 47365, 29905, 47356, 29907,
+            47352, 29893, 47340, 29900, 47330, 29893, 47316, 29904, 47297, 29929, 47303, 29948, 47322, 29961, 47333, 30045, 47325, 30047, 47326, 30060,
+            47310, 30060, 47309, 30066, 47290, 30070, 47290, 30077, 47278, 30084, 47291, 30086, 47286, 30102, 47288, 30115, 47298, 30107, 47299, 30119,
+            47280, 30125, 47278, 30106, 47253, 30110, 47238, 30118, 47241, 30135, 47217, 30138, 47208, 30148, 47192, 30155, 47165, 30163, 47165, 30158,
+            47108, 30175, 47106, 30155, 47101, 30158, 47094, 30111, 47035, 30131, 47035, 30125, 46980, 30138, 46990, 30237, 46956, 30246, 46958, 30260,
+            46976, 30256, 46979, 30287, 46966, 30292, 46968, 30314, 46957, 30316, 46960, 30332, 46953, 30333, 46948, 30315, 46940, 30310, 46921, 30316,
+            46926, 30349, 46899, 30356, 46869, 30367, 46842, 30372, 46845, 30396, 46821, 30406, 46827, 30462, 46840, 30482, 46820, 30488, 46811, 30498,
+            46795, 30509, 46810, 30547, 46783, 30559, 46785, 30570, 46773, 30573, 46781, 30595, 46790, 30597, 46776, 30604, 46781, 30658, 46798, 30653,
+            46799, 30661, 46830, 30651, 46839, 30677, 46854, 30673, 46854, 30666, 46869, 30654, 46868, 30644, 46888, 30638, 46909, 30640, 46914, 30648,
+            46907, 30695, 46883, 30687, 46877, 30693, 46881, 30704, 46894, 30709, 46888, 30717, 46894, 30729, 46902, 30725, 46907, 30758, 46912, 30756,
+            46918, 30804, 46947, 30796
+        ))
+    )
+
+    private fun _r_izmailskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            45438, 29777, 45453, 29784, 45456, 29779, 45438, 29777
+        )),
+        ScaledRing(intArrayOf(
+            45473, 29728, 45489, 29747, 45487, 29739, 45471, 29714, 45473, 29728
+        )),
+        ScaledRing(intArrayOf(
+            45554, 28553, 45580, 28544, 45571, 28491, 45500, 28515, 45486, 28434, 45485, 28421, 45513, 28421, 45547, 28304, 45516, 28256, 45471, 28215,
+            45466, 28214, 45462, 28239, 45450, 28274, 45435, 28286, 45396, 28283, 45381, 28300, 45358, 28318, 45339, 28328, 45320, 28350, 45291, 28441,
+            45278, 28487, 45260, 28537, 45249, 28559, 45244, 28631, 45239, 28658, 45225, 28700, 45224, 28715, 45233, 28744, 45238, 28783, 45246, 28793,
+            45257, 28783, 45262, 28768, 45281, 28751, 45290, 28759, 45291, 28791, 45301, 28802, 45311, 28805, 45320, 28784, 45328, 28782, 45336, 28806,
+            45335, 28820, 45324, 28832, 45316, 28854, 45317, 28871, 45290, 28910, 45281, 28927, 45281, 28945, 45294, 28955, 45310, 28949, 45331, 28967,
+            45332, 28985, 45346, 29011, 45353, 29030, 45361, 29042, 45361, 29059, 45374, 29084, 45375, 29107, 45382, 29122, 45386, 29140, 45395, 29169,
+            45401, 29180, 45411, 29185, 45420, 29218, 45430, 29234, 45436, 29248, 45428, 29274, 45428, 29289, 45432, 29301, 45446, 29319, 45448, 29335,
+            45438, 29353, 45439, 29381, 45436, 29392, 45443, 29428, 45434, 29441, 45422, 29479, 45417, 29510, 45408, 29552, 45387, 29594, 45359, 29626,
+            45333, 29657, 45310, 29669, 45293, 29671, 45268, 29678, 45262, 29664, 45248, 29659, 45217, 29673, 45231, 29678, 45230, 29685, 45213, 29682,
+            45225, 29692, 45217, 29700, 45222, 29717, 45212, 29710, 45211, 29720, 45226, 29725, 45227, 29742, 45236, 29736, 45263, 29738, 45274, 29722,
+            45283, 29722, 45289, 29732, 45276, 29740, 45326, 29763, 45342, 29762, 45370, 29755, 45393, 29759, 45392, 29748, 45402, 29748, 45425, 29763,
+            45447, 29753, 45462, 29766, 45467, 29761, 45460, 29752, 45464, 29742, 45488, 29750, 45468, 29725, 45468, 29710, 45463, 29706, 45468, 29696,
+            45462, 29679, 45468, 29678, 45479, 29663, 45475, 29654, 45466, 29653, 45467, 29660, 45453, 29655, 45452, 29645, 45462, 29632, 45471, 29629,
+            45468, 29619, 45480, 29605, 45484, 29622, 45503, 29625, 45515, 29635, 45520, 29644, 45537, 29660, 45551, 29679, 45548, 29665, 45542, 29661,
+            45538, 29646, 45545, 29616, 45553, 29602, 45565, 29597, 45610, 29608, 45632, 29610, 45648, 29605, 45644, 29562, 45624, 29564, 45621, 29530,
+            45621, 29492, 45641, 29490, 45639, 29469, 45675, 29461, 45671, 29424, 45700, 29418, 45690, 29327, 45731, 29316, 45705, 29208, 45712, 29214,
+            45720, 29211, 45721, 29202, 45737, 29202, 45736, 29192, 45793, 29183, 45816, 29166, 45812, 29154, 45800, 29079, 45786, 29082, 45783, 29065,
+            45752, 29075, 45754, 29057, 45735, 29044, 45737, 29019, 45730, 29013, 45702, 29022, 45698, 28998, 45698, 28973, 45656, 28986, 45649, 28942,
+            45644, 28937, 45628, 28947, 45617, 28878, 45607, 28882, 45599, 28835, 45602, 28820, 45590, 28738, 45496, 28769, 45484, 28704, 45475, 28705,
+            45466, 28656, 45471, 28650, 45472, 28641, 45491, 28647, 45500, 28654, 45521, 28658, 45525, 28647, 45527, 28624, 45554, 28553
+        ))
+    ))
+
+    private fun _r_odeskyi(): CompactPolygon = CompactPolygon(listOf(
+        ScaledRing(intArrayOf(
+            46373, 30080, 46376, 30096, 46383, 30091, 46397, 30071, 46399, 30058, 46383, 30022, 46389, 29997, 46370, 29999, 46360, 30008, 46371, 30080,
+            46373, 30080
+        )),
+        ScaledRing(intArrayOf(
+            46434, 30186, 46446, 30194, 46444, 30219, 46429, 30246, 46414, 30261, 46400, 30255, 46374, 30271, 46372, 30284, 46348, 30299, 46340, 30284,
+            46327, 30292, 46303, 30273, 46266, 30267, 46231, 30359, 46210, 30381, 46148, 30434, 46120, 30455, 46157, 30489, 46153, 30501, 46186, 30548,
+            46174, 30568, 46195, 30581, 46226, 30612, 46246, 30629, 46284, 30652, 46290, 30662, 46301, 30666, 46326, 30683, 46360, 30715, 46375, 30742,
+            46376, 30751, 46385, 30750, 46401, 30755, 46433, 30770, 46448, 30772, 46464, 30762, 46477, 30765, 46484, 30760, 46499, 30730, 46509, 30729,
+            46528, 30736, 46545, 30752, 46554, 30772, 46558, 30809, 46551, 30821, 46552, 30838, 46559, 30863, 46565, 30876, 46578, 30925, 46594, 31005,
+            46600, 31019, 46614, 31096, 46616, 31128, 46624, 31146, 46627, 31176, 46634, 31177, 46643, 31188, 46648, 31178, 46651, 31176, 46653, 31180,
+            46658, 31196, 46663, 31184, 46681, 31178, 46709, 31179, 46715, 31164, 46737, 31150, 46746, 31151, 46761, 31174, 46768, 31177, 46785, 31156,
+            46805, 31151, 46834, 31157, 46844, 31139, 46844, 31111, 46872, 31102, 46891, 31080, 46898, 31063, 46899, 31048, 46897, 31040, 46898, 31039,
+            46910, 31039, 46910, 31004, 46900, 31003, 46896, 30977, 46889, 30978, 46884, 30942, 46877, 30942, 46874, 30913, 46884, 30909, 46883, 30899,
+            46902, 30892, 46904, 30904, 46926, 30895, 46922, 30864, 46945, 30862, 46955, 30840, 46947, 30796, 46918, 30804, 46912, 30756, 46907, 30758,
+            46902, 30725, 46894, 30729, 46888, 30717, 46894, 30709, 46881, 30704, 46877, 30693, 46883, 30687, 46907, 30695, 46914, 30648, 46909, 30640,
+            46888, 30638, 46868, 30644, 46869, 30654, 46854, 30666, 46854, 30673, 46839, 30677, 46830, 30651, 46799, 30661, 46798, 30653, 46781, 30658,
+            46776, 30604, 46790, 30597, 46781, 30595, 46773, 30573, 46785, 30570, 46783, 30559, 46810, 30547, 46795, 30509, 46811, 30498, 46820, 30488,
+            46840, 30482, 46827, 30462, 46806, 30474, 46792, 30486, 46774, 30494, 46756, 30494, 46751, 30476, 46740, 30408, 46738, 30372, 46740, 30367,
+            46732, 30356, 46730, 30324, 46707, 30332, 46704, 30347, 46707, 30369, 46702, 30376, 46702, 30392, 46658, 30401, 46654, 30350, 46630, 30365,
+            46618, 30376, 46615, 30344, 46639, 30339, 46633, 30282, 46647, 30276, 46652, 30327, 46690, 30318, 46683, 30250, 46688, 30249, 46681, 30201,
+            46675, 30128, 46628, 30152, 46633, 29955, 46620, 29954, 46598, 29968, 46584, 29963, 46589, 29936, 46568, 29939, 46568, 29948, 46555, 29945,
+            46547, 29876, 46547, 29888, 46533, 29902, 46528, 29895, 46522, 29913, 46516, 29905, 46513, 29912, 46513, 29927, 46505, 29923, 46494, 29944,
+            46504, 29964, 46491, 29952, 46494, 29966, 46502, 29971, 46499, 29983, 46510, 29986, 46501, 29992, 46494, 29987, 46496, 30001, 46486, 29990,
+            46474, 29995, 46472, 30019, 46465, 30021, 46465, 29998, 46462, 29994, 46453, 30008, 46453, 30026, 46442, 30023, 46443, 30062, 46435, 30055,
+            46426, 30059, 46424, 30078, 46435, 30086, 46427, 30090, 46428, 30098, 46439, 30089, 46440, 30097, 46428, 30104, 46431, 30116, 46418, 30134,
+            46412, 30130, 46415, 30146, 46428, 30149, 46428, 30160, 46418, 30160, 46416, 30171, 46421, 30174, 46435, 30168, 46436, 30174, 46434, 30186
+        ))
+    ))
+
+    private fun _r_bilhorod_dnistrovskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            45731, 29316, 45690, 29327, 45700, 29418, 45671, 29424, 45675, 29461, 45639, 29469, 45641, 29490, 45621, 29492, 45621, 29530, 45624, 29564,
+            45644, 29562, 45648, 29605, 45632, 29610, 45610, 29608, 45565, 29597, 45553, 29602, 45545, 29616, 45538, 29646, 45542, 29661, 45548, 29665,
+            45551, 29679, 45575, 29712, 45608, 29771, 45644, 29842, 45660, 29870, 45680, 29899, 45748, 30022, 45787, 30079, 45809, 30119, 45825, 30154,
+            45848, 30196, 45871, 30234, 45905, 30272, 45954, 30321, 45984, 30354, 46017, 30400, 46034, 30417, 46055, 30444, 46070, 30470, 46079, 30481,
+            46086, 30483, 46111, 30505, 46122, 30510, 46150, 30549, 46174, 30568, 46186, 30548, 46153, 30501, 46157, 30489, 46120, 30455, 46148, 30434,
+            46210, 30381, 46231, 30359, 46266, 30267, 46303, 30273, 46327, 30292, 46340, 30284, 46348, 30299, 46372, 30284, 46374, 30271, 46400, 30255,
+            46414, 30261, 46429, 30246, 46444, 30219, 46446, 30194, 46434, 30186, 46436, 30169, 46434, 30168, 46422, 30174, 46419, 30174, 46416, 30171,
+            46396, 30123, 46391, 30107, 46375, 30097, 46373, 30080, 46371, 30080, 46360, 30008, 46370, 29999, 46389, 29997, 46384, 29988, 46401, 29939,
+            46372, 29887, 46352, 29891, 46386, 29805, 46396, 29823, 46422, 29790, 46455, 29776, 46453, 29768, 46470, 29749, 46473, 29741, 46467, 29727,
+            46444, 29742, 46440, 29731, 46435, 29734, 46426, 29686, 46442, 29679, 46436, 29660, 46361, 29679, 46354, 29603, 46363, 29600, 46361, 29580,
+            46416, 29566, 46423, 29506, 46428, 29495, 46447, 29485, 46461, 29502, 46498, 29448, 46447, 29387, 46426, 29399, 46402, 29417, 46398, 29440,
+            46383, 29450, 46374, 29472, 46360, 29483, 46339, 29414, 46324, 29383, 46314, 29416, 46308, 29458, 46287, 29531, 46294, 29593, 46273, 29598,
+            46275, 29612, 46234, 29623, 46212, 29626, 46206, 29602, 46198, 29610, 46190, 29552, 46199, 29517, 46195, 29484, 46160, 29483, 46159, 29474,
+            46147, 29475, 46152, 29525, 46143, 29532, 46095, 29534, 46038, 29503, 46044, 29551, 46000, 29557, 45946, 29561, 45950, 29591, 45922, 29596,
+            45910, 29499, 45915, 29465, 45866, 29438, 45792, 29467, 45792, 29482, 45779, 29482, 45792, 29404, 45752, 29410, 45738, 29377, 45731, 29316
+        ))
+    )
+
+    private fun _r_romenskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            50519, 33070, 50518, 33104, 50506, 33117, 50512, 33130, 50512, 33146, 50521, 33153, 50523, 33173, 50509, 33191, 50504, 33221, 50514, 33234,
+            50538, 33247, 50554, 33270, 50551, 33284, 50535, 33299, 50532, 33316, 50521, 33318, 50521, 33374, 50497, 33375, 50499, 33412, 50483, 33420,
+            50475, 33435, 50485, 33435, 50492, 33463, 50490, 33476, 50483, 33478, 50481, 33488, 50494, 33503, 50484, 33516, 50480, 33532, 50489, 33537,
+            50490, 33562, 50496, 33572, 50488, 33612, 50481, 33618, 50468, 33715, 50458, 33734, 50461, 33786, 50477, 33788, 50483, 33828, 50488, 33824,
+            50490, 33844, 50501, 33852, 50506, 33839, 50508, 33815, 50515, 33810, 50518, 33820, 50515, 33822, 50519, 33842, 50524, 33841, 50534, 33876,
+            50533, 33891, 50524, 33896, 50515, 33915, 50548, 33954, 50531, 33986, 50523, 34006, 50512, 34019, 50511, 34029, 50498, 34028, 50504, 34035,
+            50515, 34073, 50504, 34105, 50489, 34085, 50481, 34100, 50482, 34111, 50492, 34120, 50510, 34122, 50512, 34136, 50522, 34159, 50525, 34183,
+            50523, 34202, 50526, 34209, 50533, 34220, 50528, 34232, 50524, 34246, 50533, 34242, 50553, 34239, 50554, 34227, 50569, 34225, 50570, 34232,
+            50599, 34222, 50602, 34228, 50628, 34196, 50648, 34182, 50660, 34150, 50682, 34125, 50708, 34081, 50722, 34103, 50731, 34127, 50719, 34141,
+            50734, 34164, 50742, 34150, 50750, 34153, 50756, 34170, 50765, 34178, 50776, 34162, 50794, 34162, 50801, 34157, 50801, 34143, 50810, 34143,
+            50809, 34161, 50830, 34170, 50839, 34184, 50847, 34181, 50853, 34189, 50860, 34187, 50882, 34166, 50872, 34131, 50904, 34107, 50922, 34098,
+            50928, 34109, 50936, 34098, 50935, 34071, 50946, 34072, 50945, 34057, 50954, 34037, 50966, 34067, 50991, 34074, 50995, 34095, 51014, 34061,
+            51017, 34046, 51047, 34026, 51054, 34014, 51065, 34014, 51066, 34016, 51070, 33989, 51069, 33964, 51049, 33962, 51037, 33968, 51026, 33947,
+            51014, 33935, 51010, 33920, 51014, 33905, 50998, 33904, 50990, 33894, 50982, 33906, 50981, 33896, 50994, 33853, 50984, 33844, 50987, 33832,
+            50985, 33815, 50988, 33805, 50982, 33800, 50982, 33777, 50986, 33759, 50980, 33724, 50966, 33708, 50964, 33694, 50969, 33659, 50985, 33669,
+            50991, 33646, 51009, 33633, 51018, 33635, 51029, 33629, 51024, 33619, 51024, 33583, 51036, 33546, 51029, 33510, 51005, 33513, 51004, 33506,
+            50993, 33516, 50985, 33508, 50987, 33486, 50992, 33475, 50989, 33453, 50967, 33442, 50969, 33417, 50963, 33418, 50968, 33386, 50972, 33343,
+            50976, 33343, 50984, 33282, 50975, 33220, 50962, 33200, 50935, 33200, 50919, 33197, 50902, 33210, 50894, 33207, 50891, 33187, 50895, 33181,
+            50881, 33168, 50867, 33179, 50866, 33174, 50850, 33169, 50848, 33185, 50826, 33155, 50816, 33166, 50790, 33165, 50792, 33153, 50746, 33190,
+            50747, 33207, 50736, 33214, 50739, 33231, 50732, 33241, 50722, 33202, 50714, 33158, 50709, 33154, 50711, 33137, 50695, 33151, 50654, 33148,
+            50648, 33136, 50648, 33117, 50640, 33123, 50613, 33111, 50602, 33104, 50598, 33123, 50591, 33120, 50593, 33104, 50585, 33094, 50580, 33097,
+            50566, 33080, 50556, 33074, 50541, 33049, 50523, 33062, 50519, 33070
+        ))
+    )
+
+    private fun _r_sumskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            50368, 34396, 50377, 34406, 50382, 34425, 50386, 34456, 50394, 34472, 50389, 34485, 50395, 34491, 50400, 34479, 50414, 34493, 50433, 34503,
+            50433, 34509, 50450, 34514, 50448, 34546, 50452, 34563, 50450, 34578, 50472, 34588, 50476, 34604, 50491, 34633, 50493, 34629, 50506, 34665,
+            50519, 34714, 50528, 34712, 50525, 34720, 50536, 34728, 50555, 34734, 50569, 34729, 50571, 34752, 50563, 34765, 50565, 34774, 50586, 34781,
+            50594, 34798, 50599, 34791, 50607, 34811, 50607, 34829, 50621, 34847, 50624, 34865, 50641, 34871, 50666, 34884, 50673, 34888, 50676, 34904,
+            50696, 34928, 50698, 34937, 50716, 34938, 50721, 34944, 50717, 34933, 50722, 34938, 50724, 34928, 50728, 34937, 50731, 34923, 50741, 34926,
+            50749, 34916, 50750, 34926, 50742, 34944, 50736, 34948, 50737, 34962, 50743, 34975, 50740, 34980, 50743, 35009, 50738, 35018, 50728, 35062,
+            50716, 35094, 50709, 35086, 50711, 35077, 50703, 35069, 50700, 35076, 50692, 35072, 50704, 35057, 50701, 35033, 50696, 35021, 50679, 35023,
+            50677, 35031, 50688, 35043, 50680, 35063, 50687, 35060, 50680, 35092, 50675, 35092, 50668, 35113, 50677, 35130, 50679, 35150, 50687, 35154,
+            50685, 35165, 50673, 35170, 50673, 35181, 50648, 35203, 50648, 35194, 50631, 35178, 50620, 35173, 50615, 35178, 50609, 35170, 50593, 35165,
+            50591, 35151, 50588, 35163, 50581, 35158, 50571, 35188, 50576, 35198, 50572, 35232, 50588, 35247, 50581, 35272, 50567, 35267, 50562, 35273,
+            50540, 35271, 50542, 35249, 50537, 35268, 50528, 35273, 50523, 35262, 50518, 35264, 50519, 35276, 50527, 35281, 50528, 35294, 50540, 35299,
+            50550, 35294, 50544, 35304, 50525, 35318, 50524, 35324, 50538, 35317, 50546, 35335, 50538, 35392, 50554, 35406, 50543, 35439, 50562, 35428,
+            50580, 35391, 50590, 35400, 50603, 35426, 50616, 35421, 50614, 35413, 50632, 35402, 50642, 35391, 50656, 35401, 50655, 35427, 50666, 35462,
+            50655, 35485, 50671, 35487, 50679, 35496, 50681, 35472, 50690, 35460, 50705, 35460, 50711, 35468, 50725, 35474, 50735, 35464, 50737, 35472,
+            50755, 35474, 50777, 35489, 50785, 35475, 50783, 35450, 50794, 35433, 50799, 35415, 50805, 35410, 50829, 35420, 50844, 35419, 50864, 35404,
+            50871, 35382, 50880, 35402, 50886, 35388, 50896, 35380, 50903, 35403, 50925, 35393, 50926, 35367, 50932, 35373, 50931, 35355, 50935, 35334,
+            50947, 35326, 50963, 35336, 50973, 35352, 50988, 35343, 50996, 35330, 50998, 35337, 51014, 35323, 51006, 35356, 51013, 35383, 51020, 35384,
+            51020, 35394, 51026, 35409, 51032, 35400, 51039, 35410, 51055, 35395, 51054, 35387, 51067, 35375, 51062, 35350, 51071, 35328, 51077, 35328,
+            51079, 35304, 51070, 35297, 51068, 35281, 51059, 35276, 51059, 35258, 51065, 35248, 51046, 35212, 51050, 35197, 51084, 35163, 51082, 35148,
+            51090, 35156, 51087, 35174, 51099, 35177, 51101, 35165, 51126, 35168, 51134, 35142, 51148, 35135, 51151, 35140, 51164, 35124, 51171, 35136,
+            51174, 35130, 51194, 35130, 51203, 35144, 51210, 35137, 51224, 35150, 51233, 35105, 51229, 35066, 51216, 35062, 51205, 35040, 51218, 35038,
+            51221, 35023, 51232, 35010, 51228, 34994, 51235, 34980, 51227, 34952, 51219, 34951, 51206, 34926, 51206, 34912, 51193, 34898, 51196, 34884,
+            51191, 34876, 51199, 34862, 51183, 34834, 51169, 34836, 51169, 34817, 51175, 34799, 51185, 34785, 51175, 34772, 51181, 34754, 51179, 34737,
+            51183, 34731, 51172, 34717, 51181, 34688, 51197, 34669, 51247, 34662, 51254, 34602, 51246, 34599, 51234, 34580, 51252, 34540, 51253, 34524,
+            51242, 34513, 51245, 34484, 51253, 34460, 51262, 34446, 51256, 34438, 51263, 34412, 51271, 34400, 51273, 34383, 51240, 34331, 51238, 34306,
+            51250, 34283, 51264, 34243, 51262, 34231, 51259, 34209, 51252, 34212, 51244, 34196, 51250, 34183, 51245, 34173, 51245, 34161, 51238, 34159,
+            51236, 34159, 51234, 34147, 51216, 34141, 51198, 34149, 51184, 34130, 51182, 34120, 51158, 34121, 51142, 34130, 51144, 34108, 51120, 34078,
+            51119, 34081, 51090, 34069, 51077, 34017, 51075, 34020, 51068, 34019, 51065, 34014, 51054, 34014, 51047, 34026, 51017, 34046, 51014, 34061,
+            50995, 34095, 50991, 34074, 50966, 34067, 50954, 34037, 50945, 34057, 50946, 34072, 50935, 34071, 50936, 34098, 50928, 34109, 50922, 34098,
+            50904, 34107, 50872, 34131, 50882, 34166, 50860, 34187, 50853, 34189, 50847, 34181, 50839, 34184, 50830, 34170, 50809, 34161, 50810, 34143,
+            50801, 34143, 50801, 34157, 50794, 34162, 50776, 34162, 50765, 34178, 50756, 34170, 50750, 34153, 50742, 34150, 50734, 34164, 50719, 34141,
+            50731, 34127, 50722, 34103, 50708, 34081, 50682, 34125, 50660, 34150, 50648, 34182, 50628, 34196, 50602, 34228, 50599, 34222, 50570, 34232,
+            50569, 34225, 50554, 34227, 50553, 34239, 50533, 34242, 50526, 34246, 50523, 34245, 50517, 34249, 50490, 34256, 50453, 34251, 50433, 34259,
+            50432, 34272, 50411, 34291, 50390, 34343, 50371, 34376, 50368, 34396
+        ))
+    )
+
+    private fun _r_berdychivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49590, 29275, 49627, 29275, 49628, 29325, 49615, 29340, 49628, 29353, 49619, 29380, 49648, 29396, 49660, 29408, 49652, 29425, 49662, 29431,
+            49649, 29482, 49654, 29485, 49649, 29505, 49663, 29514, 49670, 29488, 49708, 29492, 49713, 29497, 49715, 29445, 49729, 29435, 49732, 29445,
+            49762, 29462, 49788, 29450, 49789, 29445, 49815, 29432, 49817, 29424, 49810, 29410, 49824, 29386, 49831, 29397, 49849, 29379, 49853, 29366,
+            49860, 29366, 49860, 29331, 49846, 29329, 49834, 29323, 49836, 29308, 49860, 29297, 49862, 29252, 49882, 29251, 49882, 29235, 49887, 29234,
+            49894, 29248, 49933, 29230, 49936, 29221, 49944, 29211, 49952, 29212, 49962, 29224, 49969, 29216, 49964, 29279, 49986, 29284, 49996, 29272,
+            49995, 29279, 50012, 29267, 50025, 29300, 50050, 29278, 50054, 29253, 50064, 29256, 50067, 29267, 50077, 29275, 50088, 29269, 50098, 29271,
+            50103, 29256, 50110, 29222, 50124, 29234, 50126, 29223, 50138, 29217, 50135, 29192, 50147, 29198, 50142, 29137, 50158, 29124, 50160, 29099,
+            50163, 29086, 50166, 29095, 50174, 29095, 50180, 29081, 50175, 29073, 50162, 29072, 50156, 29062, 50162, 29029, 50173, 29024, 50171, 29006,
+            50165, 29005, 50158, 28987, 50159, 28965, 50148, 28960, 50153, 28940, 50137, 28896, 50113, 28876, 50091, 28870, 50086, 28860, 50083, 28836,
+            50089, 28818, 50078, 28808, 50070, 28778, 50038, 28768, 50044, 28740, 50062, 28715, 50057, 28709, 50062, 28678, 50045, 28659, 50038, 28638,
+            50047, 28617, 50044, 28598, 50036, 28590, 50049, 28522, 50050, 28499, 50047, 28491, 50049, 28464, 50031, 28460, 50030, 28430, 50011, 28409,
+            50004, 28410, 49985, 28384, 49982, 28388, 49964, 28390, 49937, 28380, 49912, 28347, 49906, 28342, 49908, 28319, 49916, 28307, 49910, 28292,
+            49918, 28272, 49901, 28243, 49902, 28227, 49887, 28222, 49887, 28205, 49891, 28187, 49862, 28145, 49849, 28141, 49847, 28126, 49853, 28127,
+            49857, 28101, 49848, 28089, 49852, 28083, 49871, 28092, 49882, 28077, 49888, 28087, 49894, 28071, 49904, 28067, 49905, 28017, 49915, 28001,
+            49913, 27989, 49924, 27964, 49903, 27967, 49901, 27950, 49894, 27945, 49893, 27931, 49881, 27928, 49876, 27909, 49870, 27898, 49842, 27883,
+            49834, 27875, 49829, 27882, 49814, 27888, 49801, 27880, 49795, 27887, 49785, 27886, 49775, 27925, 49768, 27918, 49768, 27927, 49771, 27942,
+            49779, 27956, 49781, 27980, 49777, 28007, 49771, 28021, 49772, 28096, 49787, 28154, 49792, 28213, 49786, 28226, 49794, 28229, 49798, 28245,
+            49814, 28244, 49810, 28262, 49800, 28264, 49798, 28285, 49801, 28296, 49791, 28353, 49781, 28380, 49792, 28407, 49813, 28416, 49823, 28420,
+            49824, 28422, 49821, 28434, 49821, 28454, 49824, 28469, 49814, 28472, 49808, 28482, 49820, 28528, 49791, 28554, 49788, 28562, 49774, 28570,
+            49783, 28601, 49811, 28602, 49814, 28620, 49811, 28638, 49818, 28633, 49800, 28689, 49805, 28688, 49810, 28707, 49809, 28722, 49798, 28729,
+            49799, 28734, 49823, 28750, 49845, 28751, 49843, 28785, 49852, 28784, 49853, 28814, 49858, 28813, 49860, 28844, 49889, 28858, 49889, 28880,
+            49882, 28897, 49873, 28894, 49868, 28909, 49862, 28902, 49853, 28936, 49840, 28954, 49820, 28945, 49821, 28961, 49809, 28962, 49804, 28971,
+            49782, 28942, 49777, 28966, 49755, 28964, 49741, 29001, 49728, 29006, 49727, 28998, 49717, 28995, 49699, 28975, 49700, 28966, 49684, 28957,
+            49684, 28948, 49674, 28950, 49672, 28965, 49646, 28991, 49633, 29010, 49626, 29002, 49603, 28985, 49596, 28992, 49591, 29028, 49594, 29047,
+            49593, 29061, 49594, 29105, 49584, 29117, 49594, 29151, 49588, 29187, 49593, 29202, 49590, 29220, 49604, 29242, 49589, 29253, 49590, 29275
+        ))
+    )
+
+    private fun _r_zhytomyrskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49849, 29379, 49831, 29397, 49824, 29386, 49810, 29410, 49817, 29424, 49815, 29432, 49805, 29438, 49802, 29449, 49816, 29471, 49802, 29483,
+            49812, 29497, 49826, 29490, 49835, 29507, 49826, 29524, 49821, 29542, 49836, 29548, 49837, 29574, 49841, 29574, 49843, 29596, 49856, 29602,
+            49852, 29620, 49869, 29639, 49865, 29652, 49875, 29667, 49877, 29634, 49886, 29633, 49898, 29642, 49911, 29665, 49934, 29728, 49941, 29724,
+            49946, 29733, 49961, 29722, 49964, 29732, 49970, 29728, 49968, 29713, 49978, 29718, 49990, 29696, 50000, 29690, 50006, 29699, 50013, 29683,
+            50033, 29673, 50042, 29694, 50068, 29696, 50073, 29691, 50106, 29648, 50116, 29671, 50118, 29657, 50124, 29657, 50143, 29688, 50156, 29693,
+            50161, 29673, 50173, 29650, 50180, 29643, 50188, 29655, 50208, 29675, 50227, 29685, 50232, 29700, 50240, 29689, 50254, 29681, 50266, 29663,
+            50268, 29672, 50275, 29666, 50274, 29680, 50284, 29689, 50285, 29678, 50297, 29676, 50312, 29681, 50310, 29689, 50324, 29692, 50322, 29674,
+            50323, 29644, 50329, 29626, 50341, 29612, 50359, 29638, 50373, 29631, 50365, 29617, 50372, 29611, 50375, 29591, 50402, 29589, 50423, 29560,
+            50414, 29479, 50405, 29483, 50400, 29456, 50417, 29442, 50421, 29449, 50417, 29469, 50420, 29482, 50436, 29497, 50451, 29498, 50450, 29474,
+            50453, 29474, 50453, 29446, 50472, 29456, 50461, 29482, 50472, 29512, 50485, 29503, 50488, 29508, 50504, 29500, 50515, 29461, 50528, 29467,
+            50540, 29459, 50538, 29486, 50549, 29502, 50559, 29499, 50574, 29503, 50579, 29497, 50594, 29494, 50608, 29475, 50620, 29446, 50628, 29478,
+            50633, 29467, 50647, 29489, 50654, 29478, 50659, 29482, 50661, 29502, 50657, 29509, 50664, 29530, 50674, 29532, 50690, 29543, 50696, 29570,
+            50709, 29586, 50729, 29598, 50728, 29592, 50739, 29586, 50738, 29578, 50720, 29584, 50701, 29561, 50697, 29560, 50694, 29550, 50705, 29520,
+            50712, 29514, 50718, 29487, 50730, 29502, 50738, 29502, 50732, 29492, 50746, 29478, 50747, 29465, 50720, 29486, 50720, 29462, 50737, 29460,
+            50736, 29450, 50727, 29448, 50723, 29436, 50726, 29412, 50708, 29408, 50704, 29391, 50704, 29378, 50692, 29376, 50682, 29338, 50678, 29335,
+            50689, 29316, 50686, 29313, 50692, 29295, 50685, 29288, 50680, 29306, 50661, 29286, 50656, 29278, 50656, 29258, 50646, 29253, 50643, 29245,
+            50655, 29236, 50661, 29210, 50671, 29209, 50677, 29199, 50682, 29179, 50683, 29157, 50668, 29141, 50659, 29097, 50657, 29093, 50656, 29060,
+            50666, 29042, 50669, 29078, 50677, 29044, 50689, 29038, 50694, 29023, 50702, 29022, 50711, 28998, 50711, 28980, 50714, 28976, 50710, 28961,
+            50716, 28952, 50710, 28935, 50724, 28922, 50727, 28908, 50710, 28859, 50701, 28858, 50691, 28846, 50673, 28854, 50668, 28844, 50673, 28836,
+            50682, 28783, 50694, 28762, 50680, 28742, 50667, 28744, 50655, 28739, 50650, 28727, 50668, 28725, 50668, 28709, 50683, 28701, 50691, 28719,
+            50714, 28726, 50719, 28737, 50718, 28683, 50729, 28678, 50739, 28685, 50751, 28701, 50758, 28680, 50755, 28648, 50747, 28653, 50735, 28614,
+            50747, 28594, 50742, 28563, 50742, 28546, 50751, 28542, 50761, 28527, 50760, 28514, 50767, 28516, 50769, 28499, 50745, 28485, 50745, 28450,
+            50753, 28446, 50754, 28431, 50748, 28412, 50758, 28410, 50753, 28391, 50759, 28364, 50759, 28338, 50754, 28328, 50757, 28298, 50754, 28290,
+            50719, 28285, 50718, 28278, 50724, 28262, 50712, 28262, 50710, 28242, 50699, 28255, 50693, 28260, 50681, 28282, 50669, 28278, 50652, 28255,
+            50638, 28241, 50632, 28242, 50630, 28222, 50610, 28178, 50609, 28159, 50604, 28154, 50603, 28131, 50588, 28096, 50594, 28046, 50561, 28056,
+            50549, 28046, 50550, 28030, 50542, 28019, 50534, 28016, 50538, 27994, 50529, 27987, 50520, 27993, 50512, 27941, 50510, 27945, 50478, 27927,
+            50474, 27939, 50458, 27936, 50437, 27946, 50433, 27931, 50428, 27931, 50426, 27946, 50408, 27959, 50403, 27948, 50408, 27922, 50403, 27922,
+            50394, 27944, 50397, 27981, 50391, 27998, 50386, 28036, 50380, 28043, 50358, 28037, 50340, 28068, 50328, 28047, 50332, 28024, 50322, 28015,
+            50331, 27981, 50284, 27971, 50288, 27922, 50292, 27911, 50276, 27898, 50278, 27887, 50269, 27878, 50268, 27868, 50227, 27866, 50230, 27857,
+            50242, 27861, 50242, 27844, 50248, 27803, 50255, 27801, 50250, 27748, 50242, 27752, 50242, 27771, 50228, 27772, 50225, 27755, 50232, 27749,
+            50227, 27698, 50238, 27694, 50233, 27671, 50226, 27669, 50217, 27682, 50220, 27667, 50208, 27652, 50206, 27659, 50199, 27653, 50193, 27657,
+            50194, 27665, 50173, 27663, 50159, 27680, 50153, 27671, 50153, 27653, 50145, 27648, 50146, 27632, 50134, 27632, 50123, 27627, 50115, 27641,
+            50114, 27624, 50106, 27622, 50104, 27631, 50087, 27615, 50080, 27660, 50066, 27676, 50057, 27675, 50049, 27681, 50035, 27679, 50026, 27671,
+            50026, 27657, 50034, 27658, 50038, 27641, 50006, 27609, 50015, 27592, 50021, 27563, 50013, 27560, 50012, 27547, 49999, 27546, 49983, 27562,
+            49961, 27565, 49947, 27574, 49945, 27557, 49935, 27556, 49934, 27548, 49924, 27550, 49903, 27548, 49902, 27554, 49902, 27564, 49910, 27569,
+            49896, 27596, 49890, 27596, 49894, 27618, 49892, 27625, 49876, 27610, 49873, 27616, 49844, 27622, 49835, 27628, 49825, 27639, 49812, 27642,
+            49801, 27657, 49796, 27662, 49808, 27668, 49803, 27692, 49808, 27699, 49805, 27717, 49799, 27727, 49788, 27721, 49780, 27708, 49769, 27703,
+            49755, 27750, 49743, 27763, 49728, 27781, 49726, 27788, 49728, 27808, 49734, 27816, 49744, 27815, 49747, 27835, 49756, 27835, 49753, 27846,
+            49757, 27892, 49765, 27893, 49768, 27901, 49768, 27918, 49775, 27925, 49785, 27886, 49795, 27887, 49801, 27880, 49814, 27888, 49829, 27882,
+            49834, 27875, 49842, 27883, 49870, 27898, 49876, 27909, 49881, 27928, 49893, 27931, 49894, 27945, 49901, 27950, 49903, 27967, 49924, 27964,
+            49913, 27989, 49915, 28001, 49905, 28017, 49904, 28067, 49894, 28071, 49888, 28087, 49882, 28077, 49871, 28092, 49852, 28083, 49848, 28089,
+            49857, 28101, 49853, 28127, 49847, 28126, 49849, 28141, 49862, 28145, 49891, 28187, 49887, 28205, 49887, 28222, 49902, 28227, 49901, 28243,
+            49918, 28272, 49910, 28292, 49916, 28307, 49908, 28319, 49906, 28342, 49912, 28347, 49937, 28380, 49964, 28390, 49982, 28388, 49985, 28384,
+            50004, 28410, 50011, 28409, 50030, 28430, 50031, 28460, 50049, 28464, 50047, 28491, 50050, 28499, 50049, 28522, 50036, 28590, 50044, 28598,
+            50047, 28617, 50038, 28638, 50045, 28659, 50062, 28678, 50057, 28709, 50062, 28715, 50044, 28740, 50038, 28768, 50070, 28778, 50078, 28808,
+            50089, 28818, 50083, 28836, 50086, 28860, 50091, 28870, 50113, 28876, 50137, 28896, 50153, 28940, 50148, 28960, 50159, 28965, 50158, 28987,
+            50165, 29005, 50171, 29006, 50173, 29024, 50162, 29029, 50156, 29062, 50162, 29072, 50175, 29073, 50180, 29081, 50174, 29095, 50166, 29095,
+            50163, 29086, 50160, 29099, 50158, 29124, 50142, 29137, 50147, 29198, 50135, 29192, 50138, 29217, 50126, 29223, 50124, 29234, 50110, 29222,
+            50103, 29256, 50098, 29271, 50088, 29269, 50077, 29275, 50067, 29267, 50064, 29256, 50054, 29253, 50050, 29278, 50025, 29300, 50012, 29267,
+            49995, 29279, 49996, 29272, 49986, 29284, 49964, 29279, 49969, 29216, 49962, 29224, 49952, 29212, 49944, 29211, 49936, 29221, 49933, 29230,
+            49894, 29248, 49887, 29234, 49882, 29235, 49882, 29251, 49862, 29252, 49860, 29297, 49836, 29308, 49834, 29323, 49846, 29329, 49860, 29331,
+            49860, 29366, 49853, 29366, 49849, 29379
+        ))
+    )
+
+    private fun _r_korostenskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            50719, 28285, 50754, 28290, 50757, 28298, 50754, 28328, 50759, 28338, 50759, 28364, 50753, 28391, 50758, 28410, 50748, 28412, 50754, 28431,
+            50753, 28446, 50745, 28450, 50745, 28485, 50769, 28499, 50767, 28516, 50760, 28514, 50761, 28527, 50751, 28542, 50742, 28546, 50742, 28563,
+            50747, 28594, 50735, 28614, 50747, 28653, 50755, 28648, 50758, 28680, 50751, 28701, 50739, 28685, 50729, 28678, 50718, 28683, 50719, 28737,
+            50714, 28726, 50691, 28719, 50683, 28701, 50668, 28709, 50668, 28725, 50650, 28727, 50655, 28739, 50667, 28744, 50680, 28742, 50694, 28762,
+            50682, 28783, 50673, 28836, 50668, 28844, 50673, 28854, 50691, 28846, 50701, 28858, 50710, 28859, 50727, 28908, 50724, 28922, 50710, 28935,
+            50716, 28952, 50710, 28961, 50714, 28976, 50711, 28980, 50711, 28998, 50702, 29022, 50694, 29023, 50689, 29038, 50677, 29044, 50669, 29078,
+            50666, 29042, 50656, 29060, 50657, 29093, 50659, 29097, 50668, 29141, 50683, 29157, 50682, 29179, 50677, 29199, 50671, 29209, 50661, 29210,
+            50655, 29236, 50643, 29245, 50646, 29253, 50656, 29258, 50656, 29278, 50661, 29286, 50680, 29306, 50685, 29288, 50692, 29295, 50686, 29313,
+            50689, 29316, 50678, 29335, 50682, 29338, 50692, 29376, 50704, 29378, 50704, 29391, 50708, 29408, 50726, 29412, 50723, 29436, 50727, 29448,
+            50736, 29450, 50737, 29460, 50720, 29462, 50720, 29486, 50747, 29465, 50746, 29478, 50732, 29492, 50738, 29502, 50730, 29502, 50718, 29487,
+            50712, 29514, 50705, 29520, 50694, 29550, 50697, 29560, 50701, 29561, 50720, 29584, 50738, 29578, 50745, 29580, 50747, 29585, 50749, 29577,
+            50768, 29573, 50772, 29570, 50771, 29554, 50776, 29544, 50772, 29518, 50765, 29505, 50774, 29478, 50775, 29511, 50785, 29506, 50791, 29523,
+            50800, 29498, 50812, 29490, 50818, 29504, 50813, 29550, 50829, 29543, 50824, 29529, 50839, 29499, 50869, 29522, 50880, 29515, 50888, 29501,
+            50889, 29490, 50903, 29471, 50914, 29475, 50926, 29468, 50946, 29436, 50949, 29412, 50985, 29413, 50987, 29443, 50979, 29474, 50987, 29467,
+            51017, 29464, 51030, 29472, 51060, 29511, 51071, 29497, 51088, 29460, 51124, 29429, 51160, 29349, 51157, 29330, 51125, 29329, 51131, 29317,
+            51163, 29303, 51203, 29290, 51264, 29267, 51273, 29302, 51278, 29332, 51271, 29329, 51275, 29354, 51321, 29396, 51345, 29392, 51380, 29394,
+            51376, 29358, 51388, 29357, 51385, 29334, 51378, 29320, 51391, 29317, 51401, 29325, 51422, 29311, 51432, 29311, 51445, 29302, 51454, 29304,
+            51460, 29287, 51458, 29272, 51476, 29267, 51482, 29253, 51500, 29245, 51523, 29250, 51532, 29260, 51567, 29252, 51570, 29244, 51568, 29214,
+            51582, 29202, 51598, 29204, 51608, 29178, 51621, 29186, 51629, 29158, 51649, 29176, 51653, 29167, 51649, 29138, 51657, 29117, 51645, 29100,
+            51629, 29092, 51628, 29072, 51603, 29040, 51590, 29029, 51574, 28998, 51573, 28974, 51591, 28966, 51585, 28924, 51589, 28906, 51583, 28882,
+            51569, 28865, 51558, 28836, 51559, 28819, 51549, 28807, 51538, 28804, 51525, 28789, 51483, 28761, 51474, 28774, 51451, 28780, 51450, 28771,
+            51428, 28766, 51415, 28753, 51425, 28750, 51426, 28739, 51435, 28734, 51466, 28736, 51461, 28722, 51451, 28718, 51441, 28697, 51444, 28683,
+            51524, 28651, 51527, 28655, 51546, 28649, 51554, 28640, 51562, 28651, 51557, 28633, 51562, 28630, 51570, 28653, 51568, 28632, 51573, 28632,
+            51572, 28554, 51582, 28554, 51582, 28523, 51591, 28516, 51593, 28468, 51550, 28390, 51539, 28354, 51556, 28355, 51576, 28343, 51583, 28330,
+            51600, 28312, 51623, 28281, 51619, 28258, 51627, 28254, 51667, 28265, 51671, 28270, 51682, 28260, 51668, 28230, 51645, 28171, 51626, 28169,
+            51605, 28148, 51608, 28131, 51599, 28120, 51585, 28115, 51574, 28082, 51579, 28072, 51566, 28049, 51558, 27940, 51561, 27937, 51582, 27968,
+            51595, 27976, 51594, 27956, 51580, 27945, 51578, 27920, 51596, 27924, 51606, 27922, 51617, 27913, 51617, 27893, 51623, 27886, 51631, 27860,
+            51625, 27836, 51617, 27819, 51609, 27840, 51597, 27829, 51577, 27825, 51561, 27837, 51556, 27836, 51547, 27848, 51535, 27835, 51534, 27800,
+            51508, 27783, 51494, 27767, 51473, 27760, 51475, 27738, 51489, 27720, 51498, 27701, 51498, 27694, 51517, 27663, 51497, 27669, 51501, 27648,
+            51493, 27641, 51481, 27620, 51478, 27580, 51430, 27581, 51430, 27598, 51415, 27602, 51410, 27615, 51403, 27614, 51402, 27585, 51408, 27584,
+            51428, 27534, 51443, 27526, 51453, 27533, 51452, 27506, 51436, 27506, 51407, 27493, 51375, 27494, 51366, 27524, 51354, 27526, 51342, 27522,
+            51316, 27492, 51311, 27441, 51284, 27448, 51264, 27462, 51261, 27450, 51249, 27455, 51248, 27464, 51238, 27472, 51237, 27464, 51225, 27457,
+            51223, 27444, 51201, 27418, 51200, 27401, 51188, 27407, 51172, 27395, 51170, 27399, 51155, 27374, 51147, 27380, 51143, 27363, 51113, 27370,
+            51098, 27368, 51096, 27354, 51087, 27355, 51088, 27336, 51083, 27332, 51076, 27361, 51059, 27359, 51059, 27403, 51069, 27432, 51055, 27436,
+            51045, 27446, 51029, 27420, 51021, 27423, 51008, 27390, 51002, 27384, 51001, 27371, 51010, 27370, 51011, 27354, 51000, 27362, 50986, 27389,
+            50997, 27394, 51006, 27445, 51011, 27453, 51045, 27480, 51052, 27473, 51077, 27549, 51075, 27563, 51068, 27577, 51059, 27570, 51056, 27586,
+            51081, 27584, 51074, 27600, 51080, 27607, 51077, 27625, 51065, 27636, 51057, 27650, 51038, 27665, 51013, 27661, 51014, 27682, 51008, 27704,
+            50997, 27706, 50997, 27748, 51013, 27772, 51020, 27758, 51029, 27750, 51035, 27764, 51048, 27755, 51047, 27773, 51054, 27803, 51048, 27875,
+            51048, 27902, 51052, 27913, 51049, 27929, 51070, 27950, 51060, 27951, 51059, 28009, 51049, 28034, 51034, 28044, 51029, 28056, 51024, 28098,
+            51025, 28124, 51013, 28130, 50988, 28106, 50967, 28156, 50965, 28141, 50957, 28145, 50937, 28168, 50923, 28171, 50913, 28164, 50897, 28140,
+            50878, 28130, 50871, 28117, 50864, 28116, 50857, 28130, 50817, 28153, 50803, 28150, 50797, 28174, 50785, 28167, 50754, 28243, 50744, 28230,
+            50738, 28242, 50729, 28240, 50722, 28262, 50724, 28262, 50718, 28278, 50719, 28285
+        ))
+    )
+
+    private fun _r_novohrad_volynskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            50490, 27272, 50493, 27302, 50476, 27291, 50458, 27292, 50419, 27257, 50393, 27249, 50369, 27319, 50358, 27324, 50340, 27314, 50332, 27317,
+            50332, 27363, 50306, 27415, 50295, 27417, 50295, 27402, 50285, 27401, 50274, 27413, 50276, 27443, 50263, 27443, 50257, 27459, 50257, 27481,
+            50238, 27492, 50225, 27525, 50246, 27542, 50246, 27563, 50259, 27578, 50259, 27596, 50243, 27602, 50230, 27600, 50230, 27595, 50215, 27594,
+            50215, 27608, 50195, 27613, 50198, 27621, 50171, 27623, 50173, 27642, 50188, 27635, 50193, 27657, 50199, 27653, 50206, 27659, 50208, 27652,
+            50220, 27667, 50217, 27682, 50226, 27669, 50233, 27671, 50238, 27694, 50227, 27698, 50232, 27749, 50225, 27755, 50228, 27772, 50242, 27771,
+            50242, 27752, 50250, 27748, 50255, 27801, 50248, 27803, 50242, 27844, 50242, 27861, 50230, 27857, 50227, 27866, 50268, 27868, 50269, 27878,
+            50278, 27887, 50276, 27898, 50292, 27911, 50288, 27922, 50284, 27971, 50331, 27981, 50322, 28015, 50332, 28024, 50328, 28047, 50340, 28068,
+            50358, 28037, 50380, 28043, 50386, 28036, 50391, 27998, 50397, 27981, 50394, 27944, 50403, 27922, 50408, 27922, 50403, 27948, 50408, 27959,
+            50426, 27946, 50428, 27931, 50433, 27931, 50437, 27946, 50458, 27936, 50474, 27939, 50478, 27927, 50510, 27945, 50512, 27941, 50520, 27993,
+            50529, 27987, 50538, 27994, 50534, 28016, 50542, 28019, 50550, 28030, 50549, 28046, 50561, 28056, 50594, 28046, 50588, 28096, 50603, 28131,
+            50604, 28154, 50609, 28159, 50610, 28178, 50630, 28222, 50632, 28242, 50638, 28241, 50652, 28255, 50669, 28278, 50681, 28282, 50693, 28260,
+            50699, 28255, 50710, 28242, 50712, 28262, 50722, 28262, 50729, 28240, 50738, 28242, 50744, 28230, 50754, 28243, 50785, 28167, 50797, 28174,
+            50803, 28150, 50817, 28153, 50857, 28130, 50864, 28116, 50871, 28117, 50878, 28130, 50897, 28140, 50913, 28164, 50923, 28171, 50937, 28168,
+            50957, 28145, 50965, 28141, 50967, 28156, 50988, 28106, 51013, 28130, 51025, 28124, 51024, 28098, 51029, 28056, 51034, 28044, 51049, 28034,
+            51059, 28009, 51060, 27951, 51070, 27950, 51049, 27929, 51052, 27913, 51048, 27902, 51048, 27875, 51054, 27803, 51047, 27773, 51048, 27755,
+            51035, 27764, 51029, 27750, 51020, 27758, 51013, 27772, 50997, 27748, 50997, 27706, 51008, 27704, 51014, 27682, 51013, 27661, 51038, 27665,
+            51057, 27650, 51065, 27636, 51077, 27625, 51080, 27607, 51074, 27600, 51081, 27584, 51056, 27586, 51059, 27570, 51068, 27577, 51075, 27563,
+            51077, 27549, 51052, 27473, 51045, 27480, 51011, 27453, 51006, 27445, 50997, 27394, 50986, 27389, 51000, 27362, 51011, 27354, 51010, 27370,
+            51001, 27371, 51002, 27384, 51008, 27390, 51021, 27423, 51029, 27420, 51045, 27446, 51055, 27436, 51069, 27432, 51059, 27403, 51059, 27359,
+            51076, 27361, 51083, 27332, 51082, 27325, 51071, 27325, 51058, 27317, 51043, 27326, 51042, 27280, 51034, 27274, 51031, 27221, 51024, 27228,
+            51009, 27226, 51009, 27216, 51001, 27201, 50992, 27203, 50967, 27225, 50955, 27224, 50948, 27238, 50936, 27237, 50926, 27214, 50911, 27224,
+            50896, 27257, 50884, 27244, 50883, 27253, 50870, 27244, 50859, 27251, 50840, 27233, 50828, 27242, 50812, 27236, 50796, 27234, 50793, 27244,
+            50778, 27238, 50770, 27244, 50762, 27270, 50746, 27264, 50721, 27275, 50713, 27272, 50693, 27252, 50674, 27245, 50673, 27222, 50665, 27204,
+            50656, 27213, 50638, 27211, 50628, 27204, 50625, 27190, 50610, 27213, 50606, 27226, 50589, 27216, 50566, 27233, 50562, 27195, 50552, 27196,
+            50532, 27207, 50514, 27258, 50511, 27261, 50498, 27262, 50491, 27269, 50490, 27272
+        ))
+    )
+
+    private fun _r_kremenetskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49935, 25431, 49931, 25424, 49915, 25420, 49898, 25449, 49887, 25461, 49862, 25473, 49825, 25477, 49817, 25502, 49810, 25512, 49798, 25518,
+            49779, 25533, 49775, 25541, 49794, 25570, 49799, 25572, 49799, 25591, 49822, 25640, 49843, 25661, 49850, 25677, 49821, 25674, 49816, 25679,
+            49817, 25692, 49806, 25716, 49801, 25732, 49803, 25742, 49802, 25762, 49796, 25775, 49808, 25774, 49806, 25787, 49807, 25832, 49810, 25834,
+            49808, 25859, 49798, 25868, 49795, 25882, 49800, 25903, 49794, 25907, 49791, 25925, 49783, 25904, 49779, 25885, 49764, 25859, 49754, 25847,
+            49736, 25874, 49728, 25872, 49714, 25912, 49722, 25916, 49701, 25946, 49713, 25964, 49719, 25980, 49714, 25999, 49719, 26009, 49714, 26019,
+            49722, 26059, 49720, 26122, 49716, 26162, 49728, 26166, 49721, 26181, 49713, 26192, 49735, 26215, 49745, 26243, 49771, 26237, 49778, 26230,
+            49782, 26224, 49792, 26228, 49798, 26219, 49806, 26217, 49819, 26206, 49823, 26197, 49836, 26185, 49846, 26177, 49866, 26200, 49872, 26191,
+            49881, 26164, 49890, 26160, 49898, 26135, 49906, 26135, 49926, 26163, 49960, 26144, 49976, 26148, 49986, 26168, 49994, 26169, 49992, 26201,
+            50016, 26211, 50026, 26177, 50036, 26199, 50037, 26217, 50046, 26218, 50046, 26227, 50060, 26222, 50067, 26201, 50076, 26207, 50081, 26201,
+            50098, 26201, 50102, 26246, 50102, 26273, 50113, 26274, 50132, 26235, 50142, 26243, 50146, 26223, 50154, 26209, 50157, 26219, 50165, 26221,
+            50175, 26211, 50181, 26220, 50185, 26213, 50191, 26191, 50197, 26180, 50218, 26192, 50217, 26185, 50228, 26184, 50227, 26196, 50233, 26218,
+            50264, 26215, 50264, 26192, 50247, 26173, 50232, 26164, 50235, 26137, 50238, 26130, 50254, 26063, 50231, 26021, 50229, 26011, 50239, 26003,
+            50246, 25989, 50247, 25974, 50258, 25959, 50256, 25924, 50253, 25920, 50249, 25923, 50234, 25898, 50213, 25872, 50206, 25872, 50190, 25856,
+            50181, 25821, 50185, 25795, 50180, 25763, 50188, 25728, 50174, 25722, 50172, 25704, 50179, 25690, 50153, 25625, 50170, 25596, 50177, 25575,
+            50150, 25554, 50156, 25501, 50164, 25502, 50166, 25477, 50152, 25450, 50126, 25449, 50117, 25455, 50113, 25484, 50102, 25489, 50094, 25453,
+            50083, 25459, 50074, 25451, 50073, 25438, 50053, 25432, 50048, 25389, 50047, 25364, 50017, 25359, 50018, 25352, 50004, 25349, 49996, 25361,
+            49985, 25402, 49970, 25412, 49955, 25402, 49948, 25404, 49941, 25428, 49935, 25431
+        ))
+    )
+
+    private fun _r_chortkivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48560, 26353, 48564, 26341, 48567, 26338, 48570, 26338, 48574, 26344, 48583, 26361, 48588, 26357, 48585, 26343, 48595, 26343, 48599, 26329,
+            48609, 26328, 48621, 26295, 48624, 26294, 48627, 26296, 48625, 26314, 48628, 26323, 48636, 26318, 48635, 26299, 48639, 26289, 48650, 26310,
+            48656, 26301, 48649, 26289, 48648, 26272, 48670, 26279, 48673, 26269, 48669, 26248, 48681, 26247, 48681, 26239, 48681, 26227, 48689, 26222,
+            48691, 26223, 48692, 26226, 48697, 26241, 48702, 26234, 48713, 26233, 48718, 26241, 48728, 26237, 48740, 26244, 48747, 26228, 48750, 26235,
+            48754, 26246, 48762, 26231, 48769, 26239, 48779, 26233, 48780, 26216, 48796, 26209, 48801, 26216, 48794, 26219, 48792, 26238, 48808, 26227,
+            48813, 26229, 48809, 26242, 48808, 26253, 48811, 26257, 48817, 26259, 48821, 26252, 48818, 26241, 48834, 26223, 48851, 26219, 48857, 26203,
+            48865, 26213, 48874, 26207, 48880, 26215, 48896, 26206, 48904, 26224, 48909, 26224, 48911, 26211, 48906, 26204, 48904, 26199, 48905, 26193,
+            48908, 26189, 48917, 26184, 48918, 26198, 48932, 26194, 48952, 26208, 48959, 26203, 48968, 26180, 48971, 26176, 48978, 26182, 48978, 26186,
+            48974, 26198, 48979, 26210, 48984, 26213, 48987, 26209, 48989, 26183, 48995, 26178, 49003, 26187, 49000, 26208, 49006, 26216, 49013, 26214,
+            49024, 26199, 49032, 26209, 49054, 26185, 49061, 26188, 49066, 26207, 49073, 26212, 49073, 26196, 49080, 26197, 49097, 26204, 49112, 26203,
+            49128, 26196, 49133, 26205, 49137, 26196, 49148, 26198, 49155, 26190, 49158, 26190, 49162, 26196, 49157, 26204, 49167, 26209, 49172, 26190,
+            49181, 26195, 49196, 26184, 49212, 26196, 49219, 26190, 49221, 26202, 49244, 26206, 49246, 26222, 49243, 26244, 49253, 26243, 49262, 26258,
+            49271, 26245, 49277, 26245, 49276, 26257, 49285, 26250, 49289, 26261, 49296, 26249, 49312, 26249, 49324, 26227, 49345, 26226, 49347, 26243,
+            49354, 26243, 49364, 26235, 49367, 26244, 49370, 26243, 49374, 26231, 49385, 26163, 49381, 26161, 49384, 26127, 49369, 26128, 49366, 26103,
+            49368, 26092, 49361, 26072, 49360, 26001, 49362, 25977, 49359, 25968, 49376, 25922, 49376, 25903, 49369, 25895, 49335, 25893, 49319, 25898,
+            49305, 25914, 49296, 25942, 49295, 25932, 49286, 25923, 49287, 25890, 49279, 25881, 49276, 25866, 49273, 25854, 49261, 25850, 49244, 25832,
+            49240, 25840, 49228, 25836, 49223, 25828, 49213, 25828, 49206, 25844, 49206, 25855, 49183, 25830, 49143, 25801, 49136, 25793, 49145, 25790,
+            49150, 25779, 49138, 25787, 49133, 25781, 49134, 25779, 49130, 25771, 49155, 25755, 49155, 25751, 49174, 25747, 49175, 25726, 49181, 25723,
+            49178, 25703, 49165, 25674, 49171, 25665, 49176, 25643, 49163, 25644, 49162, 25653, 49150, 25668, 49145, 25653, 49146, 25627, 49132, 25624,
+            49131, 25591, 49133, 25561, 49131, 25548, 49145, 25517, 49157, 25519, 49162, 25507, 49184, 25523, 49205, 25488, 49212, 25465, 49210, 25434,
+            49212, 25425, 49202, 25416, 49204, 25404, 49194, 25405, 49187, 25399, 49195, 25373, 49200, 25371, 49214, 25299, 49186, 25254, 49190, 25245,
+            49178, 25178, 49175, 25139, 49175, 25100, 49171, 25054, 49174, 25041, 49181, 24998, 49182, 24980, 49171, 24944, 49174, 24933, 49181, 24927,
+            49200, 24889, 49187, 24869, 49178, 24859, 49162, 24858, 49161, 24865, 49129, 24902, 49126, 24953, 49127, 24958, 49117, 24985, 49098, 24975,
+            49090, 24980, 49083, 24975, 49079, 24986, 49072, 24992, 49072, 24970, 49076, 24963, 49082, 24927, 49080, 24913, 49072, 24915, 49062, 24904,
+            49050, 24902, 49045, 24915, 49028, 24943, 49010, 24969, 48993, 24964, 48999, 24987, 49012, 25020, 48998, 25042, 48992, 25065, 48987, 25068,
+            48983, 25090, 48980, 25092, 48997, 25107, 48995, 25117, 48985, 25108, 48964, 25111, 48945, 25147, 48936, 25141, 48928, 25121, 48917, 25120,
+            48891, 25136, 48877, 25134, 48865, 25159, 48872, 25172, 48881, 25173, 48895, 25167, 48903, 25183, 48914, 25198, 48918, 25196, 48922, 25191,
+            48927, 25192, 48922, 25210, 48931, 25227, 48928, 25237, 48921, 25238, 48911, 25230, 48890, 25231, 48878, 25228, 48849, 25209, 48849, 25228,
+            48865, 25237, 48868, 25246, 48866, 25265, 48860, 25284, 48848, 25290, 48844, 25302, 48847, 25320, 48843, 25326, 48838, 25327, 48838, 25346,
+            48856, 25343, 48859, 25348, 48859, 25368, 48847, 25407, 48843, 25431, 48846, 25438, 48850, 25440, 48865, 25428, 48871, 25430, 48872, 25436,
+            48868, 25452, 48860, 25467, 48851, 25467, 48840, 25451, 48832, 25456, 48821, 25485, 48807, 25503, 48803, 25543, 48790, 25569, 48765, 25601,
+            48748, 25640, 48739, 25635, 48731, 25615, 48725, 25609, 48719, 25611, 48716, 25614, 48711, 25647, 48699, 25651, 48683, 25622, 48673, 25628,
+            48667, 25654, 48664, 25712, 48656, 25720, 48639, 25727, 48633, 25735, 48637, 25746, 48661, 25755, 48671, 25767, 48676, 25779, 48668, 25804,
+            48661, 25813, 48629, 25842, 48622, 25854, 48614, 25857, 48600, 25848, 48596, 25861, 48599, 25877, 48588, 25901, 48587, 25920, 48593, 25938,
+            48607, 25954, 48621, 25975, 48619, 25992, 48610, 26010, 48610, 26022, 48620, 26030, 48643, 26033, 48648, 26040, 48645, 26057, 48631, 26063,
+            48622, 26060, 48603, 26066, 48585, 26045, 48570, 26058, 48556, 26081, 48541, 26090, 48537, 26094, 48538, 26104, 48541, 26113, 48548, 26124,
+            48555, 26128, 48568, 26126, 48580, 26107, 48590, 26105, 48600, 26097, 48610, 26099, 48615, 26103, 48618, 26111, 48616, 26126, 48598, 26145,
+            48590, 26146, 48566, 26145, 48547, 26148, 48536, 26155, 48529, 26166, 48525, 26194, 48530, 26229, 48539, 26260, 48534, 26283, 48515, 26294,
+            48508, 26308, 48516, 26326, 48508, 26355, 48512, 26366, 48531, 26385, 48537, 26404, 48535, 26433, 48538, 26445, 48545, 26440, 48547, 26436,
+            48546, 26429, 48540, 26418, 48541, 26412, 48544, 26406, 48564, 26383, 48561, 26376, 48546, 26377, 48542, 26370, 48546, 26359, 48559, 26366,
+            48560, 26353
+        ))
+    )
+
+    private fun _r_ternopilskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49186, 25254, 49214, 25299, 49200, 25371, 49195, 25373, 49187, 25399, 49194, 25405, 49204, 25404, 49202, 25416, 49212, 25425, 49210, 25434,
+            49212, 25465, 49205, 25488, 49184, 25523, 49162, 25507, 49157, 25519, 49145, 25517, 49131, 25548, 49133, 25561, 49131, 25591, 49132, 25624,
+            49146, 25627, 49145, 25653, 49150, 25668, 49162, 25653, 49163, 25644, 49176, 25643, 49171, 25665, 49165, 25674, 49178, 25703, 49181, 25723,
+            49175, 25726, 49174, 25747, 49155, 25751, 49155, 25755, 49130, 25771, 49134, 25779, 49133, 25781, 49138, 25787, 49150, 25779, 49145, 25790,
+            49136, 25793, 49143, 25801, 49183, 25830, 49206, 25855, 49206, 25844, 49213, 25828, 49223, 25828, 49228, 25836, 49240, 25840, 49244, 25832,
+            49261, 25850, 49273, 25854, 49276, 25866, 49279, 25881, 49287, 25890, 49286, 25923, 49295, 25932, 49296, 25942, 49305, 25914, 49319, 25898,
+            49335, 25893, 49369, 25895, 49376, 25903, 49376, 25922, 49359, 25968, 49362, 25977, 49360, 26001, 49361, 26072, 49368, 26092, 49366, 26103,
+            49369, 26128, 49384, 26127, 49381, 26161, 49385, 26163, 49374, 26231, 49377, 26223, 49379, 26222, 49383, 26229, 49400, 26234, 49407, 26228,
+            49427, 26199, 49440, 26202, 49457, 26190, 49480, 26189, 49488, 26180, 49496, 26162, 49507, 26152, 49514, 26145, 49520, 26157, 49531, 26158,
+            49550, 26176, 49555, 26197, 49546, 26200, 49545, 26204, 49552, 26219, 49565, 26214, 49570, 26214, 49580, 26208, 49588, 26214, 49608, 26200,
+            49610, 26209, 49620, 26217, 49624, 26226, 49637, 26232, 49638, 26240, 49633, 26255, 49643, 26267, 49653, 26261, 49656, 26275, 49661, 26271,
+            49665, 26271, 49672, 26264, 49682, 26250, 49693, 26241, 49707, 26210, 49708, 26197, 49717, 26188, 49728, 26166, 49716, 26162, 49720, 26122,
+            49722, 26059, 49714, 26019, 49719, 26009, 49714, 25999, 49719, 25980, 49713, 25964, 49701, 25946, 49722, 25916, 49714, 25912, 49728, 25872,
+            49736, 25874, 49754, 25847, 49764, 25859, 49779, 25885, 49783, 25904, 49791, 25925, 49794, 25907, 49800, 25903, 49795, 25882, 49798, 25868,
+            49808, 25859, 49810, 25834, 49807, 25832, 49806, 25787, 49808, 25774, 49796, 25775, 49802, 25762, 49803, 25742, 49801, 25732, 49806, 25716,
+            49817, 25692, 49816, 25679, 49821, 25674, 49850, 25677, 49843, 25661, 49822, 25640, 49799, 25591, 49799, 25572, 49794, 25570, 49775, 25541,
+            49779, 25533, 49798, 25518, 49810, 25512, 49817, 25502, 49825, 25477, 49862, 25473, 49887, 25461, 49898, 25449, 49915, 25420, 49931, 25424,
+            49935, 25431, 49940, 25428, 49934, 25416, 49937, 25402, 49935, 25387, 49927, 25387, 49914, 25376, 49897, 25389, 49878, 25382, 49875, 25371,
+            49868, 25376, 49864, 25339, 49859, 25336, 49856, 25316, 49850, 25300, 49840, 25290, 49833, 25294, 49827, 25286, 49829, 25271, 49837, 25262,
+            49832, 25247, 49825, 25241, 49826, 25213, 49830, 25211, 49838, 25180, 49831, 25172, 49836, 25157, 49828, 25144, 49818, 25143, 49815, 25135,
+            49821, 25097, 49827, 25085, 49799, 25084, 49787, 25090, 49779, 25087, 49778, 25077, 49770, 25075, 49746, 25116, 49729, 25095, 49728, 25088,
+            49712, 25067, 49730, 25046, 49735, 25022, 49700, 25000, 49666, 24994, 49653, 24987, 49645, 24990, 49636, 24983, 49641, 24966, 49627, 24962,
+            49615, 24952, 49617, 24946, 49617, 24931, 49608, 24940, 49609, 24928, 49613, 24917, 49614, 24909, 49611, 24899, 49600, 24903, 49602, 24885,
+            49609, 24873, 49598, 24863, 49601, 24846, 49599, 24833, 49582, 24841, 49580, 24835, 49593, 24830, 49587, 24814, 49586, 24802, 49572, 24791,
+            49573, 24766, 49571, 24719, 49547, 24729, 49531, 24720, 49497, 24721, 49491, 24730, 49482, 24724, 49467, 24744, 49450, 24751, 49434, 24770,
+            49430, 24772, 49424, 24770, 49414, 24776, 49398, 24775, 49390, 24776, 49385, 24781, 49382, 24795, 49391, 24810, 49386, 24829, 49363, 24834,
+            49353, 24845, 49348, 24861, 49346, 24852, 49325, 24839, 49318, 24828, 49284, 24831, 49283, 24841, 49263, 24844, 49258, 24869, 49243, 24900,
+            49237, 24927, 49229, 24930, 49217, 24901, 49200, 24889, 49181, 24927, 49174, 24933, 49171, 24944, 49182, 24980, 49181, 24998, 49174, 25041,
+            49171, 25054, 49175, 25100, 49175, 25139, 49178, 25178, 49190, 25245, 49186, 25254
+        ))
+    )
+
+    private fun _r_mohyliv_podilskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48470, 27535, 48491, 27581, 48490, 27600, 48486, 27604, 48466, 27589, 48460, 27592, 48441, 27644, 48441, 27684, 48451, 27713, 48458, 27746,
+            48456, 27762, 48445, 27789, 48428, 27814, 48419, 27821, 48414, 27848, 48404, 27873, 48393, 27880, 48382, 27878, 48366, 27889, 48354, 27906,
+            48337, 27940, 48329, 27953, 48324, 27975, 48326, 28008, 48325, 28045, 48318, 28072, 48306, 28087, 48294, 28093, 48270, 28088, 48252, 28080,
+            48240, 28081, 48234, 28089, 48232, 28109, 48242, 28130, 48263, 28146, 48257, 28177, 48251, 28187, 48237, 28182, 48216, 28185, 48204, 28208,
+            48209, 28228, 48227, 28270, 48233, 28289, 48241, 28301, 48241, 28309, 48233, 28321, 48247, 28347, 48241, 28360, 48227, 28369, 48211, 28369,
+            48192, 28361, 48179, 28348, 48162, 28308, 48141, 28305, 48132, 28324, 48136, 28349, 48142, 28360, 48166, 28372, 48176, 28385, 48177, 28410,
+            48173, 28427, 48167, 28434, 48143, 28439, 48133, 28425, 48122, 28422, 48108, 28435, 48096, 28438, 48080, 28453, 48074, 28463, 48066, 28492,
+            48068, 28501, 48075, 28492, 48086, 28497, 48106, 28495, 48127, 28499, 48138, 28521, 48151, 28503, 48154, 28529, 48169, 28545, 48176, 28567,
+            48190, 28562, 48191, 28570, 48201, 28579, 48199, 28588, 48208, 28600, 48223, 28561, 48236, 28572, 48244, 28559, 48262, 28540, 48267, 28507,
+            48270, 28501, 48282, 28512, 48301, 28509, 48318, 28513, 48330, 28505, 48339, 28487, 48345, 28466, 48353, 28468, 48363, 28481, 48376, 28450,
+            48384, 28457, 48394, 28451, 48400, 28458, 48422, 28464, 48428, 28460, 48422, 28426, 48410, 28394, 48422, 28381, 48425, 28386, 48440, 28372,
+            48446, 28385, 48454, 28376, 48452, 28369, 48468, 28353, 48473, 28337, 48486, 28348, 48490, 28328, 48488, 28316, 48507, 28320, 48515, 28352,
+            48520, 28352, 48535, 28321, 48548, 28316, 48557, 28297, 48573, 28299, 48587, 28270, 48604, 28244, 48599, 28228, 48604, 28213, 48614, 28197,
+            48610, 28175, 48619, 28173, 48615, 28148, 48618, 28134, 48617, 28113, 48626, 28106, 48625, 28099, 48644, 28083, 48650, 28084, 48649, 28049,
+            48641, 28036, 48641, 28010, 48644, 27995, 48640, 27976, 48670, 27966, 48680, 27950, 48684, 27902, 48691, 27912, 48714, 27914, 48724, 27905,
+            48720, 27889, 48731, 27886, 48735, 27879, 48772, 27881, 48771, 27891, 48781, 27899, 48790, 27878, 48792, 27865, 48810, 27843, 48812, 27814,
+            48820, 27810, 48837, 27810, 48836, 27788, 48812, 27774, 48805, 27762, 48801, 27746, 48806, 27733, 48804, 27723, 48808, 27703, 48802, 27702,
+            48814, 27675, 48827, 27657, 48843, 27612, 48847, 27615, 48884, 27582, 48884, 27572, 48892, 27554, 48906, 27544, 48910, 27530, 48904, 27522,
+            48923, 27489, 48913, 27466, 48899, 27455, 48896, 27430, 48889, 27406, 48882, 27416, 48858, 27416, 48850, 27413, 48840, 27418, 48825, 27418,
+            48812, 27411, 48795, 27428, 48790, 27418, 48779, 27414, 48774, 27404, 48767, 27408, 48764, 27390, 48753, 27393, 48740, 27413, 48727, 27401,
+            48706, 27414, 48696, 27416, 48695, 27406, 48687, 27407, 48682, 27392, 48661, 27388, 48650, 27380, 48629, 27373, 48621, 27403, 48604, 27444,
+            48591, 27456, 48580, 27463, 48551, 27478, 48528, 27483, 48506, 27479, 48484, 27496, 48470, 27520, 48470, 27535
+        ))
+    )
+
+    private fun _r_haisynskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48098, 29570, 48104, 29574, 48102, 29588, 48116, 29589, 48119, 29598, 48132, 29601, 48124, 29639, 48112, 29637, 48112, 29653, 48108, 29664,
+            48116, 29668, 48121, 29656, 48126, 29672, 48167, 29675, 48194, 29656, 48196, 29665, 48187, 29683, 48193, 29692, 48203, 29722, 48201, 29764,
+            48203, 29774, 48209, 29781, 48226, 29772, 48242, 29782, 48256, 29771, 48259, 29776, 48272, 29774, 48278, 29762, 48299, 29751, 48296, 29763,
+            48304, 29774, 48309, 29769, 48316, 29782, 48329, 29784, 48332, 29805, 48347, 29805, 48350, 29812, 48361, 29805, 48370, 29787, 48417, 29871,
+            48427, 29863, 48431, 29883, 48428, 29885, 48440, 29907, 48440, 29927, 48450, 29951, 48454, 29954, 48463, 29954, 48462, 29964, 48472, 29968,
+            48474, 29962, 48491, 29967, 48495, 29982, 48492, 30001, 48513, 30007, 48516, 29988, 48521, 29998, 48520, 30020, 48536, 30022, 48542, 30009,
+            48551, 30003, 48572, 30005, 48579, 29993, 48583, 29974, 48582, 29959, 48595, 29947, 48609, 29950, 48612, 29986, 48636, 29990, 48635, 29978,
+            48651, 29967, 48650, 29959, 48659, 29957, 48657, 29945, 48671, 29945, 48671, 29918, 48702, 29873, 48699, 29861, 48708, 29866, 48714, 29854,
+            48733, 29867, 48731, 29881, 48736, 29885, 48746, 29877, 48747, 29870, 48759, 29859, 48763, 29866, 48774, 29800, 48779, 29805, 48785, 29785,
+            48782, 29774, 48786, 29766, 48847, 29762, 48854, 29732, 48887, 29728, 48897, 29711, 48908, 29736, 48911, 29714, 48918, 29699, 48912, 29685,
+            48924, 29665, 48929, 29668, 48936, 29652, 48948, 29661, 48961, 29651, 49001, 29695, 49007, 29683, 49024, 29682, 49024, 29670, 49014, 29652,
+            49014, 29639, 49025, 29628, 49037, 29622, 49043, 29614, 49053, 29611, 49057, 29606, 49052, 29600, 49046, 29599, 49048, 29584, 49049, 29543,
+            49070, 29550, 49070, 29544, 49085, 29539, 49115, 29520, 49117, 29506, 49107, 29496, 49112, 29480, 49124, 29486, 49128, 29464, 49123, 29470,
+            49114, 29463, 49093, 29422, 49087, 29422, 49085, 29406, 49072, 29406, 49057, 29418, 49045, 29408, 49053, 29392, 49056, 29375, 49043, 29359,
+            49042, 29348, 49025, 29360, 49013, 29337, 49015, 29312, 48984, 29267, 48976, 29252, 48984, 29240, 48984, 29221, 48976, 29204, 48968, 29198,
+            48956, 29174, 48970, 29169, 48982, 29138, 48996, 29111, 49002, 29066, 48973, 29049, 48971, 29062, 48961, 29062, 48956, 29048, 48948, 29010,
+            48930, 29009, 48904, 28986, 48904, 28969, 48874, 28964, 48865, 28953, 48860, 28958, 48844, 28992, 48854, 28995, 48851, 29002, 48838, 29000,
+            48829, 29012, 48835, 29058, 48839, 29082, 48833, 29086, 48838, 29098, 48834, 29103, 48835, 29132, 48818, 29143, 48813, 29137, 48818, 29121,
+            48805, 29107, 48792, 29119, 48779, 29117, 48775, 29100, 48766, 29088, 48753, 29081, 48734, 29101, 48727, 29134, 48720, 29146, 48709, 29122,
+            48728, 29078, 48723, 29063, 48708, 29079, 48698, 29080, 48688, 29092, 48691, 29100, 48686, 29111, 48694, 29123, 48674, 29140, 48673, 29172,
+            48661, 29175, 48637, 29161, 48625, 29158, 48614, 29165, 48608, 29144, 48598, 29140, 48573, 29153, 48583, 29135, 48578, 29126, 48591, 29105,
+            48589, 29075, 48581, 29069, 48580, 29054, 48573, 29068, 48565, 29052, 48571, 29036, 48559, 29012, 48556, 29018, 48559, 29006, 48554, 28994,
+            48562, 28958, 48553, 28952, 48558, 28922, 48554, 28903, 48537, 28877, 48522, 28880, 48520, 28893, 48524, 28917, 48508, 28927, 48507, 28934,
+            48516, 28945, 48520, 28962, 48508, 28968, 48506, 28958, 48498, 28980, 48488, 28992, 48475, 28990, 48474, 28994, 48456, 28987, 48457, 29052,
+            48449, 29094, 48427, 29096, 48413, 29078, 48415, 29043, 48399, 29036, 48379, 29046, 48362, 29040, 48356, 29032, 48336, 29054, 48330, 29054,
+            48328, 29078, 48332, 29080, 48332, 29096, 48320, 29101, 48314, 29077, 48302, 29077, 48294, 29105, 48277, 29109, 48270, 29102, 48262, 29104,
+            48244, 29090, 48238, 29076, 48225, 29074, 48211, 29063, 48196, 29066, 48194, 29065, 48194, 29077, 48154, 29131, 48156, 29145, 48150, 29155,
+            48141, 29142, 48140, 29166, 48141, 29185, 48134, 29194, 48134, 29208, 48142, 29213, 48141, 29241, 48149, 29252, 48138, 29253, 48132, 29261,
+            48130, 29240, 48122, 29237, 48125, 29219, 48120, 29204, 48118, 29205, 48109, 29219, 48104, 29231, 48108, 29236, 48112, 29258, 48107, 29265,
+            48094, 29264, 48090, 29277, 48091, 29304, 48086, 29312, 48095, 29334, 48096, 29351, 48089, 29352, 48095, 29367, 48090, 29374, 48096, 29387,
+            48104, 29384, 48114, 29391, 48123, 29449, 48123, 29471, 48108, 29478, 48106, 29493, 48103, 29500, 48099, 29516, 48099, 29526, 48101, 29543,
+            48098, 29570
+        ))
+    )
+
+    private fun _r_vinnytskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48826, 28353, 48840, 28360, 48846, 28379, 48862, 28376, 48869, 28381, 48864, 28398, 48871, 28398, 48867, 28422, 48861, 28441, 48870, 28440,
+            48867, 28456, 48854, 28466, 48852, 28487, 48846, 28489, 48841, 28521, 48843, 28531, 48855, 28532, 48878, 28521, 48892, 28539, 48896, 28556,
+            48888, 28560, 48881, 28596, 48893, 28600, 48933, 28627, 48928, 28644, 48919, 28641, 48913, 28648, 48907, 28639, 48895, 28633, 48889, 28656,
+            48871, 28667, 48875, 28708, 48866, 28714, 48859, 28729, 48862, 28745, 48871, 28750, 48861, 28760, 48863, 28765, 48876, 28751, 48894, 28773,
+            48903, 28792, 48900, 28804, 48873, 28810, 48875, 28826, 48850, 28824, 48846, 28831, 48853, 28844, 48849, 28872, 48833, 28900, 48837, 28907,
+            48853, 28895, 48856, 28923, 48883, 28906, 48888, 28919, 48905, 28904, 48914, 28937, 48904, 28969, 48904, 28986, 48930, 29009, 48948, 29010,
+            48956, 29048, 48961, 29062, 48971, 29062, 48973, 29049, 49002, 29066, 48996, 29111, 48982, 29138, 48970, 29169, 48956, 29174, 48968, 29198,
+            48976, 29204, 48984, 29221, 48984, 29240, 48976, 29252, 48984, 29267, 49015, 29312, 49013, 29337, 49025, 29360, 49042, 29348, 49043, 29359,
+            49056, 29375, 49053, 29392, 49045, 29408, 49057, 29418, 49072, 29406, 49085, 29406, 49087, 29422, 49093, 29422, 49114, 29463, 49123, 29470,
+            49128, 29464, 49124, 29486, 49112, 29480, 49107, 29496, 49117, 29506, 49115, 29520, 49085, 29539, 49070, 29544, 49070, 29550, 49049, 29543,
+            49048, 29584, 49046, 29599, 49052, 29600, 49057, 29607, 49056, 29615, 49046, 29630, 49053, 29640, 49061, 29635, 49097, 29652, 49088, 29688,
+            49110, 29679, 49117, 29691, 49122, 29734, 49132, 29732, 49132, 29719, 49142, 29712, 49155, 29710, 49157, 29718, 49171, 29715, 49184, 29719,
+            49183, 29727, 49202, 29726, 49207, 29710, 49224, 29704, 49221, 29726, 49229, 29735, 49231, 29723, 49241, 29716, 49247, 29720, 49263, 29709,
+            49255, 29693, 49237, 29689, 49250, 29662, 49246, 29646, 49266, 29612, 49274, 29622, 49299, 29606, 49306, 29618, 49315, 29602, 49324, 29573,
+            49324, 29537, 49338, 29522, 49348, 29524, 49363, 29518, 49371, 29503, 49395, 29505, 49401, 29540, 49428, 29575, 49434, 29572, 49444, 29593,
+            49455, 29588, 49463, 29561, 49485, 29546, 49497, 29558, 49495, 29584, 49506, 29584, 49504, 29570, 49519, 29550, 49522, 29542, 49542, 29538,
+            49564, 29531, 49594, 29499, 49601, 29499, 49613, 29512, 49619, 29509, 49636, 29537, 49641, 29521, 49646, 29520, 49654, 29485, 49649, 29482,
+            49662, 29431, 49652, 29425, 49660, 29408, 49648, 29396, 49619, 29380, 49628, 29353, 49615, 29340, 49628, 29325, 49627, 29275, 49590, 29275,
+            49589, 29253, 49604, 29242, 49590, 29220, 49593, 29202, 49588, 29187, 49594, 29151, 49584, 29117, 49594, 29105, 49593, 29061, 49594, 29047,
+            49591, 29028, 49596, 28992, 49603, 28985, 49553, 28977, 49539, 28990, 49528, 29005, 49506, 28969, 49484, 29001, 49474, 29002, 49468, 28984,
+            49461, 28976, 49465, 28963, 49453, 28957, 49448, 28964, 49446, 28891, 49462, 28875, 49468, 28863, 49459, 28852, 49452, 28868, 49441, 28882,
+            49429, 28802, 49438, 28796, 49437, 28788, 49422, 28780, 49433, 28765, 49426, 28716, 49419, 28685, 49429, 28645, 49420, 28630, 49404, 28619,
+            49385, 28644, 49381, 28655, 49349, 28692, 49335, 28678, 49335, 28669, 49344, 28647, 49349, 28614, 49356, 28605, 49352, 28593, 49344, 28591,
+            49349, 28574, 49362, 28555, 49363, 28545, 49372, 28537, 49378, 28520, 49382, 28489, 49393, 28494, 49401, 28475, 49384, 28449, 49369, 28450,
+            49369, 28442, 49356, 28420, 49365, 28412, 49358, 28402, 49349, 28406, 49348, 28391, 49360, 28383, 49371, 28370, 49383, 28365, 49386, 28348,
+            49396, 28337, 49400, 28316, 49399, 28298, 49413, 28294, 49423, 28297, 49438, 28263, 49432, 28257, 49439, 28251, 49433, 28223, 49437, 28218,
+            49435, 28206, 49446, 28169, 49446, 28150, 49461, 28142, 49465, 28133, 49459, 28102, 49459, 28080, 49465, 28079, 49470, 28055, 49452, 28050,
+            49450, 28026, 49457, 28011, 49450, 28010, 49455, 27987, 49473, 27982, 49471, 27969, 49456, 27967, 49440, 27990, 49410, 27997, 49412, 27969,
+            49426, 27943, 49430, 27921, 49412, 27881, 49414, 27863, 49421, 27849, 49407, 27832, 49391, 27832, 49388, 27811, 49375, 27818, 49375, 27829,
+            49368, 27829, 49368, 27812, 49355, 27814, 49349, 27840, 49326, 27858, 49311, 27853, 49297, 27864, 49266, 27850, 49262, 27857, 49253, 27860,
+            49248, 27871, 49244, 27871, 49237, 27855, 49214, 27869, 49213, 27877, 49216, 27884, 49214, 27888, 49231, 27917, 49235, 27937, 49250, 27947,
+            49253, 27968, 49261, 27975, 49261, 27992, 49253, 28028, 49260, 28030, 49253, 28081, 49239, 28085, 49235, 28095, 49237, 28114, 49232, 28121,
+            49230, 28108, 49219, 28103, 49198, 28107, 49195, 28092, 49188, 28103, 49184, 28120, 49172, 28136, 49175, 28157, 49180, 28168, 49176, 28186,
+            49162, 28153, 49144, 28174, 49144, 28188, 49132, 28210, 49117, 28207, 49108, 28230, 49084, 28231, 49080, 28234, 49082, 28210, 49080, 28191,
+            49073, 28199, 49064, 28190, 49044, 28217, 49028, 28206, 49013, 28236, 49004, 28220, 48992, 28230, 48998, 28238, 48993, 28249, 48999, 28262,
+            48996, 28269, 49002, 28283, 48998, 28292, 48992, 28286, 48986, 28296, 48984, 28284, 48975, 28292, 48970, 28283, 48959, 28284, 48936, 28271,
+            48928, 28272, 48926, 28256, 48910, 28275, 48912, 28281, 48892, 28295, 48888, 28292, 48883, 28305, 48880, 28293, 48871, 28288, 48862, 28298,
+            48840, 28315, 48824, 28344, 48826, 28353
+        ))
+    )
+
+    private fun _r_zhmerynskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48586, 28315, 48602, 28342, 48614, 28352, 48611, 28369, 48626, 28382, 48616, 28391, 48630, 28405, 48638, 28393, 48651, 28404, 48657, 28428,
+            48679, 28470, 48695, 28465, 48702, 28459, 48707, 28466, 48720, 28452, 48727, 28451, 48735, 28436, 48740, 28443, 48759, 28421, 48750, 28399,
+            48759, 28365, 48765, 28359, 48781, 28391, 48783, 28381, 48807, 28349, 48825, 28348, 48824, 28344, 48840, 28315, 48862, 28298, 48871, 28288,
+            48880, 28293, 48883, 28305, 48888, 28292, 48892, 28295, 48912, 28281, 48910, 28275, 48926, 28256, 48928, 28272, 48936, 28271, 48959, 28284,
+            48970, 28283, 48975, 28292, 48984, 28284, 48986, 28296, 48992, 28286, 48998, 28292, 49002, 28283, 48996, 28269, 48999, 28262, 48993, 28249,
+            48998, 28238, 48992, 28230, 49004, 28220, 49013, 28236, 49028, 28206, 49044, 28217, 49064, 28190, 49073, 28199, 49080, 28191, 49082, 28210,
+            49080, 28234, 49084, 28231, 49108, 28230, 49117, 28207, 49132, 28210, 49144, 28188, 49144, 28174, 49162, 28153, 49176, 28186, 49180, 28168,
+            49175, 28157, 49172, 28136, 49184, 28120, 49188, 28103, 49195, 28092, 49198, 28107, 49219, 28103, 49230, 28108, 49232, 28121, 49237, 28114,
+            49235, 28095, 49239, 28085, 49253, 28081, 49260, 28030, 49253, 28028, 49261, 27992, 49261, 27975, 49253, 27968, 49250, 27947, 49235, 27937,
+            49231, 27917, 49214, 27888, 49209, 27893, 49192, 27896, 49186, 27896, 49178, 27883, 49175, 27870, 49172, 27854, 49178, 27844, 49180, 27822,
+            49188, 27817, 49186, 27804, 49178, 27791, 49190, 27781, 49190, 27775, 49172, 27779, 49153, 27758, 49140, 27739, 49149, 27713, 49140, 27706,
+            49145, 27695, 49141, 27686, 49168, 27641, 49162, 27623, 49162, 27602, 49157, 27594, 49140, 27592, 49134, 27597, 49120, 27574, 49130, 27548,
+            49139, 27534, 49130, 27536, 49123, 27538, 49127, 27517, 49132, 27511, 49122, 27493, 49108, 27503, 49096, 27492, 49090, 27480, 49073, 27500,
+            49068, 27502, 49070, 27464, 49070, 27439, 49062, 27441, 49064, 27429, 49054, 27427, 49055, 27416, 49026, 27403, 49008, 27383, 49000, 27401,
+            48996, 27395, 48988, 27397, 48974, 27408, 48972, 27417, 48956, 27413, 48944, 27400, 48935, 27396, 48925, 27396, 48899, 27395, 48891, 27404,
+            48889, 27406, 48896, 27430, 48899, 27455, 48913, 27466, 48923, 27489, 48904, 27522, 48910, 27530, 48906, 27544, 48892, 27554, 48884, 27572,
+            48884, 27582, 48847, 27615, 48843, 27612, 48827, 27657, 48814, 27675, 48802, 27702, 48808, 27703, 48804, 27723, 48806, 27733, 48801, 27746,
+            48805, 27762, 48812, 27774, 48836, 27788, 48837, 27810, 48820, 27810, 48812, 27814, 48810, 27843, 48792, 27865, 48790, 27878, 48781, 27899,
+            48771, 27891, 48772, 27881, 48735, 27879, 48731, 27886, 48720, 27889, 48724, 27905, 48714, 27914, 48691, 27912, 48684, 27902, 48680, 27950,
+            48670, 27966, 48640, 27976, 48644, 27995, 48641, 28010, 48641, 28036, 48649, 28049, 48650, 28084, 48644, 28083, 48625, 28099, 48626, 28106,
+            48617, 28113, 48618, 28134, 48615, 28148, 48619, 28173, 48610, 28175, 48614, 28197, 48604, 28213, 48599, 28228, 48604, 28244, 48587, 28270,
+            48573, 28299, 48576, 28310, 48586, 28315
+        ))
+    )
+
+    private fun _r_kosivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48279, 24734, 48273, 24736, 48262, 24749, 48266, 24759, 48254, 24767, 48249, 24778, 48234, 24774, 48224, 24789, 48229, 24824, 48225, 24837,
+            48230, 24846, 48223, 24852, 48209, 24886, 48203, 24888, 48196, 24902, 48215, 24919, 48213, 24932, 48217, 24951, 48225, 24955, 48216, 24971,
+            48210, 24968, 48198, 24988, 48203, 24999, 48201, 25021, 48190, 25038, 48180, 25044, 48161, 25089, 48164, 25092, 48172, 25083, 48179, 25083,
+            48182, 25086, 48185, 25094, 48185, 25112, 48179, 25126, 48181, 25135, 48195, 25140, 48212, 25114, 48220, 25118, 48225, 25108, 48246, 25146,
+            48246, 25174, 48254, 25191, 48264, 25198, 48286, 25220, 48289, 25227, 48314, 25242, 48317, 25255, 48319, 25257, 48323, 25255, 48330, 25264,
+            48329, 25275, 48340, 25278, 48347, 25291, 48361, 25309, 48368, 25302, 48365, 25295, 48372, 25278, 48367, 25263, 48390, 25247, 48394, 25251,
+            48396, 25232, 48402, 25218, 48399, 25203, 48413, 25172, 48407, 25144, 48396, 25129, 48398, 25107, 48412, 25097, 48412, 25088, 48420, 25078,
+            48422, 25056, 48411, 25031, 48419, 25026, 48421, 25012, 48433, 24992, 48434, 24978, 48441, 24957, 48429, 24924, 48433, 24909, 48428, 24903,
+            48440, 24885, 48437, 24859, 48432, 24848, 48434, 24832, 48446, 24794, 48456, 24790, 48459, 24786, 48443, 24771, 48438, 24744, 48428, 24715,
+            48421, 24703, 48415, 24722, 48398, 24715, 48379, 24732, 48375, 24748, 48358, 24742, 48352, 24748, 48337, 24746, 48325, 24756, 48320, 24747,
+            48302, 24733, 48280, 24739, 48279, 24734
+        ))
+    )
+
+    private fun _r_kolomyiskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48456, 24790, 48446, 24794, 48434, 24832, 48432, 24848, 48437, 24859, 48440, 24885, 48428, 24903, 48433, 24909, 48429, 24924, 48441, 24957,
+            48434, 24978, 48433, 24992, 48421, 25012, 48419, 25026, 48411, 25031, 48422, 25056, 48420, 25078, 48412, 25088, 48412, 25097, 48398, 25107,
+            48396, 25129, 48407, 25144, 48413, 25172, 48399, 25203, 48402, 25218, 48396, 25232, 48394, 25251, 48390, 25247, 48367, 25263, 48372, 25278,
+            48365, 25295, 48368, 25302, 48361, 25309, 48368, 25319, 48389, 25377, 48394, 25401, 48395, 25433, 48401, 25444, 48399, 25479, 48401, 25499,
+            48395, 25528, 48385, 25543, 48383, 25562, 48378, 25581, 48376, 25600, 48384, 25619, 48395, 25612, 48398, 25620, 48412, 25615, 48412, 25601,
+            48425, 25609, 48447, 25604, 48462, 25606, 48473, 25597, 48490, 25601, 48506, 25600, 48527, 25608, 48543, 25600, 48551, 25603, 48566, 25598,
+            48570, 25603, 48590, 25587, 48625, 25588, 48635, 25585, 48652, 25605, 48660, 25622, 48673, 25628, 48683, 25622, 48699, 25651, 48711, 25647,
+            48716, 25614, 48722, 25609, 48727, 25610, 48731, 25615, 48739, 25635, 48748, 25640, 48765, 25601, 48790, 25569, 48803, 25543, 48807, 25503,
+            48821, 25485, 48832, 25456, 48840, 25451, 48851, 25467, 48860, 25467, 48867, 25455, 48872, 25436, 48871, 25430, 48868, 25428, 48862, 25430,
+            48850, 25440, 48846, 25438, 48844, 25434, 48843, 25426, 48847, 25407, 48859, 25368, 48859, 25348, 48856, 25343, 48838, 25346, 48838, 25327,
+            48831, 25321, 48827, 25314, 48828, 25287, 48827, 25261, 48815, 25238, 48802, 25237, 48792, 25243, 48782, 25225, 48761, 25252, 48732, 25256,
+            48723, 25232, 48712, 25211, 48691, 25237, 48676, 25243, 48652, 25221, 48656, 25205, 48646, 25196, 48650, 25187, 48641, 25178, 48649, 25145,
+            48651, 25155, 48658, 25149, 48674, 25122, 48674, 25098, 48693, 25074, 48689, 25070, 48705, 25055, 48715, 25056, 48730, 25040, 48738, 25014,
+            48744, 25004, 48764, 24982, 48762, 24977, 48736, 24995, 48732, 24994, 48729, 24970, 48744, 24971, 48760, 24940, 48770, 24910, 48759, 24903,
+            48764, 24871, 48770, 24862, 48769, 24852, 48780, 24829, 48791, 24819, 48788, 24810, 48785, 24805, 48788, 24803, 48775, 24787, 48765, 24766,
+            48766, 24754, 48749, 24742, 48740, 24724, 48722, 24732, 48715, 24750, 48693, 24780, 48685, 24779, 48680, 24795, 48679, 24816, 48639, 24812,
+            48639, 24824, 48628, 24823, 48618, 24769, 48603, 24767, 48570, 24775, 48561, 24774, 48560, 24792, 48547, 24800, 48513, 24763, 48495, 24764,
+            48481, 24770, 48479, 24756, 48465, 24772, 48463, 24781, 48456, 24790
+        ))
+    )
+
+    private fun _r_khustskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48060, 23444, 48069, 23439, 48089, 23464, 48112, 23467, 48120, 23480, 48120, 23498, 48126, 23544, 48143, 23558, 48156, 23552, 48156, 23541,
+            48172, 23544, 48180, 23536, 48192, 23531, 48208, 23536, 48212, 23554, 48219, 23555, 48222, 23576, 48241, 23586, 48254, 23588, 48256, 23600,
+            48281, 23626, 48302, 23632, 48314, 23660, 48312, 23670, 48317, 23683, 48336, 23666, 48350, 23696, 48358, 23694, 48373, 23703, 48375, 23733,
+            48389, 23757, 48384, 23766, 48400, 23790, 48413, 23797, 48424, 23811, 48437, 23803, 48453, 23810, 48468, 23826, 48498, 23841, 48506, 23850,
+            48544, 23862, 48553, 23861, 48556, 23851, 48567, 23834, 48579, 23836, 48581, 23804, 48593, 23792, 48599, 23796, 48610, 23785, 48619, 23797,
+            48632, 23796, 48643, 23779, 48646, 23742, 48638, 23730, 48639, 23706, 48648, 23687, 48663, 23676, 48672, 23664, 48685, 23639, 48689, 23641,
+            48702, 23636, 48707, 23626, 48706, 23612, 48707, 23599, 48719, 23594, 48725, 23571, 48725, 23536, 48734, 23513, 48723, 23492, 48720, 23471,
+            48725, 23461, 48729, 23425, 48737, 23411, 48735, 23396, 48744, 23379, 48766, 23370, 48772, 23360, 48766, 23356, 48756, 23338, 48753, 23320,
+            48756, 23317, 48727, 23313, 48720, 23294, 48704, 23289, 48694, 23293, 48684, 23284, 48678, 23267, 48659, 23245, 48652, 23247, 48644, 23220,
+            48637, 23210, 48642, 23188, 48633, 23191, 48636, 23165, 48629, 23166, 48626, 23178, 48614, 23162, 48620, 23158, 48626, 23139, 48620, 23140,
+            48605, 23155, 48607, 23170, 48594, 23176, 48594, 23184, 48580, 23187, 48575, 23177, 48554, 23154, 48535, 23146, 48508, 23147, 48483, 23161,
+            48475, 23152, 48466, 23152, 48449, 23138, 48454, 23124, 48458, 23090, 48474, 23065, 48481, 23039, 48481, 23017, 48488, 22998, 48488, 22964,
+            48486, 22957, 48474, 22953, 48463, 22939, 48452, 22915, 48446, 22925, 48430, 22919, 48425, 22910, 48426, 22897, 48432, 22884, 48444, 22882,
+            48436, 22877, 48444, 22862, 48442, 22853, 48432, 22856, 48429, 22872, 48420, 22869, 48420, 22878, 48411, 22880, 48405, 22914, 48384, 22930,
+            48380, 22940, 48367, 22950, 48363, 22959, 48353, 22960, 48342, 22928, 48326, 22915, 48320, 22899, 48304, 22908, 48287, 22898, 48301, 22881,
+            48302, 22862, 48290, 22839, 48282, 22840, 48281, 22853, 48272, 22863, 48266, 22878, 48260, 22869, 48255, 22893, 48251, 22901, 48240, 22902,
+            48243, 22916, 48241, 22929, 48245, 22948, 48262, 22985, 48261, 22998, 48269, 23017, 48271, 23032, 48263, 23040, 48255, 23059, 48241, 23061,
+            48234, 23068, 48222, 23061, 48221, 23094, 48242, 23102, 48224, 23127, 48220, 23138, 48209, 23153, 48194, 23156, 48178, 23176, 48172, 23193,
+            48164, 23199, 48161, 23233, 48156, 23243, 48156, 23258, 48152, 23265, 48137, 23268, 48126, 23275, 48106, 23263, 48098, 23268, 48087, 23268,
+            48073, 23291, 48060, 23277, 48050, 23284, 48044, 23295, 48044, 23318, 48033, 23332, 48024, 23329, 48018, 23342, 48020, 23351, 48015, 23357,
+            48001, 23401, 47993, 23405, 47988, 23416, 47990, 23434, 47984, 23437, 47976, 23451, 47974, 23482, 47969, 23501, 47980, 23505, 47997, 23522,
+            48019, 23528, 48023, 23512, 48027, 23493, 48036, 23483, 48037, 23469, 48056, 23456, 48060, 23444
+        ))
+    )
+
+    private fun _r_rakhivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            47962, 23950, 47962, 23967, 47966, 23972, 47959, 23981, 47967, 24008, 47959, 24022, 47949, 24032, 47953, 24063, 47946, 24073, 47936, 24098,
+            47929, 24100, 47915, 24112, 47912, 24143, 47919, 24164, 47916, 24181, 47917, 24195, 47896, 24227, 47908, 24259, 47906, 24279, 47912, 24298,
+            47926, 24324, 47915, 24348, 47926, 24380, 47937, 24381, 47954, 24392, 47961, 24418, 47971, 24435, 47965, 24446, 47963, 24473, 47952, 24502,
+            47961, 24526, 47959, 24553, 47971, 24565, 47996, 24565, 47999, 24572, 48020, 24578, 48035, 24597, 48038, 24611, 48047, 24628, 48060, 24624,
+            48075, 24605, 48086, 24598, 48092, 24586, 48102, 24573, 48105, 24560, 48114, 24559, 48119, 24554, 48124, 24533, 48134, 24532, 48143, 24526,
+            48153, 24506, 48160, 24502, 48177, 24521, 48187, 24512, 48195, 24526, 48200, 24520, 48214, 24536, 48216, 24548, 48228, 24536, 48239, 24504,
+            48244, 24484, 48275, 24495, 48283, 24485, 48304, 24445, 48326, 24416, 48332, 24415, 48336, 24393, 48348, 24379, 48350, 24359, 48358, 24352,
+            48374, 24359, 48383, 24353, 48388, 24321, 48393, 24315, 48400, 24285, 48391, 24282, 48382, 24290, 48371, 24274, 48352, 24260, 48358, 24244,
+            48357, 24222, 48366, 24209, 48364, 24201, 48367, 24181, 48354, 24167, 48344, 24167, 48332, 24159, 48320, 24145, 48313, 24145, 48312, 24160,
+            48303, 24164, 48298, 24156, 48285, 24178, 48277, 24176, 48273, 24162, 48277, 24152, 48264, 24141, 48273, 24138, 48270, 24126, 48254, 24105,
+            48265, 24100, 48264, 24092, 48274, 24092, 48270, 24082, 48262, 24078, 48251, 24065, 48263, 24061, 48260, 24053, 48266, 24048, 48259, 24042,
+            48263, 24034, 48254, 24031, 48249, 24037, 48237, 24037, 48215, 24020, 48206, 24022, 48185, 23998, 48172, 23980, 48137, 23944, 48120, 23948,
+            48100, 23941, 48092, 23950, 48073, 23938, 48054, 23941, 48046, 23936, 48051, 23909, 48045, 23890, 48027, 23912, 47975, 23941, 47983, 23965,
+            48007, 23993, 48003, 24008, 47985, 23986, 47967, 23946, 47962, 23950
+        ))
+    )
+
+    private fun _r_mukachivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48350, 22626, 48345, 22635, 48340, 22641, 48307, 22669, 48293, 22708, 48288, 22756, 48294, 22767, 48292, 22791, 48300, 22787, 48310, 22793,
+            48311, 22803, 48321, 22823, 48330, 22825, 48336, 22838, 48339, 22828, 48346, 22835, 48338, 22841, 48333, 22856, 48305, 22856, 48302, 22862,
+            48301, 22881, 48287, 22898, 48304, 22908, 48320, 22899, 48326, 22915, 48342, 22928, 48353, 22960, 48363, 22959, 48367, 22950, 48380, 22940,
+            48384, 22930, 48405, 22914, 48411, 22880, 48420, 22878, 48420, 22869, 48429, 22872, 48432, 22856, 48442, 22853, 48444, 22862, 48436, 22877,
+            48444, 22882, 48432, 22884, 48426, 22897, 48425, 22910, 48430, 22919, 48446, 22925, 48452, 22915, 48463, 22939, 48474, 22953, 48486, 22957,
+            48488, 22964, 48488, 22998, 48481, 23017, 48481, 23039, 48474, 23065, 48458, 23090, 48454, 23124, 48449, 23138, 48466, 23152, 48475, 23152,
+            48483, 23161, 48508, 23147, 48535, 23146, 48554, 23154, 48575, 23177, 48580, 23187, 48594, 23184, 48594, 23176, 48607, 23170, 48605, 23155,
+            48620, 23140, 48626, 23139, 48620, 23158, 48614, 23162, 48626, 23178, 48629, 23166, 48636, 23165, 48633, 23191, 48642, 23188, 48637, 23210,
+            48644, 23220, 48652, 23247, 48659, 23245, 48678, 23267, 48684, 23284, 48694, 23293, 48704, 23289, 48720, 23294, 48727, 23313, 48756, 23317,
+            48761, 23312, 48774, 23288, 48767, 23280, 48760, 23262, 48759, 23245, 48762, 23229, 48762, 23200, 48781, 23190, 48793, 23181, 48802, 23180,
+            48810, 23172, 48832, 23153, 48834, 23136, 48845, 23136, 48852, 23131, 48862, 23100, 48861, 23090, 48856, 23086, 48854, 23082, 48854, 23069,
+            48846, 23060, 48851, 23046, 48846, 23021, 48830, 23001, 48836, 22987, 48849, 22974, 48873, 22971, 48880, 22952, 48902, 22903, 48909, 22893,
+            48924, 22887, 48930, 22881, 48922, 22860, 48909, 22866, 48901, 22862, 48878, 22836, 48870, 22835, 48861, 22852, 48842, 22873, 48828, 22881,
+            48816, 22881, 48811, 22872, 48793, 22882, 48778, 22886, 48771, 22894, 48759, 22898, 48749, 22871, 48739, 22872, 48723, 22863, 48707, 22868,
+            48688, 22849, 48666, 22857, 48660, 22850, 48640, 22861, 48624, 22859, 48615, 22850, 48612, 22820, 48634, 22790, 48636, 22770, 48632, 22749,
+            48631, 22732, 48638, 22717, 48640, 22702, 48647, 22698, 48651, 22669, 48627, 22666, 48620, 22653, 48601, 22654, 48592, 22638, 48578, 22628,
+            48579, 22620, 48564, 22573, 48554, 22556, 48531, 22556, 48512, 22584, 48499, 22578, 48495, 22559, 48483, 22558, 48488, 22551, 48491, 22529,
+            48489, 22514, 48496, 22513, 48490, 22482, 48484, 22480, 48477, 22444, 48488, 22401, 48486, 22383, 48475, 22360, 48471, 22373, 48442, 22424,
+            48441, 22437, 48431, 22432, 48433, 22448, 48421, 22466, 48416, 22464, 48401, 22506, 48390, 22498, 48378, 22498, 48378, 22506, 48351, 22543,
+            48342, 22530, 48332, 22532, 48312, 22504, 48316, 22481, 48306, 22479, 48296, 22505, 48278, 22523, 48280, 22534, 48288, 22530, 48291, 22547,
+            48303, 22557, 48306, 22566, 48316, 22569, 48325, 22570, 48320, 22556, 48326, 22546, 48330, 22563, 48338, 22570, 48330, 22585, 48333, 22599,
+            48326, 22616, 48331, 22626, 48342, 22615, 48350, 22626
+        ))
+    )
+
+    private fun _r_tiachivskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48019, 23528, 48009, 23542, 48003, 23568, 48004, 23585, 48008, 23593, 48008, 23614, 48002, 23622, 48002, 23637, 47990, 23648, 47983, 23667,
+            47991, 23712, 47987, 23718, 47994, 23726, 47996, 23747, 47992, 23762, 47995, 23770, 47988, 23783, 47983, 23813, 47972, 23830, 47958, 23832,
+            47937, 23851, 47933, 23868, 47944, 23884, 47948, 23941, 47962, 23950, 47967, 23946, 47985, 23986, 48003, 24008, 48007, 23993, 47983, 23965,
+            47975, 23941, 48027, 23912, 48045, 23890, 48051, 23909, 48046, 23936, 48054, 23941, 48073, 23938, 48092, 23950, 48100, 23941, 48120, 23948,
+            48137, 23944, 48172, 23980, 48185, 23998, 48206, 24022, 48215, 24020, 48237, 24037, 48249, 24037, 48254, 24031, 48263, 24034, 48259, 24042,
+            48266, 24048, 48260, 24053, 48263, 24061, 48251, 24065, 48262, 24078, 48270, 24082, 48274, 24092, 48264, 24092, 48265, 24100, 48254, 24105,
+            48270, 24126, 48273, 24138, 48264, 24141, 48277, 24152, 48273, 24162, 48277, 24176, 48285, 24178, 48298, 24156, 48303, 24164, 48312, 24160,
+            48313, 24145, 48320, 24145, 48332, 24159, 48344, 24167, 48354, 24167, 48367, 24181, 48375, 24182, 48376, 24172, 48384, 24164, 48388, 24151,
+            48401, 24153, 48409, 24141, 48434, 24146, 48438, 24135, 48454, 24125, 48468, 24126, 48481, 24142, 48498, 24115, 48504, 24121, 48529, 24132,
+            48534, 24111, 48526, 24101, 48527, 24089, 48514, 24077, 48518, 24065, 48512, 24046, 48502, 24033, 48505, 24020, 48506, 23998, 48475, 23975,
+            48466, 23978, 48463, 23974, 48459, 23961, 48464, 23944, 48465, 23927, 48471, 23914, 48483, 23907, 48493, 23918, 48514, 23925, 48533, 23914,
+            48541, 23916, 48552, 23929, 48557, 23911, 48562, 23906, 48554, 23891, 48556, 23869, 48553, 23861, 48544, 23862, 48506, 23850, 48498, 23841,
+            48468, 23826, 48453, 23810, 48437, 23803, 48424, 23811, 48413, 23797, 48400, 23790, 48384, 23766, 48389, 23757, 48375, 23733, 48373, 23703,
+            48358, 23694, 48350, 23696, 48336, 23666, 48317, 23683, 48312, 23670, 48314, 23660, 48302, 23632, 48281, 23626, 48256, 23600, 48254, 23588,
+            48241, 23586, 48222, 23576, 48219, 23555, 48212, 23554, 48208, 23536, 48192, 23531, 48180, 23536, 48172, 23544, 48156, 23541, 48156, 23552,
+            48143, 23558, 48126, 23544, 48120, 23498, 48120, 23480, 48112, 23467, 48089, 23464, 48069, 23439, 48060, 23444, 48056, 23456, 48037, 23469,
+            48036, 23483, 48027, 23493, 48023, 23512, 48019, 23528
+        ))
+    )
+
+    private fun _r_khmilnytskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            49421, 27849, 49414, 27863, 49412, 27881, 49430, 27921, 49426, 27943, 49412, 27969, 49410, 27997, 49440, 27990, 49456, 27967, 49471, 27969,
+            49473, 27982, 49455, 27987, 49450, 28010, 49457, 28011, 49450, 28026, 49452, 28050, 49470, 28055, 49465, 28079, 49459, 28080, 49459, 28102,
+            49465, 28133, 49461, 28142, 49446, 28150, 49446, 28169, 49435, 28206, 49437, 28218, 49433, 28223, 49439, 28251, 49432, 28257, 49438, 28263,
+            49423, 28297, 49413, 28294, 49399, 28298, 49400, 28316, 49396, 28337, 49386, 28348, 49383, 28365, 49371, 28370, 49360, 28383, 49348, 28391,
+            49349, 28406, 49358, 28402, 49365, 28412, 49356, 28420, 49369, 28442, 49369, 28450, 49384, 28449, 49401, 28475, 49393, 28494, 49382, 28489,
+            49378, 28520, 49372, 28537, 49363, 28545, 49362, 28555, 49349, 28574, 49344, 28591, 49352, 28593, 49356, 28605, 49349, 28614, 49344, 28647,
+            49335, 28669, 49335, 28678, 49349, 28692, 49381, 28655, 49385, 28644, 49404, 28619, 49420, 28630, 49429, 28645, 49419, 28685, 49426, 28716,
+            49433, 28765, 49422, 28780, 49437, 28788, 49438, 28796, 49429, 28802, 49441, 28882, 49452, 28868, 49459, 28852, 49468, 28863, 49462, 28875,
+            49446, 28891, 49448, 28964, 49453, 28957, 49465, 28963, 49461, 28976, 49468, 28984, 49474, 29002, 49484, 29001, 49506, 28969, 49528, 29005,
+            49539, 28990, 49553, 28977, 49603, 28985, 49626, 29002, 49633, 29010, 49646, 28991, 49672, 28965, 49674, 28950, 49684, 28948, 49684, 28957,
+            49700, 28966, 49699, 28975, 49717, 28995, 49727, 28998, 49728, 29006, 49741, 29001, 49755, 28964, 49777, 28966, 49782, 28942, 49804, 28971,
+            49809, 28962, 49821, 28961, 49820, 28945, 49840, 28954, 49853, 28936, 49862, 28902, 49868, 28909, 49873, 28894, 49882, 28897, 49889, 28880,
+            49889, 28858, 49860, 28844, 49858, 28813, 49853, 28814, 49852, 28784, 49843, 28785, 49845, 28751, 49823, 28750, 49799, 28734, 49798, 28729,
+            49809, 28722, 49810, 28707, 49805, 28688, 49800, 28689, 49818, 28633, 49811, 28638, 49814, 28620, 49811, 28602, 49783, 28601, 49774, 28570,
+            49788, 28562, 49791, 28554, 49820, 28528, 49808, 28482, 49814, 28472, 49824, 28469, 49821, 28436, 49824, 28420, 49813, 28416, 49792, 28407,
+            49781, 28380, 49791, 28353, 49801, 28296, 49798, 28285, 49800, 28264, 49810, 28262, 49814, 28244, 49798, 28245, 49794, 28229, 49786, 28226,
+            49792, 28213, 49787, 28154, 49772, 28096, 49771, 28021, 49776, 28010, 49779, 27992, 49781, 27980, 49780, 27961, 49776, 27950, 49771, 27942,
+            49768, 27927, 49768, 27901, 49765, 27893, 49757, 27892, 49753, 27846, 49756, 27835, 49747, 27835, 49744, 27815, 49734, 27816, 49729, 27835,
+            49709, 27805, 49700, 27811, 49697, 27762, 49666, 27767, 49653, 27794, 49641, 27811, 49616, 27810, 49621, 27800, 49600, 27789, 49596, 27772,
+            49583, 27760, 49574, 27758, 49562, 27782, 49553, 27795, 49545, 27784, 49531, 27792, 49521, 27775, 49531, 27761, 49530, 27746, 49531, 27742,
+            49516, 27736, 49509, 27734, 49500, 27736, 49496, 27732, 49492, 27748, 49492, 27789, 49477, 27777, 49478, 27764, 49462, 27755, 49452, 27744,
+            49439, 27751, 49444, 27765, 49442, 27780, 49435, 27792, 49439, 27804, 49423, 27826, 49425, 27834, 49430, 27850, 49428, 27851, 49421, 27849
+        ))
+    )
+
+    private fun _r_tulchynskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            48156, 29045, 48172, 29046, 48184, 29061, 48192, 29063, 48196, 29066, 48211, 29063, 48225, 29074, 48238, 29076, 48244, 29090, 48262, 29104,
+            48270, 29102, 48277, 29109, 48294, 29105, 48302, 29077, 48314, 29077, 48320, 29101, 48332, 29096, 48332, 29080, 48328, 29078, 48330, 29054,
+            48336, 29054, 48356, 29032, 48362, 29040, 48379, 29046, 48399, 29036, 48415, 29043, 48413, 29078, 48427, 29096, 48449, 29094, 48457, 29052,
+            48456, 28987, 48474, 28994, 48475, 28990, 48488, 28992, 48498, 28980, 48506, 28958, 48508, 28968, 48520, 28962, 48516, 28945, 48507, 28934,
+            48508, 28927, 48524, 28917, 48520, 28893, 48522, 28880, 48537, 28877, 48554, 28903, 48558, 28922, 48553, 28952, 48562, 28958, 48554, 28994,
+            48559, 29006, 48556, 29018, 48559, 29012, 48571, 29036, 48565, 29052, 48573, 29068, 48580, 29054, 48581, 29069, 48589, 29075, 48591, 29105,
+            48578, 29126, 48583, 29135, 48573, 29153, 48598, 29140, 48608, 29144, 48614, 29165, 48625, 29158, 48637, 29161, 48661, 29175, 48673, 29172,
+            48674, 29140, 48694, 29123, 48686, 29111, 48691, 29100, 48688, 29092, 48698, 29080, 48708, 29079, 48723, 29063, 48728, 29078, 48709, 29122,
+            48720, 29146, 48727, 29134, 48734, 29101, 48753, 29081, 48766, 29088, 48775, 29100, 48779, 29117, 48792, 29119, 48805, 29107, 48818, 29121,
+            48813, 29137, 48818, 29143, 48835, 29132, 48834, 29103, 48838, 29098, 48833, 29086, 48839, 29082, 48835, 29058, 48829, 29012, 48838, 29000,
+            48851, 29002, 48854, 28995, 48844, 28992, 48860, 28958, 48865, 28953, 48874, 28964, 48904, 28969, 48914, 28937, 48905, 28904, 48888, 28919,
+            48883, 28906, 48856, 28923, 48853, 28895, 48837, 28907, 48833, 28900, 48849, 28872, 48853, 28844, 48846, 28831, 48850, 28824, 48875, 28826,
+            48873, 28810, 48900, 28804, 48903, 28792, 48894, 28773, 48876, 28751, 48863, 28765, 48861, 28760, 48871, 28750, 48862, 28745, 48859, 28729,
+            48866, 28714, 48875, 28708, 48871, 28667, 48889, 28656, 48895, 28633, 48907, 28639, 48913, 28648, 48919, 28641, 48928, 28644, 48933, 28627,
+            48893, 28600, 48881, 28596, 48888, 28560, 48896, 28556, 48892, 28539, 48878, 28521, 48855, 28532, 48843, 28531, 48841, 28521, 48846, 28489,
+            48852, 28487, 48854, 28466, 48867, 28456, 48870, 28440, 48861, 28441, 48867, 28422, 48871, 28398, 48864, 28398, 48869, 28381, 48862, 28376,
+            48846, 28379, 48840, 28360, 48826, 28353, 48825, 28348, 48807, 28349, 48783, 28381, 48781, 28391, 48765, 28359, 48759, 28365, 48750, 28399,
+            48759, 28421, 48740, 28443, 48735, 28436, 48727, 28451, 48720, 28452, 48707, 28466, 48702, 28459, 48695, 28465, 48679, 28470, 48657, 28428,
+            48651, 28404, 48638, 28393, 48630, 28405, 48616, 28391, 48626, 28382, 48611, 28369, 48614, 28352, 48602, 28342, 48586, 28315, 48576, 28310,
+            48573, 28299, 48557, 28297, 48548, 28316, 48535, 28321, 48520, 28352, 48515, 28352, 48507, 28320, 48488, 28316, 48490, 28328, 48486, 28348,
+            48473, 28337, 48468, 28353, 48452, 28369, 48454, 28376, 48446, 28385, 48440, 28372, 48425, 28386, 48422, 28381, 48410, 28394, 48422, 28426,
+            48428, 28460, 48422, 28464, 48400, 28458, 48394, 28451, 48384, 28457, 48376, 28450, 48363, 28481, 48353, 28468, 48345, 28466, 48339, 28487,
+            48330, 28505, 48318, 28513, 48301, 28509, 48282, 28512, 48270, 28501, 48267, 28507, 48262, 28540, 48244, 28559, 48236, 28572, 48223, 28561,
+            48208, 28600, 48199, 28588, 48201, 28579, 48191, 28570, 48190, 28562, 48176, 28567, 48182, 28577, 48166, 28579, 48173, 28592, 48157, 28611,
+            48152, 28649, 48143, 28648, 48147, 28682, 48143, 28678, 48124, 28688, 48130, 28706, 48126, 28722, 48133, 28736, 48136, 28755, 48125, 28772,
+            48126, 28795, 48134, 28806, 48124, 28814, 48128, 28834, 48126, 28841, 48102, 28858, 48080, 28848, 48080, 28856, 48070, 28867, 48074, 28874,
+            48082, 28873, 48095, 28928, 48126, 28933, 48157, 28944, 48152, 28976, 48145, 28984, 48152, 28994, 48148, 29009, 48130, 29020, 48126, 29032,
+            48133, 29034, 48150, 29051, 48156, 29045
+        ))
+    )
+
+    private fun _r_bakhchysaraiskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            44914, 33670, 44910, 33647, 44932, 33646, 44926, 33612, 44902, 33613, 44867, 33606, 44845, 33592, 44845, 33586, 44836, 33568, 44809, 33584,
+            44811, 33604, 44796, 33663, 44786, 33677, 44770, 33682, 44753, 33633, 44751, 33611, 44739, 33614, 44712, 33616, 44716, 33651, 44702, 33688,
+            44714, 33686, 44714, 33701, 44705, 33705, 44706, 33714, 44717, 33719, 44716, 33727, 44699, 33751, 44701, 33760, 44690, 33776, 44675, 33755,
+            44663, 33749, 44643, 33722, 44635, 33716, 44632, 33722, 44618, 33716, 44601, 33736, 44606, 33745, 44606, 33772, 44612, 33781, 44599, 33781,
+            44585, 33787, 44573, 33827, 44553, 33831, 44539, 33840, 44520, 33839, 44511, 33847, 44514, 33860, 44499, 33861, 44490, 33874, 44477, 33863,
+            44482, 33896, 44470, 33888, 44464, 33895, 44424, 33899, 44421, 33926, 44426, 33947, 44433, 33954, 44438, 33976, 44452, 33994, 44473, 34003,
+            44474, 34033, 44497, 34044, 44506, 34072, 44505, 34082, 44514, 34088, 44520, 34106, 44546, 34123, 44557, 34143, 44561, 34164, 44572, 34185,
+            44589, 34206, 44612, 34206, 44624, 34213, 44639, 34207, 44659, 34205, 44674, 34207, 44677, 34193, 44693, 34180, 44706, 34180, 44706, 34166,
+            44720, 34164, 44718, 34173, 44722, 34188, 44719, 34195, 44747, 34230, 44751, 34255, 44749, 34274, 44759, 34276, 44763, 34279, 44786, 34265,
+            44794, 34265, 44798, 34228, 44781, 34228, 44775, 34208, 44777, 34172, 44765, 34152, 44761, 34152, 44758, 34137, 44750, 34125, 44730, 34113,
+            44756, 34073, 44783, 34054, 44815, 34006, 44826, 34000, 44831, 34012, 44824, 34027, 44831, 34029, 44833, 34049, 44852, 34036, 44858, 34005,
+            44873, 34011, 44874, 33968, 44884, 33955, 44880, 33940, 44902, 33919, 44902, 33898, 44911, 33897, 44921, 33874, 44921, 33833, 44898, 33832,
+            44901, 33813, 44898, 33796, 44898, 33752, 44908, 33752, 44911, 33740, 44897, 33714, 44914, 33687, 44914, 33670
+        ))
+    )
+
+    private fun _r_yaltynskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            44421, 33926, 44424, 33893, 44421, 33856, 44410, 33817, 44401, 33801, 44405, 33782, 44396, 33786, 44391, 33758, 44387, 33775, 44396, 33798,
+            44396, 33817, 44405, 33839, 44408, 33859, 44404, 33868, 44403, 33897, 44393, 33940, 44393, 33967, 44402, 33988, 44400, 34002, 44406, 34018,
+            44405, 34033, 44414, 34043, 44421, 34062, 44421, 34075, 44427, 34092, 44429, 34128, 44449, 34138, 44463, 34150, 44494, 34168, 44500, 34192,
+            44507, 34251, 44513, 34262, 44526, 34273, 44541, 34278, 44554, 34309, 44554, 34316, 44548, 34338, 44549, 34348, 44572, 34348, 44587, 34353,
+            44592, 34373, 44603, 34373, 44624, 34383, 44641, 34399, 44652, 34402, 44673, 34416, 44694, 34441, 44710, 34457, 44735, 34510, 44740, 34534,
+            44753, 34553, 44760, 34583, 44772, 34601, 44780, 34634, 44787, 34651, 44789, 34672, 44803, 34700, 44813, 34731, 44828, 34722, 44849, 34723,
+            44857, 34726, 44881, 34742, 44887, 34729, 44897, 34725, 44901, 34701, 44889, 34694, 44872, 34692, 44878, 34675, 44876, 34670, 44880, 34650,
+            44873, 34658, 44862, 34642, 44859, 34646, 44851, 34632, 44853, 34624, 44846, 34623, 44842, 34607, 44860, 34597, 44865, 34588, 44877, 34604,
+            44887, 34571, 44888, 34536, 44865, 34536, 44868, 34501, 44865, 34485, 44856, 34474, 44854, 34478, 44837, 34476, 44818, 34444, 44812, 34424,
+            44803, 34419, 44794, 34403, 44792, 34383, 44788, 34378, 44778, 34381, 44774, 34370, 44766, 34366, 44747, 34323, 44760, 34314, 44769, 34314,
+            44760, 34293, 44767, 34292, 44765, 34282, 44759, 34276, 44749, 34274, 44751, 34255, 44747, 34230, 44719, 34195, 44722, 34188, 44718, 34173,
+            44720, 34164, 44706, 34166, 44706, 34180, 44693, 34180, 44677, 34193, 44674, 34207, 44659, 34205, 44639, 34207, 44624, 34213, 44612, 34206,
+            44589, 34206, 44572, 34185, 44561, 34164, 44557, 34143, 44546, 34123, 44520, 34106, 44514, 34088, 44505, 34082, 44506, 34072, 44497, 34044,
+            44474, 34033, 44473, 34003, 44452, 33994, 44438, 33976, 44433, 33954, 44426, 33947, 44421, 33926
+        ))
+    )
+
+    private fun _r_rozdilnianskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            46633, 29955, 46631, 30042, 46628, 30152, 46675, 30128, 46681, 30201, 46688, 30249, 46683, 30250, 46690, 30318, 46652, 30327, 46647, 30276,
+            46633, 30282, 46639, 30339, 46615, 30344, 46618, 30376, 46630, 30365, 46654, 30350, 46658, 30401, 46702, 30392, 46702, 30376, 46707, 30369,
+            46704, 30347, 46707, 30332, 46730, 30324, 46732, 30356, 46740, 30367, 46738, 30372, 46740, 30408, 46751, 30476, 46756, 30494, 46774, 30494,
+            46792, 30486, 46806, 30474, 46827, 30462, 46821, 30406, 46845, 30396, 46842, 30372, 46869, 30367, 46899, 30356, 46926, 30349, 46921, 30316,
+            46940, 30310, 46948, 30315, 46953, 30333, 46960, 30332, 46957, 30316, 46968, 30314, 46966, 30292, 46979, 30287, 46976, 30256, 46958, 30260,
+            46956, 30246, 46990, 30237, 46980, 30138, 47035, 30125, 47035, 30131, 47094, 30111, 47101, 30158, 47106, 30155, 47108, 30175, 47165, 30158,
+            47165, 30163, 47192, 30155, 47208, 30148, 47217, 30138, 47241, 30135, 47238, 30118, 47253, 30110, 47278, 30106, 47280, 30125, 47299, 30119,
+            47298, 30107, 47288, 30115, 47286, 30102, 47291, 30086, 47278, 30084, 47290, 30077, 47290, 30070, 47309, 30066, 47310, 30060, 47326, 30060,
+            47325, 30047, 47333, 30045, 47322, 29961, 47303, 29948, 47297, 29929, 47316, 29904, 47330, 29893, 47340, 29900, 47352, 29893, 47356, 29907,
+            47365, 29905, 47363, 29890, 47414, 29881, 47424, 29953, 47427, 29953, 47435, 29978, 47438, 29977, 47438, 29949, 47466, 29940, 47460, 29892,
+            47475, 29889, 47470, 29845, 47532, 29826, 47526, 29768, 47519, 29718, 47523, 29713, 47509, 29600, 47496, 29602, 47493, 29584, 47478, 29586,
+            47475, 29572, 47459, 29576, 47452, 29591, 47456, 29598, 47454, 29608, 47453, 29616, 47446, 29619, 47437, 29603, 47421, 29609, 47418, 29577,
+            47390, 29583, 47389, 29570, 47344, 29581, 47257, 29599, 47251, 29552, 47136, 29580, 47128, 29505, 47132, 29495, 47109, 29499, 47112, 29515,
+            47081, 29530, 47075, 29530, 47076, 29550, 47094, 29547, 47100, 29612, 47045, 29629, 47042, 29602, 46964, 29596, 46958, 29556, 46940, 29571,
+            46955, 29640, 46920, 29648, 46925, 29700, 46932, 29718, 46918, 29721, 46919, 29731, 46861, 29750, 46875, 29849, 46882, 29847, 46886, 29884,
+            46854, 29892, 46851, 29883, 46820, 29905, 46828, 29930, 46835, 29926, 46842, 29949, 46832, 29968, 46816, 29978, 46818, 29963, 46806, 29935,
+            46796, 29942, 46771, 29966, 46756, 29966, 46752, 29974, 46730, 29968, 46711, 29966, 46686, 29970, 46678, 29959, 46659, 29955, 46646, 29946,
+            46633, 29955
+        ))
+    )
+
+    private fun _r_dubenskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            50017, 25359, 50047, 25364, 50048, 25389, 50053, 25432, 50073, 25438, 50074, 25451, 50083, 25459, 50094, 25453, 50102, 25489, 50113, 25484,
+            50117, 25455, 50126, 25449, 50152, 25450, 50166, 25477, 50164, 25502, 50156, 25501, 50150, 25554, 50177, 25575, 50170, 25596, 50153, 25625,
+            50179, 25690, 50172, 25704, 50174, 25722, 50188, 25728, 50180, 25763, 50185, 25795, 50181, 25821, 50190, 25856, 50206, 25872, 50213, 25872,
+            50234, 25898, 50249, 25923, 50253, 25920, 50255, 25921, 50257, 25930, 50258, 25956, 50257, 25961, 50247, 25974, 50246, 25989, 50239, 26003,
+            50229, 26011, 50231, 26021, 50254, 26063, 50242, 26113, 50252, 26116, 50272, 26130, 50275, 26121, 50267, 26106, 50271, 26082, 50269, 26062,
+            50288, 26026, 50311, 25996, 50324, 25992, 50351, 25971, 50352, 25958, 50368, 25928, 50382, 25938, 50392, 25925, 50395, 25933, 50392, 25964,
+            50393, 25975, 50386, 26000, 50379, 26043, 50382, 26061, 50389, 26065, 50410, 26060, 50409, 26070, 50417, 26066, 50433, 26079, 50445, 26058,
+            50460, 26072, 50479, 26083, 50476, 26096, 50499, 26096, 50501, 26103, 50536, 26093, 50538, 26082, 50521, 26064, 50520, 26057, 50505, 26026,
+            50512, 26018, 50510, 26002, 50515, 25989, 50513, 25978, 50521, 25973, 50525, 25984, 50535, 25991, 50539, 25986, 50545, 25956, 50540, 25949,
+            50564, 25904, 50570, 25918, 50590, 25912, 50594, 25888, 50598, 25884, 50611, 25856, 50605, 25835, 50606, 25822, 50599, 25817, 50605, 25811,
+            50621, 25830, 50628, 25820, 50633, 25818, 50666, 25794, 50677, 25771, 50670, 25741, 50672, 25708, 50678, 25707, 50684, 25722, 50694, 25706,
+            50705, 25698, 50725, 25693, 50715, 25631, 50718, 25606, 50716, 25597, 50696, 25601, 50700, 25592, 50701, 25579, 50685, 25526, 50685, 25512,
+            50679, 25503, 50673, 25476, 50680, 25471, 50675, 25459, 50663, 25459, 50669, 25405, 50675, 25395, 50689, 25386, 50683, 25376, 50674, 25388,
+            50656, 25386, 50649, 25354, 50643, 25354, 50635, 25379, 50621, 25388, 50611, 25404, 50605, 25394, 50612, 25383, 50611, 25351, 50615, 25349,
+            50613, 25327, 50631, 25311, 50632, 25292, 50613, 25293, 50603, 25305, 50578, 25300, 50583, 25319, 50573, 25321, 50549, 25312, 50540, 25300,
+            50541, 25292, 50533, 25269, 50534, 25245, 50542, 25231, 50543, 25192, 50552, 25191, 50548, 25154, 50548, 25138, 50539, 25116, 50528, 25125,
+            50521, 25146, 50501, 25162, 50476, 25156, 50468, 25149, 50472, 25116, 50471, 25104, 50477, 25085, 50469, 25096, 50460, 25132, 50448, 25152,
+            50438, 25142, 50428, 25140, 50428, 25153, 50419, 25170, 50396, 25170, 50392, 25202, 50387, 25206, 50381, 25209, 50375, 25210, 50368, 25205,
+            50364, 25188, 50362, 25183, 50372, 25174, 50379, 25163, 50373, 25159, 50370, 25143, 50353, 25151, 50343, 25147, 50330, 25167, 50319, 25130,
+            50312, 25131, 50311, 25110, 50295, 25103, 50294, 25112, 50286, 25113, 50283, 25123, 50291, 25164, 50288, 25180, 50280, 25207, 50261, 25203,
+            50247, 25207, 50249, 25191, 50231, 25178, 50224, 25184, 50223, 25168, 50209, 25167, 50202, 25170, 50188, 25203, 50180, 25215, 50167, 25202,
+            50157, 25208, 50131, 25197, 50117, 25211, 50042, 25294, 50025, 25311, 50004, 25349, 50018, 25352, 50017, 25359
+        ))
+    )
+
+    private fun _r_sarnenskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            51113, 27370, 51143, 27363, 51147, 27380, 51155, 27374, 51170, 27399, 51172, 27395, 51188, 27407, 51200, 27401, 51201, 27418, 51223, 27444,
+            51225, 27457, 51237, 27464, 51238, 27472, 51248, 27464, 51249, 27455, 51261, 27450, 51264, 27462, 51284, 27448, 51311, 27441, 51316, 27492,
+            51342, 27522, 51354, 27526, 51366, 27524, 51375, 27494, 51407, 27493, 51436, 27506, 51452, 27506, 51453, 27533, 51443, 27526, 51428, 27534,
+            51408, 27584, 51402, 27585, 51403, 27614, 51410, 27615, 51415, 27602, 51430, 27598, 51430, 27581, 51478, 27580, 51481, 27620, 51493, 27641,
+            51501, 27648, 51497, 27669, 51517, 27663, 51520, 27678, 51539, 27677, 51561, 27721, 51592, 27730, 51604, 27723, 51605, 27690, 51612, 27684,
+            51611, 27667, 51616, 27645, 51608, 27632, 51606, 27618, 51616, 27599, 51637, 27550, 51622, 27540, 51637, 27517, 51629, 27508, 51606, 27512,
+            51607, 27527, 51591, 27513, 51587, 27503, 51594, 27481, 51601, 27480, 51610, 27488, 51615, 27483, 51607, 27469, 51611, 27455, 51620, 27454,
+            51614, 27427, 51607, 27428, 51605, 27395, 51616, 27359, 51606, 27345, 51606, 27267, 51602, 27268, 51602, 27241, 51611, 27249, 51621, 27245,
+            51647, 27273, 51654, 27273, 51668, 27250, 51664, 27208, 51744, 27204, 51773, 27201, 51770, 26996, 51735, 26949, 51748, 26916, 51747, 26896,
+            51749, 26876, 51766, 26847, 51764, 26818, 51755, 26807, 51756, 26794, 51766, 26789, 51766, 26779, 51776, 26763, 51773, 26755, 51793, 26758,
+            51801, 26754, 51812, 26722, 51811, 26708, 51823, 26692, 51825, 26655, 51824, 26614, 51830, 26593, 51821, 26591, 51814, 26552, 51804, 26555,
+            51797, 26545, 51800, 26469, 51788, 26468, 51760, 26438, 51771, 26419, 51764, 26398, 51769, 26360, 51767, 26345, 51752, 26343, 51749, 26325,
+            51737, 26320, 51734, 26338, 51709, 26347, 51708, 26335, 51713, 26294, 51726, 26276, 51735, 26242, 51723, 26226, 51725, 26222, 51701, 26196,
+            51703, 26190, 51690, 26167, 51683, 26179, 51689, 26198, 51670, 26199, 51667, 26207, 51675, 26218, 51671, 26239, 51662, 26259, 51639, 26302,
+            51609, 26275, 51585, 26290, 51581, 26314, 51556, 26297, 51554, 26242, 51549, 26226, 51532, 26253, 51528, 26266, 51512, 26287, 51498, 26315,
+            51493, 26306, 51491, 26321, 51480, 26318, 51480, 26305, 51472, 26286, 51455, 26304, 51460, 26312, 51465, 26359, 51455, 26356, 51437, 26364,
+            51421, 26378, 51429, 26428, 51423, 26444, 51408, 26445, 51407, 26448, 51402, 26443, 51401, 26445, 51394, 26439, 51392, 26427, 51386, 26426,
+            51373, 26372, 51365, 26370, 51357, 26358, 51357, 26338, 51352, 26336, 51348, 26330, 51329, 26338, 51324, 26366, 51307, 26317, 51301, 26252,
+            51297, 26230, 51304, 26244, 51314, 26226, 51320, 26238, 51332, 26241, 51332, 26233, 51324, 26229, 51330, 26209, 51312, 26206, 51309, 26193,
+            51299, 26184, 51291, 26193, 51284, 26214, 51270, 26211, 51265, 26237, 51268, 26249, 51255, 26258, 51253, 26276, 51235, 26262, 51232, 26156,
+            51219, 26134, 51213, 26128, 51208, 26111, 51206, 26109, 51195, 26114, 51185, 26103, 51182, 26082, 51170, 26082, 51169, 26144, 51172, 26156,
+            51148, 26165, 51152, 26182, 51159, 26197, 51138, 26200, 51137, 26211, 51110, 26219, 51118, 26239, 51118, 26263, 51102, 26281, 51111, 26301,
+            51095, 26310, 51092, 26323, 51093, 26346, 51078, 26360, 51070, 26342, 51060, 26354, 51053, 26352, 51050, 26438, 51034, 26466, 51026, 26467,
+            51034, 26482, 51060, 26474, 51066, 26487, 51059, 26508, 51046, 26511, 51044, 26502, 51037, 26508, 51051, 26521, 51079, 26491, 51079, 26471,
+            51092, 26451, 51093, 26467, 51084, 26486, 51083, 26503, 51090, 26510, 51085, 26521, 51089, 26533, 51100, 26505, 51117, 26494, 51124, 26478,
+            51130, 26476, 51146, 26494, 51147, 26504, 51161, 26525, 51172, 26553, 51175, 26554, 51178, 26583, 51183, 26595, 51184, 26605, 51184, 26628,
+            51182, 26633, 51165, 26632, 51150, 26650, 51146, 26663, 51126, 26660, 51110, 26671, 51110, 26656, 51104, 26656, 51095, 26687, 51102, 26700,
+            51106, 26722, 51115, 26722, 51123, 26732, 51122, 26752, 51128, 26752, 51122, 26768, 51133, 26782, 51144, 26787, 51134, 26802, 51135, 26824,
+            51139, 26825, 51140, 26870, 51131, 26870, 51134, 26892, 51134, 26973, 51087, 27070, 51060, 27089, 51061, 27112, 51056, 27135, 51051, 27141,
+            51038, 27134, 51029, 27137, 51012, 27163, 50996, 27179, 50992, 27203, 51001, 27201, 51009, 27216, 51009, 27226, 51024, 27228, 51031, 27221,
+            51034, 27274, 51042, 27280, 51043, 27326, 51058, 27317, 51071, 27325, 51082, 27325, 51083, 27332, 51088, 27336, 51087, 27355, 51096, 27354,
+            51098, 27368, 51113, 27370
+        ))
+    )
+
+    private fun _r_varaskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            51253, 26276, 51255, 26258, 51268, 26249, 51265, 26237, 51270, 26211, 51284, 26214, 51291, 26193, 51299, 26184, 51309, 26193, 51312, 26206,
+            51330, 26209, 51324, 26229, 51332, 26233, 51332, 26241, 51322, 26238, 51319, 26236, 51314, 26226, 51304, 26244, 51297, 26230, 51301, 26252,
+            51307, 26317, 51324, 26366, 51329, 26338, 51348, 26330, 51352, 26336, 51357, 26338, 51357, 26358, 51365, 26370, 51373, 26372, 51386, 26426,
+            51389, 26425, 51393, 26427, 51394, 26439, 51401, 26445, 51402, 26443, 51407, 26448, 51408, 26445, 51423, 26444, 51429, 26428, 51421, 26378,
+            51437, 26364, 51455, 26356, 51465, 26359, 51460, 26312, 51455, 26304, 51472, 26286, 51480, 26305, 51480, 26318, 51491, 26321, 51493, 26306,
+            51498, 26315, 51512, 26287, 51528, 26266, 51532, 26253, 51549, 26226, 51554, 26242, 51556, 26297, 51581, 26314, 51585, 26290, 51609, 26275,
+            51639, 26302, 51662, 26259, 51671, 26239, 51675, 26218, 51667, 26207, 51670, 26199, 51689, 26198, 51683, 26179, 51690, 26167, 51703, 26190,
+            51701, 26196, 51725, 26222, 51723, 26226, 51735, 26242, 51726, 26276, 51713, 26294, 51708, 26335, 51709, 26347, 51734, 26338, 51737, 26320,
+            51749, 26325, 51752, 26343, 51767, 26345, 51769, 26360, 51764, 26398, 51771, 26419, 51760, 26438, 51788, 26468, 51813, 26469, 51818, 26440,
+            51833, 26429, 51832, 26396, 51877, 26394, 51863, 26372, 51864, 26330, 51860, 26304, 51869, 26290, 51870, 26275, 51871, 26220, 51867, 26216,
+            51863, 26191, 51870, 26176, 51866, 26155, 51879, 26156, 51875, 26140, 51884, 26129, 51893, 26126, 51900, 26104, 51912, 26094, 51914, 26048,
+            51926, 26043, 51930, 26002, 51933, 25998, 51927, 25976, 51922, 25946, 51915, 25934, 51916, 25911, 51921, 25870, 51925, 25862, 51924, 25828,
+            51928, 25818, 51942, 25826, 51946, 25808, 51945, 25782, 51950, 25780, 51950, 25766, 51922, 25781, 51924, 25760, 51916, 25707, 51924, 25592,
+            51916, 25596, 51907, 25624, 51902, 25631, 51903, 25676, 51896, 25705, 51880, 25689, 51870, 25660, 51863, 25659, 51853, 25641, 51837, 25638,
+            51829, 25647, 51817, 25646, 51814, 25635, 51804, 25629, 51795, 25646, 51783, 25660, 51767, 25651, 51764, 25658, 51771, 25670, 51755, 25680,
+            51738, 25671, 51730, 25662, 51719, 25663, 51707, 25645, 51693, 25645, 51687, 25634, 51681, 25639, 51671, 25625, 51664, 25624, 51642, 25606,
+            51645, 25588, 51624, 25577, 51626, 25564, 51633, 25569, 51632, 25532, 51614, 25531, 51622, 25556, 51603, 25564, 51605, 25582, 51594, 25586,
+            51583, 25602, 51563, 25596, 51563, 25585, 51556, 25572, 51541, 25563, 51529, 25594, 51523, 25596, 51513, 25552, 51500, 25557, 51506, 25609,
+            51493, 25601, 51493, 25620, 51476, 25617, 51480, 25642, 51443, 25644, 51438, 25636, 51418, 25643, 51414, 25656, 51414, 25671, 51408, 25684,
+            51392, 25692, 51394, 25703, 51385, 25705, 51382, 25720, 51389, 25717, 51400, 25726, 51400, 25760, 51381, 25756, 51373, 25778, 51379, 25792,
+            51376, 25806, 51387, 25831, 51376, 25844, 51365, 25826, 51346, 25822, 51334, 25830, 51330, 25841, 51318, 25851, 51312, 25880, 51304, 25875,
+            51305, 25886, 51298, 25886, 51300, 25898, 51292, 25894, 51293, 25903, 51283, 25917, 51278, 25938, 51262, 25931, 51249, 25946, 51233, 25946,
+            51227, 25998, 51186, 26058, 51196, 26071, 51202, 26104, 51209, 26112, 51212, 26126, 51219, 26134, 51232, 26156, 51235, 26262, 51253, 26276
+        ))
+    )
+
+    private fun _r_rivnenskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            50187, 26291, 50198, 26305, 50213, 26306, 50216, 26316, 50231, 26326, 50239, 26350, 50251, 26362, 50252, 26379, 50260, 26385, 50265, 26398,
+            50261, 26421, 50264, 26455, 50260, 26453, 50260, 26472, 50267, 26493, 50281, 26494, 50297, 26523, 50304, 26520, 50308, 26547, 50317, 26546,
+            50316, 26560, 50322, 26563, 50329, 26553, 50340, 26587, 50368, 26602, 50371, 26621, 50365, 26649, 50392, 26661, 50389, 26683, 50420, 26693,
+            50416, 26712, 50446, 26717, 50445, 26737, 50452, 26739, 50458, 26728, 50463, 26735, 50478, 26736, 50480, 26746, 50469, 26748, 50460, 26742,
+            50460, 26766, 50468, 26786, 50475, 26790, 50471, 26763, 50478, 26768, 50484, 26768, 50490, 26776, 50502, 26780, 50503, 26818, 50521, 26826,
+            50509, 26855, 50522, 26874, 50535, 26882, 50546, 26901, 50531, 26937, 50529, 26967, 50524, 26982, 50534, 26989, 50541, 27010, 50559, 27018,
+            50551, 27061, 50556, 27077, 50562, 27065, 50583, 27080, 50588, 27091, 50586, 27104, 50595, 27120, 50588, 27131, 50570, 27125, 50563, 27128,
+            50561, 27132, 50564, 27153, 50562, 27187, 50566, 27233, 50589, 27216, 50606, 27226, 50610, 27213, 50625, 27190, 50628, 27204, 50638, 27211,
+            50656, 27213, 50665, 27204, 50673, 27222, 50674, 27245, 50693, 27252, 50713, 27272, 50721, 27275, 50746, 27264, 50762, 27270, 50770, 27244,
+            50778, 27238, 50793, 27244, 50796, 27234, 50812, 27236, 50828, 27242, 50840, 27233, 50859, 27251, 50870, 27244, 50883, 27253, 50884, 27244,
+            50896, 27257, 50911, 27224, 50926, 27214, 50936, 27237, 50948, 27238, 50955, 27224, 50967, 27225, 50992, 27203, 50996, 27179, 51012, 27163,
+            51029, 27137, 51038, 27134, 51051, 27141, 51056, 27135, 51061, 27112, 51060, 27089, 51087, 27070, 51134, 26973, 51134, 26892, 51131, 26870,
+            51140, 26870, 51139, 26825, 51135, 26824, 51134, 26802, 51144, 26787, 51133, 26782, 51122, 26768, 51128, 26752, 51122, 26752, 51123, 26732,
+            51115, 26722, 51106, 26722, 51102, 26700, 51095, 26687, 51104, 26656, 51110, 26656, 51110, 26671, 51126, 26660, 51146, 26663, 51150, 26650,
+            51165, 26632, 51182, 26634, 51184, 26628, 51183, 26596, 51178, 26583, 51175, 26554, 51172, 26553, 51161, 26525, 51147, 26504, 51146, 26494,
+            51130, 26476, 51124, 26478, 51117, 26494, 51100, 26505, 51089, 26533, 51085, 26521, 51090, 26510, 51083, 26503, 51084, 26486, 51093, 26467,
+            51092, 26451, 51079, 26471, 51079, 26491, 51051, 26521, 51037, 26508, 51044, 26502, 51046, 26511, 51059, 26508, 51066, 26487, 51060, 26474,
+            51034, 26482, 51026, 26467, 51034, 26466, 51050, 26438, 51053, 26352, 51060, 26354, 51070, 26342, 51078, 26360, 51093, 26346, 51092, 26323,
+            51095, 26310, 51111, 26301, 51102, 26281, 51118, 26263, 51118, 26239, 51110, 26219, 51137, 26211, 51138, 26200, 51159, 26197, 51152, 26182,
+            51148, 26165, 51172, 26156, 51169, 26144, 51170, 26082, 51182, 26082, 51185, 26103, 51195, 26114, 51206, 26109, 51202, 26104, 51196, 26071,
+            51186, 26058, 51183, 26062, 51176, 26067, 51170, 26057, 51154, 26070, 51149, 26068, 51142, 26058, 51141, 26046, 51130, 26012, 51141, 26008,
+            51139, 25995, 51123, 25996, 51122, 25983, 51126, 25959, 51118, 25939, 51104, 25950, 51087, 25946, 51083, 25942, 51078, 25981, 51083, 26018,
+            51068, 26046, 51050, 26092, 51005, 26106, 51003, 26086, 50990, 26079, 50973, 26084, 50972, 26054, 50962, 26019, 50963, 25995, 50956, 25966,
+            50935, 26001, 50918, 25996, 50867, 25990, 50862, 26001, 50866, 26013, 50852, 26039, 50840, 26039, 50840, 26030, 50820, 26023, 50823, 26010,
+            50820, 25999, 50826, 25968, 50824, 25958, 50831, 25925, 50831, 25906, 50816, 25908, 50804, 25891, 50793, 25888, 50767, 25887, 50751, 25876,
+            50737, 25872, 50720, 25878, 50689, 25870, 50679, 25855, 50667, 25847, 50646, 25824, 50631, 25842, 50605, 25811, 50599, 25817, 50606, 25822,
+            50605, 25835, 50611, 25856, 50598, 25884, 50594, 25888, 50590, 25912, 50570, 25918, 50564, 25904, 50540, 25949, 50545, 25956, 50539, 25986,
+            50535, 25991, 50525, 25984, 50521, 25973, 50513, 25978, 50515, 25989, 50510, 26002, 50512, 26018, 50505, 26026, 50520, 26057, 50521, 26064,
+            50538, 26082, 50536, 26093, 50501, 26103, 50499, 26096, 50476, 26096, 50479, 26083, 50460, 26072, 50445, 26058, 50433, 26079, 50417, 26066,
+            50409, 26070, 50410, 26060, 50389, 26065, 50382, 26061, 50379, 26043, 50386, 26000, 50393, 25975, 50392, 25964, 50395, 25933, 50392, 25925,
+            50382, 25938, 50368, 25928, 50352, 25958, 50351, 25971, 50324, 25992, 50311, 25996, 50288, 26026, 50269, 26062, 50271, 26082, 50267, 26106,
+            50275, 26121, 50272, 26130, 50252, 26116, 50242, 26113, 50235, 26137, 50232, 26164, 50247, 26173, 50264, 26192, 50264, 26215, 50233, 26218,
+            50227, 26196, 50228, 26184, 50217, 26185, 50218, 26192, 50197, 26180, 50191, 26191, 50185, 26213, 50172, 26231, 50180, 26258, 50178, 26270,
+            50183, 26282, 50187, 26291
+        ))
+    )
+
+    private fun _r_okhtyrskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            50153, 34707, 50151, 34719, 50157, 34721, 50161, 34732, 50158, 34750, 50153, 34751, 50144, 34740, 50147, 34766, 50154, 34783, 50155, 34801,
+            50159, 34799, 50160, 34821, 50157, 34834, 50166, 34848, 50162, 34858, 50161, 34892, 50152, 34940, 50159, 34974, 50185, 34962, 50182, 34977,
+            50183, 34998, 50178, 35007, 50185, 35008, 50180, 35032, 50167, 35031, 50165, 35043, 50201, 35077, 50207, 35070, 50215, 35106, 50226, 35128,
+            50242, 35149, 50229, 35190, 50235, 35200, 50228, 35236, 50236, 35240, 50235, 35260, 50258, 35261, 50266, 35268, 50263, 35300, 50276, 35332,
+            50289, 35297, 50319, 35330, 50296, 35382, 50306, 35386, 50320, 35379, 50322, 35410, 50334, 35422, 50317, 35439, 50315, 35461, 50309, 35459,
+            50293, 35496, 50301, 35505, 50290, 35525, 50300, 35536, 50317, 35517, 50322, 35558, 50319, 35572, 50331, 35592, 50324, 35630, 50320, 35624,
+            50310, 35651, 50326, 35661, 50326, 35674, 50334, 35678, 50335, 35689, 50345, 35693, 50343, 35680, 50347, 35654, 50351, 35659, 50354, 35629,
+            50352, 35627, 50367, 35601, 50374, 35612, 50383, 35598, 50392, 35594, 50392, 35584, 50430, 35584, 50431, 35588, 50449, 35587, 50457, 35575,
+            50451, 35564, 50458, 35553, 50459, 35538, 50465, 35533, 50480, 35503, 50488, 35477, 50513, 35458, 50530, 35436, 50543, 35439, 50554, 35406,
+            50538, 35392, 50546, 35335, 50538, 35317, 50524, 35324, 50525, 35318, 50544, 35304, 50550, 35294, 50540, 35299, 50528, 35294, 50527, 35281,
+            50519, 35276, 50518, 35264, 50523, 35262, 50528, 35273, 50537, 35268, 50542, 35249, 50540, 35271, 50562, 35273, 50567, 35267, 50581, 35272,
+            50588, 35247, 50572, 35232, 50576, 35198, 50571, 35188, 50581, 35158, 50588, 35163, 50591, 35151, 50593, 35165, 50609, 35170, 50615, 35178,
+            50620, 35173, 50631, 35178, 50648, 35194, 50648, 35203, 50673, 35181, 50673, 35170, 50685, 35165, 50687, 35154, 50679, 35150, 50677, 35130,
+            50668, 35113, 50675, 35092, 50680, 35092, 50687, 35060, 50680, 35063, 50688, 35043, 50677, 35031, 50679, 35023, 50696, 35021, 50701, 35033,
+            50704, 35057, 50692, 35072, 50700, 35076, 50703, 35069, 50711, 35077, 50709, 35086, 50716, 35094, 50728, 35062, 50738, 35018, 50743, 35009,
+            50740, 34980, 50743, 34975, 50737, 34962, 50736, 34948, 50742, 34944, 50750, 34926, 50749, 34916, 50741, 34926, 50731, 34923, 50728, 34937,
+            50724, 34928, 50722, 34938, 50717, 34933, 50721, 34944, 50716, 34938, 50698, 34937, 50696, 34928, 50676, 34904, 50673, 34888, 50666, 34884,
+            50641, 34871, 50624, 34865, 50621, 34847, 50607, 34829, 50607, 34811, 50599, 34791, 50594, 34798, 50586, 34781, 50565, 34774, 50563, 34765,
+            50571, 34752, 50569, 34729, 50555, 34734, 50536, 34728, 50525, 34720, 50528, 34712, 50519, 34714, 50506, 34665, 50493, 34629, 50491, 34633,
+            50476, 34604, 50472, 34588, 50450, 34578, 50452, 34563, 50448, 34546, 50450, 34514, 50433, 34509, 50433, 34503, 50414, 34493, 50400, 34479,
+            50395, 34491, 50389, 34485, 50394, 34472, 50386, 34456, 50382, 34425, 50377, 34406, 50368, 34396, 50368, 34389, 50359, 34378, 50358, 34384,
+            50346, 34393, 50337, 34411, 50319, 34400, 50286, 34457, 50288, 34464, 50285, 34510, 50281, 34519, 50276, 34512, 50262, 34521, 50251, 34514,
+            50241, 34529, 50249, 34535, 50245, 34552, 50234, 34555, 50236, 34564, 50226, 34571, 50207, 34559, 50206, 34553, 50179, 34524, 50171, 34537,
+            50155, 34528, 50155, 34537, 50142, 34538, 50133, 34546, 50121, 34572, 50129, 34580, 50128, 34594, 50122, 34598, 50118, 34623, 50112, 34632,
+            50115, 34654, 50111, 34663, 50134, 34677, 50111, 34677, 50111, 34700, 50133, 34696, 50136, 34703, 50149, 34699, 50153, 34707
+        ))
+    )
+
+    private fun _r_konotopskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            50980, 33724, 50986, 33759, 50982, 33777, 50982, 33800, 50988, 33805, 50985, 33815, 50987, 33832, 50984, 33844, 50994, 33853, 50981, 33896,
+            50982, 33906, 50990, 33894, 50998, 33904, 51014, 33905, 51010, 33920, 51014, 33935, 51026, 33947, 51037, 33968, 51049, 33962, 51069, 33964,
+            51070, 33989, 51066, 34016, 51067, 34018, 51075, 34020, 51077, 34017, 51090, 34069, 51119, 34081, 51120, 34078, 51144, 34108, 51142, 34130,
+            51158, 34121, 51182, 34120, 51184, 34130, 51198, 34149, 51216, 34141, 51234, 34147, 51236, 34159, 51238, 34159, 51245, 34161, 51245, 34173,
+            51250, 34183, 51244, 34196, 51252, 34212, 51259, 34209, 51262, 34231, 51273, 34233, 51275, 34252, 51282, 34255, 51284, 34244, 51292, 34238,
+            51299, 34255, 51299, 34267, 51315, 34273, 51322, 34289, 51335, 34282, 51339, 34288, 51334, 34300, 51339, 34320, 51343, 34317, 51357, 34339,
+            51366, 34337, 51373, 34308, 51375, 34286, 51388, 34292, 51390, 34281, 51383, 34272, 51396, 34258, 51402, 34246, 51400, 34228, 51417, 34221,
+            51422, 34227, 51429, 34222, 51432, 34246, 51440, 34255, 51456, 34245, 51461, 34257, 51475, 34267, 51474, 34282, 51486, 34291, 51502, 34253,
+            51501, 34227, 51491, 34198, 51495, 34187, 51515, 34189, 51526, 34177, 51501, 34133, 51506, 34130, 51511, 34111, 51508, 34109, 51514, 34083,
+            51528, 34063, 51549, 34052, 51537, 34040, 51521, 34049, 51519, 34027, 51525, 34024, 51522, 34002, 51512, 34005, 51510, 33991, 51496, 33987,
+            51490, 34000, 51477, 33998, 51468, 33982, 51464, 33972, 51463, 33955, 51477, 33957, 51474, 33942, 51465, 33923, 51463, 33911, 51464, 33907,
+            51463, 33894, 51465, 33886, 51467, 33885, 51472, 33888, 51480, 33880, 51489, 33897, 51493, 33898, 51497, 33897, 51500, 33879, 51505, 33883,
+            51507, 33868, 51498, 33848, 51513, 33834, 51508, 33805, 51515, 33784, 51529, 33768, 51534, 33751, 51544, 33750, 51554, 33742, 51560, 33744,
+            51577, 33726, 51583, 33723, 51585, 33743, 51608, 33733, 51634, 33664, 51641, 33680, 51649, 33679, 51645, 33640, 51671, 33604, 51660, 33583,
+            51672, 33556, 51682, 33551, 51704, 33505, 51714, 33509, 51712, 33488, 51705, 33487, 51718, 33438, 51715, 33414, 51702, 33375, 51691, 33349,
+            51686, 33326, 51678, 33313, 51680, 33295, 51674, 33272, 51666, 33257, 51666, 33237, 51660, 33237, 51656, 33214, 51667, 33211, 51684, 33198,
+            51684, 33186, 51673, 33186, 51680, 33166, 51678, 33159, 51678, 33142, 51672, 33148, 51660, 33141, 51659, 33136, 51652, 33129, 51648, 33128,
+            51643, 33130, 51642, 33154, 51608, 33155, 51598, 33177, 51584, 33192, 51581, 33222, 51572, 33207, 51573, 33192, 51570, 33168, 51563, 33157,
+            51556, 33158, 51552, 33168, 51543, 33169, 51537, 33188, 51525, 33193, 51507, 33192, 51507, 33178, 51500, 33174, 51494, 33156, 51497, 33140,
+            51484, 33130, 51467, 33135, 51461, 33123, 51429, 33113, 51417, 33135, 51401, 33120, 51399, 33136, 51382, 33133, 51381, 33122, 51389, 33110,
+            51390, 33092, 51382, 33109, 51370, 33112, 51366, 33101, 51370, 33093, 51368, 33089, 51371, 33060, 51384, 33060, 51387, 33044, 51396, 33039,
+            51397, 33052, 51406, 33057, 51411, 33046, 51404, 33045, 51396, 33017, 51377, 33030, 51368, 33043, 51358, 33036, 51345, 33038, 51342, 33044,
+            51348, 33064, 51340, 33074, 51334, 33069, 51322, 33078, 51313, 33076, 51303, 33054, 51295, 33054, 51290, 33043, 51288, 33060, 51286, 33064,
+            51288, 33077, 51284, 33074, 51269, 33068, 51266, 33058, 51258, 33060, 51255, 33070, 51227, 33029, 51220, 33039, 51206, 33042, 51200, 33030,
+            51200, 32998, 51189, 32978, 51183, 32986, 51163, 32961, 51143, 32993, 51092, 32945, 51086, 32957, 51090, 32961, 51085, 32998, 51082, 33041,
+            51072, 33038, 51070, 33070, 51063, 33072, 51048, 33060, 51040, 33085, 51012, 33051, 51002, 33046, 50993, 33039, 50988, 33051, 50981, 33079,
+            50992, 33077, 51007, 33118, 50998, 33121, 50968, 33139, 50962, 33136, 50958, 33184, 50962, 33200, 50975, 33220, 50984, 33282, 50976, 33343,
+            50972, 33343, 50968, 33386, 50963, 33418, 50969, 33417, 50967, 33442, 50989, 33453, 50992, 33475, 50987, 33486, 50985, 33508, 50993, 33516,
+            51004, 33506, 51005, 33513, 51029, 33510, 51036, 33546, 51024, 33583, 51024, 33619, 51029, 33629, 51018, 33635, 51009, 33633, 50991, 33646,
+            50985, 33669, 50969, 33659, 50964, 33694, 50966, 33708, 50980, 33724
+        ))
+    )
+
+    private fun _r_shostkynskyi(): CompactPolygon = CompactPolygon(
+        ScaledRing(intArrayOf(
+            51486, 34291, 51492, 34298, 51510, 34290, 51512, 34305, 51520, 34308, 51524, 34296, 51533, 34295, 51535, 34284, 51534, 34260, 51548, 34259,
+            51555, 34250, 51560, 34257, 51570, 34245, 51576, 34249, 51585, 34237, 51575, 34217, 51600, 34211, 51597, 34182, 51624, 34180, 51646, 34167,
+            51643, 34152, 51643, 34130, 51649, 34130, 51650, 34112, 51667, 34106, 51662, 34093, 51666, 34081, 51677, 34099, 51685, 34126, 51689, 34128,
+            51689, 34164, 51697, 34196, 51694, 34205, 51703, 34214, 51697, 34234, 51702, 34250, 51701, 34262, 51708, 34297, 51720, 34309, 51716, 34319,
+            51712, 34363, 51718, 34391, 51715, 34400, 51722, 34422, 51731, 34435, 51743, 34440, 51750, 34435, 51764, 34436, 51782, 34409, 51794, 34408,
+            51800, 34414, 51825, 34415, 51835, 34400, 51835, 34391, 51844, 34387, 51846, 34369, 51858, 34364, 51871, 34329, 51881, 34318, 51888, 34303,
+            51888, 34275, 51879, 34263, 51882, 34246, 51889, 34259, 51905, 34255, 51909, 34262, 51916, 34250, 51913, 34233, 51920, 34220, 51928, 34226,
+            51941, 34204, 51968, 34189, 51970, 34177, 51968, 34143, 51985, 34130, 52000, 34140, 52007, 34127, 52005, 34096, 52031, 34092, 52041, 34101,
+            52053, 34094, 52058, 34084, 52071, 34081, 52070, 34062, 52074, 34062, 52085, 34085, 52086, 34095, 52093, 34101, 52102, 34088, 52109, 34087,
+            52112, 34099, 52123, 34111, 52141, 34116, 52155, 34089, 52155, 34076, 52171, 34053, 52183, 34065, 52202, 34053, 52202, 34016, 52209, 34000,
+            52227, 34000, 52234, 33982, 52230, 33974, 52243, 33958, 52248, 33961, 52250, 33937, 52283, 33945, 52295, 33924, 52305, 33922, 52308, 33910,
+            52302, 33905, 52307, 33896, 52306, 33876, 52320, 33839, 52332, 33855, 52350, 33838, 52361, 33836, 52367, 33789, 52361, 33752, 52357, 33748,
+            52354, 33724, 52363, 33717, 52363, 33708, 52355, 33678, 52348, 33680, 52340, 33658, 52340, 33639, 52334, 33605, 52319, 33578, 52311, 33578,
+            52319, 33563, 52324, 33544, 52314, 33564, 52302, 33561, 52307, 33526, 52306, 33505, 52312, 33498, 52311, 33488, 52316, 33481, 52330, 33490,
+            52335, 33514, 52344, 33521, 52354, 33519, 52358, 33510, 52355, 33500, 52359, 33472, 52365, 33455, 52357, 33452, 52353, 33439, 52342, 33447,
+            52346, 33429, 52326, 33414, 52322, 33404, 52299, 33398, 52284, 33382, 52272, 33387, 52258, 33373, 52258, 33357, 52245, 33366, 52234, 33366,
+            52222, 33354, 52216, 33333, 52221, 33324, 52213, 33316, 52212, 33326, 52198, 33330, 52182, 33310, 52167, 33333, 52155, 33337, 52155, 33328,
+            52136, 33322, 52135, 33343, 52140, 33328, 52145, 33343, 52123, 33417, 52116, 33410, 52109, 33434, 52090, 33446, 52083, 33491, 52089, 33500,
+            52039, 33500, 52039, 33465, 52033, 33438, 52024, 33428, 52031, 33412, 52051, 33402, 52050, 33389, 52042, 33368, 52030, 33346, 52031, 33317,
+            52018, 33317, 52013, 33304, 52008, 33336, 51999, 33347, 51985, 33349, 51973, 33382, 51962, 33396, 51954, 33391, 51954, 33372, 51947, 33362,
+            51930, 33356, 51930, 33331, 51937, 33316, 51934, 33297, 51924, 33292, 51923, 33272, 51918, 33264, 51925, 33257, 51908, 33224, 51906, 33222,
+            51906, 33217, 51912, 33215, 51912, 33211, 51909, 33199, 51911, 33188, 51902, 33185, 51905, 33176, 51900, 33172, 51896, 33179, 51885, 33180,
+            51878, 33145, 51871, 33134, 51856, 33132, 51854, 33126, 51836, 33127, 51834, 33136, 51818, 33148, 51816, 33133, 51790, 33101, 51782, 33102,
+            51784, 33092, 51775, 33078, 51769, 33085, 51774, 33092, 51757, 33096, 51745, 33105, 51726, 33138, 51722, 33132, 51714, 33148, 51705, 33154,
+            51700, 33171, 51692, 33169, 51688, 33145, 51684, 33148, 51681, 33153, 51682, 33163, 51680, 33166, 51673, 33186, 51684, 33186, 51684, 33198,
+            51667, 33211, 51656, 33214, 51660, 33237, 51666, 33237, 51666, 33257, 51674, 33272, 51680, 33295, 51678, 33313, 51686, 33326, 51691, 33349,
+            51702, 33375, 51715, 33414, 51718, 33438, 51705, 33487, 51712, 33488, 51714, 33509, 51704, 33505, 51682, 33551, 51672, 33556, 51660, 33583,
+            51671, 33604, 51645, 33640, 51649, 33679, 51641, 33680, 51634, 33664, 51608, 33733, 51585, 33743, 51583, 33723, 51577, 33726, 51560, 33744,
+            51554, 33742, 51544, 33750, 51534, 33751, 51529, 33768, 51515, 33784, 51508, 33805, 51513, 33834, 51498, 33848, 51507, 33868, 51505, 33883,
+            51500, 33879, 51496, 33898, 51489, 33897, 51480, 33880, 51472, 33888, 51466, 33885, 51464, 33891, 51464, 33907, 51463, 33911, 51465, 33923,
+            51474, 33942, 51477, 33957, 51463, 33955, 51464, 33972, 51468, 33982, 51477, 33998, 51490, 34000, 51496, 33987, 51510, 33991, 51512, 34005,
+            51522, 34002, 51525, 34024, 51519, 34027, 51521, 34049, 51537, 34040, 51549, 34052, 51528, 34063, 51514, 34083, 51508, 34109, 51511, 34111,
+            51506, 34130, 51501, 34133, 51526, 34177, 51515, 34189, 51495, 34187, 51491, 34198, 51501, 34227, 51502, 34253, 51486, 34291
+        ))
     )
 
 }

@@ -18,7 +18,7 @@ import ua.ukrainedrones.service.ServiceState
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
-enum class SystemEntryKind { SDK_CHANGED, SDK_CHECK_FAILED, MALFORMED_FRAME, UNKNOWN_TYPE_DETECTED, UBILLING_SCHEMA_CHANGED }
+enum class SystemEntryKind { SDK_CHANGED, SDK_CHECK_FAILED, MALFORMED_FRAME, UNKNOWN_TYPE_DETECTED }
 
 data class SystemEntry(
     val atMillis: Long,
@@ -130,26 +130,6 @@ object ApiMonitor {
         sha256(keys.joinToString("/"))
     } catch (_: Exception) {
         null
-    }
-
-    /**
-     * Check the ubilling response body against the last-known structural fingerprint. Returns
-     * [ManifestResult.Unchanged] if the structure is the same, [ManifestResult.Changed] if it
-     * shifted (old/new hash persisted), or [ManifestResult.Failed] if the body is unparseable.
-     */
-    suspend fun checkUbillingSchema(context: Context, body: String): ManifestResult {
-        val svcState = ServiceState(context)
-        val oldHash = svcState.lastUbillingSchemaHash().first()
-        val newHash = schemaFingerprint(body)
-        return if (newHash == null) {
-            ManifestResult.Failed("Cannot compute schema fingerprint")
-        } else if (newHash == oldHash) {
-            ManifestResult.Unchanged
-        } else {
-            svcState.setLastUbillingSchemaHash(newHash)
-            Log.w(TAG, "Ubilling schema changed! SHA: $oldHash -> $newHash")
-            ManifestResult.Changed(oldHash, newHash)
-        }
     }
 
     private fun persist() {

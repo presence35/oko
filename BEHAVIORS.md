@@ -374,7 +374,7 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 |---|---|---|---|
 | DebugLog | Yes | 500 / 24h | Alert decision audit trail |
 | ConnectionLog | Yes | 50 episodes | ONLINE/OFFLINE/DEGRADED episodes |
-| ApiMonitor | Yes | 100 / 7d | SDK changes, malformed frames, unknown types, ubilling schema changes |
+| ApiMonitor | Yes | 100 / 7d | SDK changes, malformed frames, unknown types |
 | ConnEvent | No | Current episode | Offline milestones, retry scheduling |
 
 No log feeds back into engine evaluation. All logging is write-only.

@@ -43,6 +43,7 @@ import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.inOblast
 import ua.ukrainedrones.engine.alertRegionName
+import ua.ukrainedrones.engine.isOblastWide
 import ua.ukrainedrones.engine.officialAlertActiveFor
 import ua.ukrainedrones.engine.threatBody
 import ua.ukrainedrones.UpdateInfo
@@ -554,7 +555,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 // the same shared gate the map uses, so a city-scoped user rings only when the
                 // alert actually covers the focus (or is oblast-wide). Mirror rule.
                 val (focusOblastAlertRaw, focusOblastAlertSince) = if (focusToken != null) {
-                    val alert = alerts.firstOrNull { it.inOblast(focusToken) }
+                    val alert = alerts.firstOrNull { it.inOblast(focusToken) && (it.level == "red" || it.isOblastWide()) }
                     (alert != null) to alert?.since
                 } else {
                     false to null
@@ -563,7 +564,9 @@ val mappedThreats = registry.allThreats.map { list ->
                     alerts, focusToken, focusCityUa, cfg.officialAlertCityScope
                 )
 
-                val activeOfficialAlert = focusToken?.let { token -> alerts.firstOrNull { it.inOblast(token) } }
+                val activeOfficialAlert = focusToken?.let { token ->
+                    alerts.firstOrNull { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }
+                }
                 val (officialReason, officialReasonThreatId) = if (activeOfficialAlert != null) {
                     engine.deriveOfficialAlertReason(
                         activeOfficialAlert,

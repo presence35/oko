@@ -442,7 +442,6 @@ object Strings {
         val apiMalformedFrame: String,
         val apiSdkViewManifest: String,
         val apiUnknownType: String,
-        val apiUbillingSchemaChanged: String,
         val logsLegend: String
     )
 
@@ -1103,7 +1102,6 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val apiMalformedFrame: String get() = misc.apiMalformedFrame
         val apiSdkViewManifest: String get() = misc.apiSdkViewManifest
         val apiUnknownType: String get() = misc.apiUnknownType
-        val apiUbillingSchemaChanged: String get() = misc.apiUbillingSchemaChanged
         val logsLegend: String get() = misc.logsLegend
         val guideTitle: String get() = guide.guideTitle
         val guideSettingsButton: String get() = guide.guideSettingsButton

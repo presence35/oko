@@ -10,7 +10,9 @@ data class OblastAlert(
     /** True when this entry covers the whole oblast (NEPTUN's `oblasts` array) rather than a
      *  single raion/city (`raions` array). Null = unknown (Ubilling/Test fallback sources) —
      *  falls back to the name heuristic in [isOblastWide]. */
-    val wide: Boolean? = null
+    val wide: Boolean? = null,
+    /** Alert severity level: "red" (air-raid alert) or "yellow" (tactical / artillery threat). Defaults to "red". */
+    val level: String = "red"
 )
 
 /** True when [token] appears in [text] delimited by word boundaries (no regex allocation). */
@@ -102,6 +104,8 @@ fun officialAlertActiveFor(
     scope: Boolean
 ): Boolean {
     if (token == null) return false
-    if (!scope || cityUa.isNullOrBlank()) return alerts.any { it.inOblast(token) }
-    return alerts.any { it.inOblast(token) && it.coversCity(cityUa) }
+    // Audio sirens only trigger for "red" level alarms (or full oblast alerts). Yellow artillery alerts remain visual/informative.
+    val sirenAlerts = alerts.filter { it.level == "red" || it.isOblastWide() }
+    if (!scope || cityUa.isNullOrBlank()) return sirenAlerts.any { it.inOblast(token) }
+    return sirenAlerts.any { it.inOblast(token) && it.coversCity(cityUa) }
 }

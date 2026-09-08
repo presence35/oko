@@ -294,7 +294,8 @@ class TestPlugin : ThreatSource {
                     key = o.optString("key", o.optString("name", "")),
                     name = o.optString("name", ""),
                     oblast = o.optString("oblast", o.optString("name", "")),
-                    since = o.optString("since").takeIf { it.isNotBlank() }
+                    since = o.optString("since").takeIf { it.isNotBlank() },
+                    level = o.optString("level", "red")
                 )
             )
         }

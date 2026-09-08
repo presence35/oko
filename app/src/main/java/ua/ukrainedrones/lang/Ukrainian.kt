@@ -433,7 +433,6 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         apiMalformedFrame = "Кадр з помилкою",
         apiSdkViewManifest = "Переглянути маніфест →",
         apiUnknownType = "Невідомий тип: %s",
-        apiUbillingSchemaChanged = "Схему Ubilling змінено",
         logsLegend = "Легенда",
     ),
     widget = Strings.Widget(
