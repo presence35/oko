@@ -39,7 +39,7 @@ private val Green = Color(0xFF4CAF50)
 
 enum class GuideDiagram {
     LIVE, STRIP, CONN, ZONES, EDIT_ZONES, NOTIF, TOGGLES, FOLLOW, PIN, SHELTER,
-    CARD_SIZE, CARD_READ, LANG, THREAT_TOGGLES, UPDATE, NIGHT, WIDGET
+    CARD_SIZE, CARD_READ, LANG, THREAT_TOGGLES, UPDATE, NIGHT, WIDGET, LEGEND
 }
 
 /** Animated mini-illustration for one feature-guide card. */
@@ -81,6 +81,7 @@ fun FeatureDiagram(kind: GuideDiagram, modifier: Modifier = Modifier) {
             GuideDiagram.UPDATE -> drawUpdate(t)
             GuideDiagram.NIGHT -> drawNight()
             GuideDiagram.WIDGET -> drawWidget(t)
+            GuideDiagram.LEGEND -> drawLegend()
         }
     }
 }
@@ -366,6 +367,21 @@ private fun DrawScope.drawShelter(t: Float) {
     }
     drawPath(arch, White, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
     drawCircle(Green, 3.dp.toPx(), Offset(cx, cy + r * 0.1f))
+}
+
+private fun DrawScope.drawLegend() {
+    bg()
+    val cx = size.width * 0.52f
+    val cy = size.height * 0.48f
+    drawRect(Color(0x66FF0000), Offset(size.width * 0.08f, size.height * 0.12f), Size(size.width * 0.36f, size.height * 0.52f))
+    drawRect(Color(0x66FFD500), Offset(size.width * 0.56f, size.height * 0.12f), Size(size.width * 0.36f, size.height * 0.52f))
+    drawRect(White.copy(alpha = 0.18f), Offset(size.width * 0.08f, size.height * 0.12f), Size(size.width * 0.36f, size.height * 0.52f), style = Stroke(1.dp.toPx()))
+    drawRect(White.copy(alpha = 0.18f), Offset(size.width * 0.56f, size.height * 0.12f), Size(size.width * 0.36f, size.height * 0.52f), style = Stroke(1.dp.toPx()))
+    drawCircle(Yellow.copy(alpha = 0.18f), size.width * 0.18f, Offset(cx, cy))
+    drawCircle(Yellow, size.width * 0.18f, Offset(cx, cy), style = Stroke(1.5.dp.toPx()))
+    drawCircle(Red.copy(alpha = 0.22f), size.width * 0.10f, Offset(cx, cy))
+    drawCircle(Red, size.width * 0.10f, Offset(cx, cy), style = Stroke(1.5.dp.toPx()))
+    drawGpsDot(Offset(cx, cy), 2.8.dp.toPx())
 }
 
 private fun DrawScope.drawWidget(t: Float) {

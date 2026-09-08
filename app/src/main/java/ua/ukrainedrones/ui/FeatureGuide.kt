@@ -31,6 +31,8 @@ data class GuideFeature(
 
 /** Builds the curated feature list in display order (grouped by category). */
 fun guideFeatures(s: Strings.StringSet): List<GuideFeature> = listOf(
+    GuideFeature("legend", s.guideCategoryMap, s.guideLegendTitle, s.guideLegendSummary,
+        listOf(s.guideLegendD1, s.guideLegendD2, s.guideLegendD3, s.guideLegendD4), GuideDiagram.LEGEND),
     GuideFeature("live", s.guideCategoryMap, s.guideLiveTitle, s.guideLiveSummary,
         listOf(s.guideLiveD1, s.guideLiveD2, s.guideLiveD3), GuideDiagram.LIVE),
     GuideFeature("footer", s.guideCategoryMap, s.guideStripTitle, s.guideStripSummary,

@@ -632,6 +632,14 @@ private fun SetupZoneControlsStep(
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface
         )
+        LegendRow(s)
+        FeatureDiagram(
+            kind = GuideDiagram.LEGEND,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(92.dp)
+                .clip(RoundedCornerShape(14.dp))
+        )
         FeatureDiagram(
             kind = GuideDiagram.ZONES,
             modifier = Modifier
@@ -745,6 +753,31 @@ private fun SetupZoneControlsStep(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LegendRow(s: Strings.StringSet) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        LegendChip(Color(0xFFD32F2F), "Red fill", Modifier.weight(1f))
+        LegendChip(Color(0xFFFFD500), "Yellow fill", Modifier.weight(1f))
+        LegendChip(Color(0xFFD32F2F), "Red zone", Modifier.weight(1f), isRing = true)
+        LegendChip(Color(0xFFFFD500), "Yellow zone", Modifier.weight(1f), isRing = true)
+    }
+}
+
+@Composable
+private fun LegendChip(color: Color, label: String, chipModifier: Modifier = Modifier, isRing: Boolean = false) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = chipModifier) {
+        Box(
+            modifier = Modifier
+                .size(14.dp)
+                .clip(if (isRing) CircleShape else RoundedCornerShape(3.dp))
+                .background(if (isRing) Color.Transparent else color.copy(alpha = 0.85f))
+                .border(1.5.dp, color, if (isRing) CircleShape else RoundedCornerShape(3.dp))
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
