@@ -38,7 +38,7 @@ OUT_FILE = os.path.join(
 # even if the source floats differ by float32 noise (~1e-5). 1e-5 deg ~ 1 m.
 EDGE_ROUND = 5
 RING_EPSILON = 0.012  # same simplification as the oblast fills (UKRAINE_BORDER)
-LAND_EPSILON = 0.003  # tighter, so river borders stay smooth (UKRAINE_LAND_BORDER)
+LAND_EPSILON = 0.012  # same as RING_EPSILON so outer fill edge and land outline coincide when both visible
 
 # Bounding box of the Ukrainian coast region (Black Sea + Sea of Azov). Edge
 # midpoints outside it are land borders by definition; only candidates inside

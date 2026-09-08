@@ -18,6 +18,8 @@ data class ThreatEvaluationResult(
     val redCities: Set<String> = emptySet(),
     val fillOblastTokens: Set<String> = emptySet(),
     val fillRaionKeys: Set<Pair<String, String>> = emptySet(),
+    val fillYellowOblastTokens: Set<String> = emptySet(),
+    val fillYellowRaionKeys: Set<Pair<String, String>> = emptySet(),
     val focusOblastAlertActive: Boolean = false,
     val officialReason: String? = null,
     val reasonThreatId: String? = null,
@@ -113,7 +115,8 @@ class ThreatEngine(
         // stays in AlertService.
         val focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, cityScope)
         val redCities = computeRedCities(alerts, fillRegions)
-        val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts, fillRegions)
+        val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts.filter { it.level != "yellow" }, fillRegions)
+        val (fillYellowOblastTokens, fillYellowRaionKeys) = computeFillKeys(alerts.filter { it.level == "yellow" }, fillRegions)
         val activeAlert = focusToken?.let { token -> alerts.firstOrNull { it.inOblast(token) } }
         val (officialReason, reasonThreatId) = if (activeAlert != null) {
             deriveOfficialAlertReason(activeAlert, threats, focus, params, lang, now)
@@ -131,6 +134,8 @@ class ThreatEngine(
             redCities = redCities,
             fillOblastTokens = fillOblastTokens,
             fillRaionKeys = fillRaionKeys,
+            fillYellowOblastTokens = fillYellowOblastTokens,
+            fillYellowRaionKeys = fillYellowRaionKeys,
             focusOblastAlertActive = focusOblastAlertActive,
             officialReason = officialReason,
             reasonThreatId = reasonThreatId,

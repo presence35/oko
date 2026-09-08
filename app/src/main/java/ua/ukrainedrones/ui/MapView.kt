@@ -765,6 +765,8 @@ fun NeptunMapView(
         uiState.showBorders,
         uiState.showRegionBorders,
         uiState.alertRaionKeys,
+        uiState.alertYellowOblastTokens,
+        uiState.alertYellowRaionKeys,
         showNearbyShelters,
         selectedShelter?.shelter?.id,
         uiState.redCities,
@@ -786,6 +788,8 @@ fun NeptunMapView(
             append('R').append(uiState.showRegionBorders)
             for (stem in uiState.alertOblastTokens) append('W').append(stem).append(';')
             for ((stem, raion) in uiState.alertRaionKeys) append('J').append(stem).append('=').append(raion).append(';')
+            for (stem in uiState.alertYellowOblastTokens) append('w').append(stem).append(';')
+            for ((stem, raion) in uiState.alertYellowRaionKeys) append('j').append(stem).append('=').append(raion).append(';')
             append('S').append(showNearbyShelters)
             if (showNearbyShelters) {
                 append('L').append(selectedShelter?.shelter?.id)
@@ -1161,22 +1165,92 @@ fun NeptunMapView(
                     })
                 )
 
-                // Oblast region fill: when fillAlertRegions is on, shade alerting oblasts
-                // with a subtle red fill instead of coloring city labels red.
-if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
-                    for (stem in uiState.alertOblastTokens) {
+                val outerHullSet = HashSet<Long>(UKRAINE_BORDER.size * 2).apply {
+                    for (pt in UKRAINE_BORDER) {
+                        val latI = kotlin.math.round(pt.latitude * 1000.0).toInt()
+                        val lonI = kotlin.math.round(pt.longitude * 1000.0).toInt()
+                        add((latI.toLong() shl 32) or (lonI.toLong() and 0xffffffffL))
+                    }
+                }
+                // Yellow (tactical) fills — illustrative only, drawn under red.
+                if (uiState.fillAlertRegions && uiState.alertYellowOblastTokens.isNotEmpty()) {
+                    for (stem in uiState.alertYellowOblastTokens) {
                         val polygon = CompactOblastBoundaries.get(stem) ?: continue
                         for (ring in polygon.rings) {
                             if (ring.pointCount < 3) continue
                             val points = ring.toPoints().map { pt -> GeoPoint(pt.lat, pt.lon) }
                             mapView.overlays.add(Polygon(mapView).apply {
                                 this.points = points
+                                fillColor = Color.argb(40, 255, 213, 0)
+                                strokeColor = Color.TRANSPARENT
+                                strokeWidth = 0f
+                                title = ""
+                                setInfoWindow(null)
+                            })
+                        }
+                    }
+                }
+                if (uiState.fillAlertRegions && uiState.alertYellowRaionKeys.isNotEmpty()) {
+                    for ((stem, raion) in uiState.alertYellowRaionKeys) {
+                        val polygon = CompactRaionBoundaries.forKey(stem, raion) ?: continue
+                        for (ring in polygon.rings) {
+                            if (ring.pointCount < 3) continue
+                            val points = ring.toPoints().map { pt -> GeoPoint(pt.lat, pt.lon) }
+                            mapView.overlays.add(Polygon(mapView).apply {
+                                this.points = points
+                                fillColor = Color.argb(40, 255, 213, 0)
+                                strokeColor = Color.TRANSPARENT
+                                strokeWidth = 0f
+                                title = ""
+                                setInfoWindow(null)
+                            })
+                        }
+                    }
+                }
+                // Oblast region fill: when fillAlertRegions is on, shade alerting oblasts
+                // with a subtle red fill instead of coloring city labels red.
+                // Stroke is transparent on the outer hull to avoid red bleeding outside Ukraine;
+                // inner edges get a hairline to seal inter-oblast simplification gaps.
+if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
+                    for (stem in uiState.alertOblastTokens) {
+                        val polygon = CompactOblastBoundaries.get(stem) ?: continue
+                        for (ring in polygon.rings) {
+                            if (ring.pointCount < 3) continue
+                            val pts = ring.toPoints()
+                            val geo = pts.map { pt -> GeoPoint(pt.lat, pt.lon) }
+                            mapView.overlays.add(Polygon(mapView).apply {
+                                this.points = geo
                                 fillColor = Color.argb(55, 255, 60, 60)
                                 strokeColor = Color.TRANSPARENT
                                 strokeWidth = 0f
                                 title = ""
                                 setInfoWindow(null)
                             })
+                            var cur = mutableListOf<GeoPoint>()
+                            fun flush() {
+                                if (cur.size >= 2) {
+                                    mapView.overlays.add(Polyline(mapView).apply {
+                                        setPoints(ArrayList(cur))
+                                        color = Color.argb(70, 255, 60, 60)
+                                        width = 1f
+                                    })
+                                }
+                                cur = mutableListOf()
+                            }
+                            for (i in pts.indices) {
+                                val a = pts[i]
+                                val b = pts[(i + 1) % pts.size]
+                                val aKey = (kotlin.math.round(a.lat * 1000.0).toInt().toLong() shl 32) or (kotlin.math.round(a.lon * 1000.0).toInt().toLong() and 0xffffffffL)
+                                val bKey = (kotlin.math.round(b.lat * 1000.0).toInt().toLong() shl 32) or (kotlin.math.round(b.lon * 1000.0).toInt().toLong() and 0xffffffffL)
+                                val isOuter = aKey in outerHullSet || bKey in outerHullSet
+                                if (isOuter) {
+                                    flush()
+                                } else {
+                                    if (cur.isEmpty()) cur.add(GeoPoint(a.lat, a.lon))
+                                    cur.add(GeoPoint(b.lat, b.lon))
+                                }
+                            }
+                            flush()
                         }
                     }
                 }
@@ -1256,11 +1330,15 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
 
                 // Subtle outline of Ukraine's land border — an open polyline, so it hugs the
                 // land borders tightly (river borders included) and never crosses the sea.
-                mapView.overlays.add(Polyline(mapView).apply {
-                    setPoints(ArrayList(UKRAINE_LAND_BORDER))
-                    color = Color.argb(70, 255, 255, 255)
-                    width = 2f
-                })
+                // Skipped when oblast borders are on: they already trace the same outer ring
+                // (same source, now same epsilon), otherwise two parallel white lines appear.
+                if (!uiState.showBorders) {
+                    mapView.overlays.add(Polyline(mapView).apply {
+                        setPoints(ArrayList(UKRAINE_LAND_BORDER))
+                        color = Color.argb(70, 255, 255, 255)
+                        width = 2f
+                    })
+                }
 
                 // Focus-centered alert zones: yellow ring (outer) and red circle (inner) for
                 // the SLOW distance thresholds — outlines only, no fill so the map stays clean.

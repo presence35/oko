@@ -2,7 +2,7 @@ package ua.ukrainedrones.community
 
 /**
  * Complete, normalized boundary polygons for all 27 Ukrainian regions
- * (24 oblasts, Crimea, Kyiv City, Sevastopol).
+ * (24 oblasts, Crimea, Sevastopol — Kyiv City merged into Kyiv oblast).
  *
  * Strict [LAT, LON] order, scaled integers (x1000, ~70m resolution).
  * Zero per-point heap allocations via [ScaledRing].
@@ -39,13 +39,12 @@ object CompactOblastBoundaries {
         "khersonska" to ::_poly_khersonska,
         "kyivska" to ::_poly_kyivska,
         "sevastopol" to ::_poly_sevastopol,
-        "м. київ" to ::_poly_м_київ,
     )
 
     // Multi-source alias resolution table mapping legacy formats, Ubilling, stems, and names to canonical ID
     private val ALIAS_TO_ID: Map<String, String> = mapOf(
-        "kyiv" to "м. київ",
-        "kyiv_city" to "м. київ",
+        "kyiv" to "kyivska",
+        "kyiv_city" to "kyivska",
         "odesa" to "odeska",
         "ubilling:автономна республіка крим" to "krym",
         "ubilling:волинська" to "volynska",
@@ -70,11 +69,11 @@ object CompactOblastBoundaries {
         "ubilling:луганська область" to "luhanska",
         "ubilling:львівська" to "lvivska",
         "ubilling:львівська область" to "lvivska",
-        "ubilling:м. київ" to "м. київ",
-        "ubilling:м.київ" to "м. київ",
+        "ubilling:м. київ" to "kyivska",
+        "ubilling:м.київ" to "kyivska",
         "ubilling:миколаївська" to "mykolaivska",
         "ubilling:миколаївська область" to "mykolaivska",
-        "ubilling:місто київ" to "м. київ",
+        "ubilling:місто київ" to "kyivska",
         "ubilling:одеська" to "odeska",
         "ubilling:одеська область" to "odeska",
         "ubilling:полтавська" to "poltavska",
@@ -122,7 +121,7 @@ object CompactOblastBoundaries {
         "запорізьк" to "zaporizka",
         "запорізька" to "zaporizka",
         "запорізька область" to "zaporizka",
-        "київ" to "м. київ",
+        "київ" to "kyivska",
         "київськ" to "kyivska",
         "київська" to "kyivska",
         "київська область" to "kyivska",
@@ -136,8 +135,8 @@ object CompactOblastBoundaries {
         "львівськ" to "lvivska",
         "львівська" to "lvivska",
         "львівська область" to "lvivska",
-        "м. київ" to "м. київ",
-        "м.київ" to "м. київ",
+        "м. київ" to "kyivska",
+        "м.київ" to "kyivska",
         "миколаївськ" to "mykolaivska",
         "миколаївська" to "mykolaivska",
         "миколаївська область" to "mykolaivska",
@@ -238,7 +237,7 @@ object CompactOblastBoundaries {
 
         // Special guard for Kyiv: "м. київ" or city references must NOT match "київська" oblast
         if (needle == "м. київ" || needle == "м.київ" || needle == "київ" || needle == "kyiv") {
-            return BY_ID["м. київ"]?.invoke()
+            return BY_ID["kyivska"]?.invoke()
         }
 
         // 3. Fallback stem matching
@@ -2210,15 +2209,6 @@ object CompactOblastBoundaries {
             50949, 29412, 50985, 29413, 50979, 29474, 51017, 29464, 51060, 29511, 51124, 29429, 51160, 29349, 51157, 29330, 51126, 29322, 51264, 29267,
             51275, 29354, 51321, 29396, 51380, 29394, 51376, 29358, 51401, 29375, 51414, 29424, 51396, 29500, 51481, 29537, 51461, 29581, 51471, 29608,
             51492, 29608, 51506, 29632, 51525, 29739
-        )),
-        ScaledRing(intArrayOf(
-            51539, 30778, 51512, 30778, 51525, 30654, 51531, 30697, 51554, 30702, 51539, 30778
-        )),
-        ScaledRing(intArrayOf(
-            50512, 30732, 50522, 30722, 50524, 30746, 50517, 30747, 50512, 30732
-        )),
-        ScaledRing(intArrayOf(
-            50494, 30318, 50496, 30346, 50492, 30347, 50483, 30336, 50494, 30318
         ))
     ))
 
@@ -2230,17 +2220,6 @@ object CompactOblastBoundaries {
             44591, 33401, 44563, 33411, 44593, 33415, 44570, 33434, 44596, 33422, 44594, 33447, 44609, 33450, 44611, 33466, 44601, 33464, 44592, 33471,
             44611, 33473, 44604, 33499, 44617, 33503, 44618, 33526, 44598, 33528, 44617, 33532, 44610, 33600, 44631, 33510, 44663, 33544, 44791, 33534,
             44838, 33552, 44818, 33577
-        ))
-    )
-
-    private fun _poly_м_київ(): CompactPolygon = CompactPolygon(
-        ScaledRing(intArrayOf(
-            50587, 30720, 50556, 30714, 50554, 30670, 50534, 30654, 50538, 30572, 50548, 30573, 50550, 30536, 50576, 30519, 50568, 30484, 50584, 30463,
-            50586, 30371, 50574, 30370, 50570, 30307, 50557, 30342, 50554, 30298, 50533, 30302, 50510, 30260, 50498, 30270, 50485, 30252, 50427, 30236,
-            50426, 30269, 50447, 30281, 50449, 30351, 50423, 30366, 50382, 30442, 50357, 30438, 50360, 30468, 50333, 30475, 50317, 30534, 50291, 30528,
-            50291, 30546, 50259, 30553, 50256, 30578, 50215, 30589, 50225, 30642, 50240, 30646, 50281, 30610, 50266, 30656, 50278, 30672, 50343, 30605,
-            50341, 30656, 50360, 30649, 50371, 30679, 50359, 30669, 50347, 30697, 50356, 30714, 50381, 30714, 50375, 30762, 50395, 30776, 50404, 30826,
-            50458, 30743, 50484, 30760, 50499, 30738, 50509, 30762, 50519, 30752, 50537, 30823, 50565, 30817, 50587, 30720
         ))
     )
 

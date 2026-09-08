@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
@@ -233,12 +234,13 @@ class PluginRegistryTest {
     }
 
     @Test
-    fun `degraded true when WS disabled`() {
+    fun `no sources enabled means offline not degraded`() {
         val registry = PluginRegistry()
         val ws = FakePlugin("ws", connectionInit = PluginConnectionState.CONNECTED)
         registry.register(ws, testScope())
         registry.setEnabled(ws, false)
-        assertTrue(registry.degraded.value)
+        assertFalse(registry.degraded.value)
+        assertTrue(registry.isOffline(Monotonic.now()))
     }
 
     @Test

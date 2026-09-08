@@ -41,6 +41,8 @@ object LocationTracker {
     private const val GPS_ATTEMPT_MS = 8_000L
     private const val MAX_GPS_ATTEMPTS = 3
     private const val NETWORK_FALLBACK_MS = 6_000L
+    private const val MAX_NETWORK_SEED_ATTEMPTS = 4
+    private const val NETWORK_SEED_INTERVAL_MS = 8_000L
     const val MAX_LOCATION_AGE_MS = 15 * 60 * 1000L // 15 minutes freshness threshold
 
     private val _location = MutableStateFlow<LatLng?>(null)
@@ -100,11 +102,20 @@ object LocationTracker {
                 started = true
             }
 
-            // No fresh fix → seed a fast cell-tower baseline (cheap, no GPS) so the dot shows as
-            // soon as the network provider is warm, and while following kick the precise GPS
-            // retry so the fix upgrades once satellites lock.
+            // No fresh fix → retry a cheap network one-shot (cell-tower baseline) until the provider warms
+            // at cold start, and while following kick the precise GPS retry so the fix upgrades
+            // once satellites lock.
             if (!isFresh()) {
-                requestNetworkFix(app)
+                // Retry the network seed so it catches a cell fix once the provider warms at
+                // cold start.  GPS kick runs in parallel via forceRefresh and has its own
+                // retry loop; the network loop stops as soon as a fresh fix lands (from either).
+                scope.launch {
+                    repeat(MAX_NETWORK_SEED_ATTEMPTS) {
+                        if (isFresh()) return@launch
+                        requestNetworkFix(app)
+                        delay(NETWORK_SEED_INTERVAL_MS)
+                    }
+                }
                 scope.launch {
                     if (UserPrefs(app).followMe().first()) forceRefresh()
                 }

@@ -235,7 +235,7 @@ class PluginRegistry {
             ?: PluginConnectionState.DISCONNECTED
         val wsDelivering = active.any { it.sourceType == SourceType.WS && map[it.id] == PluginConnectionState.CONNECTED }
         _wsHealthy.value = wsDelivering
-        _degraded.value = !_wsHealthy.value
+        _degraded.value = active.isNotEmpty() && !_wsHealthy.value
         _degradedSince.value = when {
             _wsHealthy.value -> null
             _degradedSince.value == null -> Monotonic.now()
@@ -253,6 +253,7 @@ class PluginRegistry {
      *  — [degradedSince] is stamped on the monotonic clock so a wall-clock jump can't trigger or
      *  stall the escalation. */
     fun isOffline(now: Long): Boolean {
+        if (enabledPlugins.isEmpty()) return true
         if (!_degraded.value || _coveredByFallback.value) return false
         val since = _degradedSince.value ?: return false
         return now - since >= OFFLINE_EPISODE_MS
