@@ -498,8 +498,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 iconSet = uiState.iconSet,
                 neptunDown = uiState.neptunDown,
                 degraded = uiState.degraded,
-                threatCount = uiState.mapThreats.size,
-                alertCount = uiState.alertingOblastCount,
                 onBack = { screen = Screen.MAP }
             )
         }

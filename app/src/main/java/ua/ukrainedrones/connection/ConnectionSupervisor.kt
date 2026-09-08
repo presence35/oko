@@ -137,6 +137,7 @@ class ConnectionSupervisor(
 
             ConnectionState.Disconnected -> {
                 _retryState.value = null
+                ConnectionLog.observe(ConnStatus.OFFLINE, now, activeSource)
             }
         }
     }

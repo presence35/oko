@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 - Toggling off all sources now shows "Offline" immediately instead of "Backup" for 5 minutes / When all sources are disabled, the app immediately shows "Offline" instead of incorrectly displaying "Backup" for 5 minutes
+- Connections tab now shows "Offline" when a source is manually toggled off / The connections tab now correctly records an offline episode when a source is manually disabled
+- Removed threat/alert counts from the Logs screen header / Removed threat and alert count badges from the Logs screen header
 
 - In landscape, the zone/red & yellow alert pills and edit-zones gear stack vertically in the bottom-right corner, the shelter button sits in the bottom-left, and the "all alerts off" warning moves above the footer — the two redundant crossed-bell icons above each pill were removed / In landscape, the zone/red & yellow alert pills and edit-zones gear stack vertically in the bottom-right corner, the shelter button sits in the bottom-left, and the "all alerts off" warning moves above the footer — the two redundant crossed-bell icons above each pill were removed
 - The zone editor bottom sheet now scrolls in portrait, so the bottom sliders are reachable on shorter screens / The zone editor bottom sheet now scrolls in portrait, so the bottom sliders are reachable on shorter screens

@@ -145,7 +145,7 @@ private enum class GroupBy { TIMELINE, PROXIMITY, TYPE }
 private enum class ProximitySort { DISTANCE, AGE }
 
 /** Accent for a group header. */
-private enum class GroupAccent { OFFICIAL, RED, YELLOW, OBLAST, LEFT }
+private enum class GroupAccent { OFFICIAL, RED, YELLOW, OBLAST }
 
 /** Rows of a single threat type inside a proximity group. */
 private data class TypeSubGroup(
@@ -192,8 +192,6 @@ fun LogsDropDownSheet(
     iconSet: ThreatIconSet,
     neptunDown: Boolean,
     degraded: Boolean,
-    threatCount: Int = 0,
-    alertCount: Int = 0,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -242,7 +240,6 @@ fun LogsDropDownSheet(
         degraded -> s.connDegraded
         else -> s.connOnline
     }
-    val healthCounts = "$threatCount ${s.threatsLabel} · $alertCount ${s.alertsLabel}"
 
     Column(
         modifier = modifier
@@ -290,12 +287,6 @@ fun LogsDropDownSheet(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = connColor
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                healthCounts,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -506,8 +497,6 @@ fun LogsScreen(
     iconSet: ThreatIconSet,
     neptunDown: Boolean,
     degraded: Boolean,
-    threatCount: Int = 0,
-    alertCount: Int = 0,
     onBack: () -> Unit
 ) {
     LogsDropDownSheet(
@@ -516,8 +505,6 @@ fun LogsScreen(
         iconSet = iconSet,
         neptunDown = neptunDown,
         degraded = degraded,
-        threatCount = threatCount,
-        alertCount = alertCount,
         onClose = onBack,
         modifier = Modifier.fillMaxHeight(1f)
     )
@@ -580,41 +567,33 @@ private fun buildGroups(
             val flourish = if (showFlourish) sortProximity(rows.filter { it.kind == DebugLogKind.FLOURISH }) else emptyList()
             val threat = rows.filter {
                 it.kind == DebugLogKind.ZONE_ENTER ||
-                    it.kind == DebugLogKind.ZONE_EXIT ||
                     it.kind == DebugLogKind.REGION_THREAT
             }
-            val left = sortProximity(threat.filter { it.kind == DebugLogKind.ZONE_EXIT || it.distanceKm == null })
-            val rest = threat.filter { it.kind != DebugLogKind.ZONE_EXIT && it.distanceKm != null }
+            val rest = threat.filter { it.distanceKm != null }
             val red = sortProximity(rest.filter { it.tier == ThreatZone.INNER })
             val yellow = sortProximity(rest.filter { it.tier == ThreatZone.OUTER })
             val oblast = sortProximity(rest.filter { it.tier == null })
             buildList {
                 if (official.isNotEmpty()) add(LogGroupSpec("official", "official", GroupAccent.OFFICIAL, null, official, subTypes = false))
-                if (flourish.isNotEmpty()) add(LogGroupSpec("flourish", "flourish", GroupAccent.LEFT, null, flourish, subTypes = false))
+                if (flourish.isNotEmpty()) add(LogGroupSpec("flourish", "flourish", null, null, flourish, subTypes = false))
                 if (red.isNotEmpty()) add(LogGroupSpec("red", "red", GroupAccent.RED, null, red, subTypes = true))
                 if (yellow.isNotEmpty()) add(LogGroupSpec("yellow", "yellow", GroupAccent.YELLOW, null, yellow, subTypes = true))
                 if (oblast.isNotEmpty()) add(LogGroupSpec("oblast", "oblast", GroupAccent.OBLAST, null, oblast, subTypes = true))
-                if (left.isNotEmpty()) add(LogGroupSpec("left", "left", GroupAccent.LEFT, null, left, subTypes = false))
             }
         }
         GroupBy.TYPE -> {
             val official = rows.filter { it.kind == DebugLogKind.OFFICIAL_ON || it.kind == DebugLogKind.OFFICIAL_OFF }
             val flourish = if (showFlourish) rows.filter { it.kind == DebugLogKind.FLOURISH } else emptyList()
-            val exits = rows.filter {
-                it.kind == DebugLogKind.ZONE_EXIT &&
-                    it.kind != DebugLogKind.OFFICIAL_ON && it.kind != DebugLogKind.OFFICIAL_OFF
-            }
-            val typed = rows.filter { it !in official && it !in exits && it.threatType != null && it.kind != DebugLogKind.FLOURISH }
+            val typed = rows.filter { it !in official && it.threatType != null && it.kind != DebugLogKind.FLOURISH }
             buildList {
                 if (official.isNotEmpty()) add(LogGroupSpec("official", "official", GroupAccent.OFFICIAL, null, official, subTypes = false))
-                if (flourish.isNotEmpty()) add(LogGroupSpec("flourish", "flourish", GroupAccent.LEFT, null, flourish, subTypes = false))
+                if (flourish.isNotEmpty()) add(LogGroupSpec("flourish", "flourish", null, null, flourish, subTypes = false))
                 typed.groupBy { it.threatType!! }
                     .entries
                     .sortedBy { it.key.ordinal }
                     .forEach { (type, groupRows) ->
                         add(LogGroupSpec("type-${type.name}", null, null, type, groupRows, subTypes = false))
                     }
-                if (exits.isNotEmpty()) add(LogGroupSpec("left", "left", GroupAccent.LEFT, null, exits, subTypes = false))
             }
         }
     }
@@ -787,7 +766,6 @@ private fun GroupHeader(group: LogGroupSpec, s: Strings.StringSet) {
         "red" -> s.debugTierRed
         "yellow" -> s.debugTierYellow
         "oblast" -> s.logsProxOblast
-        "left" -> s.debugGroupLeft
         else -> group.title ?: ""
     }
     Row(
@@ -901,7 +879,6 @@ private fun DebugLogKind.icon(): ImageVector = when (this) {
     DebugLogKind.OFFICIAL_ON -> Icons.Filled.Warning
     DebugLogKind.OFFICIAL_OFF -> Icons.Filled.CheckCircle
     DebugLogKind.ZONE_ENTER -> Icons.Filled.Warning
-    DebugLogKind.ZONE_EXIT -> Icons.Filled.Close
     DebugLogKind.REGION_THREAT -> Icons.Filled.Place
     DebugLogKind.FLOURISH -> Icons.Filled.Star
 }
@@ -920,8 +897,7 @@ private fun DebugLogKind.label(
         val loc = localityText(locality, lang)
         if (loc != null) "${s.debugKindOfficialOff} · $loc" else s.debugKindOfficialOff
     }
-    DebugLogKind.ZONE_ENTER -> {
-        val typeLabel = threatType?.let {
+    DebugLogKind.ZONE_ENTER -> {        val typeLabel = threatType?.let {
             val info = ThreatTypeCatalog.INFO.getValue(it)
             if (lang == AppLanguage.UA) info.labelUa else info.labelEn
         }
@@ -931,19 +907,6 @@ private fun DebugLogKind.label(
             typeLabel != null -> typeLabel
             loc != null -> "${s.debugKindZoneEnter} \u00B7 $loc"
             else -> s.debugKindZoneEnter
-        }
-    }
-    DebugLogKind.ZONE_EXIT -> {
-        val typeLabel = threatType?.let {
-            val info = ThreatTypeCatalog.INFO.getValue(it)
-            if (lang == AppLanguage.UA) info.labelUa else info.labelEn
-        }
-        val loc = localityText(locality, lang)
-        when {
-            typeLabel != null && loc != null -> "$typeLabel \u00B7 ${s.debugKindZoneExit} \u00B7 $loc"
-            typeLabel != null -> "$typeLabel \u00B7 ${s.debugKindZoneExit}"
-            loc != null -> "${s.debugKindZoneExit} \u00B7 $loc"
-            else -> s.debugKindZoneExit
         }
     }
     DebugLogKind.REGION_THREAT -> {
@@ -974,7 +937,6 @@ private fun DebugLogReason.label(s: Strings.StringSet): String = when (this) {
     DebugLogReason.STALE -> s.debugReasonStale
     DebugLogReason.OUTSIDE_ZONES -> s.debugReasonOutsideZones
     DebugLogReason.TOGGLE_OFF -> s.debugReasonToggleOff
-    DebugLogReason.LEFT -> s.debugReasonLeft
     DebugLogReason.FIRED -> ""
 }
 

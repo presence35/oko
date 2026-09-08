@@ -197,7 +197,7 @@ class DebugLogTest {
     }
 
     @Test
-    fun `leaving the region logs an exit`() {
+    fun `leaving the region clears verdicts silently`() {
         val t = threat(id = "t1", lat = 46.48, lon = 30.73)
         val base = ctx(
             mapOf("t1" to t),
@@ -207,10 +207,8 @@ class DebugLogTest {
         )
         val (_, verdicts) = computeSweep(base, emptyMap())
         // Threat resolves / vanishes: no longer in the candidate map.
-        val (exits, nextVerdicts) = computeSweep(base.copy(threats = emptyMap()), verdicts)
-        assertEquals(1, exits.size)
-        assertEquals(DebugLogKind.ZONE_EXIT, exits.first().kind)
-        assertEquals(DebugLogReason.LEFT, exits.first().reason)
+        val (entries, nextVerdicts) = computeSweep(base.copy(threats = emptyMap()), verdicts)
+        assertTrue(entries.isEmpty())
         assertTrue(nextVerdicts.isEmpty())
     }
 

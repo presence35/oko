@@ -317,7 +317,6 @@ object Strings {
         val debugLogSoundOverride: String,
         val debugLogSoundFollows: String,
         val debugGroupOfficial: String,
-        val debugGroupLeft: String,
         val debugBandCloseFormat: String,
         val closeButton: String,
         val debugBandMidFormat: String,
@@ -332,11 +331,9 @@ object Strings {
         val debugReasonStale: String,
         val debugReasonOutsideZones: String,
         val debugReasonToggleOff: String,
-        val debugReasonLeft: String,
         val debugKindOfficialOn: String,
         val debugKindOfficialOff: String,
         val debugKindZoneEnter: String,
-        val debugKindZoneExit: String,
         val debugKindRegionThreat: String,
         val debugKindFlourish: String,
         val flourishLogDetailFormat: String,
@@ -977,7 +974,6 @@ val tapToCancelLabel: String,
         val debugLogSoundOverride: String get() = misc.debugLogSoundOverride
         val debugLogSoundFollows: String get() = misc.debugLogSoundFollows
         val debugGroupOfficial: String get() = misc.debugGroupOfficial
-        val debugGroupLeft: String get() = misc.debugGroupLeft
         val debugBandCloseFormat: String get() = misc.debugBandCloseFormat
         val closeButton: String get() = misc.closeButton
         val debugBandMidFormat: String get() = misc.debugBandMidFormat
@@ -992,11 +988,9 @@ val tapToCancelLabel: String,
         val debugReasonStale: String get() = misc.debugReasonStale
         val debugReasonOutsideZones: String get() = misc.debugReasonOutsideZones
         val debugReasonToggleOff: String get() = misc.debugReasonToggleOff
-        val debugReasonLeft: String get() = misc.debugReasonLeft
         val debugKindOfficialOn: String get() = misc.debugKindOfficialOn
         val debugKindOfficialOff: String get() = misc.debugKindOfficialOff
         val debugKindZoneEnter: String get() = misc.debugKindZoneEnter
-        val debugKindZoneExit: String get() = misc.debugKindZoneExit
         val debugKindRegionThreat: String get() = misc.debugKindRegionThreat
         val debugKindFlourish: String get() = misc.debugKindFlourish
         val flourishLogDetailFormat: String get() = misc.flourishLogDetailFormat

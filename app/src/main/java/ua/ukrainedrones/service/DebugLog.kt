@@ -22,7 +22,7 @@ import ua.ukrainedrones.engine.inOblast
 import ua.ukrainedrones.engine.isFastType
 
 /** Event kinds shown in the Debug log screen. */
-enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, ZONE_EXIT, REGION_THREAT, FLOURISH }
+enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, REGION_THREAT, FLOURISH }
 
 /**
  * Why a decision landed the way it did. [FIRED] = a notification was actually posted
@@ -30,7 +30,7 @@ enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, ZONE_EXIT, REGI
  */
 enum class DebugLogReason {
     FIRED, BELL_MUTED, ALREADY_NOTIFIED, COALESCED, TYPE_OFF, ADVISORY, STALE,
-    OUTSIDE_ZONES, TOGGLE_OFF, LEFT
+    OUTSIDE_ZONES, TOGGLE_OFF
 }
 
 /**
@@ -314,15 +314,7 @@ internal fun computeSweep(
         nextVerdicts[t.id] = fingerprint
         newEntries.add(entry)
     }
-    // Threats we were tracking that left the region entirely: log an exit, drop the marker.
     nextVerdicts.keys.filterNot { it in regionIds }.toList().forEach { id ->
-        val t = ctx.threats[id]
-        newEntries.add(
-            DebugLogEntry(
-                ctx.now, DebugLogKind.ZONE_EXIT, ctx.night, ctx.sirenOverride, null,
-                false, DebugLogReason.LEFT, id, t?.type?.toThreatType(), null, null, t?.locality
-            )
-        )
         nextVerdicts.remove(id)
     }
     return newEntries to nextVerdicts

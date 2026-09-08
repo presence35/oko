@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
+import okhttp3.CacheControl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -97,7 +98,11 @@ class TestPlugin : ThreatSource {
         _enabled.value = enabled
         val activeScope = scope ?: return
         if (enabled) {
-            if (scriptJob?.isActive == true) return
+            scriptJob?.cancel()
+            scriptJob = null
+            cancelAllMovers()
+            _threats.value = emptyList()
+            _alerts.value = emptyList()
             lastError = null
             scriptJob = activeScope.launch { runScript() }
         } else {
@@ -162,7 +167,12 @@ class TestPlugin : ThreatSource {
     /** Parses `testplugin.json` from the update server into a timed event list; null on failure. */
     private suspend fun fetchScript(): List<Pair<Long, () -> Unit>>? {
         return try {
-            val request = Request.Builder().url(UPDATE_BASE_URL + "testplugin.json").build()
+            val request = Request.Builder()
+                .url(UPDATE_BASE_URL + "testplugin.json?t=" + System.currentTimeMillis())
+                .cacheControl(CacheControl.FORCE_NETWORK)
+                .header("Cache-Control", "no-cache")
+                .header("Pragma", "no-cache")
+                .build()
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     lastError = "HTTP ${response.code}"
