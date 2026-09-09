@@ -34,3 +34,17 @@ fun bearingFlat(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double 
     val deg = Math.toDegrees(atan2(dLon, dLat))
     return (deg + 360.0) % 360.0
 }
+
+fun destinationPoint(lat: Double, lon: Double, distanceMeters: Double, bearingDeg: Double): LatLng {
+    val angular = distanceMeters / EARTH_RADIUS_M
+    val brng = Math.toRadians(bearingDeg)
+    val lat1 = Math.toRadians(lat)
+    val lon1 = Math.toRadians(lon)
+    val sinLat1 = sin(lat1)
+    val cosLat1 = cos(lat1)
+    val sinAng = sin(angular)
+    val cosAng = cos(angular)
+    val lat2 = asin(sinLat1 * cosAng + cosLat1 * sinAng * cos(brng))
+    val lon2 = lon1 + atan2(sin(brng) * sinAng * cosLat1, cosAng - sinLat1 * sin(lat2))
+    return LatLng(Math.toDegrees(lat2), Math.toDegrees(lon2))
+}

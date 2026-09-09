@@ -34,6 +34,7 @@ import ua.ukrainedrones.data.SystemEntryKind
 import ua.ukrainedrones.BatteryOptimization
 import ua.ukrainedrones.showToast
 import ua.ukrainedrones.engine.NormalizedThreat
+import ua.ukrainedrones.BuildConfig
 import ua.ukrainedrones.engine.fallbackCourse
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.normalizedThreatFromJson
@@ -266,7 +267,9 @@ class NeptunConnectionClient(
 
     private fun connect(gen: Int = connectionGeneration.incrementAndGet()) {
         if (isManuallyStopped) return
-        val request = Request.Builder().url(WS_URL).build()
+        val request = Request.Builder().url(WS_URL)
+            .header("User-Agent", "Oko/${BuildConfig.VERSION_NAME} (Android)")
+            .build()
 
         client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {

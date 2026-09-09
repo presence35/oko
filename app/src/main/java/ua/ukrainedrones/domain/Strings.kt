@@ -545,12 +545,11 @@ object Strings {
         val guideWidgetD1: String,
         val guideWidgetD2: String,
         val guideWidgetD3: String,
-        val guideLegendTitle: String,
-        val guideLegendSummary: String,
-        val guideLegendD1: String,
-        val guideLegendD2: String,
-        val guideLegendD3: String,
-        val guideLegendD4: String,
+        val guideFillsTitle: String,
+        val guideFillsSummary: String,
+        val guideFillsD1: String,
+        val guideFillsD2: String,
+        val guideFillsD3: String,
         val lastSeenAgoFormat: String,
         val neutralizedLabel: String,
         val neutralizedNote: String,
@@ -1194,12 +1193,11 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val guideWidgetD1: String get() = guide.guideWidgetD1
         val guideWidgetD2: String get() = guide.guideWidgetD2
         val guideWidgetD3: String get() = guide.guideWidgetD3
-        val guideLegendTitle: String get() = guide.guideLegendTitle
-        val guideLegendSummary: String get() = guide.guideLegendSummary
-        val guideLegendD1: String get() = guide.guideLegendD1
-        val guideLegendD2: String get() = guide.guideLegendD2
-        val guideLegendD3: String get() = guide.guideLegendD3
-        val guideLegendD4: String get() = guide.guideLegendD4
+        val guideFillsTitle: String get() = guide.guideFillsTitle
+        val guideFillsSummary: String get() = guide.guideFillsSummary
+        val guideFillsD1: String get() = guide.guideFillsD1
+        val guideFillsD2: String get() = guide.guideFillsD2
+        val guideFillsD3: String get() = guide.guideFillsD3
         val lastSeenAgoFormat: String get() = guide.lastSeenAgoFormat
         val neutralizedLabel: String get() = guide.neutralizedLabel
         val neutralizedNote: String get() = guide.neutralizedNote

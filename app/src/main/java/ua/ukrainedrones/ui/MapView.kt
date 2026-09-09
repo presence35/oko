@@ -147,16 +147,12 @@ private val tileSystem = TileSystemWebMercator()
 
 /** Bounding box that fits a zone circle centred on `center`, with a 5% margin. */
 private fun zoneBoundingBox(center: IGeoPoint, radiusKm: Double): BoundingBox {
-    val marginKm = radiusKm * 1.05
-    val dLat = marginKm * 1000.0 / 110_574.0
-    val dLon = marginKm * 1000.0 /
-        (111_320.0 * cos(Math.toRadians(center.latitude)).coerceAtLeast(0.01))
-    return BoundingBox(
-        center.latitude + dLat,
-        center.longitude + dLon,
-        center.latitude - dLat,
-        center.longitude - dLon
-    )
+    val marginM = radiusKm * 1000.0 * 1.05
+    val north = ua.ukrainedrones.engine.destinationPoint(center.latitude, center.longitude, marginM, 0.0)
+    val east = ua.ukrainedrones.engine.destinationPoint(center.latitude, center.longitude, marginM, 90.0)
+    val south = ua.ukrainedrones.engine.destinationPoint(center.latitude, center.longitude, marginM, 180.0)
+    val west = ua.ukrainedrones.engine.destinationPoint(center.latitude, center.longitude, marginM, 270.0)
+    return BoundingBox(north.lat, east.lon, south.lat, west.lon)
 }
 
 /** Bounding box over the nearest shelters, padded so every marker is comfortably in view. */
@@ -202,9 +198,8 @@ private fun threatIconSizeDp(zoom: Double): Int {
 /** Position for the "approaching, precision unknown" orbit: a point on the yellow ring around
  *  [center] (the destination city), advancing the angle over time so the icon patrols the ring. */
 private fun orbitPosition(center: LatLng, radiusMeters: Double, angleRad: Double): LatLng {
-    val dLat = (radiusMeters * cos(angleRad)) / 111_320.0
-    val dLon = (radiusMeters * sin(angleRad)) / (111_320.0 * cos(Math.toRadians(center.lat)))
-    return LatLng(center.lat + dLat, center.lon + dLon)
+    val bearing = (Math.toDegrees(angleRad) + 360.0) % 360.0
+    return ua.ukrainedrones.engine.destinationPoint(center.lat, center.lon, radiusMeters, bearing)
 }
 
 /** The destination city an approximate-position threat is heading toward, resolved from its
@@ -367,11 +362,10 @@ private fun pinBitmap(context: Context): Bitmap {
 
 /** Polygon approximation of a circle around [center] — osmdroid has no native circle overlay. */
 private fun circlePoints(center: GeoPoint, radiusMeters: Double, segments: Int = 64): List<GeoPoint> {
-    val dLat = radiusMeters / 110_574.0
-    val dLon = radiusMeters / (111_320.0 * cos(Math.toRadians(center.latitude)).coerceAtLeast(0.01))
     return List(segments) { i ->
-        val a = 2.0 * Math.PI * i / segments
-        GeoPoint(center.latitude + dLat * sin(a), center.longitude + dLon * cos(a))
+        val bearing = 360.0 * i / segments
+        val p = ua.ukrainedrones.engine.destinationPoint(center.latitude, center.longitude, radiusMeters, bearing)
+        GeoPoint(p.lat, p.lon)
     }
 }
 
@@ -1474,7 +1468,7 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
                     if (pos != null) {
                         mapView.overlays.add(Marker(mapView).apply {
                             position = pos
-                            setAnchor(Marker.ANCHOR_CENTER, 0.1f)
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                             icon = BitmapDrawable(
                                 context.resources, gpsDotBitmap(context, uiState.gpsFixAvailable)
                             )

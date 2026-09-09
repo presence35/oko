@@ -39,7 +39,7 @@ private val Green = Color(0xFF4CAF50)
 
 enum class GuideDiagram {
     LIVE, STRIP, CONN, ZONES, EDIT_ZONES, NOTIF, TOGGLES, FOLLOW, PIN, SHELTER,
-    CARD_SIZE, CARD_READ, LANG, THREAT_TOGGLES, UPDATE, NIGHT, WIDGET, LEGEND
+    CARD_SIZE, CARD_READ, LANG, THREAT_TOGGLES, UPDATE, NIGHT, WIDGET, FILLS, LEGEND
 }
 
 /** Animated mini-illustration for one feature-guide card. */
@@ -81,6 +81,7 @@ fun FeatureDiagram(kind: GuideDiagram, modifier: Modifier = Modifier) {
             GuideDiagram.UPDATE -> drawUpdate(t)
             GuideDiagram.NIGHT -> drawNight()
             GuideDiagram.WIDGET -> drawWidget(t)
+            GuideDiagram.FILLS -> drawFills()
             GuideDiagram.LEGEND -> drawLegend()
         }
     }
@@ -367,6 +368,14 @@ private fun DrawScope.drawShelter(t: Float) {
     }
     drawPath(arch, White, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
     drawCircle(Green, 3.dp.toPx(), Offset(cx, cy + r * 0.1f))
+}
+
+private fun DrawScope.drawFills() {
+    bg()
+    drawRect(Color(0x66FF0000), Offset(size.width * 0.08f, size.height * 0.18f), Size(size.width * 0.36f, size.height * 0.64f))
+    drawRect(Color(0x66FFD500), Offset(size.width * 0.56f, size.height * 0.18f), Size(size.width * 0.36f, size.height * 0.64f))
+    drawRect(White.copy(alpha = 0.18f), Offset(size.width * 0.08f, size.height * 0.18f), Size(size.width * 0.36f, size.height * 0.64f), style = Stroke(1.dp.toPx()))
+    drawRect(White.copy(alpha = 0.18f), Offset(size.width * 0.56f, size.height * 0.18f), Size(size.width * 0.36f, size.height * 0.64f), style = Stroke(1.dp.toPx()))
 }
 
 private fun DrawScope.drawLegend() {

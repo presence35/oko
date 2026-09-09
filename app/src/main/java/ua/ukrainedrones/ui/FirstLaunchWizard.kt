@@ -496,7 +496,9 @@ private fun SetupLocationStep(
     val context = LocalContext.current
     val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
-    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result.values.any { it }) LocationTracker.start(context)
+    }
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(
             s.wizardLocationSubtitle,
@@ -632,13 +634,24 @@ private fun SetupZoneControlsStep(
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface
         )
-        LegendRow(s)
+        Text(
+            "Official fills — not your settings",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        FillsLegendRow()
         FeatureDiagram(
-            kind = GuideDiagram.LEGEND,
+            kind = GuideDiagram.FILLS,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(92.dp)
                 .clip(RoundedCornerShape(14.dp))
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Text(
+            "Your zones — adjustable",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         FeatureDiagram(
             kind = GuideDiagram.ZONES,
@@ -753,6 +766,14 @@ private fun SetupZoneControlsStep(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun FillsLegendRow() {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        LegendChip(Color(0xFFD32F2F), "Red fill", Modifier.weight(1f))
+        LegendChip(Color(0xFFFFD500), "Yellow fill", Modifier.weight(1f))
     }
 }
 
