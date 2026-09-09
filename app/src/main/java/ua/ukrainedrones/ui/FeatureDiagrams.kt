@@ -372,10 +372,40 @@ private fun DrawScope.drawShelter(t: Float) {
 
 private fun DrawScope.drawFills() {
     bg()
-    drawRect(Color(0x66FF0000), Offset(size.width * 0.08f, size.height * 0.18f), Size(size.width * 0.36f, size.height * 0.64f))
-    drawRect(Color(0x66FFD500), Offset(size.width * 0.56f, size.height * 0.18f), Size(size.width * 0.36f, size.height * 0.64f))
-    drawRect(White.copy(alpha = 0.18f), Offset(size.width * 0.08f, size.height * 0.18f), Size(size.width * 0.36f, size.height * 0.64f), style = Stroke(1.dp.toPx()))
-    drawRect(White.copy(alpha = 0.18f), Offset(size.width * 0.56f, size.height * 0.18f), Size(size.width * 0.36f, size.height * 0.64f), style = Stroke(1.dp.toPx()))
+    val padX = size.width * 0.06f
+    val padY = size.height * 0.12f
+    val w = size.width - padX * 2
+    val h = size.height - padY * 2
+    fun nx(x: Float) = padX + x * w
+    fun ny(y: Float) = padY + y * h
+    val outer = Path().apply {
+        val pts = listOf(
+            0.06f to 0.62f, 0.11f to 0.38f, 0.20f to 0.30f, 0.33f to 0.28f, 0.48f to 0.24f,
+            0.62f to 0.22f, 0.76f to 0.32f, 0.94f to 0.42f, 0.90f to 0.66f, 0.78f to 0.78f,
+            0.60f to 0.86f, 0.42f to 0.88f, 0.28f to 0.80f, 0.12f to 0.76f,
+        )
+        moveTo(nx(pts[0].first), ny(pts[0].second))
+        pts.drop(1).forEach { (x, y) -> lineTo(nx(x), ny(y)) }
+        close()
+    }
+    val redFill = Path().apply {
+        moveTo(nx(0.55f), ny(0.30f)); lineTo(nx(0.78f), ny(0.32f)); lineTo(nx(0.92f), ny(0.48f))
+        lineTo(nx(0.78f), ny(0.62f)); lineTo(nx(0.52f), ny(0.56f)); close()
+    }
+    val yellowFill = Path().apply {
+        moveTo(nx(0.20f), ny(0.58f)); lineTo(nx(0.48f), ny(0.58f)); lineTo(nx(0.52f), ny(0.82f))
+        lineTo(nx(0.28f), ny(0.78f)); close()
+    }
+    drawPath(redFill, Color(0x66FF0000))
+    drawPath(yellowFill, Color(0x66FFD500))
+    drawPath(outer, White.copy(alpha = 0.35f), style = Stroke(1.2.dp.toPx()))
+    val oblastStroke = White.copy(alpha = 0.16f)
+    val sw = 0.9.dp.toPx()
+    drawLine(oblastStroke, Offset(nx(0.42f), ny(0.30f)), Offset(nx(0.38f), ny(0.82f)), sw)
+    drawLine(oblastStroke, Offset(nx(0.55f), ny(0.28f)), Offset(nx(0.60f), ny(0.86f)), sw)
+    drawLine(oblastStroke, Offset(nx(0.15f), ny(0.56f)), Offset(nx(0.88f), ny(0.58f)), sw)
+    drawPath(redFill, White.copy(alpha = 0.22f), style = Stroke(sw))
+    drawPath(yellowFill, White.copy(alpha = 0.22f), style = Stroke(sw))
 }
 
 private fun DrawScope.drawLegend() {

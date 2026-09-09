@@ -119,8 +119,8 @@ internal fun FirstLaunchWizard(
     BackHandler(enabled = step > 0) { step-- }
     val stepTitle = when (step) {
         0 -> Strings.get(other).languageChooseTitle
-        1 -> s.wizardCareTitle
-        2 -> s.wizardLocationTitle
+        1 -> s.wizardLocationTitle
+        2 -> s.wizardCareTitle
         3 -> s.wizardZonesTitle
         else -> s.onboardingFeaturesTitle
     }
@@ -225,10 +225,10 @@ internal fun FirstLaunchWizard(
                             )
                         }
                     }
-                    1 -> {
+                    1 -> SetupLocationStep(current, mode = locationMode, pinnedCity = pinnedCity, onModeChange = { locationMode = it }, onFollowMeChange = onFollowMeChange, onPinnedCityChange = onPinnedCityChange)
+                    2 -> {
                         WizardThreatGrid(current, iconSet, hiddenTypes, silencedTypes, onThreatEnabledToggle)
                     }
-                    2 -> SetupLocationStep(current, mode = locationMode, pinnedCity = pinnedCity, onModeChange = { locationMode = it }, onFollowMeChange = onFollowMeChange, onPinnedCityChange = onPinnedCityChange)
                     3 -> SetupZoneControlsStep(
                         s = s,
                         lang = current,
@@ -628,48 +628,60 @@ private fun SetupZoneControlsStep(
     onSlowRedArmedChange: (Boolean) -> Unit,
     onSlowYellowArmedChange: (Boolean) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             s.wizardZonesSubtitle,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface
         )
-        Text(
-            "Official fills — not your settings",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        FillsLegendRow()
-        FeatureDiagram(
-            kind = GuideDiagram.FILLS,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(92.dp)
-                .clip(RoundedCornerShape(14.dp))
-        )
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        Text(
-            "Your zones — adjustable",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        FeatureDiagram(
-            kind = GuideDiagram.ZONES,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(150.dp)
-                .clip(RoundedCornerShape(14.dp))
-        )
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Official map fills",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FeatureDiagram(
+                    kind = GuideDiagram.FILLS,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(92.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                )
+                FillsLegendRow()
+                Text(
+                    "Not your settings — just what the regions broadcast",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Your zones — adjustable",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FeatureDiagram(
+                    kind = GuideDiagram.ZONES,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(140.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                )
                 WizardZoneSliderRow(
                     color = ZoneRedColor,
                     armed = slowRedArmed,
@@ -678,7 +690,6 @@ private fun SetupZoneControlsStep(
                     onKmChange = onSlowRedChange,
                     kmUnit = s.kmUnit
                 )
-                Spacer(Modifier.height(2.dp))
                 Text(
                     s.wizardEditZonesHint,
                     style = MaterialTheme.typography.bodySmall,
@@ -711,58 +722,62 @@ private fun SetupZoneControlsStep(
                     )
                 }
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFD32F2F))
-                            .border(BorderStroke(2.dp, Color(0xFFD32F2F)), CircleShape),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_zoom_in),
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFD32F2F)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_zoom_in),
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Text(
+                            s.zoneRedLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Text(
-                        s.zoneRedLabel,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f)
-                    )
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface)
-                            .border(BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant), CircleShape),
-                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = s.editZonesLabel,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surface)
+                                .border(BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = s.editZonesLabel,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Text(
+                            s.editZonesLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Text(
-                        s.editZonesLabel,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                    )
                 }
             }
         }

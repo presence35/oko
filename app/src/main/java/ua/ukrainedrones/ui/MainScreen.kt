@@ -276,7 +276,11 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 else settingsCollapse.copy(threats = true)
                 scrollToThreatsTick++
             },
-                        onThreatTapped = { showZonesSheet = false; viewModel.selectThreat(it) },
+                        onThreatTapped = {
+                            showZonesSheet = false
+                            if (viewModel.selectedThreatId.value == it.id) viewModel.selectThreat(null)
+                            else viewModel.selectThreat(it)
+                        },
             onFlourishEjected = viewModel::notifyFlourishEjected,
             onThreatStripTap = { viewModel.panToThreat(it) },
             onDismissPopup = { viewModel.selectThreat(null) },
@@ -293,6 +297,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onNeutralize = { id -> viewModel.neutralizeThreat(id) },
             onFlybyFinished = { id -> viewModel.onFlybyFinished(id) },
             onEjectAll = viewModel::ejectAllFun,
+            onLocateThreat = { viewModel.centerOnThreat(it) },
             showZonesSheet = showZonesSheet,
             onShowZonesSheetChange = { showZonesSheet = it },
             onOpenShelters = {
@@ -654,6 +659,7 @@ private fun MapScreen(
     onFlourishEjected: () -> Unit,
     onFlybyFinished: (String) -> Unit,
     onEjectAll: () -> Unit,
+    onLocateThreat: (NormalizedThreat) -> Unit = {},
     showZonesSheet: Boolean,
     onShowZonesSheetChange: (Boolean) -> Unit,
     onOpenShelters: () -> Unit,
@@ -1151,6 +1157,7 @@ private fun MapScreen(
                 s = s,
                 onDismiss = onDismissPopup,
                 onThreatCardSizeChange = onThreatCardSizeChange,
+                onLocateThreat = onLocateThreat,
                 onHeightChanged = { popupCoverPx = it }
             )
 
@@ -1275,6 +1282,7 @@ private fun ThreatCardHost(
     s: Strings.StringSet,
     onDismiss: () -> Unit,
     onThreatCardSizeChange: (ThreatCardSize) -> Unit,
+    onLocateThreat: (NormalizedThreat) -> Unit = {},
     onHeightChanged: (Int) -> Unit = {}
 ) {
     val sel = selection.collectAsState().value
@@ -1322,12 +1330,16 @@ private fun ThreatCardHost(
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Start
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         ThreatCardSizeControl(
                             current = cardSize,
                             contentDescription = s.cardSizeLabel,
                             onClick = { onThreatCardSizeChange(nextThreatCardSize(cardSize)) },
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                        LocateThreatControl(
+                            onClick = { onLocateThreat(threat) },
                             modifier = Modifier.padding(top = 6.dp)
                         )
                     }
@@ -1881,6 +1893,39 @@ private fun ThreatCardSizeControl(
             if (i < 1) Spacer(Modifier.height(4.dp))
         }
     }
+}
+
+/** Crosshair icon button below the popup card that centres the map on the threat. */
+@Composable
+private fun LocateThreatControl(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale = animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+        label = "locateScale"
+    )
+    Icon(
+        imageVector = Icons.Filled.LocationOn,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isPressed) 0.95f else 0.85f))
+            .pressTick(interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true),
+                onClick = onClick
+            )
+            .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .size(20.dp)
+    )
 }
 
 @Composable

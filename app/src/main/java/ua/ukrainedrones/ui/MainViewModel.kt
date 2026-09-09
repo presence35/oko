@@ -1598,6 +1598,16 @@ fun setAlertsArmed(armed: Boolean) {
         revealThreat(t.id, predicted.lat, predicted.lon, select = true)
     }
 
+    /** Locate button: pan the camera onto [t] without selecting/deselecting it. */
+    fun centerOnThreat(t: NormalizedThreat) {
+        val now = System.currentTimeMillis()
+        val props = engine.propsFor(t.type)
+        val speed = engine.speedCache.estimate(t.id, t, props)
+        val predicted = speed?.let { engine.predictPosition(t, it, props, now) }
+            ?: LatLng(t.lat, t.lon)
+        revealThreat(t.id, predicted.lat, predicted.lon, select = false)
+    }
+
     /** Auto-check at most once per day. [allowPopup] pops the dialog on start when no alert is active. */
     fun autoCheckForUpdates(allowPopup: Boolean) {
         viewModelScope.launch {

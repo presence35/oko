@@ -85,3 +85,39 @@ key-invariants section of `ARCHITECTURE.md` in the same change, so the docs neve
 Single squashed history on `main` containing only the refactored app — the
 pre-refactor project and the `refactor/` scaffold are gone. The refactor is complete;
 `BEHAVIORS.md` is now the living engine behavioral contract (not a plan).
+
+
+
+### OpenCode Zen Agent Routing Profiles
+
+This profile manages task distribution.
+
+## 🚀 Active Architecture Matrix
+
+| Agent Role | Target Model | Scope of Responsibility | Trigger Keywords |
+| :--- | :--- | :--- | :--- |
+| **Lead Architect & Debugger** | `Big Pickle` | Complex architecture, multi-file bugs, concurrency, background services | `crash, deadlock, architectural, coroutine, refactor` |
+| **Context & Log ingestion** | `Ling 3.0 Flash Fin Free` | Logcat ingestion, dependency trees, Gradle scripts, massive trace files | `logcat, build.gradle, stacktrace, analyze repo` |
+| **UI/UX & Jetpack Compose** | `Muse Spark 1.3 Free` | UI design, Compose layouts, XML resources, styling, custom views | `compose, theme, canvas, padding, preview, ui` |
+| **Rapid Scaffolder & Routing**| `MiMo V2.5 Free` | Boilerplate generation, quick local scripts, simple data classes | `generate boilerplate, fast script, helper class` |
+| **API & Data Structurer**   | `Nemotron 3.5 Lightning Free` | Retrofit schemas, Room DB entities, JSON parsing, API routing structures | `room db, retrofit, api schema, json` |
+
+---
+
+## 🛠️ Dynamic Routing System Rules
+
+### 1. Hard Engineering & Architecture (`Big Pickle`)
+- **Intent**: Heavy logic parsing.
+- **Directives**: Use for debugging asynchronous Kotlin Coroutines, StateFlow leaks, or deep Android Lifecycle management (ViewModel, Hilt/Dagger injection).
+
+### 2. Full-Context Analysis (`Ling 3.0 Flash Fin Free`)
+- **Intent**: Parsing massive files or the entire repository layout.
+- **Directives**: Route to this model when pasting an entire `Logcat` crash log or when analyzing deep nested multi-module `build.gradle.kts` dependency graphs.
+
+### 3. Frontend / User Interface (`Muse Spark 1.3 Free`)
+- **Intent**: Visual and Layout generation.
+- **Directives**: Route all Jetpack Compose functions, Material Design 3 configurations, and XML UI file modifications to this profile.
+
+### 4. Utilities & JSON Data (`Nemotron 3.5 Lightning Free`)
+- **Intent**: High-speed schema parsing and API interface declarations.
+- **Directives**: Trigger for data serialization classes, Retrofit interface declarations, and local SQLite/Room schema entities.
