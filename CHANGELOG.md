@@ -17,5 +17,6 @@
 - GPS acquisition now starts the moment you grant permission in the onboarding wizard, instead of waiting for the wizard to finish / GPS acquisition now starts the moment you grant permission in the onboarding wizard, instead of waiting for the wizard to finish
 - Onboarding wizard now asks for location permission before threat selection, so GPS has more time to lock / Onboarding wizard now asks for location permission before threat selection, so GPS has more time to lock
 - The NEPTUN attribution in the onboarding wizard now credits the Neptun team and links to their website / The NEPTUN attribution in the onboarding wizard now credits the Neptun team and links to their website
+- The onboarding zones step now shows a real map screenshot for official fills with an explanation of red vs yellow, and the button preview matches the map with red + yellow zoom buttons / The onboarding zones step now shows a real map screenshot for official fills with an explanation of red vs yellow, and the button preview matches the map with red + yellow zoom buttons
 - GPS dot stays centred on the red/yellow zone epicentre at any zoom level; zone circles and orbit path are now geodesic / GPS dot stays centred on the red/yellow zone epicentre at any zoom level; zone circles and orbit path are now geodesic
 

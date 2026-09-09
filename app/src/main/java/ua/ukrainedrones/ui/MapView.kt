@@ -805,6 +805,7 @@ fun NeptunMapView(
     val lastFittedYellowKm = remember { mutableStateOf<Int?>(null) }
     val lastRevealTick = remember { mutableStateOf(-1) }
     val lastRevealPos = remember { mutableStateOf<LatLng?>(null) }
+    val lastCenterTick = remember { mutableStateOf(-1) }
     val lastPopupCoverPx = remember { mutableStateOf(0) }
     val lastZonesCoverPx = remember { mutableStateOf(0) }
     val lastFlourishTick = remember { mutableStateOf(-1) }
@@ -1092,6 +1093,16 @@ fun NeptunMapView(
             // the green dot.
             val reveal = revealRequest
             if (reveal != null && reveal.tick != lastRevealTick.value) {
+                // Clear the previous reveal dot by refreshing the old marker icon
+                val prevId = newRingState.value?.id
+                if (prevId != null && prevId != reveal.id) {
+                    markerRefs.value[prevId]?.let { m ->
+                        val prevThreat = uiState.mapThreats.firstOrNull { it.id == prevId }
+                        if (prevThreat != null) {
+                            m.icon = threatIconFor(context, prevThreat.type.toThreatType(), iconSetState, revealed = false, sizeDp = markerIconDp.value[prevId] ?: 32)
+                        }
+                    }
+                }
                 lastRevealTick.value = reveal.tick
                 val threat = LatLng(reveal.lat, reveal.lon)
                 lastRevealPos.value = threat
@@ -1127,6 +1138,21 @@ fun NeptunMapView(
                             mapView.invalidate()
                         }
                     }
+                }
+            }
+
+            // Locate button: centre the map on the threat with a tight threat-only framing
+            // (no reveal dot, no focus-point inclusion).
+            val center = uiState.centerRequest
+            if (center != null && center.tick != lastCenterTick.value) {
+                lastCenterTick.value = center.tick
+                if (mapView.width > 0 && mapView.height > 0) {
+                    val centerPoint = GeoPoint(center.lat, center.lon)
+                    // ~20 km radius tight box around the threat, leaving room for the popup
+                    // card above and zones sheet below.
+                    val radiusM = 12_000.0
+                    val bbox = zoneBoundingBox(centerPoint, radiusM / 1000.0)
+                    mapView.zoomToBoundingBox(bbox, true)
                 }
             }
 

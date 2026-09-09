@@ -59,6 +59,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -1329,7 +1330,7 @@ private fun ThreatCardHost(
                         modifier = if (smallCard) Modifier.widthIn(max = 300.dp) else Modifier.fillMaxWidth()
                     )
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = if (smallCard) Modifier.widthIn(max = 300.dp) else Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         ThreatCardSizeControl(
@@ -1868,7 +1869,6 @@ private fun ThreatCardSizeControl(
         modifier = modifier
             .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isPressed) 0.95f else 0.85f))
             .semantics { semanticsContentDescription = contentDescription }
             .pressTick(interactionSource)
             .clickable(
@@ -1909,13 +1909,12 @@ private fun LocateThreatControl(
         label = "locateScale"
     )
     Icon(
-        imageVector = Icons.Filled.LocationOn,
+        imageVector = Icons.Outlined.LocationOn,
         contentDescription = null,
         tint = MaterialTheme.colorScheme.primary,
         modifier = modifier
             .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isPressed) 0.95f else 0.85f))
             .pressTick(interactionSource)
             .clickable(
                 interactionSource = interactionSource,

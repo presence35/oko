@@ -31,6 +31,7 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         wizardLocationSubtitle = "Оберіть, звідки брати вашу позицію — від цього залежать зони та сповіщення.",
         wizardZonesTitle = "Зони тривог",
         wizardZonesSubtitle = "На мапі є червона та жовта зони, а також зона на час для швидких об'єктів. Налаштуй під себе.",
+        wizardFillsDesc = "Red = air-raid (siren + banner); Yellow = artillery/tactical, visual only.",
         wizardEditZonesHint = "Повзунок повільно рухає коло на мапі — червона зона завжди всередині жовтої.",
         zoneRedLabel = "Натисни, щоб наблизити",
         zoneYellowLabel = "Жовта зона",

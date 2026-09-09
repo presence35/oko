@@ -117,6 +117,7 @@ data class UiState(
     val redCities: Set<String> = emptySet(),      // nameUa of cities shown red (scope-aware)
     val threatLevel: Double = 0.0,                 // experimental 0..10 gauge for the popup
     val revealRequest: RevealRequest? = null,      // notification tap: pan the camera onto a threat
+    val centerRequest: CenterRequest? = null,      // locate button: centre the map on a threat
     val flourish: FlourishShow? = null,            // tally tap: replay the shot-down show
     val flyby: AviationFlybyShow? = null,          // MiG-31K takeoff: full-size pass across the viewport
     val disclaimerCollapsed: Boolean = false,
@@ -186,6 +187,15 @@ data class RevealRequest(
     val lon: Double
 )
 
+/** One-shot request from the locate button to center the map on a threat (threat-only framing). */
+@Immutable
+data class CenterRequest(
+    val tick: Int,
+    val id: String,
+    val lat: Double,
+    val lon: Double
+)
+
 /** Distance/ETA facts for the threat popup, computed from the predicted position. */
 @Immutable
 data class ThreatProximity(
@@ -223,6 +233,8 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     private val neutralizedFlow = MutableStateFlow<String?>(null)
     private val revealFlow = MutableStateFlow<RevealRequest?>(null)
     private var revealTick = 0
+    private val centerFlow = MutableStateFlow<CenterRequest?>(null)
+    private var centerTick = 0
     private var navigateToMapCounter = 0
     private val _navigateToMapFlow = MutableStateFlow(0)
     val navigateToMapTick: StateFlow<Int> get() = _navigateToMapFlow
@@ -414,7 +426,8 @@ val fastGroupCollapsed: Boolean,
         val reveal: RevealRequest?,
         val flourish: FlourishShow?,
         val mapVisible: Boolean,
-        val shelterModeActive: Boolean
+        val shelterModeActive: Boolean,
+        val centerRequest: CenterRequest? = null
     )
 
     private data class UpdateUi(
@@ -458,6 +471,7 @@ val fastGroupCollapsed: Boolean,
         LocationTracker.location,
         LocationTracker.lastFixAtMs,
         revealFlow,
+        centerFlow,
         flourishFlow,
         mapVisibleFlow,
         shelterModeFlow
@@ -467,14 +481,15 @@ val fastGroupCollapsed: Boolean,
         val location = values[2] as LatLng?
         val lastFix = values[3] as Long?
         val reveal = values[4] as RevealRequest?
-        val flourish = values[5] as FlourishShow?
-        val mapVisible = values[6] as Boolean
-        val shelterModeActive = values[7] as Boolean
+        val center = values[5] as CenterRequest?
+        val flourish = values[6] as FlourishShow?
+        val mapVisible = values[7] as Boolean
+        val shelterModeActive = values[8] as Boolean
         LiveSnapshot(
             cs, threats, alerts,
             radii.slowRedKm, radii.slowYellowKm, radii.fastRedMin, radii.fastYellowMin,
             location, lastFix != null, reveal, flourish, mapVisible, shelterModeActive
-        )
+        ).copy(centerRequest = center)
     }
 
     private val prefsSnapshot = combine(
@@ -851,7 +866,7 @@ showBorders = prefs.showBorders,
             val durationMs = threat?.let { calculateFlybyDuration(it) } ?: AVIATION_FLYBY_DURATION_MS
             flybyFlow.value = AviationFlybyShow(autoFlyby.tick, autoFlyby.threatId, autoFlyby.courseDeg, durationMs)
         }
-        uiState.copy(flyby = flyby)
+        uiState.copy(flyby = flyby, centerRequest = live.centerRequest)
     }
         .flowOn(Dispatchers.Default)
         .stateIn(
@@ -1598,14 +1613,15 @@ fun setAlertsArmed(armed: Boolean) {
         revealThreat(t.id, predicted.lat, predicted.lon, select = true)
     }
 
-    /** Locate button: pan the camera onto [t] without selecting/deselecting it. */
+    /** Locate button: center the map on [t] without selecting/deselecting it (threat-only framing). */
     fun centerOnThreat(t: NormalizedThreat) {
         val now = System.currentTimeMillis()
         val props = engine.propsFor(t.type)
         val speed = engine.speedCache.estimate(t.id, t, props)
         val predicted = speed?.let { engine.predictPosition(t, it, props, now) }
             ?: LatLng(t.lat, t.lon)
-        revealThreat(t.id, predicted.lat, predicted.lon, select = false)
+        centerTick++
+        centerFlow.value = CenterRequest(centerTick, t.id, predicted.lat, predicted.lon)
     }
 
     /** Auto-check at most once per day. [allowPopup] pops the dialog on start when no alert is active. */

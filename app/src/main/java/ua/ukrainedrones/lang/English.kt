@@ -31,6 +31,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
         wizardLocationSubtitle = "Choose where your position comes from — it drives your zones and alerts.",
         wizardZonesTitle = "Alert zones",
         wizardZonesSubtitle = "The map has red and yellow zones, as well as a time-based zone for fast objects. Adjust them to your comfort.",
+        wizardFillsDesc = "Red = air-raid (siren + banner); Yellow = artillery/tactical, visual only.",
         wizardEditZonesHint = "Drag the slider for your comfort zones.",
         zoneRedLabel = "Tap to zoom",
         zoneYellowLabel = "Yellow zone",

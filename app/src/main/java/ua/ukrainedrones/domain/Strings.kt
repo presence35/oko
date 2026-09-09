@@ -35,6 +35,7 @@ object Strings {
         val wizardLocationSubtitle: String,
         val wizardZonesTitle: String,
         val wizardZonesSubtitle: String,
+        val wizardFillsDesc: String,
         val wizardEditZonesHint: String,
         val zoneRedLabel: String,
         val zoneYellowLabel: String,
@@ -650,6 +651,7 @@ val tapToCancelLabel: String,
         val wizardLocationSubtitle: String get() = onboarding.wizardLocationSubtitle
         val wizardZonesTitle: String get() = onboarding.wizardZonesTitle
         val wizardZonesSubtitle: String get() = onboarding.wizardZonesSubtitle
+        val wizardFillsDesc: String get() = onboarding.wizardFillsDesc
         val zoneRedLabel: String get() = onboarding.zoneRedLabel
         val zoneYellowLabel: String get() = onboarding.zoneYellowLabel
         val wizardEditZonesHint: String get() = onboarding.wizardEditZonesHint
