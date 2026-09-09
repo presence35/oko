@@ -19,4 +19,5 @@
 - The NEPTUN attribution in the onboarding wizard now credits the Neptun team and links to their website / The NEPTUN attribution in the onboarding wizard now credits the Neptun team and links to their website
 - The onboarding zones step now shows a real map screenshot for official fills with an explanation of red vs yellow, and the button preview matches the map with red + yellow zoom buttons / The onboarding zones step now shows a real map screenshot for official fills with an explanation of red vs yellow, and the button preview matches the map with red + yellow zoom buttons
 - GPS dot stays centred on the red/yellow zone epicentre at any zoom level; zone circles and orbit path are now geodesic / GPS dot stays centred on the red/yellow zone epicentre at any zoom level; zone circles and orbit path are now geodesic
+- Night mode toggle now lives on the collapsed card header, matching Just Fun / Перемикач нічного режиму тепер на заголовку згорнутої картки, як у «Розваг»
 

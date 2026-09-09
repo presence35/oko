@@ -657,12 +657,24 @@ private fun SetupZoneControlsStep(
                         .height(92.dp)
                         .clip(RoundedCornerShape(10.dp))
                 )
-                FillsLegendRow()
-                Text(
-                    s.wizardFillsDesc,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        LegendChip(Color(0xFFFFD500), "Yellow fill")
+                        Text(
+                            s.wizardYellowFillDesc,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        LegendChip(Color(0xFFD32F2F), "Red fill")
+                        Text(
+                            s.wizardRedFillDesc,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
         Card(
@@ -743,20 +755,6 @@ private fun SetupZoneControlsStep(
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFF9A825)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_zoom_in),
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
                     Text(
                         s.zoneRedLabel,
                         style = MaterialTheme.typography.bodySmall,
@@ -788,14 +786,6 @@ private fun SetupZoneControlsStep(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun FillsLegendRow() {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        LegendChip(Color(0xFFFFD500), "Yellow fill", Modifier.weight(1f))
-        LegendChip(Color(0xFFD32F2F), "Red fill", Modifier.weight(1f))
     }
 }
 
