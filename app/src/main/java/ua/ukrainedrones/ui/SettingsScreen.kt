@@ -983,7 +983,13 @@ fun SettingsScreen(
                     ),
                     onToggle = { onCollapseChange(collapse.copy(nightMode = !collapse.nightMode)) },
                     cardColor = NightSectionBg,
-                    cardBorder = NightSectionBorder
+                    cardBorder = NightSectionBorder,
+                    trailing = {
+                        Switch(
+                            checked = nightEnabled,
+                            onCheckedChange = { v -> showExplainer("nightMode"); onNightEnabledChange(v) }
+                        )
+                    }
                 ) {
                     NightModeCard(
                         lang = lang,
@@ -1005,7 +1011,6 @@ fun SettingsScreen(
                         daySlowYellowKm = slowYellowKm,
                         dayFastRedMin = fastRedMin,
                         dayFastYellowMin = fastYellowMin,
-                        onEnabledChange = { v -> showExplainer("nightMode"); onNightEnabledChange(v) },
                         onStartChange = onNightStartChange,
                         onEndChange = onNightEndChange,
                         onUseCustomZonesChange = onNightUseCustomZonesChange,
@@ -1018,8 +1023,7 @@ fun SettingsScreen(
                         onFastRedArmedChange = onNightFastRedArmedChange,
                         onFastYellowArmedChange = onNightFastYellowArmedChange,
                         onZoneSirenOverrideChange = onNightZoneSirenOverrideChange,
-                        onOfficialSirenOverrideChange = onNightOfficialSirenOverrideChange,
-                        flash = flashId == "nightMode"
+                        onOfficialSirenOverrideChange = onNightOfficialSirenOverrideChange
                     )
                 }
             }
@@ -1695,7 +1699,6 @@ private fun NightModeCard(
     daySlowYellowKm: Int,
     dayFastRedMin: Int,
     dayFastYellowMin: Int,
-    onEnabledChange: (Boolean) -> Unit,
     onStartChange: (Int) -> Unit,
     onEndChange: (Int) -> Unit,
     onUseCustomZonesChange: (Boolean) -> Unit,
@@ -1708,22 +1711,13 @@ private fun NightModeCard(
     onFastRedArmedChange: (Boolean) -> Unit,
     onFastYellowArmedChange: (Boolean) -> Unit,
     onZoneSirenOverrideChange: (Boolean) -> Unit,
-    onOfficialSirenOverrideChange: (Boolean) -> Unit,
-    flash: Boolean = false
+    onOfficialSirenOverrideChange: (Boolean) -> Unit
 ) {
     val s = Strings.get(lang)
     var editing by remember { mutableStateOf<String?>(null) }  // "start" | "end" | null
 
     Column {
-        AlertToggleRow(
-            title = s.nightModeLabel,
-            description = s.nightModeDesc,
-            checked = enabled,
-            onCheckedChange = onEnabledChange,
-            flash = flash
-        )
         if (enabled) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

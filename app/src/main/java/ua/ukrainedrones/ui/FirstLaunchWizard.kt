@@ -794,8 +794,8 @@ private fun SetupZoneControlsStep(
 @Composable
 private fun FillsLegendRow() {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        LegendChip(Color(0xFFD32F2F), "Red fill", Modifier.weight(1f))
         LegendChip(Color(0xFFFFD500), "Yellow fill", Modifier.weight(1f))
+        LegendChip(Color(0xFFD32F2F), "Red fill", Modifier.weight(1f))
     }
 }
 

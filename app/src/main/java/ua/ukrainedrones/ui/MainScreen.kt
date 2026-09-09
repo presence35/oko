@@ -1315,7 +1315,7 @@ private fun ThreatCardHost(
     ) { state ->
         when (state) {
             1 -> sel.selected?.let { threat ->
-                Column {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     ThreatPopupCard(
                         threat = threat,
                         lang = language,
@@ -1330,7 +1330,7 @@ private fun ThreatCardHost(
                         modifier = if (smallCard) Modifier.widthIn(max = 300.dp) else Modifier.fillMaxWidth()
                     )
                     Row(
-                        modifier = if (smallCard) Modifier.widthIn(max = 300.dp) else Modifier.fillMaxWidth(),
+                        modifier = if (smallCard) Modifier.fillMaxWidth().widthIn(max = 300.dp) else Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         ThreatCardSizeControl(
