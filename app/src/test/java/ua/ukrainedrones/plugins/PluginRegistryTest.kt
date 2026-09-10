@@ -244,7 +244,7 @@ class PluginRegistryTest {
     }
 
     @Test
-    fun `disabled source alerts and threats are not merged`() {
+    fun `disabled source alerts are held but threats are not merged`() {
         val registry = PluginRegistry()
         val ws = FakePlugin(
             "ws",
@@ -255,8 +255,10 @@ class PluginRegistryTest {
         assertTrue(registry.allThreats.value.isNotEmpty())
         assertTrue(registry.allAlerts.value.isNotEmpty())
         registry.setEnabled(ws, false)
+        // Threats are cleared on disable (plugin clears them)
         assertTrue(registry.allThreats.value.isEmpty())
-        assertTrue(registry.allAlerts.value.isEmpty())
+        // Alerts are HELD on disable (no authoritative source) — they persist in the merge
+        assertTrue(registry.allAlerts.value.isNotEmpty())
     }
 
     @Test

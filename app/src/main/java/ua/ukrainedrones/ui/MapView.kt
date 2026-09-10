@@ -758,6 +758,7 @@ fun NeptunMapView(
         uiState.fillAlertRegions,
         uiState.showBorders,
         uiState.showRegionBorders,
+        uiState.alertOblastTokens,
         uiState.alertRaionKeys,
         uiState.alertYellowOblastTokens,
         uiState.alertYellowRaionKeys,
@@ -1882,16 +1883,17 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
             deathFx.replayProgress.collect { onReplayProgressChange(it) }
         }
 
-        // Redraw the map at ~60fps while a death animation is playing and the map is visible,
+        // Redraw the map at ~20fps while a death animation is playing and the map is visible,
         // so the overlay animates; otherwise idle at a slow tick (no battery cost).
         LaunchedEffect(Unit) {
             while (true) {
                 if (deathFx.isActive && !pausedState && lifecycle.currentState >= Lifecycle.State.STARTED) {
                     mapViewRef.value?.invalidate()
-                    // 30fps while a flourish plays: invalidate redraws the WHOLE overlay stack
+                    // 20fps while a flourish plays: invalidate redraws the WHOLE overlay stack
                     // (tiles, markers, polygons, labels), and these effects are slow-moving —
-                    // halving the cadence halves that cost with no visible difference.
-                    delay(33)
+                    // 20fps is smooth enough for projectile/explosion visuals and halves the
+                    // redraw cost vs the original 30fps.
+                    delay(50)
                 } else {
                     delay(1000)
                 }

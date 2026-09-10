@@ -199,6 +199,21 @@ class UserPrefs(private val context: Context) {
         context.dataStore.edit { it[cachedBooleanKey("threat_alert_${type.name}")] = enabled }
     }
 
+    suspend fun setThreatMapVisibleBatch(types: Set<ThreatType>, visible: Boolean) {
+        context.dataStore.edit { prefs ->
+            for (type in types) prefs[cachedBooleanKey("threat_map_${type.name}")] = visible
+        }
+    }
+
+    suspend fun setThreatAlertsEnabledBatch(types: Set<ThreatType>, enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            for (type in types) {
+                prefs[cachedBooleanKey("threat_alert_${type.name}")] = enabled
+                if (enabled) prefs[cachedBooleanKey("threat_map_${type.name}")] = true
+            }
+        }
+    }
+
     fun explainerSeen(id: String): Flow<Boolean> {
         val key = cachedBooleanKey("explainer_seen_$id")
         return context.dataStore.data.map { prefs -> prefs[key] ?: false }

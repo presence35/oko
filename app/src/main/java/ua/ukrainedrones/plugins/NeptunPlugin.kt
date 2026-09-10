@@ -65,23 +65,19 @@ class NeptunPlugin(private val client: NeptunConnectionClient) : ThreatSource {
 
     override fun stop() {
         client.stop()
-        resetOutput()
+        _connectionState.value = PluginConnectionState.DISCONNECTED
+        _operationalMode.value = OperationalMode.STANDBY
+        _threats.value = emptyList()
     }
 
     override fun setEnabled(enabled: Boolean) {
         _enabled.value = enabled
         if (enabled) client.start() else {
             client.stop()
-            resetOutput()
+            _connectionState.value = PluginConnectionState.DISCONNECTED
+            _operationalMode.value = OperationalMode.STANDBY
+            _threats.value = emptyList()
         }
-    }
-
-    /** Clears this source's own snapshot so a disabled primary doesn't present stale data. */
-    private fun resetOutput() {
-        _connectionState.value = PluginConnectionState.DISCONNECTED
-        _operationalMode.value = OperationalMode.STANDBY
-        _threats.value = emptyList()
-        _alerts.value = emptyList()
     }
 
     override suspend fun testConnection(): SourceTestResult {

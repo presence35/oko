@@ -1315,7 +1315,9 @@ private fun ThreatCardHost(
     ) { state ->
         when (state) {
             1 -> sel.selected?.let { threat ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    modifier = if (smallCard) Modifier.fillMaxWidth().widthIn(max = 300.dp) else Modifier
+                ) {
                     ThreatPopupCard(
                         threat = threat,
                         lang = language,
@@ -1327,10 +1329,10 @@ private fun ThreatCardHost(
                         alertsOff = threat.type.toThreatType() in silencedTypes,
                         onDismiss = onDismiss,
                         fakeNeutralize = sel.fakeNeutralize,
-                        modifier = if (smallCard) Modifier.widthIn(max = 300.dp) else Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Row(
-                        modifier = if (smallCard) Modifier.fillMaxWidth().widthIn(max = 300.dp) else Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         ThreatCardSizeControl(

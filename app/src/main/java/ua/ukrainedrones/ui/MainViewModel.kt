@@ -1328,17 +1328,14 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setGroupThreatMapVisible(types: Set<ThreatType>, visible: Boolean) {
         viewModelScope.launch {
-            types.forEach { prefs.setThreatMapVisible(it, visible) }
+            prefs.setThreatMapVisibleBatch(types, visible)
             maybeShowToggleHint(mapToast = true)
         }
     }
 
     fun setGroupThreatAlertsEnabled(types: Set<ThreatType>, enabled: Boolean) {
         viewModelScope.launch {
-            types.forEach {
-                prefs.setThreatAlertsEnabled(it, enabled)
-                if (enabled) prefs.setThreatMapVisible(it, true)
-            }
+            prefs.setThreatAlertsEnabledBatch(types, enabled)
             maybeShowToggleHint(mapToast = false)
         }
     }

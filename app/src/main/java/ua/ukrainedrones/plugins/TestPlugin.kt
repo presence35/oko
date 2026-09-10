@@ -110,7 +110,6 @@ class TestPlugin : ThreatSource {
             scriptJob = null
             cancelAllMovers()
             _threats.value = emptyList()
-            _alerts.value = emptyList()
             _connectionState.value = PluginConnectionState.DISCONNECTED
             _operationalMode.value = OperationalMode.STANDBY
         }

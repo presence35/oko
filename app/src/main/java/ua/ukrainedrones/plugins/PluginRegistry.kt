@@ -156,10 +156,10 @@ class PluginRegistry {
      * Takeover merge: when at least one source is **authoritative** (actively covering the feed
      * right now), its snapshots are the sole truth — stale holders' held alerts are dropped so
      * an active fallback's all-clear can't be masked. When nothing is authoritative (e.g. the
-     * primary is down and the fallback hasn't covered yet), every source's alerts fill the feed
+     * primary is down and the fallback hasn't covered yet), ALL sources' alerts fill the feed
      * so the last-known state is held rather than fabricating an all-clear.
      *
-     * Authoritative: a WS source whose socket is CONNECTED/DEGRADED (fresh data), or a REST
+     * Authoritative: a WS source whose socket is CONNECTED (fresh data), or a REST
      * source whose poller is engaged AND has actually attempted a fetch (mode POLLING + a
      * non-DISCONNECTED connection — a never-started poller is not yet authoritative, so its
      * empty snapshot doesn't wipe the held last-known feed mid-takeover).
@@ -167,7 +167,7 @@ class PluginRegistry {
     private fun remergeAlerts() {
         val active = enabledPlugins
         val authoritative = active.filter { it.isAuthoritativeAlertSource() }
-        val ordered = if (authoritative.isNotEmpty()) authoritative else active
+        val ordered = if (authoritative.isNotEmpty()) authoritative else _plugins.value
         val owned = LinkedHashMap<String, OblastAlert>()
         var owner: String? = null
         for (plugin in ordered) {

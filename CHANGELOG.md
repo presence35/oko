@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Death flourish overlay now redraws at 20fps instead of 30fps, cutting full-map invalidations during shoot-down animations / Death flourish overlay now redraws at 20fps instead of 30fps, cutting full-map invalidations during shoot-down animations
+- Group threat toggles now batch DataStore writes into a single disk operation for snappier response / Group threat toggles now batch DataStore writes into a single disk operation for snappier response
+- Icon packs (photo/army/comic/russian) converted from PNG to lossless WebP, reducing asset size by ~35% / Icon packs (photo/army/comic/russian) converted from PNG to lossless WebP, reducing asset size by ~35%
 - Tapping a threat whose card is already open now hides the card / Натискання на загрозу, карта якої вже відкрита, тепер ховає картку
 - A locate icon below the threat card centres the map on the threat when tapped / Іконка локації під карткою загрози центрує карту на загрозі при натисканні
 - WebSocket now identifies as `Oko/<version> (Android)` so NEPTUN can contact us at scale instead of blanket-blocking / WebSocket тепер ідентифікується як `Oko/<version> (Android)`, щоб NEPTUN міг зв'язатися з нами при масштабуванні замість блокування
