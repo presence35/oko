@@ -892,6 +892,7 @@ val tapToCancelLabel: String,
         val pinCityTitle: String get() = threat.pinCityTitle
         val pinCityDesc: String get() = threat.pinCityDesc
         val alertBannerFormat: String get() = threat.alertBannerFormat
+        val alertYellowBannerFormat: String get() = threat.alertYellowBannerFormat
         val notifBodyRegionFormat: String get() = threat.notifBodyRegionFormat
         val notifOfficialFormat: String get() = threat.notifOfficialFormat
         val notifOfficialWithReasonFormat: String get() = threat.notifOfficialWithReasonFormat

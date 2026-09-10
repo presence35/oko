@@ -37,6 +37,8 @@ import ua.ukrainedrones.engine.isFastType
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.OblastAlert
+import ua.ukrainedrones.engine.AlertLevel
+import ua.ukrainedrones.engine.maxLevelFor
 import ua.ukrainedrones.Transliteration
 import ua.ukrainedrones.ThreatType
 import ua.ukrainedrones.engine.ThreatZone
@@ -560,7 +562,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 val focusOblastLevel = alerts.maxLevelFor(focusToken, focusCityUa, cfg.officialAlertCityScope)
                 val focusOblastRawLevel = alerts.maxLevelFor(focusToken, null, false)
                 val focusOblastAlertSince = focusToken?.let { token ->
-                    alerts.firstOrNull { it.inOblast(token) && (it.level == AlertLevel.RED || it.isOblastWide()) }?.since
+                    alerts.firstOrNull { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }?.since
                 }
                 val effectiveOfficialActive = focusOblastLevel >= AlertLevel.RED
 
@@ -717,7 +719,7 @@ val mappedThreats = registry.allThreats.map { list ->
             wakeLockManager.acquireForAlert()
             postAlert(
                 zone,
-                if (zone == ThreatZone.INNER) AlertLevel.RED else AlertLevel.YELLOW,
+                if (zone == ThreatZone.INNER) "red" else "yellow",
                 bannerFor(zone, s),
                 body,
                 state.zoneSirenOverride,
@@ -802,7 +804,7 @@ val mappedThreats = registry.allThreats.map { list ->
             wakeLockManager.acquireForAlert()
             postAlert(
                 null,
-                state.focusOblastLevel,
+                state.focusOblastLevel.name.lowercase(),
                 String.format(s.alertBannerFormat, state.focusBannerCity),
                 officialBody,
                 state.officialSirenOverride,
@@ -826,7 +828,7 @@ val mappedThreats = registry.allThreats.map { list ->
             val reasonThreat = state.officialReasonThreatId?.let { all[it] }
             postAlert(
                 null,
-                state.focusOblastLevel,
+                state.focusOblastLevel.name.lowercase(),
                 String.format(s.alertBannerFormat, state.focusBannerCity),
                 officialBody,
                 state.officialSirenOverride,
@@ -900,7 +902,7 @@ val mappedThreats = registry.allThreats.map { list ->
         ) {
             postAlert(
                 null,
-                AlertLevel.YELLOW,
+                "yellow",
                 String.format(s.alertYellowBannerFormat, state.focusBannerCity),
                 officialBody,
                 state.officialSirenOverride,
@@ -1019,7 +1021,7 @@ val mappedThreats = registry.allThreats.map { list ->
         lastMonitorAlertLevel = alertLevel
         notificationManager.safeNotify(
             NOTIF_MONITOR,
-            notificationManager.buildMonitorNotification(title, text, retryLabel, progressMax, progressNow, ignoreLabel, alertLevel)
+            notificationManager.buildMonitorNotification(title, text, retryLabel, progressMax, progressNow, ignoreLabel, alertLevel == AlertLevel.RED)
         )
     }
 
@@ -1037,7 +1039,7 @@ val mappedThreats = registry.allThreats.map { list ->
 
     private fun postAlert(
         zone: ThreatZone?,
-        level: AlertLevel,
+        level: String,
         title: String,
         body: String,
         sirenOverride: Boolean,
@@ -1047,7 +1049,6 @@ val mappedThreats = registry.allThreats.map { list ->
     ) {
         notificationManager.postAlertNotification(
             zone = zone ?: ThreatZone.INNER,
-            level = level,
             title = title,
             body = body,
             sirenOverride = sirenOverride,
