@@ -132,6 +132,7 @@ class AlertService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var monitoringJob: Job? = null
     private var wasFocusAlertActive = false
+    private var wasYellowAlertActive = false
     private var officialRegionToken: String? = null
     private var currentReasonThreatId: String? = null
     private var officialAnnouncedToken: String? = null
@@ -149,7 +150,7 @@ class AlertService : Service() {
     private var lastMonitorProgressMax: Int? = null
     private var lastMonitorProgressNow: Int? = null
     private var lastMonitorIgnore: String? = null
-    private var lastMonitorRed: Boolean = false
+    private var lastMonitorAlertLevel: AlertLevel = AlertLevel.NONE
 
     private var hasShownGpsFallbackToast = false
     @Volatile private var wasConnected = true
@@ -176,7 +177,8 @@ class AlertService : Service() {
 
     private data class MonitorState(
         val focusOblastAlertActive: Boolean,
-        val focusOblastAlertRaw: Boolean,
+        val focusOblastLevel: AlertLevel,
+        val focusOblastRawLevel: AlertLevel,
         val focusToken: String?,
         val focusOblastAlertSince: String?,
         val focusBannerCity: String,
@@ -194,6 +196,7 @@ class AlertService : Service() {
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
         val officialAlertsEnabled: Boolean,
+        val yellowAlertsEnabled: Boolean = true,
         val zoneSirenOverride: Boolean,
         val officialSirenOverride: Boolean,
         val connectionState: ConnectionState,
@@ -215,6 +218,7 @@ class AlertService : Service() {
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
         val officialAlertsEnabled: Boolean,
+        val yellowAlertsEnabled: Boolean,
         val officialAlertCityScope: Boolean,
         val sirenOverride: Boolean,
         val followMe: Boolean,
@@ -472,13 +476,14 @@ val mappedThreats = registry.allThreats.map { list ->
                     prefs.fastRedZoneArmed(),
                     prefs.fastYellowZoneArmed(),
                     prefs.officialAlertsEnabled(),
+                    prefs.yellowAlertsEnabled(),
                     prefs.officialAlertCityScope(),
                     prefs.sirenOverride(),
                     prefs.followMe(),
                     prefs.criticalOfflineOverride()
                 ) { flags: Array<Boolean> ->
                     AlertConfig(
-                        flags[0], flags[1], flags[2], flags[3], flags[4], flags[5], flags[6], flags[7], flags[8]
+                        flags[0], flags[1], flags[2], flags[3], flags[4], flags[5], flags[6], flags[7], flags[8], flags[9]
                     )
                 },
                 combine(
@@ -550,19 +555,14 @@ val mappedThreats = registry.allThreats.map { list ->
                 val focusToken = focus.attribution.token
                 currentToken = focusToken
 
-                // Raw episode = oblast-wide matching (scope=false): the all-clear latch keys on
-                // this ending so a scope flip never synthesizes a false all-clear. Effective =
-                // the same shared gate the map uses, so a city-scoped user rings only when the
-                // alert actually covers the focus (or is oblast-wide). Mirror rule.
-                val (focusOblastAlertRaw, focusOblastAlertSince) = if (focusToken != null) {
-                    val alert = alerts.firstOrNull { it.inOblast(focusToken) && (it.level == "red" || it.isOblastWide()) }
-                    (alert != null) to alert?.since
-                } else {
-                    false to null
+                // Scoped level: highest level matching the user's focus + scope (siren gate).
+                // Raw level: highest level in the oblast, no scope filter (all-clear gate).
+                val focusOblastLevel = alerts.maxLevelFor(focusToken, focusCityUa, cfg.officialAlertCityScope)
+                val focusOblastRawLevel = alerts.maxLevelFor(focusToken, null, false)
+                val focusOblastAlertSince = focusToken?.let { token ->
+                    alerts.firstOrNull { it.inOblast(token) && (it.level == AlertLevel.RED || it.isOblastWide()) }?.since
                 }
-                val effectiveOfficialActive = officialAlertActiveFor(
-                    alerts, focusToken, focusCityUa, cfg.officialAlertCityScope
-                )
+                val effectiveOfficialActive = focusOblastLevel >= AlertLevel.RED
 
                 val activeOfficialAlert = focusToken?.let { token ->
                     alerts.firstOrNull { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }
@@ -593,7 +593,8 @@ val mappedThreats = registry.allThreats.map { list ->
 
                 MonitorState(
                     focusOblastAlertActive = effectiveOfficialActive,
-                    focusOblastAlertRaw = focusOblastAlertRaw,
+                    focusOblastLevel = focusOblastLevel,
+                    focusOblastRawLevel = focusOblastRawLevel,
                     focusToken = focusToken,
                     focusOblastAlertSince = focusOblastAlertSince,
                     focusBannerCity = focusBannerCity,
@@ -611,6 +612,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     fastRedArmed = cfg.fastRedArmed,
                     fastYellowArmed = cfg.fastYellowArmed,
                     officialAlertsEnabled = cfg.officialAlertsEnabled,
+                    yellowAlertsEnabled = cfg.yellowAlertsEnabled,
                     zoneSirenOverride = zoneSirenOverride,
                     officialSirenOverride = officialSirenOverride,
                     connectionState = cs,
@@ -655,8 +657,12 @@ val mappedThreats = registry.allThreats.map { list ->
             nowMono - offlineSince
         } else 0L
 
-        val redAlert = (state.officialAlertsEnabled && state.focusOblastAlertActive) ||
-            state.zoneThreats.values.any { it == ThreatZone.INNER }
+        val monitorAlertLevel = when {
+            (state.officialAlertsEnabled && state.focusOblastAlertActive) ||
+                state.zoneThreats.values.any { it == ThreatZone.INNER } -> AlertLevel.RED
+            state.officialAlertsEnabled && state.focusOblastLevel >= AlertLevel.YELLOW -> AlertLevel.YELLOW
+            else -> AlertLevel.NONE
+        }
         val monitorTitle = when {
             isOfflineNow -> s.offlineStatusTitle
             state.focusPinned -> String.format(s.notifMonitoringCityFormat, state.focusBannerCity)
@@ -677,7 +683,7 @@ val mappedThreats = registry.allThreats.map { list ->
             progressMax = if (isOfflineNow) 20 else null,
             progressNow = if (isOfflineNow) offlineMinutes else null,
             ignoreLabel = if (isOfflineNow && elapsedSinceReconnect >= twentyMinMs) s.offlineIgnoreAction else null,
-            red = redAlert
+            alertLevel = monitorAlertLevel
         )
 
         val all = state.threats
@@ -711,6 +717,7 @@ val mappedThreats = registry.allThreats.map { list ->
             wakeLockManager.acquireForAlert()
             postAlert(
                 zone,
+                if (zone == ThreatZone.INNER) AlertLevel.RED else AlertLevel.YELLOW,
                 bannerFor(zone, s),
                 body,
                 state.zoneSirenOverride,
@@ -795,6 +802,7 @@ val mappedThreats = registry.allThreats.map { list ->
             wakeLockManager.acquireForAlert()
             postAlert(
                 null,
+                state.focusOblastLevel,
                 String.format(s.alertBannerFormat, state.focusBannerCity),
                 officialBody,
                 state.officialSirenOverride,
@@ -818,6 +826,7 @@ val mappedThreats = registry.allThreats.map { list ->
             val reasonThreat = state.officialReasonThreatId?.let { all[it] }
             postAlert(
                 null,
+                state.focusOblastLevel,
                 String.format(s.alertBannerFormat, state.focusBannerCity),
                 officialBody,
                 state.officialSirenOverride,
@@ -832,7 +841,7 @@ val mappedThreats = registry.allThreats.map { list ->
             persistOfficialAnnounced(state)
         }
 
-        if (state.officialAlertsEnabled && wasFocusAlertActive && state.focusOblastAlertRaw &&
+        if (state.officialAlertsEnabled && wasFocusAlertActive && state.focusOblastRawLevel >= AlertLevel.RED &&
             !state.focusOblastAlertActive
         ) {
             if (alertable.isEmpty()) {
@@ -858,7 +867,7 @@ val mappedThreats = registry.allThreats.map { list ->
             )
         }
 
-        if (state.officialAlertsEnabled && wasFocusAlertActive && !state.focusOblastAlertRaw &&
+        if (state.officialAlertsEnabled && wasFocusAlertActive && state.focusOblastRawLevel == AlertLevel.NONE &&
             state.focusToken == officialRegionToken
         ) {
             if (alertable.isEmpty()) {
@@ -868,6 +877,7 @@ val mappedThreats = registry.allThreats.map { list ->
             currentReasonThreatId = null
             officialRegionToken = null
             debugOfficialActive = false
+            wasYellowAlertActive = false
             officialAnnouncedCity = null
             clearOfficialAnnounced()
             DebugLog.recordOfficial(
@@ -883,6 +893,24 @@ val mappedThreats = registry.allThreats.map { list ->
                 distanceKm = null,
                 now = System.currentTimeMillis()
             )
+        }
+
+        if (state.focusOblastLevel >= AlertLevel.YELLOW && state.focusOblastLevel < AlertLevel.RED &&
+            state.officialAlertsEnabled && state.yellowAlertsEnabled && !wasYellowAlertActive && !posted
+        ) {
+            postAlert(
+                null,
+                AlertLevel.YELLOW,
+                String.format(s.alertYellowBannerFormat, state.focusBannerCity),
+                officialBody,
+                state.officialSirenOverride,
+                vibrationLevel = VIBRATION_STRONG
+            )
+            wasYellowAlertActive = true
+        }
+        if (state.focusOblastLevel < AlertLevel.YELLOW && wasYellowAlertActive) {
+            cancelAlert()
+            wasYellowAlertActive = false
         }
 
         if (!state.focusOblastAlertActive) {
@@ -976,11 +1004,11 @@ val mappedThreats = registry.allThreats.map { list ->
         progressMax: Int? = null,
         progressNow: Int? = null,
         ignoreLabel: String? = null,
-        red: Boolean = false
+        alertLevel: AlertLevel = AlertLevel.NONE
     ) {
         if (title == lastMonitorTitle && text == lastMonitorText && retryLabel == lastMonitorRetry &&
             progressMax == lastMonitorProgressMax && progressNow == lastMonitorProgressNow && ignoreLabel == lastMonitorIgnore &&
-            red == lastMonitorRed
+            alertLevel == lastMonitorAlertLevel
         ) return
         lastMonitorTitle = title
         lastMonitorText = text
@@ -988,10 +1016,10 @@ val mappedThreats = registry.allThreats.map { list ->
         lastMonitorProgressMax = progressMax
         lastMonitorProgressNow = progressNow
         lastMonitorIgnore = ignoreLabel
-        lastMonitorRed = red
+        lastMonitorAlertLevel = alertLevel
         notificationManager.safeNotify(
             NOTIF_MONITOR,
-            notificationManager.buildMonitorNotification(title, text, retryLabel, progressMax, progressNow, ignoreLabel, red)
+            notificationManager.buildMonitorNotification(title, text, retryLabel, progressMax, progressNow, ignoreLabel, alertLevel)
         )
     }
 
@@ -1009,6 +1037,7 @@ val mappedThreats = registry.allThreats.map { list ->
 
     private fun postAlert(
         zone: ThreatZone?,
+        level: AlertLevel,
         title: String,
         body: String,
         sirenOverride: Boolean,
@@ -1018,6 +1047,7 @@ val mappedThreats = registry.allThreats.map { list ->
     ) {
         notificationManager.postAlertNotification(
             zone = zone ?: ThreatZone.INNER,
+            level = level,
             title = title,
             body = body,
             sirenOverride = sirenOverride,

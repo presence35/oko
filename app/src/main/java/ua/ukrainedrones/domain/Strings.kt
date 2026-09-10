@@ -70,6 +70,9 @@ object Strings {
         val officialAlertsTitle: String,
         val officialAlertsDesc: String,
         val officialAlertsRedTridentNote: String,
+        val officialYellowAlertsTitle: String,
+        val officialYellowAlertsDesc: String,
+        val officialYellowTridentNote: String,
         val officialAlertScopeTitle: String,
         val officialAlertScopeDesc: String,
         val sirenOverrideTitle: String,
@@ -217,6 +220,7 @@ object Strings {
         val pinCityTitle: String,
         val pinCityDesc: String,
         val alertBannerFormat: String,
+        val alertYellowBannerFormat: String,
         val notifBodyRegionFormat: String,
         val notifOfficialFormat: String,
         val notifOfficialWithReasonFormat: String,
@@ -249,7 +253,11 @@ object Strings {
         val alarmAlertChannelName: String,
         val alarmAlertChannelDesc: String,
         val outerAlarmAlertChannelName: String,
-        val outerAlarmAlertChannelDesc: String
+        val outerAlarmAlertChannelDesc: String,
+        val yellowAlertChannelName: String,
+        val yellowAlertChannelDesc: String,
+        val yellowAlarmAlertChannelName: String,
+        val yellowAlarmAlertChannelDesc: String
     )
 
     data class Misc(

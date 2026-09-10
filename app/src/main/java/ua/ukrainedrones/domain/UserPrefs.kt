@@ -40,6 +40,7 @@ class UserPrefs(private val context: Context) {
     private val fastRedArmedKey = booleanPreferencesKey("fast_red_armed")
     private val fastYellowArmedKey = booleanPreferencesKey("fast_yellow_armed")
     private val officialAlertsKey = booleanPreferencesKey("official_alerts_enabled")
+    private val yellowAlertsKey = booleanPreferencesKey("yellow_alerts_enabled")
     private val sirenOverrideKey = booleanPreferencesKey("siren_override")
     private val disclaimerCollapsedKey = booleanPreferencesKey("disclaimer_collapsed")
     private val disclaimerReadCountKey = intPreferencesKey("disclaimer_read_count")
@@ -172,6 +173,13 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setOfficialAlertsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[officialAlertsKey] = enabled }
+    }
+
+    fun yellowAlertsEnabled(): Flow<Boolean> =
+        context.dataStore.data.map { prefs -> prefs[yellowAlertsKey] ?: true }
+
+    suspend fun setYellowAlertsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[yellowAlertsKey] = enabled }
     }
 
     fun sirenOverride(): Flow<Boolean> =
