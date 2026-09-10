@@ -392,7 +392,6 @@ class DeathFxController(
             val box = flourishesBoundingBox(group, null)
             runCatching { mapView.zoomToBoundingBox(box, false) }
             overlay.rebasePendingOrigins { randomEdgeOrigin() }
-            mapView.invalidate()
             // Fire loop aligned to the pre-spawned schedule (drift-free vs the spawn clock):
             // shot k launches at fireBase + k*STAGGER; haptic + footer progress advance per shot.
             group.forEachIndexed { k, _ ->
@@ -405,7 +404,6 @@ class DeathFxController(
                     bulletOverall = index,
                     totalRecords = records.size
                 )
-                mapView.invalidate()
                 strikeHaptics()
             }
             if (finalGroup) {

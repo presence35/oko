@@ -20,6 +20,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.View
+import android.view.Choreographer
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -986,6 +988,9 @@ fun NeptunMapView(
                             return false
                         }
                     })
+                // Self-contained death animation overlay: draws via its own Choreographer
+                // frame callback, so death effects never trigger a full MapView invalidate.
+                addView(DeathFxOverlayView(ctx, this@apply, deathFx))
             }
         },
         update = { mapView ->
@@ -1617,9 +1622,6 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
                     )
                 )
 
-                // Death flourish on top of everything else.
-                mapView.overlays.add(deathFx.overlay)
-
                 mapView.invalidate()
             }
         },
@@ -1883,23 +1885,6 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
             deathFx.replayProgress.collect { onReplayProgressChange(it) }
         }
 
-        // Redraw the map at ~20fps while a death animation is playing and the map is visible,
-        // so the overlay animates; otherwise idle at a slow tick (no battery cost).
-        LaunchedEffect(Unit) {
-            while (true) {
-                if (deathFx.isActive && !pausedState && lifecycle.currentState >= Lifecycle.State.STARTED) {
-                    mapViewRef.value?.invalidate()
-                    // 20fps while a flourish plays: invalidate redraws the WHOLE overlay stack
-                    // (tiles, markers, polygons, labels), and these effects are slow-moving —
-                    // 20fps is smooth enough for projectile/explosion visuals and halves the
-                    // redraw cost vs the original 30fps.
-                    delay(50)
-                } else {
-                    delay(1000)
-                }
-            }
-        }
-
     // Markers are a pure function of the wall clock: orbit/drift/parked positions and headings
     // all derive from `now` (resolveThreatPose). One loop recomputes every marker's pose each
     // frame while anything is moving (30fps), idles at 1s otherwise, and freezes writes while the
@@ -2012,4 +1997,54 @@ private class ScaleDrawable(
     override fun getOpacity(): Int = inner.opacity
     override fun getIntrinsicWidth(): Int = inner.intrinsicWidth
     override fun getIntrinsicHeight(): Int = inner.intrinsicHeight
+}
+
+/**
+ * Transparent View layered on top of the osmdroid MapView (added as a child in the FrameLayout).
+ * Drives the death animation via [Choreographer] frame callbacks — only redraws its own canvas,
+ * never calls [MapView.invalidate], so the expensive tile + overlay stack is untouched.
+ */
+private class DeathFxOverlayView(
+    context: Context,
+    private val mapView: MapView,
+    private val deathFx: DeathFxController
+) : View(context) {
+
+    private val frameCallback = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            if (deathFx.isActive) {
+                invalidate()
+                Choreographer.getInstance().postFrameCallback(this)
+            }
+        }
+    }
+
+    init {
+        setWillNotDraw(false)
+        // Transparent — draw nothing in background; let the MapView show through.
+        setBackgroundColor(Color.TRANSPARENT)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        Choreographer.getInstance().postFrameCallback(frameCallback)
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        Choreographer.getInstance().removeFrameCallback(frameCallback)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        if (!deathFx.isActive) return
+        // Delegate to the existing ThreatDeathOverlay draw logic — same code path,
+        // just rendering to this View's own canvas instead of the full overlay stack.
+        deathFx.overlay.draw(canvas, mapView, false)
+        if (deathFx.isActive) {
+            Choreographer.getInstance().postFrameCallback(frameCallback)
+        }
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean = false
 }
