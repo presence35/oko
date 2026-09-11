@@ -101,6 +101,7 @@ data class UiState(
     val nightZoneSirenOverride: Boolean = false,
     val nightOfficialSirenOverride: Boolean = false,
     val officialAlertsEnabled: Boolean = true,
+    val officialYellowAlertsEnabled: Boolean = true,
     val officialAlertCityScope: Boolean = false,
     val sirenOverride: Boolean = false,
     val criticalOfflineOverride: Boolean = true,
@@ -109,6 +110,7 @@ data class UiState(
     val silencedTypes: Set<ThreatType> = emptySet(),    // alerts off (still on the map, dimmed)
     val activeZone: ThreatZone? = null,           // most specific zone with a threat
     val focusOblastAlertActive: Boolean = false,  // official alert on the focus point's oblast
+    val focusOblastYellowAlertActive: Boolean = false, // yellow-level official alert on the focus point's oblast
     val focusBannerCity: String = "",             // localized city name for the alert banner
     val language: AppLanguage = AppLanguage.EN,
     val followMe: Boolean = true,
@@ -377,6 +379,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
         val officialAlertsEnabled: Boolean,
+        val officialYellowAlertsEnabled: Boolean,
         val officialAlertCityScope: Boolean,
         val sirenOverride: Boolean,
         val followMe: Boolean,
@@ -442,6 +445,7 @@ val fastGroupCollapsed: Boolean,
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
         val officialAlertsEnabled: Boolean,
+        val officialYellowAlertsEnabled: Boolean,
         val officialAlertCityScope: Boolean,
         val sirenOverride: Boolean,
         val followMe: Boolean,
@@ -508,6 +512,7 @@ val fastGroupCollapsed: Boolean,
             prefs.fastRedZoneArmed(),
             prefs.fastYellowZoneArmed(),
             prefs.officialAlertsEnabled(),
+            prefs.yellowAlertsEnabled(),
             prefs.officialAlertCityScope(),
             prefs.sirenOverride(),
             prefs.followMe(),
@@ -534,7 +539,7 @@ val fastGroupCollapsed: Boolean,
                 flags[0], flags[1], flags[2], flags[3], flags[4], flags[5],
                 flags[6], flags[7], flags[8], flags[9], flags[10], flags[11], flags[12],
                 flags[13], flags[14], flags[15], flags[16], flags[17], flags[18], flags[19],
-                flags[20], flags[21], flags[22], flags[23], flags[24], flags[25]
+                flags[20], flags[21], flags[22], flags[23], flags[24], flags[25], flags[26]
             )
         },
         combine(
@@ -610,6 +615,7 @@ combine(
             fastRedArmed = b.fastRedArmed,
             fastYellowArmed = b.fastYellowArmed,
             officialAlertsEnabled = b.officialAlertsEnabled,
+            officialYellowAlertsEnabled = b.officialYellowAlertsEnabled,
             officialAlertCityScope = b.officialAlertCityScope,
             sirenOverride = b.sirenOverride,
             followMe = b.followMe,
@@ -776,6 +782,7 @@ showBorders = prefs.showBorders,
             fastRedArmed = prefs.fastRedArmed,
             fastYellowArmed = prefs.fastYellowArmed,
             officialAlertsEnabled = prefs.officialAlertsEnabled,
+            officialYellowAlertsEnabled = prefs.officialYellowAlertsEnabled,
             officialAlertCityScope = prefs.officialAlertCityScope,
             sirenOverride = prefs.sirenOverride,
             criticalOfflineOverride = prefs.criticalOfflineOverride,
@@ -842,6 +849,7 @@ showBorders = prefs.showBorders,
                 activeSlowYellowArmed = activeArmed.slowYellow,
                 activeFastYellowArmed = activeArmed.fastYellow,
                 officialAlertsEnabled = prefs.officialAlertsEnabled,
+                officialYellowAlertsEnabled = prefs.officialYellowAlertsEnabled,
                 criticalOfflineOverride = prefs.criticalOfflineOverride,
                 silencedTypesCount = (ThreatType.values().toSet() - prefs.alertEnabled).size,
                 neptunOffline = registry.isOffline(nowMono)
@@ -992,7 +1000,7 @@ showBorders = prefs.showBorders,
         val threatDataStale = registry.isThreatDataStale(nowMono)
         val threatList = if (threatDataStale) emptyList() else threats.values
             .filter { it.type.toThreatType() in mapEnabledTypes }
-        val silencedTypeStrings = alertedTypes.map { it.toEngineString() }.toSet()
+        val silencedTypeStrings = (ThreatType.values().toSet() - alertedTypes).map { it.toEngineString() }.toSet()
         val engineFocus = focusLocation?.let { LatLng(it.lat, it.lon) }
         val engineParams = ZoneParams(params.slowRedKm, params.slowYellowKm, params.fastRedMin, params.fastYellowMin)
         val evaluation = engine.evaluate(
@@ -1014,6 +1022,7 @@ showBorders = prefs.showBorders,
         val mapThreats = evaluation.mapThreats
         val threatScores = evaluation.threatScores
         val focusOblastAlertActive = evaluation.focusOblastAlertActive
+        val focusOblastYellowAlertActive = evaluation.focusOblastYellowAlertActive
         val redCities = evaluation.redCities
 
         val activeZone: ThreatZone? = evaluation.activeZone
@@ -1043,6 +1052,7 @@ showBorders = prefs.showBorders,
             silencedTypes = ThreatType.values().toSet() - alertedTypes,
             activeZone = activeZone,
             focusOblastAlertActive = focusOblastAlertActive,
+            focusOblastYellowAlertActive = focusOblastYellowAlertActive,
             focusBannerCity = focusBannerCity,
             language = language,
             followMe = followMe,
@@ -1129,6 +1139,10 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setOfficialAlertsEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setOfficialAlertsEnabled(enabled) }
+    }
+
+    fun setOfficialYellowAlertsEnabled(enabled: Boolean) {
+        viewModelScope.launch { prefs.setYellowAlertsEnabled(enabled) }
     }
 
     fun setOfficialAlertCityScope(enabled: Boolean) {
@@ -1749,13 +1763,14 @@ private fun deriveProtectionState(
     activeSlowYellowArmed: Boolean,
     activeFastYellowArmed: Boolean,
     officialAlertsEnabled: Boolean,
+    officialYellowAlertsEnabled: Boolean,
     criticalOfflineOverride: Boolean,
     silencedTypesCount: Int,
     neptunOffline: Boolean
 ): ProtectionState {
     if (!monitoringRunning) return ProtectionState.OFFLINE
     val anyZoneArmed = activeSlowRedArmed || activeFastRedArmed || activeSlowYellowArmed || activeFastYellowArmed
-    val allChannelsOff = !anyZoneArmed && !officialAlertsEnabled
+    val allChannelsOff = !anyZoneArmed && !officialAlertsEnabled && !officialYellowAlertsEnabled
     val reduced = notificationsDisabledBySystem ||
         allChannelsOff ||
         silencedTypesCount == ThreatType.values().size ||

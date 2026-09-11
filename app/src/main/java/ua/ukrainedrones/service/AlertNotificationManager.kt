@@ -21,6 +21,7 @@ import kotlinx.coroutines.runBlocking
 import ua.ukrainedrones.AppLanguage
 import ua.ukrainedrones.MainActivity
 import ua.ukrainedrones.R
+import ua.ukrainedrones.engine.AlertLevel
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.Strings
@@ -34,6 +35,7 @@ class AlertNotificationManager(private val context: Context) {
 
     companion object {
         private val NotifRed = Color.parseColor("#E53935")
+        private val NotifYellow = Color.parseColor("#F9A825")
         const val ACTION_RETRY = "ua.ukrainedrones.RETRY"
         const val ACTION_IGNORE_RETRY = "ua.ukrainedrones.IGNORE_RETRY"
         const val EXTRA_REVEAL_ID = "reveal_threat_id"
@@ -176,7 +178,7 @@ class AlertNotificationManager(private val context: Context) {
         progressMax: Int? = null,
         progressNow: Int? = null,
         ignoreLabel: String? = null,
-        red: Boolean = false
+        alertLevel: AlertLevel = AlertLevel.NONE
     ): Notification {
         val b = NotificationCompat.Builder(context, CHANNEL_MONITOR)
             .setSmallIcon(R.drawable.ic_trident)
@@ -185,8 +187,10 @@ class AlertNotificationManager(private val context: Context) {
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(openAppIntent())
-        if (red) {
-            b.setLargeIcon(redIconBitmap())
+        when (alertLevel) {
+            AlertLevel.RED -> b.setLargeIcon(redIconBitmap())
+            AlertLevel.YELLOW -> b.setLargeIcon(yellowIconBitmap())
+            AlertLevel.NONE -> {}
         }
 
         if (retryLabel != null) {
@@ -201,19 +205,23 @@ class AlertNotificationManager(private val context: Context) {
         return b.build()
     }
 
-    /** Red-tinted trident as a large-icon bitmap (used to colorize the monitor notification red). */
-    private fun redIconBitmap(): Bitmap {
+    /** Tinted trident as a large-icon bitmap (used to colorize the monitor notification). */
+    private fun tintedIconBitmap(color: Int): Bitmap {
         val size = 96
         val drawable = ContextCompat.getDrawable(context, R.drawable.ic_trident)?.mutate()
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         if (drawable != null) {
-            drawable.setTint(NotifRed)
+            drawable.setTint(color)
             drawable.setBounds(0, 0, size, size)
             drawable.draw(canvas)
         }
         return bmp
     }
+
+    private fun redIconBitmap(): Bitmap = tintedIconBitmap(NotifRed)
+
+    private fun yellowIconBitmap(): Bitmap = tintedIconBitmap(NotifYellow)
 
     fun postAlertNotification(
         zone: ThreatZone,

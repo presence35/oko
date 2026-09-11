@@ -2,6 +2,7 @@ package ua.ukrainedrones
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.ThreatZone
+import ua.ukrainedrones.engine.AlertLevel
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.distanceFlat
 
@@ -328,144 +329,94 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             // Composed after MapScreen, so its handler is checked first on Back.
             BackHandler { screen = Screen.MAP }
             SettingsScreen(
-                lang = uiState.language,
+                uiState = uiState,
                 listState = settingsListState,
-                onThreatsScrollHandled = { scrollToThreatsTick = 0 },
-                scrollToThreatsTick = scrollToThreatsTick,
-                scrollToNightMode = uiState.nightActive,
                 collapse = settingsCollapse,
                 onCollapseChange = { settingsCollapse = it },
-                hiddenTypes = uiState.hiddenTypes,
-                silencedTypes = uiState.silencedTypes,
-                officialAlertsEnabled = uiState.officialAlertsEnabled,
-                officialAlertCityScope = uiState.officialAlertCityScope,
-                sirenOverride = uiState.sirenOverride,
-                criticalOfflineOverride = uiState.criticalOfflineOverride,
-                criticalOfflineBypassSilent = uiState.criticalOfflineBypassSilent,
-                nightEnabled = uiState.nightEnabled,
-                nightStartMin = uiState.nightStartMin,
-                nightEndMin = uiState.nightEndMin,
-                nightUseCustomZones = uiState.nightUseCustomZones,
-                slowRedKm = uiState.slowRedKm,
-                slowYellowKm = uiState.slowYellowKm,
-                fastRedMin = uiState.fastRedMin,
-                fastYellowMin = uiState.fastYellowMin,
-                nightSlowRedKm = uiState.nightSlowRedKm,
-                nightSlowYellowKm = uiState.nightSlowYellowKm,
-                nightFastRedMin = uiState.nightFastRedMin,
-                nightFastYellowMin = uiState.nightFastYellowMin,
-                nightSlowRedArmed = uiState.nightSlowRedArmed,
-                nightSlowYellowArmed = uiState.nightSlowYellowArmed,
-                nightFastRedArmed = uiState.nightFastRedArmed,
-                nightFastYellowArmed = uiState.nightFastYellowArmed,
-                nightZoneSirenOverride = uiState.nightZoneSirenOverride,
-                nightOfficialSirenOverride = uiState.nightOfficialSirenOverride,
-                disclaimerCollapsed = uiState.disclaimerCollapsed,
-                disclaimerReadCount = uiState.disclaimerReadCount,
-                followMe = uiState.followMe,
-                pinnedCity = uiState.pinnedCity,
-                threatCardSize = uiState.threatCardSize,
-                iconSet = uiState.iconSet,
-                showMapScale = uiState.showMapScale,
-                showMediumCities = uiState.showMediumCities,
-                showSmallCities = uiState.showSmallCities,
-                showLargeCities = uiState.showLargeCities,
-                fillAlertRegions = uiState.fillAlertRegions,
-                showBorders = uiState.showBorders,
-                showRegionBorders = uiState.showRegionBorders,
-                sheltersEnabled = uiState.sheltersEnabled,
-                periodicGps = uiState.periodicGps,
-                calmMessagesEnabled = uiState.calmMessagesEnabled,
-                hapticsEnabled = uiState.hapticsEnabled,
-                deathAnimationEnabled = uiState.deathAnimationEnabled,
-                flybyAnimationEnabled = uiState.flybyAnimationEnabled,
-                followBullet = uiState.followBullet,
-                neutralizedTallyEnabled = uiState.neutralizedTallyEnabled,
-                neutralizedTallyAllUkraine = uiState.neutralizedTallyAllUkraine,
-                threatIconZoom = uiState.threatIconZoom,
-                onThreatIconZoomChange = { viewModel.setThreatIconZoom(it) },
-                fastGroupCollapsed = uiState.fastGroupCollapsed,
-                slowGroupCollapsed = uiState.slowGroupCollapsed,
-                versionName = BuildConfig.VERSION_NAME,
-                isChecking = uiState.update is UpdateState.Checking,
-                latestVersion = uiState.latestVersion,
-                onBack = { screen = Screen.MAP },
+                scrollToThreatsTick = scrollToThreatsTick,
+                onThreatsScrollHandled = remember { { scrollToThreatsTick = 0 } },
                 activeExplainer = activeExplainer,
-                onExplainerChange = { activeExplainer = it },
-                onLanguageChange = { viewModel.setLanguage(it) },
-                onThreatMapToggle = { type, visible -> viewModel.setThreatMapVisible(type, visible) },
-                onThreatAlertToggle = { type, enabled -> viewModel.setThreatAlertsEnabled(type, enabled) },
-                onThreatMapToggleAll = { types, visible -> viewModel.setGroupThreatMapVisible(types, visible) },
-                onThreatAlertToggleAll = { types, enabled -> viewModel.setGroupThreatAlertsEnabled(types, enabled) },
-                onOfficialAlertsChange = { viewModel.setOfficialAlertsEnabled(it) },
-                onOfficialAlertCityScopeChange = { viewModel.setOfficialAlertCityScope(it) },
-                onSirenOverrideChange = { viewModel.setSirenOverride(it) },
-                onCriticalOfflineOverrideChange = { viewModel.setCriticalOfflineOverride(it) },
-                onCriticalOfflineBypassSilentChange = { viewModel.setCriticalOfflineBypassSilent(it) },
-                bootRestartEnabled = uiState.bootRestartEnabled,
-                onBootRestartChange = { viewModel.setBootRestartEnabled(it) },
-                onNightEnabledChange = { viewModel.setNightEnabled(it) },
-                onNightStartChange = { viewModel.setNightStartMin(it) },
-                onNightEndChange = { viewModel.setNightEndMin(it) },
-                onNightUseCustomZonesChange = { viewModel.setNightUseCustomZones(it) },
-                onNightSlowRedChange = { viewModel.setNightSlowRedKm(it) },
-                onNightSlowYellowChange = { viewModel.setNightSlowYellowKm(it) },
-                onNightFastRedChange = { viewModel.setNightFastRedMin(it) },
-                onNightFastYellowChange = { viewModel.setNightFastYellowMin(it) },
+                onExplainerChange = remember { { activeExplainer = it } },
+                versionName = BuildConfig.VERSION_NAME,
+                onBack = remember { { screen = Screen.MAP } },
+                onLanguageChange = remember { { viewModel.setLanguage(it) } },
+                onThreatMapToggle = remember<(ThreatType, Boolean) -> Unit> { { type, visible -> viewModel.setThreatMapVisible(type, visible) } },
+                onThreatAlertToggle = remember<(ThreatType, Boolean) -> Unit> { { type, enabled -> viewModel.setThreatAlertsEnabled(type, enabled) } },
+                onThreatMapToggleAll = remember<(Set<ThreatType>, Boolean) -> Unit> { { types, visible -> viewModel.setGroupThreatMapVisible(types, visible) } },
+                onThreatAlertToggleAll = remember<(Set<ThreatType>, Boolean) -> Unit> { { types, enabled -> viewModel.setGroupThreatAlertsEnabled(types, enabled) } },
+                onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } },
+                onOfficialYellowAlertsChange = remember { { viewModel.setOfficialYellowAlertsEnabled(it) } },
+                onOfficialAlertCityScopeChange = remember { { viewModel.setOfficialAlertCityScope(it) } },
+                onSirenOverrideChange = remember { { viewModel.setSirenOverride(it) } },
+                onCriticalOfflineOverrideChange = remember { { viewModel.setCriticalOfflineOverride(it) } },
+                onCriticalOfflineBypassSilentChange = remember { { viewModel.setCriticalOfflineBypassSilent(it) } },
+                onBootRestartChange = remember { { viewModel.setBootRestartEnabled(it) } },
+                onNightEnabledChange = remember { { viewModel.setNightEnabled(it) } },
+                onNightStartChange = remember { { viewModel.setNightStartMin(it) } },
+                onNightEndChange = remember { { viewModel.setNightEndMin(it) } },
+                onNightUseCustomZonesChange = remember { { viewModel.setNightUseCustomZones(it) } },
+                onNightSlowRedChange = remember { { viewModel.setNightSlowRedKm(it) } },
+                onNightSlowYellowChange = remember { { viewModel.setNightSlowYellowKm(it) } },
+                onNightFastRedChange = remember { { viewModel.setNightFastRedMin(it) } },
+                onNightFastYellowChange = remember { { viewModel.setNightFastYellowMin(it) } },
                 onNightSlowRedArmedChange = { armOrRequestPermission(it) { v -> viewModel.setNightSlowRedArmed(v) } },
                 onNightSlowYellowArmedChange = { armOrRequestPermission(it) { v -> viewModel.setNightSlowYellowArmed(v) } },
                 onNightFastRedArmedChange = { armOrRequestPermission(it) { v -> viewModel.setNightFastRedArmed(v) } },
                 onNightFastYellowArmedChange = { armOrRequestPermission(it) { v -> viewModel.setNightFastYellowArmed(v) } },
-                onNightZoneSirenOverrideChange = { viewModel.setNightZoneSirenOverride(it) },
-                onNightOfficialSirenOverrideChange = { viewModel.setNightOfficialSirenOverride(it) },
-                onFollowMeChange = { viewModel.setFollowMe(it) },
-                onPinnedCityChange = { viewModel.setPinnedCity(it) },
-                onPeriodicGpsChange = { viewModel.setPeriodicGps(it) },
-                onCalmMessagesChange = { viewModel.setCalmMessagesEnabled(it) },
-                onHapticsEnabledChange = { viewModel.setHapticsEnabled(it) },
-                onDisclaimerCollapse = { viewModel.setDisclaimerCollapsed(it) },
-                onDisclaimerShown = { viewModel.onDisclaimerShown() },
-                onThreatCardSizeChange = { viewModel.setThreatCardSize(it) },
-                onIconSetChange = { viewModel.setThreatIconSet(it) },
-                overlapMode = uiState.overlapMode,
-                onOverlapModeChange = { viewModel.setOverlapMode(it) },
-                onShowMapScaleChange = { viewModel.setShowMapScale(it) },
-                onShowMediumCitiesChange = { viewModel.setShowMediumCities(it) },
-                onShowSmallCitiesChange = { viewModel.setShowSmallCities(it) },
-                onShowLargeCitiesChange = { viewModel.setShowLargeCities(it) },
-                onFillAlertRegionsChange = { viewModel.setFillAlertRegions(it) },
-                onShowBordersChange = { viewModel.setShowBorders(it) },
-                onShowRegionBordersChange = { viewModel.setShowRegionBorders(it) },
-                onSheltersEnabledChange = { viewModel.setSheltersEnabled(it) },
-                onOpenShelterList = {
-                sheltersFromSettings = true
-                screen = Screen.SHELTERS
-            },
-                justFunMasterEnabled = uiState.justFunMasterEnabled,
-                onJustFunMasterChange = { viewModel.setJustFunEnabled(it) },
-                onDeathAnimationChange = { viewModel.setDeathAnimationEnabled(it) },
-                onFlybyAnimationChange = { viewModel.setFlybyAnimationEnabled(it) },
-                onFollowBulletChange = { viewModel.setFollowBullet(it) },
-                onNeutralizedTallyChange = { viewModel.setNeutralizedTallyEnabled(it) },
-                onNeutralizedTallyAllUkraineChange = { viewModel.setNeutralizedTallyAllUkraine(it) },
-                onFastGroupCollapse = { viewModel.setFastGroupCollapsed(it) },
-                onSlowGroupCollapse = { viewModel.setSlowGroupCollapsed(it) },
+                onNightZoneSirenOverrideChange = remember { { viewModel.setNightZoneSirenOverride(it) } },
+                onNightOfficialSirenOverrideChange = remember { { viewModel.setNightOfficialSirenOverride(it) } },
+                onFollowMeChange = remember { { viewModel.setFollowMe(it) } },
+                onPinnedCityChange = remember { { viewModel.setPinnedCity(it) } },
+                onPeriodicGpsChange = remember { { viewModel.setPeriodicGps(it) } },
+                onCalmMessagesChange = remember { { viewModel.setCalmMessagesEnabled(it) } },
+                onHapticsEnabledChange = remember { { viewModel.setHapticsEnabled(it) } },
+                onDisclaimerCollapse = remember { { viewModel.setDisclaimerCollapsed(it) } },
+                onDisclaimerShown = remember { { viewModel.onDisclaimerShown() } },
+                onThreatCardSizeChange = remember { { viewModel.setThreatCardSize(it) } },
+                onIconSetChange = remember { { viewModel.setThreatIconSet(it) } },
+                onOverlapModeChange = remember { { viewModel.setOverlapMode(it) } },
+                onShowMapScaleChange = remember { { viewModel.setShowMapScale(it) } },
+                onShowMediumCitiesChange = remember { { viewModel.setShowMediumCities(it) } },
+                onShowSmallCitiesChange = remember { { viewModel.setShowSmallCities(it) } },
+                onShowLargeCitiesChange = remember { { viewModel.setShowLargeCities(it) } },
+                onFillAlertRegionsChange = remember { { viewModel.setFillAlertRegions(it) } },
+                onShowBordersChange = remember { { viewModel.setShowBorders(it) } },
+                onShowRegionBordersChange = remember { { viewModel.setShowRegionBorders(it) } },
+                onSheltersEnabledChange = remember { { viewModel.setSheltersEnabled(it) } },
+                onOpenShelterList = remember {
+                    {
+                        sheltersFromSettings = true
+                        screen = Screen.SHELTERS
+                    }
+                },
+                onJustFunMasterChange = remember { { viewModel.setJustFunEnabled(it) } },
+                onDeathAnimationChange = remember { { viewModel.setDeathAnimationEnabled(it) } },
+                onFlybyAnimationChange = remember { { viewModel.setFlybyAnimationEnabled(it) } },
+                onFollowBulletChange = remember { { viewModel.setFollowBullet(it) } },
+                onNeutralizedTallyChange = remember { { viewModel.setNeutralizedTallyEnabled(it) } },
+                onNeutralizedTallyAllUkraineChange = remember { { viewModel.setNeutralizedTallyAllUkraine(it) } },
+                onThreatIconZoomChange = remember { { viewModel.setThreatIconZoom(it) } },
+                onFastGroupCollapse = remember { { viewModel.setFastGroupCollapsed(it) } },
+                onSlowGroupCollapse = remember { { viewModel.setSlowGroupCollapsed(it) } },
                 onExit = onExit,
-                onCheckUpdate = { viewModel.checkForUpdates() },
-                onRelaunchSetup = {
-                    viewModel.relaunchSetup()
-                    wizardFromSettings = true
+                onCheckUpdate = remember { { viewModel.checkForUpdates() } },
+                onRelaunchSetup = remember {
+                    {
+                        viewModel.relaunchSetup()
+                        wizardFromSettings = true
+                    }
                 },
                 onResetTips = {
                     viewModel.resetAllTips()
-                    // Re-arm the in-memory hint counters so the gear re-pulses immediately.
                     settingsHintRemaining = 3
                     showToast(Strings.get(uiState.language).tipsResetToast, cardVisible = false)
                 },
-                onOpenGuide = {
-                    guideFromSettings = true
-                    guideFeatureId = null
-                    screen = Screen.GUIDE
+                onOpenGuide = remember {
+                    {
+                        guideFromSettings = true
+                        guideFeatureId = null
+                        screen = Screen.GUIDE
+                    }
                 }
             )
         }
@@ -800,11 +751,17 @@ private fun MapScreen(
     Scaffold(
         topBar = {
             val activeZone = uiState.activeZone
-            val officialOnly = uiState.focusOblastAlertActive && activeZone == null
+            // Official-alert level for the trident: red siren > yellow tactical > none.
+            val officialLevel = when {
+                uiState.focusOblastAlertActive -> AlertLevel.RED
+                uiState.focusOblastYellowAlertActive -> AlertLevel.YELLOW
+                else -> AlertLevel.NONE
+            }
+            // Border colors only track the app's own zones — the trident owns the official signal.
             val borderColor = when (activeZone) {
                 ThreatZone.INNER -> AlertRed
                 ThreatZone.OUTER -> Color(0xFFF9A825)
-                null -> if (officialOnly) AlertRed else Color.Transparent
+                null -> Color.Transparent
             }
             val pinnedCityName = if (uiState.followMe) null else uiState.pinnedCity?.let {
                 if (uiState.language == AppLanguage.UA) it.nameUa else it.nameEn
@@ -814,7 +771,8 @@ private fun MapScreen(
                 ThreatZone.OUTER -> s.yellowZoneAlert
                 null -> when {
                     uiState.gpsFixMissing -> s.gpsUnavailableFollowMe
-                    officialOnly -> String.format(s.alertBannerFormat, uiState.focusBannerCity)
+                    uiState.focusOblastAlertActive -> String.format(s.alertBannerFormat, uiState.focusBannerCity)
+                    uiState.focusOblastYellowAlertActive -> String.format(s.alertYellowBannerFormat, uiState.focusBannerCity)
                     pinnedCityName != null -> pinnedCityName
                     else -> s.appTitle
                 }
@@ -838,7 +796,7 @@ private fun MapScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 UkraineEmblem(
-                    active = uiState.focusOblastAlertActive,
+                    level = officialLevel,
                     modifier = Modifier.padding(end = 4.dp)
                 )
                 Box(
@@ -858,7 +816,9 @@ private fun MapScreen(
                             .semantics { semanticsContentDescription = s.fitMapLabel },
                         style = when {
                             activeZone != null -> MaterialTheme.typography.titleMedium.copy(color = Color.White)
-                            officialOnly -> MaterialTheme.typography.titleMedium.copy(color = Color(0xFFE57373))
+                            officialLevel != AlertLevel.NONE -> MaterialTheme.typography.titleMedium.copy(
+                                color = if (officialLevel == AlertLevel.RED) Color(0xFFE57373) else Color(0xFFF9A825)
+                            )
                             else -> MaterialTheme.typography.titleMedium.copy(
                                 brush = Brush.linearGradient(
                                     listOf(UkraineBlue, UkraineYellow)
@@ -1465,11 +1425,13 @@ private fun ThreatStripFooter(
 }
 
 @Composable
-private fun UkraineEmblem(active: Boolean, modifier: Modifier = Modifier, contentDesc: String? = null) {
+private fun UkraineEmblem(level: AlertLevel, modifier: Modifier = Modifier, contentDesc: String? = null) {
     val red = AlertRed
+    val yellow = Color(0xFFF9A825)
     Box(modifier = modifier.size(44.dp), contentAlignment = Alignment.Center) {
-        if (active) {
-            // Soft red halo so the emblem reads as "glowing red" during an official alert.
+        if (level == AlertLevel.RED) {
+            // Soft red halo so the emblem reads as "glowing red" during a red official alert.
+            // Yellow official alerts are tint-only — red keeps the glow as the highest urgency.
             Box(
                 modifier = Modifier
                     .matchParentSize()
@@ -1482,7 +1444,11 @@ private fun UkraineEmblem(active: Boolean, modifier: Modifier = Modifier, conten
         Image(
             painter = painterResource(R.drawable.ic_trident),
             contentDescription = contentDesc,
-            colorFilter = if (active) ColorFilter.tint(red) else null,
+            colorFilter = when (level) {
+                AlertLevel.RED -> ColorFilter.tint(red)
+                AlertLevel.YELLOW -> ColorFilter.tint(yellow)
+                AlertLevel.NONE -> null
+            },
             modifier = Modifier.fillMaxSize()
         )
     }

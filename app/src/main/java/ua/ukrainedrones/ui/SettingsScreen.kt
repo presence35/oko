@@ -1,6 +1,7 @@
 package ua.ukrainedrones
 
 import ua.ukrainedrones.engine.SpeedSource
+import ua.ukrainedrones.UpdateState
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.ZoneParams
@@ -352,82 +353,27 @@ private fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    lang: AppLanguage,
+    uiState: UiState,
     listState: LazyListState,
-    onThreatsScrollHandled: () -> Unit,
-    scrollToThreatsTick: Int,
-    scrollToNightMode: Boolean,
     collapse: SettingsCollapseState,
     onCollapseChange: (SettingsCollapseState) -> Unit,
-    hiddenTypes: Set<ThreatType>,
-    silencedTypes: Set<ThreatType>,
-    officialAlertsEnabled: Boolean,
-    officialAlertCityScope: Boolean,
-    sirenOverride: Boolean,
-    criticalOfflineOverride: Boolean,
-    criticalOfflineBypassSilent: Boolean,
-    nightEnabled: Boolean,
-    nightStartMin: Int,
-    nightEndMin: Int,
-    nightUseCustomZones: Boolean,
-    slowRedKm: Int,
-    slowYellowKm: Int,
-    fastRedMin: Int,
-    fastYellowMin: Int,
-    nightSlowRedKm: Int,
-    nightSlowYellowKm: Int,
-    nightFastRedMin: Int,
-    nightFastYellowMin: Int,
-    nightSlowRedArmed: Boolean,
-    nightSlowYellowArmed: Boolean,
-    nightFastRedArmed: Boolean,
-    nightFastYellowArmed: Boolean,
-    nightZoneSirenOverride: Boolean,
-    nightOfficialSirenOverride: Boolean,
-    disclaimerCollapsed: Boolean,
-    disclaimerReadCount: Int,
-    followMe: Boolean,
-    pinnedCity: City?,
-    threatCardSize: ThreatCardSize,
-    iconSet: ThreatIconSet,
-    showMapScale: Boolean,
-    showMediumCities: Boolean,
-    showSmallCities: Boolean,
-    showLargeCities: Boolean,
-    fillAlertRegions: Boolean,
-    showBorders: Boolean,
-    showRegionBorders: Boolean,
-    sheltersEnabled: Boolean,
-    periodicGps: Boolean,
-    calmMessagesEnabled: Boolean,
-    hapticsEnabled: Boolean,
-    deathAnimationEnabled: Boolean,
-    flybyAnimationEnabled: Boolean,
-    onFlybyAnimationChange: (Boolean) -> Unit,
-    followBullet: Boolean,
-    neutralizedTallyEnabled: Boolean,
-    neutralizedTallyAllUkraine: Boolean,
-    threatIconZoom: Boolean,
-    onThreatIconZoomChange: (Boolean) -> Unit,
-    fastGroupCollapsed: Boolean,
-    slowGroupCollapsed: Boolean,
-    versionName: String,
-    isChecking: Boolean,
-    latestVersion: String?,
-    onBack: () -> Unit,
+    scrollToThreatsTick: Int,
+    onThreatsScrollHandled: () -> Unit,
     activeExplainer: Explainer?,
     onExplainerChange: (Explainer?) -> Unit,
+    versionName: String,
+    onBack: () -> Unit,
     onLanguageChange: (AppLanguage) -> Unit,
     onThreatMapToggle: (ThreatType, Boolean) -> Unit,
     onThreatAlertToggle: (ThreatType, Boolean) -> Unit,
     onThreatMapToggleAll: (Set<ThreatType>, Boolean) -> Unit,
     onThreatAlertToggleAll: (Set<ThreatType>, Boolean) -> Unit,
     onOfficialAlertsChange: (Boolean) -> Unit,
+    onOfficialYellowAlertsChange: (Boolean) -> Unit,
     onOfficialAlertCityScopeChange: (Boolean) -> Unit,
     onSirenOverrideChange: (Boolean) -> Unit,
     onCriticalOfflineOverrideChange: (Boolean) -> Unit,
     onCriticalOfflineBypassSilentChange: (Boolean) -> Unit,
-    bootRestartEnabled: Boolean,
     onBootRestartChange: (Boolean) -> Unit,
     onNightEnabledChange: (Boolean) -> Unit,
     onNightStartChange: (Int) -> Unit,
@@ -452,7 +398,6 @@ fun SettingsScreen(
     onDisclaimerShown: () -> Unit,
     onThreatCardSizeChange: (ThreatCardSize) -> Unit,
     onIconSetChange: (ThreatIconSet) -> Unit,
-    overlapMode: OverlapMode,
     onOverlapModeChange: (OverlapMode) -> Unit,
     onShowMapScaleChange: (Boolean) -> Unit,
     onShowMediumCitiesChange: (Boolean) -> Unit,
@@ -464,11 +409,12 @@ fun SettingsScreen(
     onSheltersEnabledChange: (Boolean) -> Unit,
     onOpenShelterList: () -> Unit = {},
     onJustFunMasterChange: (Boolean) -> Unit,
-    justFunMasterEnabled: Boolean,
     onDeathAnimationChange: (Boolean) -> Unit,
+    onFlybyAnimationChange: (Boolean) -> Unit,
     onFollowBulletChange: (Boolean) -> Unit,
     onNeutralizedTallyChange: (Boolean) -> Unit,
     onNeutralizedTallyAllUkraineChange: (Boolean) -> Unit,
+    onThreatIconZoomChange: (Boolean) -> Unit,
     onFastGroupCollapse: (Boolean) -> Unit,
     onSlowGroupCollapse: (Boolean) -> Unit,
     onExit: () -> Unit,
@@ -477,6 +423,64 @@ fun SettingsScreen(
     onRelaunchSetup: () -> Unit,
     onResetTips: () -> Unit = {}
 ) {
+    val lang = uiState.language
+    val hiddenTypes = uiState.hiddenTypes
+    val silencedTypes = uiState.silencedTypes
+    val officialAlertsEnabled = uiState.officialAlertsEnabled
+    val officialYellowAlertsEnabled = uiState.officialYellowAlertsEnabled
+    val officialAlertCityScope = uiState.officialAlertCityScope
+    val sirenOverride = uiState.sirenOverride
+    val criticalOfflineOverride = uiState.criticalOfflineOverride
+    val criticalOfflineBypassSilent = uiState.criticalOfflineBypassSilent
+    val nightEnabled = uiState.nightEnabled
+    val nightStartMin = uiState.nightStartMin
+    val nightEndMin = uiState.nightEndMin
+    val nightUseCustomZones = uiState.nightUseCustomZones
+    val slowRedKm = uiState.slowRedKm
+    val slowYellowKm = uiState.slowYellowKm
+    val fastRedMin = uiState.fastRedMin
+    val fastYellowMin = uiState.fastYellowMin
+    val nightSlowRedKm = uiState.nightSlowRedKm
+    val nightSlowYellowKm = uiState.nightSlowYellowKm
+    val nightFastRedMin = uiState.nightFastRedMin
+    val nightFastYellowMin = uiState.nightFastYellowMin
+    val nightSlowRedArmed = uiState.nightSlowRedArmed
+    val nightSlowYellowArmed = uiState.nightSlowYellowArmed
+    val nightFastRedArmed = uiState.nightFastRedArmed
+    val nightFastYellowArmed = uiState.nightFastYellowArmed
+    val nightZoneSirenOverride = uiState.nightZoneSirenOverride
+    val nightOfficialSirenOverride = uiState.nightOfficialSirenOverride
+    val disclaimerCollapsed = uiState.disclaimerCollapsed
+    val disclaimerReadCount = uiState.disclaimerReadCount
+    val followMe = uiState.followMe
+    val pinnedCity = uiState.pinnedCity
+    val threatCardSize = uiState.threatCardSize
+    val iconSet = uiState.iconSet
+    val showMapScale = uiState.showMapScale
+    val showMediumCities = uiState.showMediumCities
+    val showSmallCities = uiState.showSmallCities
+    val showLargeCities = uiState.showLargeCities
+    val fillAlertRegions = uiState.fillAlertRegions
+    val showBorders = uiState.showBorders
+    val showRegionBorders = uiState.showRegionBorders
+    val sheltersEnabled = uiState.sheltersEnabled
+    val periodicGps = uiState.periodicGps
+    val calmMessagesEnabled = uiState.calmMessagesEnabled
+    val hapticsEnabled = uiState.hapticsEnabled
+    val deathAnimationEnabled = uiState.deathAnimationEnabled
+    val flybyAnimationEnabled = uiState.flybyAnimationEnabled
+    val followBullet = uiState.followBullet
+    val neutralizedTallyEnabled = uiState.neutralizedTallyEnabled
+    val neutralizedTallyAllUkraine = uiState.neutralizedTallyAllUkraine
+    val threatIconZoom = uiState.threatIconZoom
+    val fastGroupCollapsed = uiState.fastGroupCollapsed
+    val slowGroupCollapsed = uiState.slowGroupCollapsed
+    val overlapMode = uiState.overlapMode
+    val justFunMasterEnabled = uiState.justFunMasterEnabled
+    val bootRestartEnabled = uiState.bootRestartEnabled
+    val isChecking = uiState.update is UpdateState.Checking
+    val latestVersion = uiState.latestVersion
+    val scrollToNightMode = uiState.nightActive
     val s = Strings.get(lang)
     // Search box: filters sections + standalone actions by curated keywords, surfaces suggestion
     // chips for related concepts and "did you mean" for typos. Query is plain remember so it
@@ -788,7 +792,7 @@ fun SettingsScreen(
                     title = s.alertsLabel,
                     icon = rememberVectorPainter(Icons.Default.Notifications),
                     expanded = collapse.alerts,
-                    subtitle = s.alertsSubtitle(officialAlertsEnabled, sirenOverride),
+                    subtitle = s.alertsSubtitle(officialAlertsEnabled, officialYellowAlertsEnabled, sirenOverride),
                     onToggle = { onCollapseChange(collapse.copy(alerts = !collapse.alerts)) }
                 ) {
                     val notifsEnabled = remember(Unit) {
@@ -858,6 +862,7 @@ fun SettingsScreen(
                         checked = officialAlertsEnabled,
                         onCheckedChange = { v -> showExplainer("officialAlerts"); onOfficialAlertsChange(v) },
                         icon = painterResource(R.drawable.ic_trident),
+                        iconTint = if (officialAlertsEnabled) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurfaceVariant,
                         note = s.officialAlertsRedTridentNote,
                         noteIcon = painterResource(R.drawable.ic_trident),
                         noteIconTint = Color(0xFFD32F2F),
@@ -873,6 +878,19 @@ fun SettingsScreen(
                             )
                         }
                     }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AlertToggleRow(
+                        title = s.officialYellowAlertsTitle,
+                        description = s.officialYellowAlertsDesc,
+                        checked = officialYellowAlertsEnabled,
+                        onCheckedChange = { v -> showExplainer("officialYellowAlerts"); onOfficialYellowAlertsChange(v) },
+                        icon = painterResource(R.drawable.ic_trident),
+                        iconTint = if (officialYellowAlertsEnabled) Color(0xFFF9A825) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        note = s.officialYellowTridentNote,
+                        noteIcon = painterResource(R.drawable.ic_trident),
+                        noteIconTint = Color(0xFFF9A825),
+                        flash = flashId == "officialYellowAlerts"
+                    )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertToggleRow(
                         title = s.sirenOverrideTitle,
@@ -2709,19 +2727,15 @@ internal fun IconSetTile(
     ) {
         val types = IconCatalog.photoTypes()
         val naturalWidth = (slot + IconTileSpacing) * types.size + IconTileSpacing
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
         ) {
-            // Content width is the full natural strip so the horizontal scroll can reach
-            // every icon (a capped width made the 7th icon unreachable). On wide screens the
-            // strip fits whole and nothing scrolls.
-            val stripWidth = naturalWidth
             Row(
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
-                    .width(stripWidth)
+                    .width(naturalWidth)
                     .padding(horizontal = IconTileSpacing, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(IconTileSpacing)

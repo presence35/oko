@@ -47,6 +47,7 @@ object WidgetUpdater {
         val activeZone = stringPreferencesKey("active_zone")
         val nearestKm = intPreferencesKey("nearest_km")
         val officialAlert = booleanPreferencesKey("official_alert")
+        val officialYellowAlert = booleanPreferencesKey("official_yellow_alert")
         val sourceOnline = booleanPreferencesKey("source_online")
         val sourceDegraded = booleanPreferencesKey("source_degraded")
         val primaryId = stringPreferencesKey("primary_id")
@@ -127,6 +128,7 @@ object WidgetUpdater {
             prefs[Keys.activeZone] = snapshot.activeZone?.name.orEmpty()
             prefs[Keys.nearestKm] = snapshot.nearestKm?.toInt() ?: -1
             prefs[Keys.officialAlert] = snapshot.officialAlert
+            prefs[Keys.officialYellowAlert] = snapshot.officialYellowAlert
             prefs[Keys.sourceOnline] = snapshot.sourceOnline
             prefs[Keys.sourceDegraded] = snapshot.sourceDegraded
             val pt = snapshot.primaryThreat
@@ -165,6 +167,7 @@ object WidgetUpdater {
             },
             nearestKm = prefs[Keys.nearestKm]?.takeIf { it >= 0 }?.toDouble(),
             officialAlert = prefs[Keys.officialAlert] ?: false,
+            officialYellowAlert = prefs[Keys.officialYellowAlert] ?: false,
             sourceOnline = prefs[Keys.sourceOnline] ?: false,
             sourceDegraded = prefs[Keys.sourceDegraded] ?: false,
             primaryThreat = prefs[Keys.primaryId]?.let { id ->

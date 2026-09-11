@@ -24,7 +24,7 @@ behavior here, update the implementation in the same change.
 | Zone groups | `threatsInner`, `threatsOuter`, `activeZone`, `zoneThreats` | Tier classification |
 | Map threats | `List<NormalizedThreat>` (raw fixes) | Display-ready, ghosts excluded. Prediction is applied downstream: consumers glide via `predictPosition` on their own tick (MapView's 1s marker loop, popup proximity) |
 | Red cities | `Set<String>` | Cities under official alert (region-precise; scope-independent, labels light nationwide) |
-| Official alert | `focusOblastAlertActive: Boolean`, `officialReason: String?`, `reasonThreatId: String?` | Siren state (scoped) + attribution, owned by the engine |
+| Official alert | `focusOblastAlertActive: Boolean`, `focusOblastYellowAlertActive: Boolean`, `officialReason: String?`, `reasonThreatId: String?` | Siren/latch state (red) + yellow flag + attribution, owned by the engine |
 | Threat level | `Double` (0–10) | Aggregate gauge |
 | Proximity | `ThreatProximity?` (per selected threat) | Distance, ETA, speed source |
 
@@ -253,6 +253,10 @@ Engine gate (engine/OblastAlert.kt). Returns true when any alert covers the focu
 scope=false → oblast-wide matching
 scope=true  → oblast + city name matching (coversCity)
 Falls back to oblast-wide when city name is unknown.
+The red siren flag (`focusOblastAlertActive`, level "red") and the yellow flag
+(`focusOblastYellowAlertActive`, level "yellow") are derived with the same scoping, in
+`ThreatEngine.evaluate()`. Red wins over yellow in consumers' UI priority; the flags stay
+independent so messaging can be per-level. Consumers never re-implement this matching.
 ```
 
 ### `deriveOfficialAlertReason(alert, threats, focus, params, lang, now)` — Human-Readable Reason

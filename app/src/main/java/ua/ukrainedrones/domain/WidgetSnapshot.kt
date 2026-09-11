@@ -24,6 +24,9 @@ data class WidgetSnapshot(
     val activeZone: ThreatZone? = null,
     val nearestKm: Double? = null,
     val officialAlert: Boolean = false,
+    /** Whether a yellow-level (tactical) official alert is active for the focus — lets the
+     *  widget tint its trident amber instead of red. Red still wins when both are active. */
+    val officialYellowAlert: Boolean = false,
     val sourceOnline: Boolean = false,
     /** No WS source delivering (disabled, silent, or down) — mirrors the app's degraded pill. */
     val sourceDegraded: Boolean = false,
@@ -101,6 +104,7 @@ fun computeWidgetSnapshot(
     nearestKm = nearestKm?.let { it.coerceAtMost(WidgetSnapshot.NEAREST_CAP_KM).roundToInt().toDouble() }
 
     val officialAlert = eval.focusOblastAlertActive
+    val officialYellowAlert = eval.focusOblastYellowAlertActive
 
     // Three-tier, mirroring the app pill: green when a WS source delivers, orange when degraded,
     // red only on the offline escalation. Caller (WidgetUpdater) derives these from the registry.
@@ -110,6 +114,7 @@ fun computeWidgetSnapshot(
         activeZone = eval.activeZone,
         nearestKm = nearestKm,
         officialAlert = officialAlert,
+        officialYellowAlert = officialYellowAlert,
         sourceOnline = !offline,
         sourceDegraded = degraded,
         primaryThreat = primaryThreat,

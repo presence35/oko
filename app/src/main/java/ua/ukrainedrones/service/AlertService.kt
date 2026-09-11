@@ -1021,7 +1021,7 @@ val mappedThreats = registry.allThreats.map { list ->
         lastMonitorAlertLevel = alertLevel
         notificationManager.safeNotify(
             NOTIF_MONITOR,
-            notificationManager.buildMonitorNotification(title, text, retryLabel, progressMax, progressNow, ignoreLabel, alertLevel == AlertLevel.RED)
+            notificationManager.buildMonitorNotification(title, text, retryLabel, progressMax, progressNow, ignoreLabel, alertLevel)
         )
     }
 

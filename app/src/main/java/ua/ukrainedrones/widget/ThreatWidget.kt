@@ -346,7 +346,7 @@ class ThreatWidget : GlanceAppWidget() {
 
     private fun accentColor(snapshot: WidgetSnapshot): Color = when {
         snapshot.officialAlert || snapshot.activeZone == ThreatZone.INNER -> RED
-        snapshot.activeZone == ThreatZone.OUTER -> AMBER
+        snapshot.officialYellowAlert || snapshot.activeZone == ThreatZone.OUTER -> AMBER
         snapshot.threatCount > 0 -> BLUE
         else -> GREEN
     }
@@ -355,6 +355,7 @@ class ThreatWidget : GlanceAppWidget() {
         snapshot.activeZone == ThreatZone.INNER -> strings.redZoneLabel to RED
         snapshot.activeZone == ThreatZone.OUTER -> strings.yellowZoneLabel to AMBER
         snapshot.officialAlert -> strings.widget.officialAlertLabel to RED
+        snapshot.officialYellowAlert -> strings.widget.officialYellowAlertLabel to AMBER
         snapshot.threatCount > 0 -> strings.widget.threatsAwayFormat
             .let { if (snapshot.nearestKm != null) String.format(it, snapshot.nearestKm.toInt()) else strings.widget.active } to BLUE
         else -> strings.widget.noThreats to GREEN

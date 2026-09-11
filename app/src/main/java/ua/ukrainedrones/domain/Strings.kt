@@ -460,7 +460,8 @@ object Strings {
         val updatedNowLabel: String,
         val threatsAwayFormat: String,
         val refreshLabel: String,
-        val officialAlertLabel: String
+        val officialAlertLabel: String,
+        val officialYellowAlertLabel: String
     )
 
     data class Guide(
@@ -591,6 +592,7 @@ val tapToCancelLabel: String,
         val nightSirenSuffix: String,
         val nightZonesSuffix: String,
         val alertsOfficialPrefix: String,
+        val alertsYellowOfficialPrefix: String,
         val alertsSirenOverride: String,
         val onWord: String,
         val offWord: String,
@@ -687,6 +689,9 @@ val tapToCancelLabel: String,
         val officialAlertsTitle: String get() = settings.officialAlertsTitle
         val officialAlertsDesc: String get() = settings.officialAlertsDesc
         val officialAlertsRedTridentNote: String get() = settings.officialAlertsRedTridentNote
+        val officialYellowAlertsTitle: String get() = settings.officialYellowAlertsTitle
+        val officialYellowAlertsDesc: String get() = settings.officialYellowAlertsDesc
+        val officialYellowTridentNote: String get() = settings.officialYellowTridentNote
         val officialAlertScopeTitle: String get() = settings.officialAlertScopeTitle
         val officialAlertScopeDesc: String get() = settings.officialAlertScopeDesc
         val sirenOverrideTitle: String get() = settings.sirenOverrideTitle
@@ -756,10 +761,10 @@ val tapToCancelLabel: String,
                 "${subtitles.nightEnabledPrefix} · $timeStr$sirenStr$zonesStr"
             }
 
-        fun alertsSubtitle(officialAlerts: Boolean, sirenOverride: Boolean): String {
+        fun alertsSubtitle(officialAlerts: Boolean, officialYellowAlerts: Boolean, sirenOverride: Boolean): String {
             val parts = mutableListOf<String>()
-            val officialText = String.format(subtitles.alertsOfficialPrefix, if (officialAlerts) subtitles.onWord else subtitles.offWord)
-            parts.add(officialText)
+            parts.add(String.format(subtitles.alertsOfficialPrefix, if (officialAlerts) subtitles.onWord else subtitles.offWord))
+            parts.add(String.format(subtitles.alertsYellowOfficialPrefix, if (officialYellowAlerts) subtitles.onWord else subtitles.offWord))
             if (sirenOverride) {
                 parts.add(subtitles.alertsSirenOverride)
             }

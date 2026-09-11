@@ -21,7 +21,6 @@ import android.graphics.Bitmap
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
-import android.view.Choreographer
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -923,8 +922,17 @@ fun NeptunMapView(
         )
     }
 
+    val deathFrame = remember { mutableIntStateOf(0) }
+    LaunchedEffect(deathFx) {
+        while (true) {
+            withFrameNanos {}
+            if (deathFx.isActive) deathFrame.intValue++
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
     AndroidView(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
             Configuration.getInstance().userAgentValue = ctx.packageName
             // Keep the tile cache in the OS cache dir so Android treats it as "Cache"
@@ -988,9 +996,6 @@ fun NeptunMapView(
                             return false
                         }
                     })
-                // Self-contained death animation overlay: draws via its own Choreographer
-                // frame callback, so death effects never trigger a full MapView invalidate.
-                addView(DeathFxOverlayView(ctx, this@apply, deathFx))
             }
         },
         update = { mapView ->
@@ -2000,9 +2005,11 @@ private class ScaleDrawable(
 }
 
 /**
- * Transparent View layered on top of the osmdroid MapView (added as a child in the FrameLayout).
- * Drives the death animation via [Choreographer] frame callbacks — only redraws its own canvas,
- * never calls [MapView.invalidate], so the expensive tile + overlay stack is untouched.
+ * Transparent View layered on top of the osmdroid MapView (added as a full-size child view —
+ * MapView is a ViewGroup, and osmdroid restores the canvas before drawing children, so this
+ * draws in the same screen-pixel space [projection.toPixels] returns). Drives the death
+ * animation via [postOnAnimation] frame ticks — only redraws its own canvas, never calls
+ * [MapView.invalidate], so the expensive tile + overlay stack is untouched.
  */
 private class DeathFxOverlayView(
     context: Context,
@@ -2010,29 +2017,26 @@ private class DeathFxOverlayView(
     private val deathFx: DeathFxController
 ) : View(context) {
 
-    private val frameCallback = object : Choreographer.FrameCallback {
-        override fun doFrame(frameTimeNanos: Long) {
-            Choreographer.getInstance().postFrameCallback(this)
-            if (deathFx.isActive) {
-                invalidate()
-            }
+    private val tick = object : Runnable {
+        override fun run() {
+            if (!isAttachedToWindow) return
+            if (deathFx.isActive) invalidate()
+            postOnAnimation(this)
         }
     }
 
     init {
         setWillNotDraw(false)
-        // Transparent — draw nothing in background; let the MapView show through.
-        setBackgroundColor(Color.TRANSPARENT)
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        Choreographer.getInstance().postFrameCallback(frameCallback)
+        postOnAnimation(tick)
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        Choreographer.getInstance().removeFrameCallback(frameCallback)
+        removeCallbacks(tick)
     }
 
     override fun onDraw(canvas: Canvas) {

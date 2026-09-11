@@ -21,6 +21,9 @@ data class ThreatEvaluationResult(
     val fillYellowOblastTokens: Set<String> = emptySet(),
     val fillYellowRaionKeys: Set<Pair<String, String>> = emptySet(),
     val focusOblastAlertActive: Boolean = false,
+    /** Whether a yellow-level (tactical) official alert is active for the focus — the UI's
+     *  "official yellow" trident tint. Independent of [focusOblastAlertActive] (red siren). */
+    val focusOblastYellowAlertActive: Boolean = false,
     val officialReason: String? = null,
     val reasonThreatId: String? = null,
     val threatLevel: Double = 0.0
@@ -114,6 +117,10 @@ class ThreatEngine(
         // re-implement alert matching. Orchestration (region latch, announce-once, sound policy)
         // stays in AlertService.
         val focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, cityScope)
+        val focusOblastYellowAlertActive = focusToken != null && alerts.filter { it.level == "yellow" }.let { yellow ->
+            if (!cityScope || focusCityUa.isNullOrBlank()) yellow.any { it.inOblast(focusToken) }
+            else yellow.any { it.inOblast(focusToken) && it.coversCity(focusCityUa) }
+        }
         val redCities = computeRedCities(alerts, fillRegions)
         val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts.filter { it.level != "yellow" }, fillRegions)
         val (fillYellowOblastTokens, fillYellowRaionKeys) = computeFillKeys(alerts.filter { it.level == "yellow" }, fillRegions)
@@ -137,6 +144,7 @@ class ThreatEngine(
             fillYellowOblastTokens = fillYellowOblastTokens,
             fillYellowRaionKeys = fillYellowRaionKeys,
             focusOblastAlertActive = focusOblastAlertActive,
+            focusOblastYellowAlertActive = focusOblastYellowAlertActive,
             officialReason = officialReason,
             reasonThreatId = reasonThreatId,
             threatLevel = aggregateScores(threatScores)
