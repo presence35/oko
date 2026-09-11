@@ -20,7 +20,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.view.GestureDetector
 import android.view.MotionEvent
-import android.view.View
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -33,18 +32,24 @@ import android.graphics.drawable.BitmapDrawable
 import android.animation.ValueAnimator
 import android.graphics.drawable.Drawable
 import android.view.animation.DecelerateInterpolator
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
@@ -1636,6 +1641,18 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
         }
     )
 
+        // Death flourish renderer: a sibling Compose layer over the map, driven by its own
+        // vsync tick. Reading deathFrame subscribes THIS node to redraws only — the MapView
+        // below never re-paints, and the layer consumes no touch input.
+        Canvas(modifier = Modifier.matchParentSize()) {
+            deathFrame.intValue
+            val mv = mapViewRef.value
+            if (deathFx.isActive && mv != null) {
+                drawIntoCanvas { d -> deathFx.overlay.draw(d.nativeCanvas, mv, false) }
+            }
+        }
+    }
+
     // The popup card's height lands a frame AFTER the reveal fires (the card isn't laid out yet
     // on the same frame). Once it's measured, reframe the revealed threat so it stays visible
     // below the card. Only reframes on the 0→>0 transition (a card first appearing): a card
@@ -2002,48 +2019,4 @@ private class ScaleDrawable(
     override fun getOpacity(): Int = inner.opacity
     override fun getIntrinsicWidth(): Int = inner.intrinsicWidth
     override fun getIntrinsicHeight(): Int = inner.intrinsicHeight
-}
-
-/**
- * Transparent View layered on top of the osmdroid MapView (added as a full-size child view —
- * MapView is a ViewGroup, and osmdroid restores the canvas before drawing children, so this
- * draws in the same screen-pixel space [projection.toPixels] returns). Drives the death
- * animation via [postOnAnimation] frame ticks — only redraws its own canvas, never calls
- * [MapView.invalidate], so the expensive tile + overlay stack is untouched.
- */
-private class DeathFxOverlayView(
-    context: Context,
-    private val mapView: MapView,
-    private val deathFx: DeathFxController
-) : View(context) {
-
-    private val tick = object : Runnable {
-        override fun run() {
-            if (!isAttachedToWindow) return
-            if (deathFx.isActive) invalidate()
-            postOnAnimation(this)
-        }
-    }
-
-    init {
-        setWillNotDraw(false)
-    }
-
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        postOnAnimation(tick)
-    }
-
-    override fun onDetachedFromWindow() {
-        super.onDetachedFromWindow()
-        removeCallbacks(tick)
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        if (!deathFx.isActive) return
-        deathFx.overlay.draw(canvas, mapView, false)
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean = false
 }
