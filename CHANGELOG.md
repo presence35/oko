@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Death flourish overlay now redraws at 20fps instead of 30fps, cutting full-map invalidations during shoot-down animations / Death flourish overlay now redraws at 20fps instead of 30fps, cutting full-map invalidations during shoot-down animations
+- Death flourish overlay now renders in its own self-contained View (no full-map redraws during shoot-down) / Death flourish overlay now renders in its own self-contained View (no full-map redraws during shoot-down)
 - Group threat toggles now batch DataStore writes into a single disk operation for snappier response / Group threat toggles now batch DataStore writes into a single disk operation for snappier response
 - Icon packs (photo/army/comic/russian) converted from PNG to lossless WebP, reducing asset size by ~35% / Icon packs (photo/army/comic/russian) converted from PNG to lossless WebP, reducing asset size by ~35%
 - Tapping a threat whose card is already open now hides the card / Натискання на загрозу, карта якої вже відкрита, тепер ховає картку

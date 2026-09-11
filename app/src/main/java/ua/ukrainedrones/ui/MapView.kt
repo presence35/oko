@@ -2012,9 +2012,9 @@ private class DeathFxOverlayView(
 
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
+            Choreographer.getInstance().postFrameCallback(this)
             if (deathFx.isActive) {
                 invalidate()
-                Choreographer.getInstance().postFrameCallback(this)
             }
         }
     }
@@ -2038,12 +2038,7 @@ private class DeathFxOverlayView(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (!deathFx.isActive) return
-        // Delegate to the existing ThreatDeathOverlay draw logic — same code path,
-        // just rendering to this View's own canvas instead of the full overlay stack.
         deathFx.overlay.draw(canvas, mapView, false)
-        if (deathFx.isActive) {
-            Choreographer.getInstance().postFrameCallback(frameCallback)
-        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean = false
