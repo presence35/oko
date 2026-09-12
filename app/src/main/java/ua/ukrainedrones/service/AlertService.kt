@@ -30,9 +30,7 @@ import org.json.JSONObject
 import ua.ukrainedrones.AppLanguage
 import ua.ukrainedrones.resolveFocus
 import ua.ukrainedrones.connection.Monotonic
-import ua.ukrainedrones.connection.ConnEventKind
-import ua.ukrainedrones.connection.ConnectionState
-import ua.ukrainedrones.plugins.SourceEventKind
+import ua.ukrainedrones.source.SourceState
 import ua.ukrainedrones.engine.isFastType
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
@@ -53,9 +51,7 @@ import ua.ukrainedrones.UpdateManager
 import ua.ukrainedrones.UpdateState
 import ua.ukrainedrones.engine.ZoneParams
 import ua.ukrainedrones.data.ApiMonitor
-import ua.ukrainedrones.connection.ConnectionHolder
 import ua.ukrainedrones.ConnectionLog
-import ua.ukrainedrones.connection.ConnectionSupervisor
 import ua.ukrainedrones.DebugLog
 import ua.ukrainedrones.DebugLogContext
 import ua.ukrainedrones.DebugLogKind
@@ -74,9 +70,6 @@ import ua.ukrainedrones.NeutralizedTally
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.service.ServiceState
 import ua.ukrainedrones.service.MonitoringStatus
-import ua.ukrainedrones.connection.isConnected
-import ua.ukrainedrones.connection.isDegraded
-import ua.ukrainedrones.connection.offlineSinceOrNull
 
 class AlertService : Service() {
 
@@ -198,10 +191,10 @@ class AlertService : Service() {
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
         val officialAlertsEnabled: Boolean,
+        val officialRedAlertsEnabled: Boolean,
         val yellowAlertsEnabled: Boolean = true,
         val zoneSirenOverride: Boolean,
         val officialSirenOverride: Boolean,
-        val connectionState: ConnectionState,
         val degraded: Boolean = false,
         val threats: Map<String, NormalizedThreat>,
         val alerts: List<OblastAlert>,
@@ -220,6 +213,7 @@ class AlertService : Service() {
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
         val officialAlertsEnabled: Boolean,
+        val officialRedAlertsEnabled: Boolean,
         val yellowAlertsEnabled: Boolean,
         val officialAlertCityScope: Boolean,
         val sirenOverride: Boolean,
@@ -252,7 +246,7 @@ class AlertService : Service() {
     override fun onCreate() {
         super.onCreate()
         notificationManager.createChannels()
-        AppPluginHolder.init(applicationContext)
+        AppSources.init(applicationContext)
 
         scope.launch {
             ConnectionLog.attach(applicationContext)
@@ -283,42 +277,6 @@ class AlertService : Service() {
                     )
                 }
             }
-
-            val client = ConnectionHolder.getClient(applicationContext)
-            val sup = ConnectionHolder.getSupervisor(applicationContext)
-            val recStart = ServiceState(applicationContext).reconnectStartMillis().first()
-            val ignoreUntil = ServiceState(applicationContext).ignoreRetryUntil().first()
-            client.start(savedReconnectStartMs = recStart, savedIgnoreUntilMs = ignoreUntil)
-            sup.start()
-
-            launch {
-                AppPluginHolder.registry.sourceEvents.collect { ev ->
-                    when (ev.kind) {
-                        SourceEventKind.TOGGLED_ON -> sup.recordEvent(ConnEventKind.SOURCE_TOGGLED, detail = "on:${ev.sourceId}")
-                        SourceEventKind.TOGGLED_OFF -> sup.recordEvent(ConnEventKind.SOURCE_TOGGLED, detail = "off:${ev.sourceId}")
-                        SourceEventKind.TAKEOVER -> {
-                            sup.setActiveSource(ev.sourceId)
-                            ConnectionLog.setPendingSource(ev.sourceId)
-                            sup.recordEvent(ConnEventKind.FALLBACK_ACTIVE, detail = ev.sourceId)
-                        }
-                        SourceEventKind.RESTORED -> {
-                            sup.setActiveSource(null)
-                            ConnectionLog.setPendingSource(null)
-                            sup.recordEvent(ConnEventKind.FALLBACK_RESTORED)
-                        }
-                    }
-                }
-            }
-
-            launch {
-                client.connectionState.collect { cs ->
-                    when (cs) {
-                        is ConnectionState.Offline -> ServiceState(applicationContext).setReconnectStartMillis(cs.reconnectStartMillis)
-                        is ConnectionState.Connected -> ServiceState(applicationContext).setReconnectStartMillis(0L)
-                        else -> {}
-                    }
-                }
-            }
         }
 
         screenReceiver = object : BroadcastReceiver() {
@@ -344,14 +302,12 @@ class AlertService : Service() {
         when (intent?.action) {
             ACTION_RETRY -> {
                 scope.launch {
-                    val client = ConnectionHolder.getClient(applicationContext)
-                    client.retryNow()
+                    AppSources.registry.retryNow()
                 }
             }
             ACTION_IGNORE_RETRY -> {
                 scope.launch {
-                    val client = ConnectionHolder.getClient(applicationContext)
-                    client.pauseFor(30)
+                    AppSources.registry.pauseRetries(30)
                 }
             }
             NeutralizedTally.ACTION_NEUTRALIZED_DISMISS -> tally.reset()
@@ -388,7 +344,7 @@ class AlertService : Service() {
             prefs.neutralizedTallyEnabled()
                 .distinctUntilChanged()
                 .flatMapLatest { enabled ->
-                    if (!enabled) emptyFlow() else ConnectionHolder.getClient(applicationContext).removedThreats
+                    if (!enabled) emptyFlow() else AppSources.registry.removedThreats
                 }
                 .collect { removed ->
                     if (!prefs.neutralizedTallyAllUkraine().first()) {
@@ -435,21 +391,18 @@ class AlertService : Service() {
             }
 
             data class LiveInputs(
-                val cs: ConnectionState,
                 val rawThreats: Map<String, NormalizedThreat>,
                 val alerts: List<OblastAlert>,
                 val gps: LatLng?,
                 val now: Long
             )
 
-            val client = ConnectionHolder.getClient(applicationContext)
-            val registry = AppPluginHolder.registry
+            val registry = AppSources.registry
             val engine = ThreatEngine(registry.typeCatalog.value)
 val mappedThreats = registry.allThreats.map { list ->
                 list.associate { it.id to it }
             }
             val liveFlow = combine(
-                client.connectionState,
                 mappedThreats,
                 registry.allAlerts,
                 LocationTracker.location,
@@ -457,11 +410,10 @@ val mappedThreats = registry.allThreats.map { list ->
             ) { values: Array<Any?> ->
                 @Suppress("UNCHECKED_CAST")
                 LiveInputs(
-                    cs = values[0] as ConnectionState,
-                    rawThreats = values[1] as Map<String, NormalizedThreat>,
-                    alerts = values[2] as List<OblastAlert>,
-                    gps = values[3] as LatLng?,
-                    now = values[4] as Long
+                    rawThreats = values[0] as Map<String, NormalizedThreat>,
+                    alerts = values[1] as List<OblastAlert>,
+                    gps = values[2] as LatLng?,
+                    now = values[3] as Long
                 )
             }
 
@@ -478,6 +430,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     prefs.fastRedZoneArmed(),
                     prefs.fastYellowZoneArmed(),
                     prefs.officialAlertsEnabled(),
+                    prefs.officialRedAlertsEnabled(),
                     prefs.yellowAlertsEnabled(),
                     prefs.officialAlertCityScope(),
                     prefs.sirenOverride(),
@@ -485,7 +438,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     prefs.criticalOfflineOverride()
                 ) { flags: Array<Boolean> ->
                     AlertConfig(
-                        flags[0], flags[1], flags[2], flags[3], flags[4], flags[5], flags[6], flags[7], flags[8], flags[9]
+                        flags[0], flags[1], flags[2], flags[3], flags[4], flags[5], flags[6], flags[7], flags[8], flags[9], flags[10]
                     )
                 },
                 combine(
@@ -530,7 +483,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     NightSettings(window, zones, ov.first, ov.second)
                 }
             ) { live, dayParams, cfg, tail, night ->
-                val (cs, rawThreats, alerts, gps, now) = live
+                val (rawThreats, alerts, gps, now) = live
                 val nowMin = nowMinuteOfDay()
                 val nightActive = night.window.enabled && isWithinNight(nowMin, night.window.startMin, night.window.endMin)
                 val params = if (nightActive && night.window.useCustomZones) {
@@ -614,10 +567,10 @@ val mappedThreats = registry.allThreats.map { list ->
                     fastRedArmed = cfg.fastRedArmed,
                     fastYellowArmed = cfg.fastYellowArmed,
                     officialAlertsEnabled = cfg.officialAlertsEnabled,
+                    officialRedAlertsEnabled = cfg.officialRedAlertsEnabled,
                     yellowAlertsEnabled = cfg.yellowAlertsEnabled,
                     zoneSirenOverride = zoneSirenOverride,
                     officialSirenOverride = officialSirenOverride,
-                    connectionState = cs,
                     degraded = registry.degraded.value,
                     threats = threats,
                     alerts = alerts,
@@ -643,7 +596,7 @@ val mappedThreats = registry.allThreats.map { list ->
             notificationManager.updateChannels(s)
         }
 
-        val registry = AppPluginHolder.registry
+        val registry = AppSources.registry
         val isDegradedNow = state.degraded
         // Offline escalation and its age are measured on the monotonic clock (see PluginRegistry);
         // the wall `now` is still used for engine staleness and display stamps below.
@@ -660,9 +613,10 @@ val mappedThreats = registry.allThreats.map { list ->
         } else 0L
 
         val monitorAlertLevel = when {
-            (state.officialAlertsEnabled && state.focusOblastAlertActive) ||
+            (state.officialAlertsEnabled && state.officialRedAlertsEnabled && state.focusOblastAlertActive) ||
                 state.zoneThreats.values.any { it == ThreatZone.INNER } -> AlertLevel.RED
-            state.officialAlertsEnabled && state.focusOblastLevel >= AlertLevel.YELLOW -> AlertLevel.YELLOW
+            state.officialAlertsEnabled && state.yellowAlertsEnabled &&
+                state.focusOblastLevel == AlertLevel.YELLOW -> AlertLevel.YELLOW
             else -> AlertLevel.NONE
         }
         val monitorTitle = when {
@@ -731,9 +685,8 @@ val mappedThreats = registry.allThreats.map { list ->
             persistKnownZones()
         }
 
-        val client = ConnectionHolder.getClient(applicationContext)
         val droppedZoneIds = knownZones.keys.filterNot { id ->
-            id in state.zoneThreats.keys || client.wasUserShotRecently(id)
+            id in state.zoneThreats.keys || AppSources.registry.wasUserShotRecently(id)
         }
         if (droppedZoneIds.isNotEmpty()) {
             knownZones = knownZones.filterKeys { it !in droppedZoneIds }
@@ -771,7 +724,7 @@ val mappedThreats = registry.allThreats.map { list ->
         officialAnnouncedSince = null
         officialAnnouncedReasonId = null
 
-        val officialActive = state.officialAlertsEnabled && state.focusOblastAlertActive
+        val officialActive = state.officialAlertsEnabled && state.officialRedAlertsEnabled && state.focusOblastAlertActive
         val officialBody = state.officialReason ?: state.focusRegion
 
         if (!debugOfficialActive && state.focusOblastAlertActive) {
@@ -784,9 +737,9 @@ val mappedThreats = registry.allThreats.map { list ->
                 vibrationLevel = reasonThreat?.let {
                     if (isFastType(it.type.toThreatType())) state.fastVibrationLevel else state.slowVibrationLevel
                 } ?: VIBRATION_STRONG,
-                notified = state.officialAlertsEnabled && !posted,
+                notified = state.officialAlertsEnabled && state.officialRedAlertsEnabled && !posted,
                 reason = when {
-                    !state.officialAlertsEnabled -> DebugLogReason.TOGGLE_OFF
+                    !state.officialAlertsEnabled || !state.officialRedAlertsEnabled -> DebugLogReason.TOGGLE_OFF
                     posted -> DebugLogReason.COALESCED
                     else -> DebugLogReason.FIRED
                 },
@@ -872,10 +825,13 @@ val mappedThreats = registry.allThreats.map { list ->
         if (state.officialAlertsEnabled && wasFocusAlertActive && state.focusOblastRawLevel == AlertLevel.NONE &&
             state.focusToken == officialRegionToken
         ) {
-            if (alertable.isEmpty()) {
+            val officialChannelsOn = state.officialRedAlertsEnabled || state.yellowAlertsEnabled
+            if (alertable.isEmpty() && officialChannelsOn) {
                 cancelAlert()
             }
-            postAllClear(s, state.focusBannerCity)
+            if (officialChannelsOn) {
+                postAllClear(s, state.focusBannerCity)
+            }
             currentReasonThreatId = null
             officialRegionToken = null
             debugOfficialActive = false
@@ -887,7 +843,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 night = state.nightActive,
                 sirenOverride = state.officialSirenOverride,
                 vibrationLevel = null,
-                notified = true,
+                notified = officialChannelsOn,
                 reason = DebugLogReason.FIRED,
                 threatId = null,
                 threatType = null,
@@ -975,7 +931,7 @@ val mappedThreats = registry.allThreats.map { list ->
         }
 
         hasActiveThreats = state.zoneThreats.isNotEmpty() || state.focusOblastAlertActive
-        isOutage = !AppPluginHolder.registry.wsHealthy.value
+        isOutage = !AppSources.registry.wsHealthy.value
     }
 
     private fun persistKnownZones() {
@@ -1026,14 +982,9 @@ val mappedThreats = registry.allThreats.map { list ->
     }
 
     private fun offlineLiveBody(s: Strings.StringSet, minutes: Int): String {
-        val client = ConnectionHolder.getClient(applicationContext)
-        val cs = client.connectionState.value
-        if (cs is ConnectionState.Paused) return s.offlinePausedBody
-        val attempt = when (cs) {
-            is ConnectionState.Offline -> cs.attempt
-            is ConnectionState.Connecting -> cs.attempt
-            else -> 0
-        }
+        val registry = AppSources.registry
+        if (registry.connectionState.value == SourceState.PAUSED) return s.offlinePausedBody
+        val attempt = registry.retryState.value?.attempt ?: 0
         return String.format(s.offlineLiveFormat, minutes, 20, attempt + 1)
     }
 
@@ -1154,7 +1105,7 @@ val mappedThreats = registry.allThreats.map { list ->
         screenReceiver = null
         monitoringJob?.cancel()
         wakeLockManager.release()
-        ConnectionHolder.clear()
+        AppSources.clear()
         LocationTracker.stop()
         tally.reset()
         scope.cancel()

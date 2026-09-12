@@ -1,4 +1,4 @@
-package ua.ukrainedrones.plugins
+package ua.ukrainedrones.source
 
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
@@ -26,24 +26,19 @@ import ua.ukrainedrones.UA_TIGHT_MIN_LON
 import ua.ukrainedrones.UA_TIGHT_MAX_LON
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.NormalizedThreat
-import ua.ukrainedrones.engine.OperationalMode
-import ua.ukrainedrones.engine.PluginConnectionState
-import ua.ukrainedrones.engine.SourceTestResult
-import ua.ukrainedrones.engine.SourceType
 import ua.ukrainedrones.engine.ThreatProps
-import ua.ukrainedrones.engine.ThreatSource
 import ua.ukrainedrones.engine.bearingHaversine
 
 /**
- * Peace-time simulator: a normal [ThreatSource] that, while enabled, plays a server-defined
+ * Peace-time simulator: a normal [Source] that, while enabled, plays a server-defined
  * script (`testplugin.json` on the update server) of timed threat/alert events. The JSON is
  * the single source of truth — timings, counts, types and regions can change without an APK.
  *
  * Behaviour mirrors a real source (mirror rule): emitted threats merge with the registry feed
  * by concatenation, alerts by the usual oblast-key takeover; disabling the source clears its
- * output. It is independent of NEPTUN — never injected into another plugin's feed.
+ * output. It is independent of NEPTUN — never injected into another source's feed.
  */
-class TestPlugin : ThreatSource {
+class TestSource : Source {
 
     override val id = "test"
     override val name = "Test"
@@ -60,8 +55,8 @@ class TestPlugin : ThreatSource {
     private val _alerts = MutableStateFlow<List<OblastAlert>>(emptyList())
     override val alerts: StateFlow<List<OblastAlert>> = _alerts.asStateFlow()
 
-    private val _connectionState = MutableStateFlow(PluginConnectionState.DISCONNECTED)
-    override val connectionState: StateFlow<PluginConnectionState> = _connectionState.asStateFlow()
+    private val _connectionState = MutableStateFlow(SourceState.DISCONNECTED)
+    override val connectionState: StateFlow<SourceState> = _connectionState.asStateFlow()
 
     private val _enabled = MutableStateFlow(false)
     override val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
@@ -90,7 +85,7 @@ class TestPlugin : ThreatSource {
         _enabled.value = false
         _threats.value = emptyList()
         _alerts.value = emptyList()
-        _connectionState.value = PluginConnectionState.DISCONNECTED
+        _connectionState.value = SourceState.DISCONNECTED
         _operationalMode.value = OperationalMode.STANDBY
     }
 
@@ -110,7 +105,7 @@ class TestPlugin : ThreatSource {
             scriptJob = null
             cancelAllMovers()
             _threats.value = emptyList()
-            _connectionState.value = PluginConnectionState.DISCONNECTED
+            _connectionState.value = SourceState.DISCONNECTED
             _operationalMode.value = OperationalMode.STANDBY
         }
     }
@@ -119,7 +114,7 @@ class TestPlugin : ThreatSource {
         val running = _enabled.value
         if (!running) return SourceTestResult(true, "disabled — enable on the Sources tab")
         val state = _connectionState.value
-        return if (state == PluginConnectionState.OFFLINE) {
+        return if (state == SourceState.OFFLINE) {
             SourceTestResult(false, lastError ?: "script fetch failed")
         } else {
             SourceTestResult(
@@ -131,7 +126,7 @@ class TestPlugin : ThreatSource {
 
     private suspend fun runScript() {
         _operationalMode.value = OperationalMode.STREAMING
-        _connectionState.value = PluginConnectionState.CONNECTED
+        _connectionState.value = SourceState.CONNECTED
         try {
             val events = fetchScript() ?: return
             val start = System.currentTimeMillis()
@@ -157,7 +152,7 @@ class TestPlugin : ThreatSource {
                 cancelAllMovers()
                 _threats.value = emptyList()
                 _alerts.value = emptyList()
-                _connectionState.value = PluginConnectionState.DISCONNECTED
+                _connectionState.value = SourceState.DISCONNECTED
                 _operationalMode.value = OperationalMode.STANDBY
             }
         }
@@ -175,7 +170,7 @@ class TestPlugin : ThreatSource {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     lastError = "HTTP ${response.code}"
-                    _connectionState.value = PluginConnectionState.OFFLINE
+                    _connectionState.value = SourceState.OFFLINE
                     return null
                 }
                 val body = response.body?.string().orEmpty()
@@ -192,7 +187,7 @@ class TestPlugin : ThreatSource {
             }
         } catch (e: Exception) {
             lastError = e.message
-            _connectionState.value = PluginConnectionState.OFFLINE
+            _connectionState.value = SourceState.OFFLINE
             null
         }
     }

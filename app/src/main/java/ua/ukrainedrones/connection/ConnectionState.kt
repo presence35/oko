@@ -1,7 +1,6 @@
 package ua.ukrainedrones.connection
 
 import ua.ukrainedrones.Strings
-import ua.ukrainedrones.ThreatType
 import java.time.Instant
 
 /** Live reconnect state for the current offline episode — transient, never persisted. */
@@ -44,18 +43,6 @@ data class ConnEvent(
         ConnEventKind.SOURCE_TOGGLED -> String.format(s.connEventSourceToggled, detail ?: "")
     }
 }
-
-/** A threat just disappeared from the server feed (resolved or a remove frame) — drives the map death animation. */
-data class ThreatRemoved(
-    val id: String,
-    val lat: Double,
-    val lon: Double,
-    val type: ThreatType,
-    val courseDeg: Double = 0.0,
-    val region: String? = null,
-    val district: String? = null,
-    val locality: String? = null
-)
 
 /**
  * Formal Connection State Machine for the NEPTUN WebSocket telemetry feed.

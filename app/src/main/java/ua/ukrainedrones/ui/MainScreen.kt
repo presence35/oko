@@ -344,7 +344,8 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 onThreatAlertToggle = remember<(ThreatType, Boolean) -> Unit> { { type, enabled -> viewModel.setThreatAlertsEnabled(type, enabled) } },
                 onThreatMapToggleAll = remember<(Set<ThreatType>, Boolean) -> Unit> { { types, visible -> viewModel.setGroupThreatMapVisible(types, visible) } },
                 onThreatAlertToggleAll = remember<(Set<ThreatType>, Boolean) -> Unit> { { types, enabled -> viewModel.setGroupThreatAlertsEnabled(types, enabled) } },
-                onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } },
+onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } },
+                onOfficialRedAlertsChange = remember { { viewModel.setOfficialRedAlertsEnabled(it) } },
                 onOfficialYellowAlertsChange = remember { { viewModel.setOfficialYellowAlertsEnabled(it) } },
                 onOfficialAlertCityScopeChange = remember { { viewModel.setOfficialAlertCityScope(it) } },
                 onSirenOverrideChange = remember { { viewModel.setSirenOverride(it) } },
@@ -1276,7 +1277,7 @@ private fun ThreatCardHost(
         when (state) {
             1 -> sel.selected?.let { threat ->
                 Column(
-                    modifier = if (smallCard) Modifier.fillMaxWidth().widthIn(max = 300.dp) else Modifier
+                    modifier = if (smallCard) Modifier.widthIn(max = 300.dp) else Modifier
                 ) {
                     ThreatPopupCard(
                         threat = threat,

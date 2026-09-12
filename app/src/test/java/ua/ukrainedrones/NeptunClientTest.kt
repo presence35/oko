@@ -1,7 +1,7 @@
 package ua.ukrainedrones
 
 import ua.ukrainedrones.connection.ConnectionState
-import ua.ukrainedrones.connection.NeptunConnectionClient
+import ua.ukrainedrones.connection.WsTransport
 import ua.ukrainedrones.connection.isDegraded
 import ua.ukrainedrones.connection.isOffline
 import org.junit.Assert.assertEquals
@@ -15,7 +15,7 @@ class NeptunClientTest {
     @Test
     fun `first reconnect attempt is fast`() {
         repeat(100) {
-            val ms = NeptunConnectionClient.calculateBackoffMs(1)
+            val ms = WsTransport.calculateBackoffMs(1)
             assertTrue("first attempt must retry within 1-3s, got $ms", ms in 1000..3000)
         }
     }
@@ -29,7 +29,7 @@ class NeptunClientTest {
         )
         repeat(100) {
             for ((attempt, range) in expected) {
-                val ms = NeptunConnectionClient.calculateBackoffMs(attempt)
+val ms = WsTransport.calculateBackoffMs(attempt)
                 assertTrue("attempt $attempt should be ~$range, got $ms", ms in range)
             }
         }
@@ -38,7 +38,7 @@ class NeptunClientTest {
     @Test
     fun `backoff caps at 15 seconds`() {
         for (attempt in 5..30) {
-            val ms = NeptunConnectionClient.calculateBackoffMs(attempt)
+            val ms = WsTransport.calculateBackoffMs(attempt)
             assertTrue("attempt $attempt should cap at ~15s, got $ms", ms in 15000..15400)
         }
     }
@@ -51,11 +51,11 @@ class NeptunClientTest {
 
         // The Degraded state signals a stale link — the client transitions to it
         // when a Connected state has been quiet for >= DEGRADED_STALE_MS.
-        val stale = ConnectionState.Degraded(generation = 1, openedAtMs = now, lastFrameAtMs = now - NeptunConnectionClient.DEGRADED_STALE_MS, quietDurationMs = NeptunConnectionClient.DEGRADED_STALE_MS)
+        val stale = ConnectionState.Degraded(generation = 1, openedAtMs = now, lastFrameAtMs = now - WsTransport.DEGRADED_STALE_MS, quietDurationMs = WsTransport.DEGRADED_STALE_MS)
         assertTrue(stale.isDegraded)
 
         // Offline always wins — never degraded once the socket is actually down.
-        val down = ConnectionState.Offline(since = now - NeptunConnectionClient.DEGRADED_STALE_MS, reconnectStartMillis = 0L)
+        val down = ConnectionState.Offline(since = now - WsTransport.DEGRADED_STALE_MS, reconnectStartMillis = 0L)
         assertFalse(down.isDegraded)
         assertTrue(down.isOffline)
 

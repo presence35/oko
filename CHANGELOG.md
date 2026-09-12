@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Deep refactor: the NEPTUN connection layer is now a source-agnostic source SPI (socket, decoder and reconnect supervisor split into separate pieces registered through a single source registry), so future threat data sources plug in without touching the engine or UI / Deep refactor: the NEPTUN connection layer is now a source-agnostic source SPI so future threat data sources plug in without touching the engine or UI
 - Death flourish overlay now renders in its own self-contained View (no full-map redraws during shoot-down) / Death flourish overlay now renders in its own self-contained View (no full-map redraws during shoot-down)
 - Group threat toggles now batch DataStore writes into a single disk operation for snappier response / Group threat toggles now batch DataStore writes into a single disk operation for snappier response
 - Icon packs (photo/army/comic/russian) converted from PNG to lossless WebP, reducing asset size by ~35% / Icon packs (photo/army/comic/russian) converted from PNG to lossless WebP, reducing asset size by ~35%
@@ -24,8 +25,10 @@
 - GPS dot stays centred on the red/yellow zone epicentre at any zoom level; zone circles and orbit path are now geodesic / GPS dot stays centred on the red/yellow zone epicentre at any zoom level; zone circles and orbit path are now geodesic
 - Night mode toggle now lives on the collapsed card header, matching Just Fun / Перемикач нічного режиму тепер на заголовку згорнутої картки, як у «Розваг»
 - Disabled sources no longer trigger an all-clear signal — last-known oblast alerts are kept, and toggling a source back on repaints the alert regions / Disabled sources no longer trigger an all-clear signal — last-known oblast alerts are kept, and toggling a source back on repaints the alert regions
-- Official alerts now have two independent toggles (red + yellow) in Settings > Alerts / Official alerts now have two independent toggles (red + yellow) in Settings > Alerts
+- Official alerts in Settings > Alerts are now a master switch with independent Red and Yellow channels (notifications only — the header trident and map colors always show the live alert) / Official alerts in Settings > Alerts are now a master switch with independent Red and Yellow channels (notifications only — the header trident and map colors always show the live alert)
 - The header trident turns red with a glow for an official red alert and amber for an official yellow alert; the header border shows your zone state (inner red / outer amber) / The header trident turns red with a glow for an official red alert and amber for an official yellow alert; the header border shows your zone state (inner red / outer amber)
 - Official yellow alerts now color the notification icon and widget accent / Official yellow alerts now color the notification icon and widget accent
 - Threat zones renamed to "Inner zone" and "Outer zone" so they are not confused with official red/yellow alerts / Threat zones renamed to "Inner zone" and "Outer zone" so they are not confused with official red/yellow alerts
+- The all-clear notification is only sent while at least one official channel (red or yellow) is on, but is always logged so no event is missed / The all-clear notification is only sent while at least one official channel (red or yellow) is on, but is always logged so no event is missed
+- The official-alerts trident is now larger in Settings > Alerts / The official-alerts trident is now larger in Settings > Alerts
 

@@ -10,10 +10,8 @@ import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import android.content.Intent
 import android.net.Uri
-import ua.ukrainedrones.connection.ConnectionHolder
 import ua.ukrainedrones.connection.ConnEvent
 import ua.ukrainedrones.connection.ConnRetryState
-import ua.ukrainedrones.connection.NeptunConnectionClient
 import ua.ukrainedrones.data.ApiMonitor
 import ua.ukrainedrones.data.SystemEntry
 import ua.ukrainedrones.data.SystemEntryKind
@@ -117,14 +115,14 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import ua.ukrainedrones.AppPluginHolder
-import ua.ukrainedrones.engine.OperationalMode
-import ua.ukrainedrones.engine.PluginConnectionState
-import ua.ukrainedrones.engine.SourceTestResult
-import ua.ukrainedrones.engine.SourceType
-import ua.ukrainedrones.engine.ThreatSource
-import ua.ukrainedrones.plugins.SourceEvent
-import ua.ukrainedrones.plugins.SourceEventKind
+import ua.ukrainedrones.AppSources
+import ua.ukrainedrones.source.OperationalMode
+import ua.ukrainedrones.source.SourceState
+import ua.ukrainedrones.source.SourceTestResult
+import ua.ukrainedrones.source.SourceType
+import ua.ukrainedrones.source.Source
+import ua.ukrainedrones.source.SourceEvent
+import ua.ukrainedrones.source.SourceEventKind
 
 private val DebugRed = Color(0xFFE57373)
 private val DebugAmber = Color(0xFFF9A825)
@@ -199,8 +197,9 @@ fun LogsDropDownSheet(
     val connEntries by ConnectionLog.entries.collectAsState()
     val systemEntries by ApiMonitor.entries.collectAsState()
     val context = LocalContext.current
-    val connRetry by ConnectionHolder.getSupervisor(context).retryState.collectAsState()
-    val connEvents by ConnectionHolder.getSupervisor(context).connEvents.collectAsState()
+    val registry = AppSources.registry
+    val connRetry by registry.retryState.collectAsState()
+    val connEvents by registry.connEvents.collectAsState()
     val scope = rememberCoroutineScope()
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     var filter by rememberSaveable { mutableStateOf(LogsFilter.DECISIONS) }
@@ -268,17 +267,20 @@ fun LogsDropDownSheet(
                 modifier = Modifier.height(16.dp)
             )
             Spacer(Modifier.width(6.dp))
+            val siteUrl = registry.siteUrl
             Text(
-                NeptunConnectionClient.NEPTUN_DOMAIN,
+                siteUrl?.removePrefix("https://")?.removeSuffix("/") ?: "",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.clickable {
-                    context.startActivity(
-                        Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse(NeptunConnectionClient.NEPTUN_SITE_URL)
+                    siteUrl?.let { url ->
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(url)
+                            )
                         )
-                    )
+                    }
                 }
             )
             Spacer(Modifier.width(8.dp))
@@ -383,7 +385,7 @@ fun LogsDropDownSheet(
             }
             if (filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty()) {
                 item(key = "retrylog") {
-                    RetryLogCard(connEvents, connRetry, s, now) { ConnectionHolder.getSupervisor(context).dismissLogCard() }
+                    RetryLogCard(connEvents, connRetry, s, now) { AppSources.registry.dismissLogCard() }
                 }
             }
             if (visible.isEmpty() && filter != LogsFilter.SOURCES && filter != LogsFilter.CHANNELS
@@ -1264,14 +1266,14 @@ private fun ConnectionCard(entry: ConnLogEntry, s: Strings.StringSet, lang: AppL
 
 @Composable
 private fun SourcesList(s: Strings.StringSet, now: Long, lang: AppLanguage, iconSet: ThreatIconSet) {
-    val registry = AppPluginHolder.registry
-    val plugins by registry.plugins.collectAsState()
+    val registry = AppSources.registry
+    val sources by registry.sources.collectAsState()
     val states by registry.perSourceState.collectAsState()
     val events = remember { mutableStateListOf<SourceEvent>() }
     LaunchedEffect(registry) {
         registry.sourceEvents.collect { ev -> events.add(0, ev); while (events.size > 20) events.removeAt(events.size - 1) }
     }
-    if (plugins.isEmpty()) {
+    if (sources.isEmpty()) {
         Text(
             s.logsEmptySources,
             style = MaterialTheme.typography.bodyLarge,
@@ -1282,9 +1284,9 @@ private fun SourcesList(s: Strings.StringSet, now: Long, lang: AppLanguage, icon
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        plugins.forEach { plugin ->
-            SourceCard(plugin, states[plugin.id] ?: PluginConnectionState.DISCONNECTED, s)
-            SourceDataCard(plugin, lang, iconSet, s)
+        sources.forEach { source ->
+            SourceCard(source, states[source.id] ?: SourceState.DISCONNECTED, s)
+            SourceDataCard(source, lang, iconSet, s)
         }
         MergedAlertsDebugCard(s)
         if (events.isNotEmpty()) {
@@ -1307,7 +1309,7 @@ private fun SourcesList(s: Strings.StringSet, now: Long, lang: AppLanguage, icon
  *  raions of one oblast used to collapse into a single alert. */
 @Composable
 private fun MergedAlertsDebugCard(s: Strings.StringSet) {
-    val registry = AppPluginHolder.registry
+    val registry = AppSources.registry
     val alerts by registry.allAlerts.collectAsState()
     val owner by registry.activeAlertSource.collectAsState()
     Column(
@@ -1394,31 +1396,31 @@ private fun SourceEventRow(ev: SourceEvent, s: Strings.StringSet, now: Long) {
 }
 
 @Composable
-private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: Strings.StringSet) {
-    val mode by plugin.operationalMode.collectAsState()
-    val enabled by plugin.enabled.collectAsState()
+private fun SourceCard(source: Source, state: SourceState, s: Strings.StringSet) {
+    val mode by source.operationalMode.collectAsState()
+    val enabled by source.enabled.collectAsState()
     val scope = rememberCoroutineScope()
     var testing by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<SourceTestResult?>(null) }
     val connLabel = when (state) {
-        PluginConnectionState.CONNECTED -> s.connOnline
-        PluginConnectionState.DEGRADED -> s.connDegraded
-        PluginConnectionState.OFFLINE -> s.connOffline
+        SourceState.CONNECTED -> s.connOnline
+        SourceState.DEGRADED -> s.connDegraded
+        SourceState.OFFLINE -> s.connOffline
         else -> s.sourceModeStandby
     }
     val status = when {
         !enabled -> s.connOff
-        plugin.sourceType == SourceType.REST && mode == OperationalMode.POLLING -> "$connLabel · ${s.sourceModePolling}"
+        source.sourceType == SourceType.REST && mode == OperationalMode.POLLING -> "$connLabel · ${s.sourceModePolling}"
         else -> connLabel
     }
     val statusColor = when {
         !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
-        state == PluginConnectionState.OFFLINE -> DebugRed
-        state == PluginConnectionState.DEGRADED -> DebugAmber
-        state == PluginConnectionState.CONNECTED -> DebugGreen
+        state == SourceState.OFFLINE -> DebugRed
+        state == SourceState.DEGRADED -> DebugAmber
+        state == SourceState.CONNECTED -> DebugGreen
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val typeLabel = plugin.badgeLabel ?: if (plugin.sourceType == SourceType.WS) s.sourceTypeWs else s.sourceTypeRest
+    val typeLabel = source.badgeLabel ?: if (source.sourceType == SourceType.WS) s.sourceTypeWs else s.sourceTypeRest
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1430,7 +1432,7 @@ private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: St
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    plugin.name,
+                    source.name,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -1441,7 +1443,7 @@ private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: St
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (plugin.id == "test") {
+                if (source.id == "test") {
                     Spacer(Modifier.width(6.dp))
                     Text(
                         s.simulationLabel,
@@ -1475,7 +1477,7 @@ private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: St
             onClick = {
                 scope.launch {
                     testing = true
-                    testResult = plugin.testConnection()
+                    testResult = source.testConnection()
                     testing = false
                 }
             }
@@ -1485,7 +1487,7 @@ private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: St
         Switch(
             checked = enabled,
             onCheckedChange = { newEnabled ->
-                AppPluginHolder.registry.setEnabled(plugin, newEnabled)
+                AppSources.registry.setEnabled(source, newEnabled)
             }
         )
     }
@@ -1493,13 +1495,13 @@ private fun SourceCard(plugin: ThreatSource, state: PluginConnectionState, s: St
 
 @Composable
 private fun SourceDataCard(
-    plugin: ThreatSource,
+    source: Source,
     lang: AppLanguage,
     iconSet: ThreatIconSet,
     s: Strings.StringSet
 ) {
-    val threats by plugin.threats.collectAsState()
-    val alerts by plugin.alerts.collectAsState()
+    val threats by source.threats.collectAsState()
+    val alerts by source.alerts.collectAsState()
     val grouped = threats.groupBy { it.type }
     val isEmpty = threats.isEmpty() && alerts.isEmpty()
     if (isEmpty) return

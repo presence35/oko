@@ -30,12 +30,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import ua.ukrainedrones.connection.ConnectionHolder
-import ua.ukrainedrones.connection.ConnectionState
 import ua.ukrainedrones.connection.Monotonic
-import ua.ukrainedrones.connection.isConnected
-import ua.ukrainedrones.connection.isDegraded
-import ua.ukrainedrones.connection.isOffline
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
@@ -101,6 +96,7 @@ data class UiState(
     val nightZoneSirenOverride: Boolean = false,
     val nightOfficialSirenOverride: Boolean = false,
     val officialAlertsEnabled: Boolean = true,
+    val officialRedAlertsEnabled: Boolean = true,
     val officialYellowAlertsEnabled: Boolean = true,
     val officialAlertCityScope: Boolean = false,
     val sirenOverride: Boolean = false,
@@ -256,34 +252,24 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     /** Bumped each time a Settings-open check finds an available update (remind-only or fresh). */
     private val updateReminderFlow = MutableStateFlow(0)
     val updateReminderTick: StateFlow<Int> get() = updateReminderFlow
-    private val client = ConnectionHolder.getClient(app)
-    private val connectionStateFlow = client.connectionState
 
     // The plugin registry must exist before any property below reads it — property
     // initializers run before the init{} block, so init it here (idempotent; the later
     // init block also calls it after AlertService may have started).
     init {
-        AppPluginHolder.init(getApplication())
+        AppSources.init(getApplication())
     }
 
-    private val registry = AppPluginHolder.registry
+    private val registry = AppSources.registry
     private val engine = ThreatEngine(registry.typeCatalog.value)
     private val threatsFlow = registry.allThreats.map { list ->
         list.associate { it.id to it }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
     private val alertsFlow = registry.allAlerts
-    /** Sampled NEPTUN state for UI (120ms) — bounds recomposition rate during heavy streams.
-     *  AlertService still consumes the raw stream directly (mirror rule). */
+    /** Sampled merged feed for UI (120ms) — bounds recomposition rate during heavy streams.
+     *  AlertService still consumes the raw merged feed directly (mirror rule). */
     @OptIn(FlowPreview::class)
-    private val neptunForUi = combine(connectionStateFlow, threatsFlow, alertsFlow) { cs, t, a ->
-        Triple(cs, t, a)
-    }.sample(120)
-    /** Last NEPTUN frame timestamp, derived from the connection state. Collected by the
-     *  connection status sheet to show "last update Xs ago" without polluting UiState. */
-    val lastFrameAt: Flow<Long> = connectionStateFlow.map { cs ->
-        (cs as? ConnectionState.Connected)?.lastFrameAtMs
-            ?: (cs as? ConnectionState.Degraded)?.lastFrameAtMs ?: 0L
-    }.distinctUntilChanged()
+    private val liveFeed = combine(threatsFlow, alertsFlow) { threats, alerts -> threats to alerts }.sample(120)
     private val shelterIndexFlow = MutableStateFlow<ShelterIndex?>(null)
     /** Whether the map screen is the visible screen — the neutralizing animation and death
      *  flourish only run while it is, so no stale half-consumed animations play on return. */
@@ -306,7 +292,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     init {
-        AppPluginHolder.init(getApplication())
+        AppSources.init(getApplication())
         LocationTracker.start(getApplication())
         // Auto-check for updates at most once per day; pops only when no alert is active.
         autoCheckForUpdates(allowPopup = true)
@@ -379,6 +365,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
         val officialAlertsEnabled: Boolean,
+        val officialRedAlertsEnabled: Boolean,
         val officialYellowAlertsEnabled: Boolean,
         val officialAlertCityScope: Boolean,
         val sirenOverride: Boolean,
@@ -417,7 +404,6 @@ val fastGroupCollapsed: Boolean,
 
     /** Live inputs that change every frame/second: stream, GPS, selection, time. */
     private data class LiveSnapshot(
-        val cs: ConnectionState,
         val threats: Map<String, NormalizedThreat>,
         val alerts: List<OblastAlert>,
         val slowRedKm: Int,
@@ -445,6 +431,7 @@ val fastGroupCollapsed: Boolean,
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
         val officialAlertsEnabled: Boolean,
+        val officialRedAlertsEnabled: Boolean,
         val officialYellowAlertsEnabled: Boolean,
         val officialAlertCityScope: Boolean,
         val sirenOverride: Boolean,
@@ -470,7 +457,7 @@ val fastGroupCollapsed: Boolean,
     )
 
     private val liveSnapshot = combine(
-        neptunForUi,
+        liveFeed,
         zonesFlow,
         LocationTracker.location,
         LocationTracker.lastFixAtMs,
@@ -480,7 +467,7 @@ val fastGroupCollapsed: Boolean,
         mapVisibleFlow,
         shelterModeFlow
     ) { values: Array<Any?> ->
-        val (cs, threats, alerts) = values[0] as Triple<ConnectionState, Map<String, NormalizedThreat>, List<OblastAlert>>
+        val (threats, alerts) = values[0] as Pair<Map<String, NormalizedThreat>, List<OblastAlert>>
         val radii = values[1] as ZoneParams
         val location = values[2] as LatLng?
         val lastFix = values[3] as Long?
@@ -490,7 +477,7 @@ val fastGroupCollapsed: Boolean,
         val mapVisible = values[7] as Boolean
         val shelterModeActive = values[8] as Boolean
         LiveSnapshot(
-            cs, threats, alerts,
+            threats, alerts,
             radii.slowRedKm, radii.slowYellowKm, radii.fastRedMin, radii.fastYellowMin,
             location, lastFix != null, reveal, flourish, mapVisible, shelterModeActive
         ).copy(centerRequest = center)
@@ -533,13 +520,38 @@ val fastGroupCollapsed: Boolean,
             prefs.justFunMasterEnabled(),
             prefs.fillAlertRegions(),
             prefs.showBorders(),
-            prefs.showRegionBorders()
+            prefs.showRegionBorders(),
+            prefs.officialRedAlertsEnabled()
         ) { flags: Array<Boolean> ->
             AlertConfig(
-                flags[0], flags[1], flags[2], flags[3], flags[4], flags[5],
-                flags[6], flags[7], flags[8], flags[9], flags[10], flags[11], flags[12],
-                flags[13], flags[14], flags[15], flags[16], flags[17], flags[18], flags[19],
-                flags[20], flags[21], flags[22], flags[23], flags[24], flags[25], flags[26]
+                slowRedArmed = flags[0],
+                slowYellowArmed = flags[1],
+                fastRedArmed = flags[2],
+                fastYellowArmed = flags[3],
+                officialAlertsEnabled = flags[4],
+                officialYellowAlertsEnabled = flags[5],
+                officialAlertCityScope = flags[6],
+                sirenOverride = flags[7],
+                followMe = flags[8],
+                showMapScale = flags[9],
+                showMediumCities = flags[10],
+                showSmallCities = flags[11],
+                showLargeCities = flags[12],
+                deathAnimationEnabled = flags[13],
+                followBullet = flags[14],
+                neutralizedTallyEnabled = flags[15],
+                neutralizedTallyAllUkraine = flags[16],
+                threatIconZoom = flags[17],
+                fastGroupCollapsed = flags[18],
+                slowGroupCollapsed = flags[19],
+                criticalOfflineOverride = flags[20],
+                criticalOfflineBypassSilent = flags[21],
+                flybyAnimationEnabled = flags[22],
+                justFunMasterEnabled = flags[23],
+                fillAlertRegions = flags[24],
+                showBorders = flags[25],
+                showRegionBorders = flags[26],
+                officialRedAlertsEnabled = flags[27]
             )
         },
         combine(
@@ -615,6 +627,7 @@ combine(
             fastRedArmed = b.fastRedArmed,
             fastYellowArmed = b.fastYellowArmed,
             officialAlertsEnabled = b.officialAlertsEnabled,
+            officialRedAlertsEnabled = b.officialRedAlertsEnabled,
             officialYellowAlertsEnabled = b.officialYellowAlertsEnabled,
             officialAlertCityScope = b.officialAlertCityScope,
             sirenOverride = b.sirenOverride,
@@ -782,6 +795,7 @@ showBorders = prefs.showBorders,
             fastRedArmed = prefs.fastRedArmed,
             fastYellowArmed = prefs.fastYellowArmed,
             officialAlertsEnabled = prefs.officialAlertsEnabled,
+            officialRedAlertsEnabled = prefs.officialRedAlertsEnabled,
             officialYellowAlertsEnabled = prefs.officialYellowAlertsEnabled,
             officialAlertCityScope = prefs.officialAlertCityScope,
             sirenOverride = prefs.sirenOverride,
@@ -849,6 +863,7 @@ showBorders = prefs.showBorders,
                 activeSlowYellowArmed = activeArmed.slowYellow,
                 activeFastYellowArmed = activeArmed.fastYellow,
                 officialAlertsEnabled = prefs.officialAlertsEnabled,
+                officialRedAlertsEnabled = prefs.officialRedAlertsEnabled,
                 officialYellowAlertsEnabled = prefs.officialYellowAlertsEnabled,
                 criticalOfflineOverride = prefs.criticalOfflineOverride,
                 silencedTypesCount = (ThreatType.values().toSet() - prefs.alertEnabled).size,
@@ -1139,6 +1154,10 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setOfficialAlertsEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setOfficialAlertsEnabled(enabled) }
+    }
+
+    fun setOfficialRedAlertsEnabled(enabled: Boolean) {
+        viewModelScope.launch { prefs.setOfficialRedAlertsEnabled(enabled) }
     }
 
     fun setOfficialYellowAlertsEnabled(enabled: Boolean) {
@@ -1545,7 +1564,7 @@ fun setAlertsArmed(armed: Boolean) {
      *  REST-source polling cadence (foreground → faster polling). */
     fun setAppForeground(foreground: Boolean) {
         appForegroundFlow.value = foreground
-        AppPluginHolder.setAppForeground(foreground)
+        AppSources.setAppForeground(foreground)
     }
 
     /** Calculates flyby duration based on distance to threat (capped 1.5–8 s). */
@@ -1763,6 +1782,7 @@ private fun deriveProtectionState(
     activeSlowYellowArmed: Boolean,
     activeFastYellowArmed: Boolean,
     officialAlertsEnabled: Boolean,
+    officialRedAlertsEnabled: Boolean,
     officialYellowAlertsEnabled: Boolean,
     criticalOfflineOverride: Boolean,
     silencedTypesCount: Int,
@@ -1770,7 +1790,8 @@ private fun deriveProtectionState(
 ): ProtectionState {
     if (!monitoringRunning) return ProtectionState.OFFLINE
     val anyZoneArmed = activeSlowRedArmed || activeFastRedArmed || activeSlowYellowArmed || activeFastYellowArmed
-    val allChannelsOff = !anyZoneArmed && !officialAlertsEnabled && !officialYellowAlertsEnabled
+    val allChannelsOff = !anyZoneArmed &&
+        !(officialAlertsEnabled && (officialRedAlertsEnabled || officialYellowAlertsEnabled))
     val reduced = notificationsDisabledBySystem ||
         allChannelsOff ||
         silencedTypesCount == ThreatType.values().size ||

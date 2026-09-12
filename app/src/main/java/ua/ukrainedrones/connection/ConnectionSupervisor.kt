@@ -17,17 +17,18 @@ import ua.ukrainedrones.ConnStatus
 import ua.ukrainedrones.ConnectionLog
 
 /**
- * Supervised connection health & milestone tracker.
+ * Supervised connection health & milestone tracker. Owned by the NEPTUN source's transport
+ * wrapper; the Logs sheet reads its outputs through [SourceRegistry].
  *
  * Responsibilities:
  * 1. Tracks offline duration milestones (3m, 5m, 6m, 10m, 20m) accurately across app lifecycles.
  * 2. Emits real-time [ConnEvent] items directly on connection lifecycle transitions.
- * 3. Bridges [NeptunConnectionClient] states to [ConnectionLog] event-driven updates.
+ * 3. Bridges the connection state to [ConnectionLog] event-driven updates.
  * 4. Manages the transient UI retry countdown state ([ConnRetryState]).
  */
 class ConnectionSupervisor(
     private val context: Context,
-    private val client: NeptunConnectionClient,
+    private val connectionState: StateFlow<ConnectionState>,
     private val onMilestoneReached: ((ConnEventKind, Long) -> Unit)? = null
 ) {
     companion object {
@@ -67,7 +68,7 @@ class ConnectionSupervisor(
 
     fun start() {
         scope.launch {
-            client.connectionState.collect { state ->
+            connectionState.collect { state ->
                 handleStateTransition(state)
             }
         }
@@ -155,7 +156,7 @@ class ConnectionSupervisor(
         milestoneMonitorJob = scope.launch {
             while (isActive) {
                 delay(1000)
-                val state = client.connectionState.value
+                val state = connectionState.value
                 if (state is ConnectionState.Offline) {
                     val outageDuration = System.currentTimeMillis() - state.reconnectStartMillis
                     checkMilestones(outageDuration)

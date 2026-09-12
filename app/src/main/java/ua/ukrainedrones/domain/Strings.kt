@@ -70,6 +70,7 @@ object Strings {
         val officialAlertsTitle: String,
         val officialAlertsDesc: String,
         val officialAlertsRedTridentNote: String,
+        val officialRedAlertsTitle: String,
         val officialYellowAlertsTitle: String,
         val officialYellowAlertsDesc: String,
         val officialYellowTridentNote: String,
@@ -689,6 +690,7 @@ val tapToCancelLabel: String,
         val officialAlertsTitle: String get() = settings.officialAlertsTitle
         val officialAlertsDesc: String get() = settings.officialAlertsDesc
         val officialAlertsRedTridentNote: String get() = settings.officialAlertsRedTridentNote
+        val officialRedAlertsTitle: String get() = settings.officialRedAlertsTitle
         val officialYellowAlertsTitle: String get() = settings.officialYellowAlertsTitle
         val officialYellowAlertsDesc: String get() = settings.officialYellowAlertsDesc
         val officialYellowTridentNote: String get() = settings.officialYellowTridentNote

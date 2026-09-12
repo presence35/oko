@@ -1,4 +1,4 @@
-package ua.ukrainedrones.plugins
+package ua.ukrainedrones.source
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -6,31 +6,27 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import kotlinx.coroutines.launch
 import ua.ukrainedrones.connection.Monotonic
-import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.NEPTUN_TYPES
 import ua.ukrainedrones.engine.NormalizedThreat
-import ua.ukrainedrones.engine.OperationalMode
-import ua.ukrainedrones.engine.PluginConnectionState
-import ua.ukrainedrones.engine.SourceType
+import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.ThreatProps
-import ua.ukrainedrones.engine.ThreatSource
 import ua.ukrainedrones.threat
 
-private class FakePlugin(
+private class FakeSource(
     override val id: String,
     threatsInit: List<NormalizedThreat> = emptyList(),
     alertsInit: List<OblastAlert> = emptyList(),
-    connectionInit: PluginConnectionState = PluginConnectionState.DISCONNECTED,
+    connectionInit: SourceState = SourceState.DISCONNECTED,
     override val sourceType: SourceType = SourceType.WS
-) : ThreatSource {
+) : Source {
     override val name = id
     override val typeCatalog: Map<String, ThreatProps> = NEPTUN_TYPES
     private val _threats = MutableStateFlow(threatsInit)
@@ -38,7 +34,7 @@ private class FakePlugin(
     private val _alerts = MutableStateFlow(alertsInit)
     override val alerts: StateFlow<List<OblastAlert>> = _alerts.asStateFlow()
     private val _connectionState = MutableStateFlow(connectionInit)
-    override val connectionState: StateFlow<PluginConnectionState> = _connectionState.asStateFlow()
+    override val connectionState: StateFlow<SourceState> = _connectionState.asStateFlow()
     private val _operationalMode = MutableStateFlow(OperationalMode.STREAMING)
     override val operationalMode: StateFlow<OperationalMode> = _operationalMode.asStateFlow()
     private val _enabled = MutableStateFlow(true)
@@ -52,11 +48,11 @@ private class FakePlugin(
 
     fun emitThreats(list: List<NormalizedThreat>) { _threats.value = list }
     fun emitAlerts(list: List<OblastAlert>) { _alerts.value = list }
-    fun emitConnection(state: PluginConnectionState) { _connectionState.value = state }
+    fun emitConnection(state: SourceState) { _connectionState.value = state }
     fun emitOperationalMode(mode: OperationalMode) { _operationalMode.value = mode }
 }
 
-class PluginRegistryTest {
+class SourceRegistryTest {
 
     @Before
     fun setUp() {
@@ -80,45 +76,45 @@ class PluginRegistryTest {
     )
 
     @Test
-    fun `register starts plugin`() {
-        val registry = PluginRegistry()
-        val plugin = FakePlugin("test")
-        registry.register(plugin, testScope())
-        assertTrue(plugin.started)
+    fun `register starts source`() {
+        val registry = SourceRegistry()
+        val source = FakeSource("test")
+        registry.register(source, testScope())
+        assertTrue(source.started)
     }
 
     @Test
-    fun `unregister stops plugin`() {
-        val registry = PluginRegistry()
-        val plugin = FakePlugin("test")
-        registry.register(plugin, testScope())
-        registry.unregister(plugin)
-        assertTrue(plugin.stopped)
+    fun `unregister stops source`() {
+        val registry = SourceRegistry()
+        val source = FakeSource("test")
+        registry.register(source, testScope())
+        registry.unregister(source)
+        assertTrue(source.stopped)
     }
 
     @Test
-    fun `single plugin threats flow through`() {
-        val registry = PluginRegistry()
-        val plugin = FakePlugin("a", threatsInit = listOf(threat("t1"), threat("t2")))
-        registry.register(plugin, testScope())
+    fun `single source threats flow through`() {
+        val registry = SourceRegistry()
+        val source = FakeSource("a", threatsInit = listOf(threat("t1"), threat("t2")))
+        registry.register(source, testScope())
         assertEquals(2, registry.allThreats.value.size)
     }
 
     @Test
-    fun `multiple plugins merge threats`() {
-        val registry = PluginRegistry()
-        val a = FakePlugin("a", threatsInit = listOf(threat("t1")))
-        val b = FakePlugin("b", threatsInit = listOf(threat("t2"), threat("t3")))
+    fun `multiple sources merge threats`() {
+        val registry = SourceRegistry()
+        val a = FakeSource("a", threatsInit = listOf(threat("t1")))
+        val b = FakeSource("b", threatsInit = listOf(threat("t2"), threat("t3")))
         registry.register(a, testScope())
         registry.register(b, testScope())
         assertEquals(3, registry.allThreats.value.size)
     }
 
     @Test
-    fun `multiple plugins merge alerts`() {
-        val registry = PluginRegistry()
-        val a = FakePlugin("a", alertsInit = listOf(OblastAlert("k1", "n1", "Odesa", null)))
-        val b = FakePlugin("b", alertsInit = listOf(OblastAlert("k2", "n2", "Kyiv", null)))
+    fun `multiple sources merge alerts`() {
+        val registry = SourceRegistry()
+        val a = FakeSource("a", alertsInit = listOf(OblastAlert("k1", "n1", "Odesa", null)))
+        val b = FakeSource("b", alertsInit = listOf(OblastAlert("k2", "n2", "Kyiv", null)))
         registry.register(a, testScope())
         registry.register(b, testScope())
         assertEquals(2, registry.allAlerts.value.size)
@@ -126,19 +122,19 @@ class PluginRegistryTest {
 
     @Test
     fun `worst connection state wins`() {
-        val registry = PluginRegistry()
-        val a = FakePlugin("a", connectionInit = PluginConnectionState.CONNECTED)
-        val b = FakePlugin("b", connectionInit = PluginConnectionState.DEGRADED)
+        val registry = SourceRegistry()
+        val a = FakeSource("a", connectionInit = SourceState.CONNECTED)
+        val b = FakeSource("b", connectionInit = SourceState.DEGRADED)
         registry.register(a, testScope())
         registry.register(b, testScope())
-        assertEquals(PluginConnectionState.DEGRADED, registry.connectionState.value)
+        assertEquals(SourceState.DEGRADED, registry.connectionState.value)
     }
 
     @Test
-    fun `type catalog merges from all plugins`() {
-        val registry = PluginRegistry()
-        val a = FakePlugin("a")
-        val b = FakePlugin("b")
+    fun `type catalog merges from all sources`() {
+        val registry = SourceRegistry()
+        val a = FakeSource("a")
+        val b = FakeSource("b")
         registry.register(a, testScope())
         registry.register(b, testScope())
         assertTrue(registry.typeCatalog.value.containsKey("shahed"))
@@ -147,33 +143,33 @@ class PluginRegistryTest {
 
     @Test
     fun `empty registry defaults`() {
-        val registry = PluginRegistry()
+        val registry = SourceRegistry()
         assertEquals(0, registry.allThreats.value.size)
         assertEquals(0, registry.allAlerts.value.size)
-        assertEquals(PluginConnectionState.DISCONNECTED, registry.connectionState.value)
+        assertEquals(SourceState.DISCONNECTED, registry.connectionState.value)
         assertTrue(registry.typeCatalog.value.isEmpty())
     }
 
     @Test
     fun `wsHealthy true when a WS source is connected`() {
-        val registry = PluginRegistry()
-        registry.register(FakePlugin("a", connectionInit = PluginConnectionState.CONNECTED), testScope())
+        val registry = SourceRegistry()
+        registry.register(FakeSource("a", connectionInit = SourceState.CONNECTED), testScope())
         assertTrue(registry.wsHealthy.value)
     }
 
     @Test
     fun `wsHealthy false when all WS sources offline`() {
-        val registry = PluginRegistry()
-        registry.register(FakePlugin("a", connectionInit = PluginConnectionState.OFFLINE), testScope())
-        registry.register(FakePlugin("b", connectionInit = PluginConnectionState.DISCONNECTED), testScope())
+        val registry = SourceRegistry()
+        registry.register(FakeSource("a", connectionInit = SourceState.OFFLINE), testScope())
+        registry.register(FakeSource("b", connectionInit = SourceState.DISCONNECTED), testScope())
         assertTrue(!registry.wsHealthy.value)
     }
 
     @Test
     fun `REST sources do not count toward wsHealthy`() {
-        val registry = PluginRegistry()
+        val registry = SourceRegistry()
         registry.register(
-            FakePlugin("rest", sourceType = SourceType.REST, connectionInit = PluginConnectionState.CONNECTED),
+            FakeSource("rest", sourceType = SourceType.REST, connectionInit = SourceState.CONNECTED),
             testScope()
         )
         assertTrue(!registry.wsHealthy.value)
@@ -181,38 +177,38 @@ class PluginRegistryTest {
 
     @Test
     fun `degraded WS source is not healthy - backup engages`() {
-        val registry = PluginRegistry()
-        registry.register(FakePlugin("a", connectionInit = PluginConnectionState.DEGRADED), testScope())
+        val registry = SourceRegistry()
+        registry.register(FakeSource("a", connectionInit = SourceState.DEGRADED), testScope())
         assertTrue(!registry.wsHealthy.value)
     }
 
     @Test
     fun `coveredByFallback true when WS down but REST authoritative`() {
-        val registry = PluginRegistry()
-        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
-        val rest = FakePlugin("rest", sourceType = SourceType.REST)
+        val registry = SourceRegistry()
+        registry.register(FakeSource("ws", connectionInit = SourceState.OFFLINE), testScope())
+        val rest = FakeSource("rest", sourceType = SourceType.REST)
         registry.register(rest, testScope())
         rest.emitOperationalMode(OperationalMode.POLLING)
-        rest.emitConnection(PluginConnectionState.CONNECTED)
+        rest.emitConnection(SourceState.CONNECTED)
         assertTrue(registry.coveredByFallback.value)
     }
 
     @Test
     fun `coveredByFallback true when REST delivers`() {
-        val registry = PluginRegistry()
-        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.CONNECTED), testScope())
-        val rest = FakePlugin("rest", sourceType = SourceType.REST)
+        val registry = SourceRegistry()
+        registry.register(FakeSource("ws", connectionInit = SourceState.CONNECTED), testScope())
+        val rest = FakeSource("rest", sourceType = SourceType.REST)
         registry.register(rest, testScope())
         rest.emitOperationalMode(OperationalMode.POLLING)
-        rest.emitConnection(PluginConnectionState.CONNECTED)
+        rest.emitConnection(SourceState.CONNECTED)
         assertTrue(registry.coveredByFallback.value)
     }
 
     @Test
     fun `coveredByFallback false when nothing covers`() {
-        val registry = PluginRegistry()
-        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
-        val rest = FakePlugin("rest", sourceType = SourceType.REST)
+        val registry = SourceRegistry()
+        registry.register(FakeSource("ws", connectionInit = SourceState.OFFLINE), testScope())
+        val rest = FakeSource("rest", sourceType = SourceType.REST)
         registry.register(rest, testScope())
         // REST standby (never fetched) → no real coverage.
         assertTrue(!registry.coveredByFallback.value)
@@ -220,23 +216,23 @@ class PluginRegistryTest {
 
     @Test
     fun `degraded false when WS delivering`() {
-        val registry = PluginRegistry()
-        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.CONNECTED), testScope())
+        val registry = SourceRegistry()
+        registry.register(FakeSource("ws", connectionInit = SourceState.CONNECTED), testScope())
         assertTrue(!registry.degraded.value)
         assertTrue(registry.wsHealthy.value)
     }
 
     @Test
     fun `degraded true when WS offline`() {
-        val registry = PluginRegistry()
-        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
+        val registry = SourceRegistry()
+        registry.register(FakeSource("ws", connectionInit = SourceState.OFFLINE), testScope())
         assertTrue(registry.degraded.value)
     }
 
     @Test
     fun `no sources enabled means offline not degraded`() {
-        val registry = PluginRegistry()
-        val ws = FakePlugin("ws", connectionInit = PluginConnectionState.CONNECTED)
+        val registry = SourceRegistry()
+        val ws = FakeSource("ws", connectionInit = SourceState.CONNECTED)
         registry.register(ws, testScope())
         registry.setEnabled(ws, false)
         assertFalse(registry.degraded.value)
@@ -245,8 +241,8 @@ class PluginRegistryTest {
 
     @Test
     fun `disabled source alerts are held but threats are not merged`() {
-        val registry = PluginRegistry()
-        val ws = FakePlugin(
+        val registry = SourceRegistry()
+        val ws = FakeSource(
             "ws",
             threatsInit = listOf(threat(id = "t1")),
             alertsInit = listOf(OblastAlert("k1", "n1", "Odesa oblast", null))
@@ -255,7 +251,7 @@ class PluginRegistryTest {
         assertTrue(registry.allThreats.value.isNotEmpty())
         assertTrue(registry.allAlerts.value.isNotEmpty())
         registry.setEnabled(ws, false)
-        // Threats are cleared on disable (plugin clears them)
+        // Threats are cleared on disable (source clears them)
         assertTrue(registry.allThreats.value.isEmpty())
         // Alerts are HELD on disable (no authoritative source) — they persist in the merge
         assertTrue(registry.allAlerts.value.isNotEmpty())
@@ -263,10 +259,10 @@ class PluginRegistryTest {
 
     @Test
     fun `disabling the primary does not keep the fallback covering`() {
-        val registry = PluginRegistry()
-        val ws = FakePlugin("neptun", connectionInit = PluginConnectionState.CONNECTED)
+        val registry = SourceRegistry()
+        val ws = FakeSource("neptun", connectionInit = SourceState.CONNECTED)
         registry.register(ws, testScope())
-        val rest = FakePlugin("ubilling", sourceType = SourceType.REST)
+        val rest = FakeSource("ubilling", sourceType = SourceType.REST)
         registry.register(rest, testScope())
         registry.setEnabled(ws, false)
         assertTrue(!registry.coveredByFallback.value)
@@ -274,45 +270,45 @@ class PluginRegistryTest {
 
     @Test
     fun `degraded true when WS silent`() {
-        val registry = PluginRegistry()
-        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.DEGRADED), testScope())
+        val registry = SourceRegistry()
+        registry.register(FakeSource("ws", connectionInit = SourceState.DEGRADED), testScope())
         assertTrue(registry.degraded.value)
     }
 
     @Test
     fun `isOffline false within episode grace`() {
-        val registry = PluginRegistry()
-        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
+        val registry = SourceRegistry()
+        registry.register(FakeSource("ws", connectionInit = SourceState.OFFLINE), testScope())
         val since = registry.degradedSince.value
         assertTrue(!registry.isOffline((since ?: 0L) + 1_000L))
     }
 
     @Test
     fun `isOffline true past episode grace with no fallback`() {
-        val registry = PluginRegistry()
-        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
+        val registry = SourceRegistry()
+        registry.register(FakeSource("ws", connectionInit = SourceState.OFFLINE), testScope())
         val since = registry.degradedSince.value!!
-        assertTrue(registry.isOffline(since + PluginRegistry.OFFLINE_EPISODE_MS + 1_000L))
+        assertTrue(registry.isOffline(since + SourceRegistry.OFFLINE_EPISODE_MS + 1_000L))
     }
 
     @Test
     fun `isOffline false past grace when fallback covers`() {
-        val registry = PluginRegistry()
-        registry.register(FakePlugin("ws", connectionInit = PluginConnectionState.OFFLINE), testScope())
-        val rest = FakePlugin("rest", sourceType = SourceType.REST)
+        val registry = SourceRegistry()
+        registry.register(FakeSource("ws", connectionInit = SourceState.OFFLINE), testScope())
+        val rest = FakeSource("rest", sourceType = SourceType.REST)
         registry.register(rest, testScope())
         rest.emitOperationalMode(OperationalMode.POLLING)
-        rest.emitConnection(PluginConnectionState.CONNECTED)
+        rest.emitConnection(SourceState.CONNECTED)
         val since = registry.degradedSince.value!!
         assertTrue(registry.coveredByFallback.value)
-        assertTrue(!registry.isOffline(since + PluginRegistry.OFFLINE_EPISODE_MS + 1_000L))
+        assertTrue(!registry.isOffline(since + SourceRegistry.OFFLINE_EPISODE_MS + 1_000L))
     }
 
     @Test
     fun `threat data stale when nothing delivered yet`() {
         var tick = 1_000_000_000L
         Monotonic.nowProvider = { tick }
-        val registry = PluginRegistry()
+        val registry = SourceRegistry()
         assertTrue(registry.isThreatDataStale(tick))
     }
 
@@ -320,8 +316,8 @@ class PluginRegistryTest {
     fun `threat data fresh right after a source delivers`() {
         var tick = 1_000_000_000L
         Monotonic.nowProvider = { tick }
-        val registry = PluginRegistry()
-        val ws = FakePlugin("ws")
+        val registry = SourceRegistry()
+        val ws = FakeSource("ws")
         registry.register(ws, testScope())
         ws.emitThreats(listOf(threat("t1")))
         assertTrue(!registry.isThreatDataStale(tick))
@@ -331,20 +327,20 @@ class PluginRegistryTest {
     fun `threat data stale again past the window`() {
         var tick = 1_000_000_000L
         Monotonic.nowProvider = { tick }
-        val registry = PluginRegistry()
-        val ws = FakePlugin("ws")
+        val registry = SourceRegistry()
+        val ws = FakeSource("ws")
         registry.register(ws, testScope())
         ws.emitThreats(listOf(threat("t1")))
-        tick += PluginRegistry.THREAT_DATA_STALE_MS + 1_000L
+        tick += SourceRegistry.THREAT_DATA_STALE_MS + 1_000L
         assertTrue(registry.isThreatDataStale(tick))
     }
 
     @Test
-    fun `takeover merge prefers first registered plugin per key`() {
-        val registry = PluginRegistry()
-        // Same alert key from both plugins: the first registered owner wins.
-        val a = FakePlugin("a", alertsInit = listOf(OblastAlert("odeska", "Одеська область", "Одеська область", null)))
-        val b = FakePlugin("b", alertsInit = listOf(OblastAlert("odeska", "Одеська область", "Одеська область", "123")))
+    fun `takeover merge prefers first registered source per key`() {
+        val registry = SourceRegistry()
+        // Same alert key from both sources: the first registered owner wins.
+        val a = FakeSource("a", alertsInit = listOf(OblastAlert("odeska", "Одеська область", "Одеська область", null)))
+        val b = FakeSource("b", alertsInit = listOf(OblastAlert("odeska", "Одеська область", "Одеська область", "123")))
         registry.register(a, testScope())
         registry.register(b, testScope())
         assertEquals(1, registry.allAlerts.value.size)
@@ -354,9 +350,9 @@ class PluginRegistryTest {
 
     @Test
     fun `merge keeps multiple regions of the same oblast`() {
-        val registry = PluginRegistry()
+        val registry = SourceRegistry()
         // A whole-oblast alert AND two raion alerts inside the SAME oblast — all distinct keys.
-        val a = FakePlugin(
+        val a = FakeSource(
             "a",
             alertsInit = listOf(
                 OblastAlert("odeska", "Одеська область", "Одеська область", null),
@@ -372,9 +368,9 @@ class PluginRegistryTest {
 
     @Test
     fun `takeover merge reflects live emission`() {
-        val registry = PluginRegistry()
-        val a = FakePlugin("a")
-        val b = FakePlugin("b", alertsInit = listOf(OblastAlert("k1", "n1", "Kyiv oblast", null)))
+        val registry = SourceRegistry()
+        val a = FakeSource("a")
+        val b = FakeSource("b", alertsInit = listOf(OblastAlert("k1", "n1", "Kyiv oblast", null)))
         registry.register(a, testScope())
         registry.register(b, testScope())
         assertEquals("b", registry.activeAlertSource.value)
@@ -385,20 +381,20 @@ class PluginRegistryTest {
 
     @Test
     fun `active REST fallback supersedes stale WS alerts`() {
-        val registry = PluginRegistry()
+        val registry = SourceRegistry()
         // WS source registered first, but OFFLINE → holding a stale "alerting" entry.
-        val neptun = FakePlugin("neptun", alertsInit = listOf(OblastAlert("k1", "n1", "Odesa oblast", "111")))
+        val neptun = FakeSource("neptun", alertsInit = listOf(OblastAlert("k1", "n1", "Odesa oblast", "111")))
         registry.register(neptun, testScope())
         // REST fallback actively polling, reports the same oblast CLEAR (not alerting).
-        val ubilling = FakePlugin(
+        val ubilling = FakeSource(
             "ubilling",
             sourceType = SourceType.REST,
             alertsInit = emptyList(),
-            connectionInit = PluginConnectionState.DISCONNECTED
+            connectionInit = SourceState.DISCONNECTED
         )
         registry.register(ubilling, testScope())
         // A successful poll flips the fallback to CONNECTED + POLLING → authoritative.
-        ubilling.emitConnection(PluginConnectionState.CONNECTED)
+        ubilling.emitConnection(SourceState.CONNECTED)
         ubilling.emitOperationalMode(OperationalMode.POLLING)
         // Ubilling's snapshot (empty = all-clear) is authoritative → stale Neptun alert is superseded.
         assertEquals(0, registry.allAlerts.value.size)
@@ -407,10 +403,10 @@ class PluginRegistryTest {
 
     @Test
     fun `stale WS alerts fill when no authoritative source covers oblast`() {
-        val registry = PluginRegistry()
-        val neptun = FakePlugin("neptun", alertsInit = listOf(OblastAlert("k1", "n1", "Odesa oblast", "111")))
+        val registry = SourceRegistry()
+        val neptun = FakeSource("neptun", alertsInit = listOf(OblastAlert("k1", "n1", "Odesa oblast", "111")))
         registry.register(neptun, testScope())
-        val ubilling = FakePlugin("ubilling", sourceType = SourceType.REST)
+        val ubilling = FakeSource("ubilling", sourceType = SourceType.REST)
         registry.register(ubilling, testScope())
         // Neptun OFFLINE but ubilling is STANDBY (not yet covering) → Neptun's held alert fills.
         assertEquals(1, registry.allAlerts.value.size)
@@ -419,10 +415,10 @@ class PluginRegistryTest {
 
     @Test
     fun `REST poller that never fetched does not wipe held feed`() {
-        val registry = PluginRegistry()
-        val neptun = FakePlugin("neptun", alertsInit = listOf(OblastAlert("k1", "n1", "Odesa oblast", "111")))
+        val registry = SourceRegistry()
+        val neptun = FakeSource("neptun", alertsInit = listOf(OblastAlert("k1", "n1", "Odesa oblast", "111")))
         registry.register(neptun, testScope())
-        val ubilling = FakePlugin("ubilling", sourceType = SourceType.REST)
+        val ubilling = FakeSource("ubilling", sourceType = SourceType.REST)
         registry.register(ubilling, testScope())
         // POLLING but still DISCONNECTED (first fetch not returned) → not authoritative → held alert stays.
         ubilling.emitOperationalMode(OperationalMode.POLLING)
@@ -430,9 +426,9 @@ class PluginRegistryTest {
     }
 
     @Test
-    fun `setEnabled propagates to plugin`() {
-        val registry = PluginRegistry()
-        val a = FakePlugin("a")
+    fun `setEnabled propagates to source`() {
+        val registry = SourceRegistry()
+        val a = FakeSource("a")
         registry.register(a, testScope())
         registry.setEnabled(a, false)
         assertEquals(listOf(false), a.enabledCalls)
@@ -440,8 +436,8 @@ class PluginRegistryTest {
 
     @Test
     fun `setEnabled emits a toggle event`() {
-        val registry = PluginRegistry()
-        val a = FakePlugin("a")
+        val registry = SourceRegistry()
+        val a = FakeSource("a")
         registry.register(a, testScope())
         val collected = mutableListOf<SourceEvent>()
         val job = testScope().launch {

@@ -17,8 +17,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import ua.ukrainedrones.connection.ConnectionHolder
-import ua.ukrainedrones.connection.ConnectionState
 import ua.ukrainedrones.connection.Monotonic
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.ZoneParams
@@ -73,10 +71,9 @@ object WidgetUpdater {
             combine(
                 combine(
                     combine(
-                        ConnectionHolder.getClient(context).connectionState,
-                        AppPluginHolder.registry.allThreats.map { list -> list.associate { it.id to it } },
-                        AppPluginHolder.registry.allAlerts
-                    ) { cs, threats, alerts -> Triple(cs, threats, alerts) },
+                        AppSources.registry.allThreats.map { list -> list.associate { it.id to it } },
+                        AppSources.registry.allAlerts
+                    ) { threats, alerts -> Pair(threats, alerts) },
                     LocationTracker.location,
                     clock
                 ) { core, gps, now -> Triple(core, gps, now) },
@@ -91,7 +88,7 @@ object WidgetUpdater {
                     Tail(follow, pinned, lang, iconSet, mapEnabled)
                 }
             ) { core, params, tail ->
-                val (_, threats, alerts) = core.first as Triple<ConnectionState, Map<String, NormalizedThreat>, List<OblastAlert>>
+                val (threats, alerts) = core.first as Pair<Map<String, NormalizedThreat>, List<OblastAlert>>
                 val gps = core.second
                 val now = core.third
                 val focus = resolveFocus(tail.followMe, gps, LocationTracker.isFresh(now), tail.pinned)
@@ -103,8 +100,8 @@ object WidgetUpdater {
                     params = params,
                     mapEnabled = tail.mapEnabled,
                     now = now,
-                    degraded = AppPluginHolder.registry.degraded.value,
-                    offline = AppPluginHolder.registry.isOffline(Monotonic.now())
+                    degraded = AppSources.registry.degraded.value,
+                    offline = AppSources.registry.isOffline(Monotonic.now())
                 ) to Pair(tail.lang, tail.iconSet)
             }.collect { (snapshot, tail) ->
                 persist(context, snapshot, tail.first, tail.second)

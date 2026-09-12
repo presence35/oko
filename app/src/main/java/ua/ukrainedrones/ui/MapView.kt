@@ -1,7 +1,5 @@
 package ua.ukrainedrones
 
-import ua.ukrainedrones.connection.ConnectionHolder
-import ua.ukrainedrones.connection.NeptunConnectionClient
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
@@ -11,6 +9,7 @@ import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.NEPTUN_TYPES
+import ua.ukrainedrones.source.RESOLVED_REPLAY_GRACE_MS
 import ua.ukrainedrones.courseTargetPlace
 import ua.ukrainedrones.community.CompactOblastBoundaries
 import ua.ukrainedrones.community.CompactPolygon
@@ -800,9 +799,9 @@ fun NeptunMapView(
         }
     }
     val lastOverlayKey = remember { mutableStateOf<String?>(null) }
-    // Per-id dedup of server-resolution strikes: NEPTUN re-sends a resolved/remove frame within
+    // Per-id dedup of server-resolution strikes: a source re-sends a resolved/remove frame within
     // ~60s; without this the map re-strikes threats the user already saw (a "random" replay a
-    // minute later). Pruned to the same RECENT_REMOVED_GRACE_MS window the client uses.
+    // minute later). Pruned to the same RESOLVED_REPLAY_GRACE_MS window the source uses.
     val struckRemovalAt = remember { HashMap<String, Long>() }
     val lastFitUkraineTick = remember { mutableStateOf(fitUkraineTick) }
     val lastFollow = remember { mutableStateOf<LatLng?>(null) }
@@ -1609,7 +1608,7 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
                                         }
                                         // Remember the shot so a same-id respawn within the grace
                                         // window doesn't re-alert (the object itself is never removed).
-                                        if (pressedId != null) ConnectionHolder.getClient(context).markUserShot(pressedId)
+                                        if (pressedId != null) AppSources.registry.markUserShot(pressedId)
                                         deathFx.strikeHaptics()
                                     }
                                 }
@@ -1725,14 +1724,14 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
             snapshotFlow { uiState.deathAnimationEnabled }
                 .distinctUntilChanged()
                 .flatMapLatest { enabled ->
-                    if (!enabled) emptyFlow() else ConnectionHolder.getClient(context).removedThreats
+                    if (!enabled) emptyFlow() else AppSources.registry.removedThreats
                 }
                 .collect { r ->
                     // NEPTUN re-sends a resolution within its 60s grace window — strike each
                     // threat once, so an already-witnessed resolution never re-strikes later
                     // (which read as a "random" replay ~1 min after the tally tap).
                     val nowMs = System.currentTimeMillis()
-                    struckRemovalAt.entries.removeIf { nowMs - it.value > NeptunConnectionClient.RECENT_REMOVED_GRACE_MS }
+                    struckRemovalAt.entries.removeIf { nowMs - it.value > RESOLVED_REPLAY_GRACE_MS }
                     if (struckRemovalAt.containsKey(r.id)) return@collect
                     struckRemovalAt[r.id] = nowMs
                     // Skip resolutions that arrived while the map wasn't visible (Settings open,

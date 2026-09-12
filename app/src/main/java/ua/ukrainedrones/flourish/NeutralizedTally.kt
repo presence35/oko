@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import ua.ukrainedrones.connection.ThreatRemoved
+import ua.ukrainedrones.source.ThreatRemoved
 
 /**
  * Service-side flourish facade: owns the shoot-down tally (count + running memory of resolved

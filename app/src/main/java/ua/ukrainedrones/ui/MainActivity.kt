@@ -1,7 +1,5 @@
 package ua.ukrainedrones
 
-import ua.ukrainedrones.connection.ConnectionHolder
-
 import android.content.res.Configuration
 import android.Manifest
 import android.content.Intent
@@ -175,7 +173,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         // Mirror the website's focus handler — refresh positions and reset the stale window.
-        ConnectionHolder.getClient(this).onForeground()
+        AppSources.registry.onAppForeground()
     }
 
     /**

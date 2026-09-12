@@ -104,6 +104,7 @@ import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -369,6 +370,7 @@ fun SettingsScreen(
     onThreatMapToggleAll: (Set<ThreatType>, Boolean) -> Unit,
     onThreatAlertToggleAll: (Set<ThreatType>, Boolean) -> Unit,
     onOfficialAlertsChange: (Boolean) -> Unit,
+    onOfficialRedAlertsChange: (Boolean) -> Unit,
     onOfficialYellowAlertsChange: (Boolean) -> Unit,
     onOfficialAlertCityScopeChange: (Boolean) -> Unit,
     onSirenOverrideChange: (Boolean) -> Unit,
@@ -427,6 +429,7 @@ fun SettingsScreen(
     val hiddenTypes = uiState.hiddenTypes
     val silencedTypes = uiState.silencedTypes
     val officialAlertsEnabled = uiState.officialAlertsEnabled
+    val officialRedAlertsEnabled = uiState.officialRedAlertsEnabled
     val officialYellowAlertsEnabled = uiState.officialYellowAlertsEnabled
     val officialAlertCityScope = uiState.officialAlertCityScope
     val sirenOverride = uiState.sirenOverride
@@ -792,7 +795,11 @@ fun SettingsScreen(
                     title = s.alertsLabel,
                     icon = rememberVectorPainter(Icons.Default.Notifications),
                     expanded = collapse.alerts,
-                    subtitle = s.alertsSubtitle(officialAlertsEnabled, officialYellowAlertsEnabled, sirenOverride),
+                    subtitle = s.alertsSubtitle(
+                        officialAlertsEnabled && officialRedAlertsEnabled,
+                        officialAlertsEnabled && officialYellowAlertsEnabled,
+                        sirenOverride
+                    ),
                     onToggle = { onCollapseChange(collapse.copy(alerts = !collapse.alerts)) }
                 ) {
                     val notifsEnabled = remember(Unit) {
@@ -862,14 +869,25 @@ fun SettingsScreen(
                         checked = officialAlertsEnabled,
                         onCheckedChange = { v -> showExplainer("officialAlerts"); onOfficialAlertsChange(v) },
                         icon = painterResource(R.drawable.ic_trident),
-                        iconTint = if (officialAlertsEnabled) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        iconTint = if (officialAlertsEnabled) Color(0xFFF9A825) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        iconSize = 44.dp,
                         note = s.officialAlertsRedTridentNote,
                         noteIcon = painterResource(R.drawable.ic_trident),
-                        noteIconTint = Color(0xFFD32F2F),
+                        noteIconTint = Color(0xFFF9A825),
+                        noteIconSize = 20.sp,
                         flash = flashId == "officialAlerts"
                     )
                     AnimatedVisibility(visible = officialAlertsEnabled) {
-                        Column(modifier = Modifier.padding(start = 40.dp)) {
+                        Column(modifier = Modifier.padding(start = 40.dp, end = 12.dp)) {
+                            OfficialPairToggleRow(
+                                redTitle = s.officialRedAlertsTitle,
+                                redChecked = officialRedAlertsEnabled,
+                                onRedChange = { v -> showExplainer("officialRedAlerts"); onOfficialRedAlertsChange(v) },
+                                yellowTitle = s.officialYellowAlertsTitle,
+                                yellowChecked = officialYellowAlertsEnabled,
+                                onYellowChange = { v -> showExplainer("officialYellowAlerts"); onOfficialYellowAlertsChange(v) }
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             AlertToggleRow(
                                 title = s.officialAlertScopeTitle,
                                 description = s.officialAlertScopeDesc,
@@ -878,19 +896,6 @@ fun SettingsScreen(
                             )
                         }
                     }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    AlertToggleRow(
-                        title = s.officialYellowAlertsTitle,
-                        description = s.officialYellowAlertsDesc,
-                        checked = officialYellowAlertsEnabled,
-                        onCheckedChange = { v -> showExplainer("officialYellowAlerts"); onOfficialYellowAlertsChange(v) },
-                        icon = painterResource(R.drawable.ic_trident),
-                        iconTint = if (officialYellowAlertsEnabled) Color(0xFFF9A825) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        note = s.officialYellowTridentNote,
-                        noteIcon = painterResource(R.drawable.ic_trident),
-                        noteIconTint = Color(0xFFF9A825),
-                        flash = flashId == "officialYellowAlerts"
-                    )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertToggleRow(
                         title = s.sirenOverrideTitle,
@@ -1925,6 +1930,7 @@ internal fun AlertToggleRow(
     note: String? = null,
     noteIcon: Painter? = null,
     noteIconTint: Color? = null,
+    noteIconSize: TextUnit = 14.sp,
     flash: Boolean = false,
     enabled: Boolean = true
 ) {
@@ -1998,8 +2004,8 @@ internal fun AlertToggleRow(
                         inlineContent = mapOf(
                             iconId to InlineTextContent(
                                 Placeholder(
-                                    14.sp,
-                                    14.sp,
+                                    noteIconSize,
+                                    noteIconSize,
                                     PlaceholderVerticalAlign.TextCenter
                                 )
                             ) {
@@ -2026,6 +2032,81 @@ internal fun AlertToggleRow(
             onCheckedChange = null,
             modifier = Modifier.scale(if (isPressed) 0.92f else 1f)
         )
+    }
+}
+
+/** Red / Yellow official-alert sub-channels on one line, each with its own switch. */
+@Composable
+private fun OfficialPairToggleRow(
+    redTitle: String,
+    redChecked: Boolean,
+    onRedChange: (Boolean) -> Unit,
+    yellowTitle: String,
+    yellowChecked: Boolean,
+    onYellowChange: (Boolean) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.03f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SubToggleCell(
+                title = redTitle,
+                checked = redChecked,
+                onCheckedChange = onRedChange,
+                icon = painterResource(R.drawable.ic_trident),
+                iconTint = if (redChecked) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(32.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+            )
+            SubToggleCell(
+                title = yellowTitle,
+                checked = yellowChecked,
+                onCheckedChange = onYellowChange,
+                icon = painterResource(R.drawable.ic_trident),
+                iconTint = if (yellowChecked) Color(0xFFF9A825) else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubToggleCell(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    icon: Painter? = null,
+    iconTint: Color? = null,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        icon?.let {
+            Image(
+                painter = it,
+                contentDescription = null,
+                colorFilter = iconTint?.let { c -> ColorFilter.tint(c) },
+                modifier = Modifier.size(26.dp)
+            )
+        }
+        Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
