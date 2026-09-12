@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -77,17 +78,13 @@ object WidgetUpdater {
                     LocationTracker.location,
                     clock
                 ) { core, gps, now -> Triple(core, gps, now) },
-                combine(
-                    prefs.slowRedKm(), prefs.slowYellowKm(),
-                    prefs.fastRedMin(), prefs.fastYellowMin()
-                ) { sr, sy, fr, fy -> ZoneParams(sr, sy, fr, fy) },
-                combine(
-                    prefs.followMe(), prefs.pinnedCity(), prefs.language(),
-                    prefs.threatIconSet(), threatMapFlow(prefs)
-                ) { follow, pinned, lang, iconSet, mapEnabled ->
-                    Tail(follow, pinned, lang, iconSet, mapEnabled)
-                }
-            ) { core, params, tail ->
+                prefs.preferences.map { p ->
+                    Pair(
+                        ZoneParams(p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin),
+                        Tail(p.followMe, p.pinnedCity, p.language, p.threatIconSet, p.mapVisibleTypes)
+                    )
+                }.distinctUntilChanged()
+            ) { core, (params, tail) ->
                 val (threats, alerts) = core.first as Pair<Map<String, NormalizedThreat>, List<OblastAlert>>
                 val gps = core.second
                 val now = core.third

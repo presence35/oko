@@ -65,7 +65,6 @@ import ua.ukrainedrones.Strings
 import ua.ukrainedrones.UserPrefs
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.isWithinNight
-import ua.ukrainedrones.threatAlertFlow
 import ua.ukrainedrones.NeutralizedTally
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.service.ServiceState
@@ -207,40 +206,6 @@ class AlertService : Service() {
         val enabled: Set<ThreatType>
     )
 
-    private data class AlertConfig(
-        val slowRedArmed: Boolean,
-        val slowYellowArmed: Boolean,
-        val fastRedArmed: Boolean,
-        val fastYellowArmed: Boolean,
-        val officialAlertsEnabled: Boolean,
-        val officialRedAlertsEnabled: Boolean,
-        val yellowAlertsEnabled: Boolean,
-        val officialAlertCityScope: Boolean,
-        val sirenOverride: Boolean,
-        val followMe: Boolean,
-        val criticalOfflineOverride: Boolean
-    )
-
-    private data class TailPrefs(
-        val enabled: Set<ThreatType>,
-        val lang: AppLanguage,
-        val pinned: String?
-    )
-
-    private data class NightWindow(
-        val enabled: Boolean,
-        val startMin: Int,
-        val endMin: Int,
-        val useCustomZones: Boolean
-    )
-
-    private data class NightSettings(
-        val window: NightWindow,
-        val zones: NightZones,
-        val zoneSirenOverride: Boolean,
-        val officialSirenOverride: Boolean
-    )
-
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -341,17 +306,19 @@ class AlertService : Service() {
         }
 
         scope.launch {
-            prefs.neutralizedTallyEnabled()
+            prefs.preferences
+                .map { it.neutralizedTallyEnabled }
                 .distinctUntilChanged()
                 .flatMapLatest { enabled ->
                     if (!enabled) emptyFlow() else AppSources.registry.removedThreats
                 }
                 .collect { removed ->
-                    if (!prefs.neutralizedTallyAllUkraine().first()) {
+                    val p = prefs.preferences.first()
+                    if (!p.neutralizedTallyAllUkraine) {
                         val token = currentToken ?: return@collect
                         if (!inOblast(removed.region, removed.district, removed.locality, token)) return@collect
                     }
-                    tally.onResolved(removed, prefs.language().first())
+                    tally.onResolved(removed, p.language)
                 }
         }
 
@@ -419,91 +386,40 @@ val mappedThreats = registry.allThreats.map { list ->
 
             combine(
                 liveFlow,
-                combine(
-                    prefs.slowRedKm(), prefs.slowYellowKm(), prefs.fastRedMin(), prefs.fastYellowMin()
-                ) { slowRed, slowYellow, fastRed, fastYellow ->
-                    ZoneParams(slowRed, slowYellow, fastRed, fastYellow)
-                },
-                combine(
-                    prefs.slowRedZoneArmed(),
-                    prefs.slowYellowZoneArmed(),
-                    prefs.fastRedZoneArmed(),
-                    prefs.fastYellowZoneArmed(),
-                    prefs.officialAlertsEnabled(),
-                    prefs.officialRedAlertsEnabled(),
-                    prefs.yellowAlertsEnabled(),
-                    prefs.officialAlertCityScope(),
-                    prefs.sirenOverride(),
-                    prefs.followMe(),
-                    prefs.criticalOfflineOverride()
-                ) { flags: Array<Boolean> ->
-                    AlertConfig(
-                        flags[0], flags[1], flags[2], flags[3], flags[4], flags[5], flags[6], flags[7], flags[8], flags[9], flags[10]
-                    )
-                },
-                combine(
-                    threatAlertFlow(prefs),
-                    prefs.language(),
-                    prefs.pinnedCity()
-                ) { enabled, lang, pinned ->
-                    TailPrefs(enabled, lang, pinned)
-                },
-                combine(
-                    combine(
-                        prefs.nightEnabled(), prefs.nightStartMin(), prefs.nightEndMin(),
-                        prefs.nightUseCustomZones()
-                    ) { enabled, start, end, use ->
-                        NightWindow(enabled, start, end, use)
-                    },
-                    combine(
-                        combine(
-                            prefs.nightSlowRedKm(), prefs.nightSlowYellowKm(), prefs.nightFastRedMin(),
-                            prefs.nightFastYellowMin()
-                        ) { sr, sy, fr, fy ->
-                            NightZones(sr, sy, fr, fy, slowRedArmed = true, slowYellowArmed = true, fastRedArmed = true, fastYellowArmed = true)
-                        },
-                        combine(
-                            prefs.nightSlowRedZoneArmed(), prefs.nightSlowYellowZoneArmed(),
-                            prefs.nightFastRedZoneArmed(), prefs.nightFastYellowZoneArmed()
-                        ) { flags: Array<Boolean> ->
-                            flags
-                        }
-                    ) { zones, flags ->
-                        zones.copy(
-                            slowRedArmed = flags[0],
-                            slowYellowArmed = flags[1],
-                            fastRedArmed = flags[2],
-                            fastYellowArmed = flags[3]
-                        )
-                    },
-                    combine(
-                        prefs.nightZoneSirenOverride(), prefs.nightOfficialSirenOverride()
-                    ) { zoneOv, officialOv -> zoneOv to officialOv }
-                ) { window, zones, ov ->
-                    NightSettings(window, zones, ov.first, ov.second)
-                }
-            ) { live, dayParams, cfg, tail, night ->
+                prefs.preferences
+            ) { live, p ->
                 val (rawThreats, alerts, gps, now) = live
                 val nowMin = nowMinuteOfDay()
-                val nightActive = night.window.enabled && isWithinNight(nowMin, night.window.startMin, night.window.endMin)
-                val params = if (nightActive && night.window.useCustomZones) {
-                    effectiveZoneParams(dayParams, night.zones, true, nightActive)
+                val nightActive = p.nightEnabled && isWithinNight(nowMin, p.nightStartMin, p.nightEndMin)
+                val dayParams = ZoneParams(p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin)
+                val nightZones = NightZones(
+                    slowRedKm = p.nightSlowRedKm,
+                    slowYellowKm = p.nightSlowYellowKm,
+                    fastRedMin = p.nightFastRedMin,
+                    fastYellowMin = p.nightFastYellowMin,
+                    slowRedArmed = p.nightSlowRedArmed,
+                    slowYellowArmed = p.nightSlowYellowArmed,
+                    fastRedArmed = p.nightFastRedArmed,
+                    fastYellowArmed = p.nightFastYellowArmed
+                )
+                val params = if (nightActive && p.nightUseCustomZones) {
+                    effectiveZoneParams(dayParams, nightZones, true, nightActive)
                 } else {
                     dayParams
                 }
-                val zoneSirenOverride = if (nightActive) night.zoneSirenOverride else cfg.sirenOverride
-                val officialSirenOverride = if (nightActive) night.officialSirenOverride else cfg.sirenOverride
+                val zoneSirenOverride = if (nightActive) p.nightZoneSirenOverride else p.sirenOverride
+                val officialSirenOverride = if (nightActive) p.nightOfficialSirenOverride else p.sirenOverride
 
-                val enabled = tail.enabled
+                val enabled = p.alertEnabledTypes
                 val threats = rawThreats.filterValues { it.type.toThreatType() in enabled }
 
-                val focus = resolveFocus(cfg.followMe, gps, LocationTracker.isFresh(now), tail.pinned)
+                val focus = resolveFocus(p.followMe, gps, LocationTracker.isFresh(now), p.pinnedCity)
                 val focusLoc = focus.location
                 val focusBannerCity =
-                    if (tail.lang == AppLanguage.UA) focus.attribution.bannerCityUa else focus.attribution.bannerCityEn
+                    if (p.language == AppLanguage.UA) focus.attribution.bannerCityUa else focus.attribution.bannerCityEn
                 val focusCityUa = focus.attribution.bannerCityUa
                 val focusRegion =
-                    if (tail.lang == AppLanguage.UA) focus.attribution.bannerCityUa
+                    if (p.language == AppLanguage.UA) focus.attribution.bannerCityUa
                     else focus.attribution.bannerCityEn.ifBlank { Transliteration.transliterate(focus.attribution.bannerCityUa) }
                 val focusPinned = focus.pinned
                 val gpsFixMissing = focus.gpsFixMissing
@@ -512,7 +428,7 @@ val mappedThreats = registry.allThreats.map { list ->
 
                 // Scoped level: highest level matching the user's focus + scope (siren gate).
                 // Raw level: highest level in the oblast, no scope filter (all-clear gate).
-                val focusOblastLevel = alerts.maxLevelFor(focusToken, focusCityUa, cfg.officialAlertCityScope)
+                val focusOblastLevel = alerts.maxLevelFor(focusToken, focusCityUa, p.officialAlertCityScope)
                 val focusOblastRawLevel = alerts.maxLevelFor(focusToken, null, false)
                 val focusOblastAlertSince = focusToken?.let { token ->
                     alerts.firstOrNull { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }?.since
@@ -528,7 +444,7 @@ val mappedThreats = registry.allThreats.map { list ->
                         threats.values.toList(),
                         focusLoc,
                         params,
-                        tail.lang,
+                        p.language,
                         now
                     )
                 } else {
@@ -558,23 +474,23 @@ val mappedThreats = registry.allThreats.map { list ->
                     focusPinned = focusPinned,
                     officialReason = officialReason,
                     officialReasonThreatId = officialReasonThreatId,
-                    officialRegion = activeOfficialAlert?.let { alertRegionName(it, tail.lang) },
+                    officialRegion = activeOfficialAlert?.let { alertRegionName(it, p.language) },
                     zoneThreats = zoneThreats,
                     params = params,
-                    lang = tail.lang,
-                    slowRedArmed = cfg.slowRedArmed,
-                    slowYellowArmed = cfg.slowYellowArmed,
-                    fastRedArmed = cfg.fastRedArmed,
-                    fastYellowArmed = cfg.fastYellowArmed,
-                    officialAlertsEnabled = cfg.officialAlertsEnabled,
-                    officialRedAlertsEnabled = cfg.officialRedAlertsEnabled,
-                    yellowAlertsEnabled = cfg.yellowAlertsEnabled,
+                    lang = p.language,
+                    slowRedArmed = p.slowRedArmed,
+                    slowYellowArmed = p.slowYellowArmed,
+                    fastRedArmed = p.fastRedArmed,
+                    fastYellowArmed = p.fastYellowArmed,
+                    officialAlertsEnabled = p.officialAlertsEnabled,
+                    officialRedAlertsEnabled = p.officialRedAlertsEnabled,
+                    yellowAlertsEnabled = p.officialYellowAlertsEnabled,
                     zoneSirenOverride = zoneSirenOverride,
                     officialSirenOverride = officialSirenOverride,
                     degraded = registry.degraded.value,
                     threats = threats,
                     alerts = alerts,
-                    criticalOfflineOverride = cfg.criticalOfflineOverride,
+                    criticalOfflineOverride = p.criticalOfflineOverride,
                     fastVibrationLevel = fastVib,
                     slowVibrationLevel = slowVib,
                     focusLocation = focusLoc,
@@ -1070,7 +986,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 val lastNotified = svcState.lastNotifiedUpdateCode().first()
                 if (result.info.versionCode > lastNotified) {
                     svcState.setLastNotifiedUpdateCode(result.info.versionCode.toLong())
-                    val s = Strings.get(userPrefs.language().first())
+                    val s = Strings.get(userPrefs.preferences.first().language)
                     notificationManager.postUpdateNotification(
                         s.notifUpdateTitle,
                         String.format(s.notifUpdateText, result.info.versionName)

@@ -148,7 +148,7 @@ class AlertNotificationManager(private val context: Context) {
         )
 
         val bypassSilent = runBlocking(Dispatchers.IO) {
-            UserPrefs(context).criticalOfflineBypassSilent().first()
+            UserPrefs(context).preferences.first().criticalOfflineBypassSilent
         }
         val criticalAttrs = if (bypassSilent) alarmAttributes() else notificationAttributes()
         nm.createNotificationChannel(

@@ -16,7 +16,7 @@ class BootReceiver : BroadcastReceiver() {
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
                 AlertWatchdog.schedule(context.applicationContext)
                 val bootRestart = runBlocking {
-                    UserPrefs(context.applicationContext).bootRestartEnabled().first()
+                    UserPrefs(context.applicationContext).preferences.first().bootRestartEnabled
                 }
                 if (bootRestart) {
                     AlertService.start(context)

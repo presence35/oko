@@ -354,6 +354,7 @@ private fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    state: SettingsState,
     uiState: UiState,
     listState: LazyListState,
     collapse: SettingsCollapseState,
@@ -425,62 +426,62 @@ fun SettingsScreen(
     onRelaunchSetup: () -> Unit,
     onResetTips: () -> Unit = {}
 ) {
-    val lang = uiState.language
-    val hiddenTypes = uiState.hiddenTypes
-    val silencedTypes = uiState.silencedTypes
-    val officialAlertsEnabled = uiState.officialAlertsEnabled
-    val officialRedAlertsEnabled = uiState.officialRedAlertsEnabled
-    val officialYellowAlertsEnabled = uiState.officialYellowAlertsEnabled
-    val officialAlertCityScope = uiState.officialAlertCityScope
-    val sirenOverride = uiState.sirenOverride
-    val criticalOfflineOverride = uiState.criticalOfflineOverride
-    val criticalOfflineBypassSilent = uiState.criticalOfflineBypassSilent
-    val nightEnabled = uiState.nightEnabled
-    val nightStartMin = uiState.nightStartMin
-    val nightEndMin = uiState.nightEndMin
-    val nightUseCustomZones = uiState.nightUseCustomZones
-    val slowRedKm = uiState.slowRedKm
-    val slowYellowKm = uiState.slowYellowKm
-    val fastRedMin = uiState.fastRedMin
-    val fastYellowMin = uiState.fastYellowMin
-    val nightSlowRedKm = uiState.nightSlowRedKm
-    val nightSlowYellowKm = uiState.nightSlowYellowKm
-    val nightFastRedMin = uiState.nightFastRedMin
-    val nightFastYellowMin = uiState.nightFastYellowMin
-    val nightSlowRedArmed = uiState.nightSlowRedArmed
-    val nightSlowYellowArmed = uiState.nightSlowYellowArmed
-    val nightFastRedArmed = uiState.nightFastRedArmed
-    val nightFastYellowArmed = uiState.nightFastYellowArmed
-    val nightZoneSirenOverride = uiState.nightZoneSirenOverride
-    val nightOfficialSirenOverride = uiState.nightOfficialSirenOverride
-    val disclaimerCollapsed = uiState.disclaimerCollapsed
-    val disclaimerReadCount = uiState.disclaimerReadCount
-    val followMe = uiState.followMe
-    val pinnedCity = uiState.pinnedCity
-    val threatCardSize = uiState.threatCardSize
-    val iconSet = uiState.iconSet
-    val showMapScale = uiState.showMapScale
-    val showMediumCities = uiState.showMediumCities
-    val showSmallCities = uiState.showSmallCities
-    val showLargeCities = uiState.showLargeCities
-    val fillAlertRegions = uiState.fillAlertRegions
-    val showBorders = uiState.showBorders
-    val showRegionBorders = uiState.showRegionBorders
-    val sheltersEnabled = uiState.sheltersEnabled
-    val periodicGps = uiState.periodicGps
-    val calmMessagesEnabled = uiState.calmMessagesEnabled
-    val hapticsEnabled = uiState.hapticsEnabled
-    val deathAnimationEnabled = uiState.deathAnimationEnabled
-    val flybyAnimationEnabled = uiState.flybyAnimationEnabled
-    val followBullet = uiState.followBullet
-    val neutralizedTallyEnabled = uiState.neutralizedTallyEnabled
-    val neutralizedTallyAllUkraine = uiState.neutralizedTallyAllUkraine
-    val threatIconZoom = uiState.threatIconZoom
-    val fastGroupCollapsed = uiState.fastGroupCollapsed
-    val slowGroupCollapsed = uiState.slowGroupCollapsed
-    val overlapMode = uiState.overlapMode
-    val justFunMasterEnabled = uiState.justFunMasterEnabled
-    val bootRestartEnabled = uiState.bootRestartEnabled
+    val lang = state.language
+    val hiddenTypes = state.hiddenTypes
+    val silencedTypes = state.silencedTypes
+    val officialAlertsEnabled = state.officialAlertsEnabled
+    val officialRedAlertsEnabled = state.officialRedAlertsEnabled
+    val officialYellowAlertsEnabled = state.officialYellowAlertsEnabled
+    val officialAlertCityScope = state.officialAlertCityScope
+    val sirenOverride = state.sirenOverride
+    val criticalOfflineOverride = state.criticalOfflineOverride
+    val criticalOfflineBypassSilent = state.criticalOfflineBypassSilent
+    val nightEnabled = state.nightEnabled
+    val nightStartMin = state.nightStartMin
+    val nightEndMin = state.nightEndMin
+    val nightUseCustomZones = state.nightUseCustomZones
+    val slowRedKm = state.slowRedKm
+    val slowYellowKm = state.slowYellowKm
+    val fastRedMin = state.fastRedMin
+    val fastYellowMin = state.fastYellowMin
+    val nightSlowRedKm = state.nightSlowRedKm
+    val nightSlowYellowKm = state.nightSlowYellowKm
+    val nightFastRedMin = state.nightFastRedMin
+    val nightFastYellowMin = state.nightFastYellowMin
+    val nightSlowRedArmed = state.nightSlowRedArmed
+    val nightSlowYellowArmed = state.nightSlowYellowArmed
+    val nightFastRedArmed = state.nightFastRedArmed
+    val nightFastYellowArmed = state.nightFastYellowArmed
+    val nightZoneSirenOverride = state.nightZoneSirenOverride
+    val nightOfficialSirenOverride = state.nightOfficialSirenOverride
+    val disclaimerCollapsed = state.disclaimerCollapsed
+    val disclaimerReadCount = state.disclaimerReadCount
+    val followMe = state.followMe
+    val pinnedCity = state.pinnedCity
+    val threatCardSize = state.threatCardSize
+    val iconSet = state.iconSet
+    val showMapScale = state.showMapScale
+    val showMediumCities = state.showMediumCities
+    val showSmallCities = state.showSmallCities
+    val showLargeCities = state.showLargeCities
+    val fillAlertRegions = state.fillAlertRegions
+    val showBorders = state.showBorders
+    val showRegionBorders = state.showRegionBorders
+    val sheltersEnabled = state.sheltersEnabled
+    val periodicGps = state.periodicGps
+    val calmMessagesEnabled = state.calmMessagesEnabled
+    val hapticsEnabled = state.hapticsEnabled
+    val deathAnimationEnabled = state.deathAnimationEnabled
+    val flybyAnimationEnabled = state.flybyAnimationEnabled
+    val followBullet = state.followBullet
+    val neutralizedTallyEnabled = state.neutralizedTallyEnabled
+    val neutralizedTallyAllUkraine = state.neutralizedTallyAllUkraine
+    val threatIconZoom = state.threatIconZoom
+    val fastGroupCollapsed = state.fastGroupCollapsed
+    val slowGroupCollapsed = state.slowGroupCollapsed
+    val overlapMode = state.overlapMode
+    val justFunMasterEnabled = state.justFunMasterEnabled
+    val bootRestartEnabled = state.bootRestartEnabled
     val isChecking = uiState.update is UpdateState.Checking
     val latestVersion = uiState.latestVersion
     val scrollToNightMode = uiState.nightActive
@@ -869,12 +870,8 @@ fun SettingsScreen(
                         checked = officialAlertsEnabled,
                         onCheckedChange = { v -> showExplainer("officialAlerts"); onOfficialAlertsChange(v) },
                         icon = painterResource(R.drawable.ic_trident),
-                        iconTint = if (officialAlertsEnabled) Color(0xFFF9A825) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        iconTint = if (officialAlertsEnabled) UkraineBlue else MaterialTheme.colorScheme.onSurfaceVariant,
                         iconSize = 44.dp,
-                        note = s.officialAlertsRedTridentNote,
-                        noteIcon = painterResource(R.drawable.ic_trident),
-                        noteIconTint = Color(0xFFF9A825),
-                        noteIconSize = 20.sp,
                         flash = flashId == "officialAlerts"
                     )
                     AnimatedVisibility(visible = officialAlertsEnabled) {

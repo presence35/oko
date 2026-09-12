@@ -21,7 +21,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -117,7 +119,7 @@ object LocationTracker {
                     }
                 }
                 scope.launch {
-                    if (UserPrefs(app).followMe().first()) forceRefresh()
+                    if (UserPrefs(app).preferences.first().followMe) forceRefresh()
                 }
             }
 
@@ -132,7 +134,7 @@ object LocationTracker {
         periodicJob?.cancel()
         val prefs = UserPrefs(app)
         periodicJob = scope.launch {
-            prefs.periodicGps().collectLatest { enabled ->
+            prefs.preferences.map { it.periodicGps }.distinctUntilChanged().collectLatest { enabled ->
                 if (enabled) {
                     while (isActive) {
                         delay(PERIODIC_GPS_INTERVAL_MS)

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import ua.ukrainedrones.source.ThreatRemoved
 
@@ -43,7 +44,8 @@ class NeutralizedTally(
 
     init {
         scope.launch {
-            UserPrefs(context).justFunMasterEnabled()
+            UserPrefs(context).preferences
+                .map { it.justFunMasterEnabled }
                 .distinctUntilChanged()
                 .collect { enabled ->
                     justFunEnabled.value = enabled
@@ -98,7 +100,7 @@ class NeutralizedTally(
      *  count so it stays gone until the next resolution starts a fresh tally. */
     private fun postNeutralizedTally(lang: AppLanguage) {
         scope.launch {
-            val allUkraine = runCatching { UserPrefs(context).neutralizedTallyAllUkraine().first() }.getOrDefault(false)
+            val allUkraine = runCatching { UserPrefs(context).preferences.first().neutralizedTallyAllUkraine }.getOrDefault(false)
             val badge = if (allUkraine) "🇺🇦" else ""
             val breakdown = perTypeCounts.entries
                 .sortedWith(compareByDescending<Map.Entry<ThreatType, Int>> { it.value }.thenBy { it.key.ordinal })

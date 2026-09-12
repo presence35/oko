@@ -14,7 +14,7 @@ class AlertWatchdog(ctx: Context, params: androidx.work.WorkerParameters) : Coro
 
     override suspend fun doWork(): Result {
         if (MonitoringStatus.running.value) return Result.success()
-        val bootRestart = UserPrefs(applicationContext).bootRestartEnabled().first()
+        val bootRestart = UserPrefs(applicationContext).preferences.first().bootRestartEnabled
         if (!bootRestart) return Result.success()
         try {
             AlertService.start(applicationContext)

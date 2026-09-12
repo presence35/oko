@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.osmdroid.util.GeoPoint
@@ -61,7 +62,8 @@ class DeathFxController(
 
     init {
         scope.launch {
-            UserPrefs(context).justFunMasterEnabled()
+            UserPrefs(context).preferences
+                .map { it.justFunMasterEnabled }
                 .distinctUntilChanged()
                 .collect { enabled ->
                     justFunEnabled.value = enabled

@@ -29,8 +29,8 @@ import androidx.lifecycle.lifecycleScope
 import java.io.File
 import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import ua.ukrainedrones.theme.DarkThemePlugin
 
@@ -161,7 +161,7 @@ class MainActivity : ComponentActivity() {
     private fun cleanLegacyOsmdroidCache() {
         lifecycleScope.launch(Dispatchers.IO) {
             val prefs = UserPrefs(applicationContext)
-            if (prefs.legacyCacheCleaned().first()) return@launch
+            if (prefs.preferences.first().legacyCacheCleaned) return@launch
             File(filesDir, "osmdroid").takeIf { it.exists() }?.deleteRecursively()
             getExternalFilesDir(null)?.let { base ->
                 File(base, "osmdroid").takeIf { it.exists() }?.deleteRecursively()
@@ -211,15 +211,13 @@ class MainActivity : ComponentActivity() {
             val prefs = UserPrefs(applicationContext)
             // Re-arm for this session — a previous "Later" deferral only lasts one launch.
             prefs.setPermissionPromptDeferred(false)
-            val wizardDone = prefs.wizardCompleted().first()
-            val ready = if (wizardDone && prefs.batteryOnboardShown().first()) {
-                !prefs.permissionPromptDeferred().first()
+            val p = prefs.preferences.first()
+            val ready = if (p.wizardCompleted && p.batteryOnboardShown) {
+                !p.permissionPromptDeferred
             } else {
-                combine(
-                    prefs.wizardCompleted(),
-                    prefs.batteryOnboardShown(),
-                    prefs.permissionPromptDeferred()
-                ) { w, b, d -> w && b && !d }.first { it }
+                prefs.preferences
+                    .map { it.wizardCompleted && it.batteryOnboardShown && !it.permissionPromptDeferred }
+                    .first { it }
             }
             if (ready) requestLocationAndNotifications()
         }

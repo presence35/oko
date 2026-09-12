@@ -163,6 +163,76 @@ data class UiState(
     val protectionState: ProtectionState = ProtectionState.ACTIVE
 )
 
+@Immutable
+data class SettingsState(
+    val prefs: UserPreferences = UserPreferences()
+) {
+    val language: AppLanguage get() = prefs.language
+    val hiddenTypes: Set<ThreatType> get() = ThreatType.values().toSet() - prefs.mapVisibleTypes
+    val silencedTypes: Set<ThreatType> get() = ThreatType.values().toSet() - prefs.alertEnabledTypes
+    val mapVisibleTypes: Set<ThreatType> get() = prefs.mapVisibleTypes
+    val alertEnabledTypes: Set<ThreatType> get() = prefs.alertEnabledTypes
+    val slowRedKm: Int get() = prefs.slowRedKm
+    val slowYellowKm: Int get() = prefs.slowYellowKm
+    val fastRedMin: Int get() = prefs.fastRedMin
+    val fastYellowMin: Int get() = prefs.fastYellowMin
+    val slowRedArmed: Boolean get() = prefs.slowRedArmed
+    val slowYellowArmed: Boolean get() = prefs.slowYellowArmed
+    val fastRedArmed: Boolean get() = prefs.fastRedArmed
+    val fastYellowArmed: Boolean get() = prefs.fastYellowArmed
+    val officialAlertsEnabled: Boolean get() = prefs.officialAlertsEnabled
+    val officialRedAlertsEnabled: Boolean get() = prefs.officialRedAlertsEnabled
+    val officialYellowAlertsEnabled: Boolean get() = prefs.officialYellowAlertsEnabled
+    val officialAlertCityScope: Boolean get() = prefs.officialAlertCityScope
+    val sirenOverride: Boolean get() = prefs.sirenOverride
+    val criticalOfflineOverride: Boolean get() = prefs.criticalOfflineOverride
+    val criticalOfflineBypassSilent: Boolean get() = prefs.criticalOfflineBypassSilent
+    val bootRestartEnabled: Boolean get() = prefs.bootRestartEnabled
+    val nightEnabled: Boolean get() = prefs.nightEnabled
+    val nightStartMin: Int get() = prefs.nightStartMin
+    val nightEndMin: Int get() = prefs.nightEndMin
+    val nightUseCustomZones: Boolean get() = prefs.nightUseCustomZones
+    val nightSlowRedKm: Int get() = prefs.nightSlowRedKm
+    val nightSlowYellowKm: Int get() = prefs.nightSlowYellowKm
+    val nightFastRedMin: Int get() = prefs.nightFastRedMin
+    val nightFastYellowMin: Int get() = prefs.nightFastYellowMin
+    val nightSlowRedArmed: Boolean get() = prefs.nightSlowRedArmed
+    val nightSlowYellowArmed: Boolean get() = prefs.nightSlowYellowArmed
+    val nightFastRedArmed: Boolean get() = prefs.nightFastRedArmed
+    val nightFastYellowArmed: Boolean get() = prefs.nightFastYellowArmed
+    val nightZoneSirenOverride: Boolean get() = prefs.nightZoneSirenOverride
+    val nightOfficialSirenOverride: Boolean get() = prefs.nightOfficialSirenOverride
+    val followMe: Boolean get() = prefs.followMe
+    val pinnedCity: City? get() = prefs.pinnedCity?.let { Cities.byUa[it] }
+    val pinnedCityName: String? get() = prefs.pinnedCity
+    val periodicGps: Boolean get() = prefs.periodicGps
+    val calmMessagesEnabled: Boolean get() = prefs.justFunMasterEnabled && prefs.calmMessagesEnabled
+    val hapticsEnabled: Boolean get() = prefs.hapticsEnabled ?: true
+    val disclaimerCollapsed: Boolean get() = prefs.disclaimerCollapsed
+    val disclaimerReadCount: Int get() = prefs.disclaimerReadCount
+    val threatCardSize: ThreatCardSize get() = prefs.threatCardSize
+    val iconSet: ThreatIconSet get() = prefs.threatIconSet
+    val overlapMode: OverlapMode get() = prefs.overlapMode
+    val showMapScale: Boolean get() = prefs.showMapScale
+    val showMediumCities: Boolean get() = prefs.showMediumCities
+    val showSmallCities: Boolean get() = prefs.showSmallCities
+    val showLargeCities: Boolean get() = prefs.showLargeCities
+    val fillAlertRegions: Boolean get() = prefs.fillAlertRegions
+    val showBorders: Boolean get() = prefs.showBorders
+    val showRegionBorders: Boolean get() = prefs.showRegionBorders
+    val sheltersEnabled: Boolean get() = prefs.sheltersEnabled
+    val sheltersWithKids: Boolean get() = prefs.sheltersWithKidsEnabled
+    val justFunMasterEnabled: Boolean get() = prefs.justFunMasterEnabled
+    val deathAnimationEnabled: Boolean get() = prefs.deathAnimationEnabled
+    val flybyAnimationEnabled: Boolean get() = prefs.flybyAnimationEnabled
+    val followBullet: Boolean get() = prefs.followBullet
+    val neutralizedTallyEnabled: Boolean get() = prefs.neutralizedTallyEnabled
+    val neutralizedTallyAllUkraine: Boolean get() = prefs.neutralizedTallyAllUkraine
+    val threatIconZoom: Boolean get() = prefs.threatIconZoom
+    val fastGroupCollapsed: Boolean get() = prefs.fastGroupCollapsed
+    val slowGroupCollapsed: Boolean get() = prefs.slowGroupCollapsed
+}
+
 /**
  * Popup-only state, deliberately OUTSIDE [UiState]: tapping a threat updates only this flow,
  * so the header/map/footer scopes never recompose on selection. Derived from the selection
@@ -285,10 +355,8 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
      *  "fake" text instead of the real "neutralizing" copy. Cleared on selection change. */
     private val fakeNeutralizeFlow = MutableStateFlow(false)
     private var isChecking = false
-    private val zonesFlow = combine(
-        prefs.slowRedKm(), prefs.slowYellowKm(), prefs.fastRedMin(), prefs.fastYellowMin()
-    ) { slowRed, slowYellow, fastRed, fastYellow ->
-        ZoneParams(slowRed, slowYellow, fastRed, fastYellow)
+    private val zonesFlow = prefs.preferences.map {
+        ZoneParams(it.slowRedKm, it.slowYellowKm, it.fastRedMin, it.fastYellowMin)
     }
 
     init {
@@ -303,29 +371,6 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         super.onCleared()
     }
-
-    /** Everything read from prefs whenever any of them changes. */
-    private data class ThreatPrefs(
-        val map: Set<ThreatType>,
-        val alert: Set<ThreatType>,
-        val lang: AppLanguage,
-        val disclaimer: Boolean,
-        val disclaimerReadCount: Int
-    )
-
-    private data class PrefsQuad(
-        val pinnedCity: String?,
-        val wizardCompleted: Boolean?,
-        val batteryOnboardShown: Boolean,
-        val cardSize: ThreatCardSize,
-        val iconSet: ThreatIconSet,
-        val overlapMode: OverlapMode,
-        val sheltersEnabled: Boolean,
-        val sheltersWithKids: Boolean,
-        val periodicGps: Boolean,
-        val calmMessagesEnabled: Boolean,
-        val hapticsEnabled: Boolean?
-    )
 
     /** Night-mode window prefs (raw, day values untouched). */
     private data class NightWindowPrefs(
@@ -425,37 +470,6 @@ val fastGroupCollapsed: Boolean,
         val latestVersion: String?
     )
 
-    private data class AlertConfig(
-        val slowRedArmed: Boolean,
-        val slowYellowArmed: Boolean,
-        val fastRedArmed: Boolean,
-        val fastYellowArmed: Boolean,
-        val officialAlertsEnabled: Boolean,
-        val officialRedAlertsEnabled: Boolean,
-        val officialYellowAlertsEnabled: Boolean,
-        val officialAlertCityScope: Boolean,
-        val sirenOverride: Boolean,
-        val followMe: Boolean,
-        val showMapScale: Boolean,
-        val showMediumCities: Boolean,
-        val showSmallCities: Boolean,
-        val showLargeCities: Boolean,
-        val deathAnimationEnabled: Boolean,
-        val followBullet: Boolean,
-        val neutralizedTallyEnabled: Boolean,
-        val neutralizedTallyAllUkraine: Boolean,
-        val threatIconZoom: Boolean,
-        val fastGroupCollapsed: Boolean,
-        val slowGroupCollapsed: Boolean,
-        val criticalOfflineOverride: Boolean,
-        val criticalOfflineBypassSilent: Boolean,
-        val flybyAnimationEnabled: Boolean,
-        val justFunMasterEnabled: Boolean,
-        val fillAlertRegions: Boolean,
-        val showBorders: Boolean,
-        val showRegionBorders: Boolean
-    )
-
     private val liveSnapshot = combine(
         liveFeed,
         zonesFlow,
@@ -483,185 +497,72 @@ val fastGroupCollapsed: Boolean,
         ).copy(centerRequest = center)
     }
 
-    private val prefsSnapshot = combine(
-        combine(
-            threatMapFlow(prefs),
-            threatAlertFlow(prefs),
-            prefs.language(),
-            prefs.disclaimerCollapsed(),
-            prefs.disclaimerReadCount()
-        ) { map, alert, lang, disclaimer, readCount ->
-            ThreatPrefs(map, alert, lang, disclaimer, readCount)
-        },
-        combine(
-            prefs.slowRedZoneArmed(),
-            prefs.slowYellowZoneArmed(),
-            prefs.fastRedZoneArmed(),
-            prefs.fastYellowZoneArmed(),
-            prefs.officialAlertsEnabled(),
-            prefs.yellowAlertsEnabled(),
-            prefs.officialAlertCityScope(),
-            prefs.sirenOverride(),
-            prefs.followMe(),
-            prefs.showMapScale(),
-            prefs.showMediumCities(),
-            prefs.showSmallCities(),
-            prefs.showLargeCities(),
-            prefs.deathAnimationEnabled(),
-            prefs.followBullet(),
-            prefs.neutralizedTallyEnabled(),
-            prefs.neutralizedTallyAllUkraine(),
-            prefs.threatIconZoom(),
-            prefs.fastGroupCollapsed(),
-            prefs.slowGroupCollapsed(),
-            prefs.criticalOfflineOverride(),
-            prefs.criticalOfflineBypassSilent(),
-            prefs.flybyAnimationEnabled(),
-            prefs.justFunMasterEnabled(),
-            prefs.fillAlertRegions(),
-            prefs.showBorders(),
-            prefs.showRegionBorders(),
-            prefs.officialRedAlertsEnabled()
-        ) { flags: Array<Boolean> ->
-            AlertConfig(
-                slowRedArmed = flags[0],
-                slowYellowArmed = flags[1],
-                fastRedArmed = flags[2],
-                fastYellowArmed = flags[3],
-                officialAlertsEnabled = flags[4],
-                officialYellowAlertsEnabled = flags[5],
-                officialAlertCityScope = flags[6],
-                sirenOverride = flags[7],
-                followMe = flags[8],
-                showMapScale = flags[9],
-                showMediumCities = flags[10],
-                showSmallCities = flags[11],
-                showLargeCities = flags[12],
-                deathAnimationEnabled = flags[13],
-                followBullet = flags[14],
-                neutralizedTallyEnabled = flags[15],
-                neutralizedTallyAllUkraine = flags[16],
-                threatIconZoom = flags[17],
-                fastGroupCollapsed = flags[18],
-                slowGroupCollapsed = flags[19],
-                criticalOfflineOverride = flags[20],
-                criticalOfflineBypassSilent = flags[21],
-                flybyAnimationEnabled = flags[22],
-                justFunMasterEnabled = flags[23],
-                fillAlertRegions = flags[24],
-                showBorders = flags[25],
-                showRegionBorders = flags[26],
-                officialRedAlertsEnabled = flags[27]
+    private fun UserPreferences.toPrefsSnapshot(): PrefsSnapshot {
+        return PrefsSnapshot(
+            mapEnabled = mapVisibleTypes,
+            alertEnabled = alertEnabledTypes,
+            language = language,
+            disclaimerCollapsed = disclaimerCollapsed,
+            disclaimerReadCount = disclaimerReadCount,
+            slowRedArmed = slowRedArmed,
+            slowYellowArmed = slowYellowArmed,
+            fastRedArmed = fastRedArmed,
+            fastYellowArmed = fastYellowArmed,
+            officialAlertsEnabled = officialAlertsEnabled,
+            officialRedAlertsEnabled = officialRedAlertsEnabled,
+            officialYellowAlertsEnabled = officialYellowAlertsEnabled,
+            officialAlertCityScope = officialAlertCityScope,
+            sirenOverride = sirenOverride,
+            followMe = followMe,
+            criticalOfflineOverride = criticalOfflineOverride,
+            criticalOfflineBypassSilent = criticalOfflineBypassSilent,
+            pinnedCity = pinnedCity,
+            wizardCompleted = wizardCompleted,
+            batteryOnboardShown = batteryOnboardShown,
+            cardSize = threatCardSize,
+            iconSet = threatIconSet,
+            overlapMode = overlapMode,
+            showMapScale = showMapScale,
+            showMediumCities = showMediumCities,
+            showSmallCities = showSmallCities,
+            showLargeCities = showLargeCities,
+            fillAlertRegions = fillAlertRegions,
+            showBorders = showBorders,
+            showRegionBorders = showRegionBorders,
+            justFunMasterEnabled = justFunMasterEnabled,
+            deathAnimationEnabled = deathAnimationEnabled,
+            flybyAnimationEnabled = flybyAnimationEnabled,
+            followBullet = followBullet,
+            neutralizedTallyEnabled = neutralizedTallyEnabled,
+            neutralizedTallyAllUkraine = neutralizedTallyAllUkraine,
+            threatIconZoom = threatIconZoom,
+            fastGroupCollapsed = fastGroupCollapsed,
+            slowGroupCollapsed = slowGroupCollapsed,
+            sheltersEnabled = sheltersEnabled,
+            sheltersWithKids = sheltersWithKidsEnabled,
+            periodicGps = periodicGps,
+            calmMessagesEnabled = calmMessagesEnabled,
+            hapticsEnabled = hapticsEnabled,
+            night = NightPrefs(
+                window = NightWindowPrefs(
+                    enabled = nightEnabled,
+                    startMin = nightStartMin,
+                    endMin = nightEndMin,
+                    useCustomZones = nightUseCustomZones
+                ),
+                zones = NightZonesPrefs(
+                    slowRedKm = nightSlowRedKm,
+                    slowYellowKm = nightSlowYellowKm,
+                    fastRedMin = nightFastRedMin,
+                    fastYellowMin = nightFastYellowMin,
+                    slowRedArmed = nightSlowRedArmed,
+                    slowYellowArmed = nightSlowYellowArmed,
+                    fastRedArmed = nightFastRedArmed,
+                    fastYellowArmed = nightFastYellowArmed,
+                    zoneSirenOverride = nightZoneSirenOverride,
+                    officialSirenOverride = nightOfficialSirenOverride
+                )
             )
-        },
-        combine(
-            combine(
-                combine(
-                    combine(
-                        prefs.pinnedCity(),
-                        prefs.wizardCompleted(),
-                        prefs.batteryOnboardShown(),
-                        prefs.threatCardSize(),
-                        prefs.threatIconSet()
-                    ) { pinned, wizardDone, batteryShown, card, iconSet ->
-                        PrefsQuad(pinned, wizardDone, batteryShown, card, iconSet, OverlapMode.DEFAULT, false, true, false, true, true)
-                    },
-                    prefs.overlapMode()
-                ) { quad, overlap ->
-                    quad.copy(overlapMode = overlap)
-                },
-                prefs.sheltersEnabled()
-            ) { quad, shelters ->
-                quad.copy(sheltersEnabled = shelters)
-            },
-                prefs.sheltersWithKidsEnabled(),
-                prefs.periodicGps(),
-                prefs.calmMessagesEnabled(),
-                prefs.hapticsEnabled()
-        ) { quad, kids, periodic, calm, haptics ->
-            quad.copy(sheltersWithKids = kids, periodicGps = periodic, calmMessagesEnabled = calm, hapticsEnabled = haptics)
-        },
-        combine(
-            combine(
-                prefs.nightEnabled(), prefs.nightStartMin(), prefs.nightEndMin(),
-                prefs.nightUseCustomZones()
-            ) { enabled, start, end, use ->
-                NightWindowPrefs(enabled, start, end, use)
-            },
-combine(
-                    combine(
-                        prefs.nightSlowRedKm(), prefs.nightSlowYellowKm(), prefs.nightFastRedMin(),
-                        prefs.nightFastYellowMin()
-                    ) { sr, sy, fr, fy ->
-                        NightZonesPrefs(sr, sy, fr, fy, true, true, true, true, false, false)
-                    },
-                    combine(
-                        prefs.nightSlowRedZoneArmed(), prefs.nightSlowYellowZoneArmed(),
-                        prefs.nightFastRedZoneArmed(), prefs.nightFastYellowZoneArmed(),
-                        prefs.nightZoneSirenOverride(), prefs.nightOfficialSirenOverride()
-                    ) { flags: Array<Boolean> ->
-                        flags
-                    }
-                ) { zones, flags ->
-                    zones.copy(
-                        slowRedArmed = flags[0],
-                        slowYellowArmed = flags[1],
-                        fastRedArmed = flags[2],
-                        fastYellowArmed = flags[3],
-                        zoneSirenOverride = flags[4],
-                        officialSirenOverride = flags[5]
-                    )
-                }
-    ) { window, zones ->
-        NightPrefs(window, zones)
-    }
-    ) { a, b, c, night ->
-        PrefsSnapshot(
-            mapEnabled = a.map,
-            alertEnabled = a.alert,
-            language = a.lang,
-            disclaimerCollapsed = a.disclaimer,
-            disclaimerReadCount = a.disclaimerReadCount,
-            slowRedArmed = b.slowRedArmed,
-            slowYellowArmed = b.slowYellowArmed,
-            fastRedArmed = b.fastRedArmed,
-            fastYellowArmed = b.fastYellowArmed,
-            officialAlertsEnabled = b.officialAlertsEnabled,
-            officialRedAlertsEnabled = b.officialRedAlertsEnabled,
-            officialYellowAlertsEnabled = b.officialYellowAlertsEnabled,
-            officialAlertCityScope = b.officialAlertCityScope,
-            sirenOverride = b.sirenOverride,
-            followMe = b.followMe,
-            criticalOfflineOverride = b.criticalOfflineOverride,
-            criticalOfflineBypassSilent = b.criticalOfflineBypassSilent,
-            pinnedCity = c.pinnedCity,
-            wizardCompleted = c.wizardCompleted,
-            batteryOnboardShown = c.batteryOnboardShown,
-            cardSize = c.cardSize,
-            iconSet = c.iconSet,
-            overlapMode = c.overlapMode,
-            showMapScale = b.showMapScale,
-            showMediumCities = b.showMediumCities,
-            showSmallCities = b.showSmallCities,
-            showLargeCities = b.showLargeCities,
-            fillAlertRegions = b.fillAlertRegions,
-            showBorders = b.showBorders,
-            showRegionBorders = b.showRegionBorders,
-            justFunMasterEnabled = b.justFunMasterEnabled,
-            deathAnimationEnabled = b.deathAnimationEnabled,
-            flybyAnimationEnabled = b.flybyAnimationEnabled,
-            followBullet = b.followBullet,
-            neutralizedTallyEnabled = b.neutralizedTallyEnabled,
-            neutralizedTallyAllUkraine = b.neutralizedTallyAllUkraine,
-            threatIconZoom = b.threatIconZoom,
-            fastGroupCollapsed = b.fastGroupCollapsed,
-            slowGroupCollapsed = b.slowGroupCollapsed,
-            sheltersEnabled = c.sheltersEnabled,
-            sheltersWithKids = c.sheltersWithKids,
-            periodicGps = c.periodicGps,
-            calmMessagesEnabled = c.calmMessagesEnabled,
-            hapticsEnabled = c.hapticsEnabled,
-            night = night
         )
     }
 
@@ -679,60 +580,29 @@ combine(
      * the main thread and no first-frame flash.
      */
     private val seedFlow: Flow<Unit> = flow {
-        prefs.language().first()
-        prefs.slowRedKm().first()
-        prefs.slowYellowKm().first()
-        prefs.fastRedMin().first()
-        prefs.fastYellowMin().first()
-        prefs.slowRedZoneArmed().first()
-        prefs.slowYellowZoneArmed().first()
-        prefs.fastRedZoneArmed().first()
-        prefs.fastYellowZoneArmed().first()
-        prefs.followMe().first()
-        prefs.pinnedCity().first()
-        prefs.wizardCompleted().first()
-        prefs.batteryOnboardShown().first()
-        prefs.nightEnabled().first()
-        prefs.nightStartMin().first()
-        prefs.nightEndMin().first()
-        prefs.nightUseCustomZones().first()
-        prefs.nightSlowRedKm().first()
-        prefs.nightSlowYellowKm().first()
-        prefs.nightFastRedMin().first()
-        prefs.nightFastYellowMin().first()
-        prefs.nightSlowRedZoneArmed().first()
-        prefs.nightSlowYellowZoneArmed().first()
-        prefs.nightFastRedZoneArmed().first()
-        prefs.nightFastYellowZoneArmed().first()
-        prefs.nightZoneSirenOverride().first()
-        prefs.nightOfficialSirenOverride().first()
-        prefs.deathAnimationEnabled().first()
-        prefs.followBullet().first()
-        prefs.showBorders().first()
-        prefs.showRegionBorders().first()
-        prefs.bootRestartEnabled().first()
+        prefs.preferences.first()
         emit(Unit)
     }.flowOn(Dispatchers.IO)
 
 val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         seedFlow,
         liveSnapshot,
-        prefsSnapshot,
+        prefs.preferences,
         updateUiFlow,
         shelterIndexFlow,
         flybyFlow,
         MonitoringStatus.running,
-        prefs.bootRestartEnabled(),
         registry.degraded,
         registry.coveredByFallback
     ) { values ->
         val live = values[1] as LiveSnapshot
-        val prefs = values[2] as PrefsSnapshot
+        val rawPrefs = values[2] as UserPreferences
+        val prefs = rawPrefs.toPrefsSnapshot()
         val updateUi = values[3] as UpdateUi
         val shelterIndex = values[4] as ShelterIndex?
         val flyby = values[5] as AviationFlybyShow?
         val monitoringRunning = values[6] as Boolean
-        val bootRestartEnabled = values[7] as Boolean
+        val bootRestartEnabled = rawPrefs.bootRestartEnabled
         // No 1s wall-clock flow: the model rebuild is event-driven, so stamp the build time
         // here. Per-second visuals (staleness dimming, marker motion) live in MapView's own
         // 1s loop; ghost/night freshness re-arms on the next frame or pref change.
@@ -896,6 +766,16 @@ showBorders = prefs.showBorders,
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
             UiState()
+        )
+
+    val settingsState: StateFlow<SettingsState> = prefs.preferences
+        .map { SettingsState(it) }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            SettingsState()
         )
 
     private data class SelectionInput(
@@ -1228,28 +1108,28 @@ fun setAlertsArmed(armed: Boolean) {
     fun setNightSlowRedArmed(armed: Boolean) {
         viewModelScope.launch {
             if (armed) { AlertService.start(app) }
-            prefs.setNightSlowRedZoneArmed(armed)
+            prefs.setNightSlowRedArmed(armed)
         }
     }
 
     fun setNightSlowYellowArmed(armed: Boolean) {
         viewModelScope.launch {
             if (armed) { AlertService.start(app) }
-            prefs.setNightSlowYellowZoneArmed(armed)
+            prefs.setNightSlowYellowArmed(armed)
         }
     }
 
     fun setNightFastRedArmed(armed: Boolean) {
         viewModelScope.launch {
             if (armed) { AlertService.start(app) }
-            prefs.setNightFastRedZoneArmed(armed)
+            prefs.setNightFastRedArmed(armed)
         }
     }
 
     fun setNightFastYellowArmed(armed: Boolean) {
         viewModelScope.launch {
             if (armed) { AlertService.start(app) }
-            prefs.setNightFastYellowZoneArmed(armed)
+            prefs.setNightFastYellowArmed(armed)
         }
     }
 
@@ -1375,10 +1255,11 @@ fun setAlertsArmed(armed: Boolean) {
 
     /** One-time hint (first 3 Map/Alerts toggles ever): a brief toast explaining how they work. */
     private suspend fun maybeShowToggleHint(mapToast: Boolean) {
-        val remaining = prefs.threatToggleHintRemaining().first()
+        val p = prefs.preferences.first()
+        val remaining = p.threatToggleHintRemaining
         if (remaining <= 0) return
         prefs.setThreatToggleHintRemaining(remaining - 1)
-        val s = Strings.get(prefs.language().first())
+        val s = Strings.get(p.language)
         val prefix = if (mapToast) s.mapToggleHintPrefix else s.alertToggleHintPrefix
         val rest = if (mapToast) s.mapToggleHintRest else s.alertToggleHintRest
         val message = SpannableString(prefix + rest)
@@ -1393,10 +1274,11 @@ fun setAlertsArmed(armed: Boolean) {
      *  shoot-down show — tell the user it will wait until they're back on the map. */
     fun notifyFlourishEjected() {
         viewModelScope.launch {
-            val remaining = prefs.flourishEjectHintRemaining().first()
+            val p = prefs.preferences.first()
+            val remaining = p.flourishEjectHintRemaining
             if (remaining <= 0) return@launch
             prefs.setFlourishEjectHintRemaining(remaining - 1)
-            val s = Strings.get(prefs.language().first())
+            val s = Strings.get(p.language)
             showToast(s.flourishEjectToast, cardVisible = false)
         }
     }
@@ -1407,9 +1289,8 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun onDisclaimerShown() {
         viewModelScope.launch {
-            prefs.disclaimerReadCount().first().let { count ->
-                if (count < 3) prefs.setDisclaimerReadCount(count + 1)
-            }
+            val count = prefs.preferences.first().disclaimerReadCount
+            if (count < 3) prefs.setDisclaimerReadCount(count + 1)
         }
     }
 
@@ -1695,7 +1576,7 @@ fun setAlertsArmed(armed: Boolean) {
             val result = updateManager.check()
             isChecking = false
             svcState.setLastUpdateCheck(System.currentTimeMillis())
-            val s = Strings.get(prefs.language().first())
+            val s = Strings.get(prefs.preferences.first().language)
             when (result) {
                 is UpdateState.Available -> {
                     lastAvailableUpdate = result.info

@@ -118,6 +118,7 @@ private val AlertRed = Color(0xFFD32F2F)
 @Composable
 fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsState()
+    val settingsState by viewModel.settingsState.collectAsState()
     val context = LocalContext.current
 
     var screen by remember { mutableStateOf(Screen.MAP) }
@@ -217,8 +218,9 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         action(armed)
     }
     LaunchedEffect(Unit) {
-        settingsHintRemaining = prefs.settingsHintRemaining().first()
-        shelterTipStage = prefs.shelterTipStage().first()
+        val p = prefs.preferences.first()
+        settingsHintRemaining = p.settingsHintRemaining
+        shelterTipStage = p.shelterTipStage
     }
 
     val onExit: () -> Unit = {
@@ -329,6 +331,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             // Composed after MapScreen, so its handler is checked first on Back.
             BackHandler { screen = Screen.MAP }
             SettingsScreen(
+                state = settingsState,
                 uiState = uiState,
                 listState = settingsListState,
                 collapse = settingsCollapse,
@@ -843,20 +846,6 @@ private fun MapScreen(
                     ) {
                         Text(
                             text = s.protectionReduced,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFE65100)
-                        )
-                    }
-                }
-                if (activeZone == ThreatZone.INNER && !uiState.sirenOverride) {
-                    Surface(
-                        color = Color(0xFFFFF3E0),
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = Modifier.padding(end = 4.dp)
-                    ) {
-                        Text(
-                            text = s.sirenOverrideWarning,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFFE65100)

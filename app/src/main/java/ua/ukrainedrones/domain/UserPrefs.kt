@@ -1,6 +1,7 @@
 package ua.ukrainedrones
 
 import android.content.Context
+import androidx.compose.runtime.Immutable
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -8,7 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "user_prefs")
@@ -21,6 +22,85 @@ enum class ThreatIconSet { PHOTO, ARMY, COMIC, RUSSIAN }
 
 /** How same-coordinate threats render on the map. */
 enum class OverlapMode { DEFAULT, GRID, SPREAD, COUNT }
+
+@Immutable
+data class UserPreferences(
+    val language: AppLanguage = AppLanguage.UA,
+    val languageChosen: Boolean = false,
+    val wizardCompleted: Boolean = false,
+    val slowRedKm: Int = 20,
+    val slowYellowKm: Int = 50,
+    val fastRedMin: Int = 5,
+    val fastYellowMin: Int = 20,
+    val slowRedArmed: Boolean = true,
+    val slowYellowArmed: Boolean = true,
+    val fastRedArmed: Boolean = true,
+    val fastYellowArmed: Boolean = true,
+    val officialAlertsEnabled: Boolean = true,
+    val officialRedAlertsEnabled: Boolean = true,
+    val yellowAlertsEnabled: Boolean = true,
+    val sirenOverride: Boolean = false,
+    val disclaimerCollapsed: Boolean = false,
+    val disclaimerReadCount: Int = 0,
+    val followMe: Boolean = true,
+    val pinnedCity: String? = null,
+    val criticalOfflineOverride: Boolean = true,
+    val criticalOfflineBypassSilent: Boolean = false,
+    val threatCardSize: ThreatCardSize = ThreatCardSize.LARGE,
+    val threatIconSet: ThreatIconSet = ThreatIconSet.PHOTO,
+    val overlapMode: OverlapMode = OverlapMode.DEFAULT,
+    val showMapScale: Boolean = true,
+    val showMediumCities: Boolean = true,
+    val showSmallCities: Boolean = true,
+    val showLargeCities: Boolean = true,
+    val deathAnimationEnabled: Boolean = true,
+    val followBullet: Boolean = true,
+    val neutralizedTallyEnabled: Boolean = true,
+    val neutralizedTallyAllUkraine: Boolean = false,
+    val legacyCacheCleaned: Boolean = false,
+    val fastGroupCollapsed: Boolean = false,
+    val slowGroupCollapsed: Boolean = false,
+    val batteryOnboardShown: Boolean = false,
+    val permissionPromptDeferred: Boolean = false,
+    val nightEnabled: Boolean = true,
+    val nightStartMin: Int = 22 * 60,
+    val nightEndMin: Int = 7 * 60,
+    val nightUseCustomZones: Boolean = false,
+    val nightSlowRedKm: Int = 20,
+    val nightSlowYellowKm: Int = 50,
+    val nightFastRedMin: Int = 5,
+    val nightFastYellowMin: Int = 20,
+    val nightSlowRedArmed: Boolean = true,
+    val nightSlowYellowArmed: Boolean = true,
+    val nightFastRedArmed: Boolean = true,
+    val nightFastYellowArmed: Boolean = true,
+    val nightZoneSirenOverride: Boolean = false,
+    val nightOfficialSirenOverride: Boolean = false,
+    val flybyAnimationEnabled: Boolean = true,
+    val threatIconZoom: Boolean = true,
+    val sheltersEnabled: Boolean = true,
+    val sheltersWithKidsEnabled: Boolean = true,
+    val periodicGps: Boolean = false,
+    val calmMessagesEnabled: Boolean = true,
+    val hapticsEnabled: Boolean? = null,
+    val officialAlertCityScope: Boolean = false,
+    val justFunMasterEnabled: Boolean = false,
+    val bootRestartEnabled: Boolean = true,
+    val fillAlertRegions: Boolean = false,
+    val showBorders: Boolean = true,
+    val showRegionBorders: Boolean = false,
+    val settingsHintRemaining: Int = 3,
+    val threatToggleHintRemaining: Int = 3,
+    val flourishEjectHintRemaining: Int = 3,
+    val shelterTipStage: Int = 0,
+    val mapVisibleTypes: Set<ThreatType> = ThreatType.values().toSet(),
+    val alertEnabledTypes: Set<ThreatType> = ThreatType.values().toSet()
+) {
+    val officialYellowAlertsEnabled: Boolean get() = yellowAlertsEnabled
+    val iconSet: ThreatIconSet get() = threatIconSet
+    val sheltersWithKids: Boolean get() = sheltersWithKidsEnabled
+    val cardSize: ThreatCardSize get() = threatCardSize
+}
 
 class UserPrefs(private val context: Context) {
 
@@ -97,8 +177,103 @@ class UserPrefs(private val context: Context) {
     private val showRegionBordersKey = booleanPreferencesKey("show_region_borders")
     private val showLargeCitiesKey = booleanPreferencesKey("show_large_cities")
 
-    fun slowRedKm(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[slowRedKmKey] ?: 20 }
+    val preferences: Flow<UserPreferences> = context.dataStore.data.map { it.toUserPreferences() }.distinctUntilChanged()
+
+    private fun Preferences.toUserPreferences(): UserPreferences {
+        val lang = when (this[languageKey]) {
+            "EN" -> AppLanguage.EN
+            "UA" -> AppLanguage.UA
+            else -> if (java.util.Locale.getDefault().language == "uk") AppLanguage.UA else AppLanguage.EN
+        }
+        val cardSize = this[threatCardSizeKey]?.let { stored ->
+            ThreatCardSize.values().firstOrNull { it.name == stored }
+        } ?: ThreatCardSize.LARGE
+        val iconSet = this[threatIconSetKey]?.let { stored ->
+            ThreatIconSet.values().firstOrNull { it.name == stored }
+        } ?: ThreatIconSet.PHOTO
+        val overlap = this[overlapModeKey]?.let { stored ->
+            OverlapMode.values().firstOrNull { it.name == stored }
+        } ?: OverlapMode.DEFAULT
+        val mapVisible = ThreatType.values().filter { type ->
+            this[cachedBooleanKey("threat_map_${type.name}")] ?: true
+        }.toSet()
+        val alertEnabled = ThreatType.values().filter { type ->
+            this[cachedBooleanKey("threat_alert_${type.name}")] ?: true
+        }.toSet()
+
+        return UserPreferences(
+            language = lang,
+            languageChosen = this[languageChosenKey] ?: false,
+            wizardCompleted = this[wizardCompletedKey] ?: (this[languageChosenKey] ?: false),
+            slowRedKm = this[slowRedKmKey] ?: 20,
+            slowYellowKm = this[slowYellowKmKey] ?: 50,
+            fastRedMin = this[fastRedMinKey] ?: 5,
+            fastYellowMin = this[fastYellowMinKey] ?: 20,
+            slowRedArmed = this[slowRedArmedKey] ?: true,
+            slowYellowArmed = this[slowYellowArmedKey] ?: true,
+            fastRedArmed = this[fastRedArmedKey] ?: true,
+            fastYellowArmed = this[fastYellowArmedKey] ?: true,
+            officialAlertsEnabled = this[officialAlertsKey] ?: true,
+            officialRedAlertsEnabled = this[officialRedAlertsKey] ?: true,
+            yellowAlertsEnabled = this[yellowAlertsKey] ?: true,
+            sirenOverride = this[sirenOverrideKey] ?: false,
+            disclaimerCollapsed = this[disclaimerCollapsedKey] ?: false,
+            disclaimerReadCount = this[disclaimerReadCountKey] ?: 0,
+            followMe = this[followMeKey] ?: true,
+            pinnedCity = this[pinnedCityKey],
+            criticalOfflineOverride = this[criticalOfflineOverrideKey] ?: true,
+            criticalOfflineBypassSilent = this[criticalOfflineBypassSilentKey] ?: false,
+            threatCardSize = cardSize,
+            threatIconSet = iconSet,
+            overlapMode = overlap,
+            showMapScale = this[showMapScaleKey] ?: true,
+            showMediumCities = this[showMediumCitiesKey] ?: true,
+            showSmallCities = this[showSmallCitiesKey] ?: true,
+            showLargeCities = this[showLargeCitiesKey] ?: true,
+            deathAnimationEnabled = this[deathAnimationEnabledKey] ?: true,
+            followBullet = this[followBulletKey] ?: true,
+            neutralizedTallyEnabled = this[neutralizedTallyEnabledKey] ?: true,
+            neutralizedTallyAllUkraine = this[neutralizedTallyAllUkraineKey] ?: false,
+            legacyCacheCleaned = this[legacyCacheCleanedKey] ?: false,
+            fastGroupCollapsed = this[fastGroupCollapsedKey] ?: false,
+            slowGroupCollapsed = this[slowGroupCollapsedKey] ?: false,
+            batteryOnboardShown = this[batteryOnboardShownKey] ?: false,
+            permissionPromptDeferred = this[permissionPromptDeferredKey] ?: false,
+            nightEnabled = this[nightEnabledKey] ?: true,
+            nightStartMin = this[nightStartMinKey] ?: (22 * 60),
+            nightEndMin = this[nightEndMinKey] ?: (7 * 60),
+            nightUseCustomZones = this[nightUseCustomZonesKey] ?: false,
+            nightSlowRedKm = this[nightSlowRedKmKey] ?: 20,
+            nightSlowYellowKm = this[nightSlowYellowKmKey] ?: 50,
+            nightFastRedMin = this[nightFastRedMinKey] ?: 5,
+            nightFastYellowMin = this[nightFastYellowMinKey] ?: 20,
+            nightSlowRedArmed = this[nightSlowRedArmedKey] ?: true,
+            nightSlowYellowArmed = this[nightSlowYellowArmedKey] ?: true,
+            nightFastRedArmed = this[nightFastRedArmedKey] ?: true,
+            nightFastYellowArmed = this[nightFastYellowArmedKey] ?: true,
+            nightZoneSirenOverride = this[nightZoneSirenOverrideKey] ?: false,
+            nightOfficialSirenOverride = this[nightOfficialSirenOverrideKey] ?: false,
+            flybyAnimationEnabled = this[flybyAnimationEnabledKey] ?: true,
+            threatIconZoom = this[threatIconZoomKey] ?: true,
+            sheltersEnabled = this[sheltersEnabledKey] ?: true,
+            sheltersWithKidsEnabled = this[sheltersWithKidsEnabledKey] ?: true,
+            periodicGps = this[periodicGpsKey] ?: false,
+            calmMessagesEnabled = this[calmMessagesEnabledKey] ?: true,
+            hapticsEnabled = this[hapticsEnabledKey],
+            officialAlertCityScope = this[officialAlertCityScopeKey] ?: false,
+            justFunMasterEnabled = this[justFunMasterEnabledKey] ?: false,
+            bootRestartEnabled = this[bootRestartEnabledKey] ?: true,
+            fillAlertRegions = this[fillAlertRegionsKey] ?: false,
+            showBorders = this[showBordersKey] ?: true,
+            showRegionBorders = this[showRegionBordersKey] ?: false,
+            settingsHintRemaining = this[settingsHintRemainingKey] ?: 3,
+            threatToggleHintRemaining = this[threatToggleHintRemainingKey] ?: 3,
+            flourishEjectHintRemaining = this[flourishEjectHintRemainingKey] ?: 3,
+            shelterTipStage = (this[shelterTipRemainingKey] ?: 0).coerceIn(0, 6),
+            mapVisibleTypes = mapVisible,
+            alertEnabledTypes = alertEnabled
+        )
+    }
 
     suspend fun setSlowRedKm(km: Int) {
         context.dataStore.edit { prefs ->
@@ -109,18 +284,12 @@ class UserPrefs(private val context: Context) {
         }
     }
 
-    fun slowYellowKm(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[slowYellowKmKey] ?: 50 }
-
     suspend fun setSlowYellowKm(km: Int) {
         context.dataStore.edit { prefs ->
             val red = prefs[slowRedKmKey] ?: 20
             prefs[slowYellowKmKey] = km.coerceIn(red + 2, 50)
         }
     }
-
-    fun fastRedMin(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[fastRedMinKey] ?: 5 }
 
     suspend fun setFastRedMin(min: Int) {
         context.dataStore.edit { prefs ->
@@ -131,9 +300,6 @@ class UserPrefs(private val context: Context) {
         }
     }
 
-    fun fastYellowMin(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[fastYellowMinKey] ?: 20 }
-
     suspend fun setFastYellowMin(min: Int) {
         context.dataStore.edit { prefs ->
             val red = prefs[fastRedMinKey] ?: 5
@@ -141,74 +307,40 @@ class UserPrefs(private val context: Context) {
         }
     }
 
-    fun slowRedZoneArmed(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[slowRedArmedKey] ?: true }
-
     suspend fun setSlowRedZoneArmed(armed: Boolean) {
         context.dataStore.edit { it[slowRedArmedKey] = armed }
     }
-
-    fun slowYellowZoneArmed(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[slowYellowArmedKey] ?: true }
 
     suspend fun setSlowYellowZoneArmed(armed: Boolean) {
         context.dataStore.edit { it[slowYellowArmedKey] = armed }
     }
 
-    fun fastRedZoneArmed(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[fastRedArmedKey] ?: true }
-
     suspend fun setFastRedZoneArmed(armed: Boolean) {
         context.dataStore.edit { it[fastRedArmedKey] = armed }
     }
-
-    fun fastYellowZoneArmed(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[fastYellowArmedKey] ?: true }
 
     suspend fun setFastYellowZoneArmed(armed: Boolean) {
         context.dataStore.edit { it[fastYellowArmedKey] = armed }
     }
 
-    fun officialAlertsEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[officialAlertsKey] ?: true }
-
     suspend fun setOfficialAlertsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[officialAlertsKey] = enabled }
     }
-
-    fun officialRedAlertsEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[officialRedAlertsKey] ?: true }
 
     suspend fun setOfficialRedAlertsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[officialRedAlertsKey] = enabled }
     }
 
-    fun yellowAlertsEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[yellowAlertsKey] ?: true }
-
     suspend fun setYellowAlertsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[yellowAlertsKey] = enabled }
     }
-
-    fun sirenOverride(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[sirenOverrideKey] ?: false }
 
     suspend fun setSirenOverride(override: Boolean) {
         context.dataStore.edit { it[sirenOverrideKey] = override }
     }
 
-    fun threatMapVisible(type: ThreatType): Flow<Boolean> {
-        val key = cachedBooleanKey("threat_map_${type.name}")
-        return context.dataStore.data.map { prefs -> prefs[key] ?: true }
-    }
-
     suspend fun setThreatMapVisible(type: ThreatType, visible: Boolean) {
         context.dataStore.edit { it[cachedBooleanKey("threat_map_${type.name}")] = visible }
-    }
-
-    fun threatAlertsEnabled(type: ThreatType): Flow<Boolean> {
-        val key = cachedBooleanKey("threat_alert_${type.name}")
-        return context.dataStore.data.map { prefs -> prefs[key] ?: true }
     }
 
     suspend fun setThreatAlertsEnabled(type: ThreatType, enabled: Boolean) {
@@ -250,29 +382,17 @@ class UserPrefs(private val context: Context) {
         }
     }
 
-    fun disclaimerCollapsed(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[disclaimerCollapsedKey] ?: false }
-
     suspend fun setDisclaimerCollapsed(collapsed: Boolean) {
         context.dataStore.edit { it[disclaimerCollapsedKey] = collapsed }
     }
-
-    fun disclaimerReadCount(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[disclaimerReadCountKey] ?: 0 }
 
     suspend fun setDisclaimerReadCount(count: Int) {
         context.dataStore.edit { it[disclaimerReadCountKey] = count }
     }
 
-    fun followMe(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[followMeKey] ?: true }
-
     suspend fun setFollowMe(follow: Boolean) {
         context.dataStore.edit { it[followMeKey] = follow }
     }
-
-    fun pinnedCity(): Flow<String?> =
-        context.dataStore.data.map { prefs -> prefs[pinnedCityKey] }
 
     suspend fun setPinnedCity(nameUa: String?) {
         context.dataStore.edit {
@@ -280,28 +400,13 @@ class UserPrefs(private val context: Context) {
         }
     }
 
-    fun criticalOfflineOverride(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[criticalOfflineOverrideKey] ?: true }
-
     suspend fun setCriticalOfflineOverride(enabled: Boolean) {
         context.dataStore.edit { it[criticalOfflineOverrideKey] = enabled }
     }
 
-    fun criticalOfflineBypassSilent(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[criticalOfflineBypassSilentKey] ?: false }
-
     suspend fun setCriticalOfflineBypassSilent(enabled: Boolean) {
         context.dataStore.edit { it[criticalOfflineBypassSilentKey] = enabled }
     }
-
-    fun language(): Flow<AppLanguage> =
-        context.dataStore.data.map { prefs ->
-            when (prefs[languageKey]) {
-                "EN" -> AppLanguage.EN
-                "UA" -> AppLanguage.UA
-                else -> if (java.util.Locale.getDefault().language == "uk") AppLanguage.UA else AppLanguage.EN
-            }
-        }
 
     suspend fun setLanguage(lang: AppLanguage) {
         context.dataStore.edit {
@@ -309,300 +414,161 @@ class UserPrefs(private val context: Context) {
         }
     }
 
-    fun languageChosen(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[languageChosenKey] ?: false }
-
     suspend fun setLanguageChosen(chosen: Boolean) {
         context.dataStore.edit { it[languageChosenKey] = chosen }
     }
-
-    fun wizardCompleted(): Flow<Boolean> =
-        context.dataStore.data.map { prefs ->
-            prefs[wizardCompletedKey] ?: (prefs[languageChosenKey] ?: false)
-        }
 
     suspend fun setWizardCompleted(done: Boolean) {
         context.dataStore.edit { it[wizardCompletedKey] = done }
     }
 
-    fun settingsHintRemaining(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[settingsHintRemainingKey] ?: 3 }
-
     suspend fun setSettingsHintRemaining(remaining: Int) {
         context.dataStore.edit { it[settingsHintRemainingKey] = remaining.coerceAtLeast(0) }
     }
-
-    fun threatToggleHintRemaining(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[threatToggleHintRemainingKey] ?: 3 }
 
     suspend fun setThreatToggleHintRemaining(remaining: Int) {
         context.dataStore.edit { it[threatToggleHintRemainingKey] = remaining.coerceAtLeast(0) }
     }
 
-    fun flourishEjectHintRemaining(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[flourishEjectHintRemainingKey] ?: 3 }
-
     suspend fun setFlourishEjectHintRemaining(remaining: Int) {
         context.dataStore.edit { it[flourishEjectHintRemainingKey] = remaining.coerceAtLeast(0) }
     }
-
-    fun shelterTipStage(): Flow<Int> =
-        context.dataStore.data.map { prefs -> (prefs[shelterTipRemainingKey] ?: 0).coerceIn(0, 6) }
 
     suspend fun setShelterTipStage(stage: Int) {
         context.dataStore.edit { it[shelterTipRemainingKey] = stage.coerceIn(0, 6) }
     }
 
-    fun threatCardSize(): Flow<ThreatCardSize> =
-        context.dataStore.data.map { prefs ->
-            prefs[threatCardSizeKey]?.let { stored ->
-                ThreatCardSize.values().firstOrNull { it.name == stored }
-            } ?: ThreatCardSize.LARGE
-        }
-
     suspend fun setThreatCardSize(size: ThreatCardSize) {
         context.dataStore.edit { it[threatCardSizeKey] = size.name }
     }
-
-    fun threatIconSet(): Flow<ThreatIconSet> =
-        context.dataStore.data.map { prefs ->
-            prefs[threatIconSetKey]?.let { stored ->
-                ThreatIconSet.values().firstOrNull { it.name == stored }
-            } ?: ThreatIconSet.PHOTO
-        }
 
     suspend fun setThreatIconSet(set: ThreatIconSet) {
         context.dataStore.edit { it[threatIconSetKey] = set.name }
     }
 
-    fun overlapMode(): Flow<OverlapMode> =
-        context.dataStore.data.map { prefs ->
-            prefs[overlapModeKey]?.let { stored ->
-                OverlapMode.values().firstOrNull { it.name == stored }
-            } ?: OverlapMode.DEFAULT
-        }
-
     suspend fun setOverlapMode(mode: OverlapMode) {
         context.dataStore.edit { it[overlapModeKey] = mode.name }
     }
-
-    fun showMapScale(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[showMapScaleKey] ?: true }
 
     suspend fun setShowMapScale(show: Boolean) {
         context.dataStore.edit { it[showMapScaleKey] = show }
     }
 
-    fun showMediumCities(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[showMediumCitiesKey] ?: true }
-
     suspend fun setShowMediumCities(show: Boolean) {
         context.dataStore.edit { it[showMediumCitiesKey] = show }
     }
-
-    fun showSmallCities(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[showSmallCitiesKey] ?: true }
 
     suspend fun setShowSmallCities(show: Boolean) {
         context.dataStore.edit { it[showSmallCitiesKey] = show }
     }
 
-    fun sheltersEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[sheltersEnabledKey] ?: true }
-
     suspend fun setSheltersEnabled(enabled: Boolean) {
         context.dataStore.edit { it[sheltersEnabledKey] = enabled }
     }
-
-    fun sheltersWithKidsEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[sheltersWithKidsEnabledKey] ?: true }
 
     suspend fun setSheltersWithKidsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[sheltersWithKidsEnabledKey] = enabled }
     }
 
-    fun periodicGps(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[periodicGpsKey] ?: false }
-
     suspend fun setPeriodicGps(enabled: Boolean) {
         context.dataStore.edit { it[periodicGpsKey] = enabled }
     }
-
-    fun calmMessagesEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[calmMessagesEnabledKey] ?: true }
 
     suspend fun setCalmMessagesEnabled(enabled: Boolean) {
         context.dataStore.edit { it[calmMessagesEnabledKey] = enabled }
     }
 
-    fun hapticsEnabled(): Flow<Boolean?> =
-        context.dataStore.data.map { prefs -> prefs[hapticsEnabledKey] }
-
     suspend fun setHapticsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[hapticsEnabledKey] = enabled }
     }
-
-    fun officialAlertCityScope(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[officialAlertCityScopeKey] ?: false }
 
     suspend fun setOfficialAlertCityScope(enabled: Boolean) {
         context.dataStore.edit { it[officialAlertCityScopeKey] = enabled }
     }
 
-    fun justFunMasterEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[justFunMasterEnabledKey] ?: false }
-
     suspend fun setJustFunMasterEnabled(enabled: Boolean) {
         context.dataStore.edit { it[justFunMasterEnabledKey] = enabled }
     }
-
-    /**
-     * Whether monitoring restarts automatically after a device reboot or in-app update.
-     * Off by the Settings "Restart monitoring after reboot" toggle (with a security
-     * warning); cold-starts of the app always arm monitoring regardless of this flag.
-     */
-    fun bootRestartEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[bootRestartEnabledKey] ?: true }
 
     suspend fun setBootRestartEnabled(enabled: Boolean) {
         context.dataStore.edit { it[bootRestartEnabledKey] = enabled }
     }
 
-    fun fillAlertRegions(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[fillAlertRegionsKey] ?: false }
-
     suspend fun setFillAlertRegions(enabled: Boolean) {
         context.dataStore.edit { it[fillAlertRegionsKey] = enabled }
     }
-
-    fun showBorders(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[showBordersKey] ?: true }
 
     suspend fun setShowBorders(enabled: Boolean) {
         context.dataStore.edit { it[showBordersKey] = enabled }
     }
 
-    fun showRegionBorders(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[showRegionBordersKey] ?: false }
-
     suspend fun setShowRegionBorders(enabled: Boolean) {
         context.dataStore.edit { it[showRegionBordersKey] = enabled }
     }
-
-    fun showLargeCities(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[showLargeCitiesKey] ?: true }
 
     suspend fun setShowLargeCities(show: Boolean) {
         context.dataStore.edit { it[showLargeCitiesKey] = show }
     }
 
-    fun deathAnimationEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[deathAnimationEnabledKey] ?: true }
-
     suspend fun setDeathAnimationEnabled(enabled: Boolean) {
         context.dataStore.edit { it[deathAnimationEnabledKey] = enabled }
     }
-
-    fun flybyAnimationEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[flybyAnimationEnabledKey] ?: true }
 
     suspend fun setFlybyAnimationEnabled(enabled: Boolean) {
         context.dataStore.edit { it[flybyAnimationEnabledKey] = enabled }
     }
 
-    fun followBullet(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[followBulletKey] ?: true }
-
     suspend fun setFollowBullet(enabled: Boolean) {
         context.dataStore.edit { it[followBulletKey] = enabled }
     }
-
-    fun threatIconZoom(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[threatIconZoomKey] ?: true }
 
     suspend fun setThreatIconZoom(enabled: Boolean) {
         context.dataStore.edit { it[threatIconZoomKey] = enabled }
     }
 
-    fun neutralizedTallyEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[neutralizedTallyEnabledKey] ?: true }
-
     suspend fun setNeutralizedTallyEnabled(enabled: Boolean) {
         context.dataStore.edit { it[neutralizedTallyEnabledKey] = enabled }
     }
-
-    fun neutralizedTallyAllUkraine(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[neutralizedTallyAllUkraineKey] ?: false }
 
     suspend fun setNeutralizedTallyAllUkraine(enabled: Boolean) {
         context.dataStore.edit { it[neutralizedTallyAllUkraineKey] = enabled }
     }
 
-    fun legacyCacheCleaned(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[legacyCacheCleanedKey] ?: false }
-
     suspend fun setLegacyCacheCleaned(cleaned: Boolean) {
         context.dataStore.edit { it[legacyCacheCleanedKey] = cleaned }
     }
-
-    fun fastGroupCollapsed(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[fastGroupCollapsedKey] ?: false }
 
     suspend fun setFastGroupCollapsed(collapsed: Boolean) {
         context.dataStore.edit { it[fastGroupCollapsedKey] = collapsed }
     }
 
-    fun slowGroupCollapsed(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[slowGroupCollapsedKey] ?: false }
-
     suspend fun setSlowGroupCollapsed(collapsed: Boolean) {
         context.dataStore.edit { it[slowGroupCollapsedKey] = collapsed }
     }
-
-    fun batteryOnboardShown(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[batteryOnboardShownKey] ?: false }
 
     suspend fun setBatteryOnboardShown(shown: Boolean) {
         context.dataStore.edit { it[batteryOnboardShownKey] = shown }
     }
 
-    fun permissionPromptDeferred(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[permissionPromptDeferredKey] ?: false }
-
     suspend fun setPermissionPromptDeferred(deferred: Boolean) {
         context.dataStore.edit { it[permissionPromptDeferredKey] = deferred }
     }
-
-    fun nightEnabled(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[nightEnabledKey] ?: true }
 
     suspend fun setNightEnabled(enabled: Boolean) {
         context.dataStore.edit { it[nightEnabledKey] = enabled }
     }
 
-    fun nightStartMin(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[nightStartMinKey] ?: 22 * 60 }
-
     suspend fun setNightStartMin(min: Int) {
         context.dataStore.edit { it[nightStartMinKey] = min.coerceIn(0, 1439) }
     }
-
-    fun nightEndMin(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[nightEndMinKey] ?: 7 * 60 }
 
     suspend fun setNightEndMin(min: Int) {
         context.dataStore.edit { it[nightEndMinKey] = min.coerceIn(0, 1439) }
     }
 
-    fun nightUseCustomZones(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[nightUseCustomZonesKey] ?: false }
-
     suspend fun setNightUseCustomZones(use: Boolean) {
         context.dataStore.edit { it[nightUseCustomZonesKey] = use }
     }
-
-    fun nightSlowRedKm(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[nightSlowRedKmKey] ?: 20 }
 
     suspend fun setNightSlowRedKm(km: Int) {
         context.dataStore.edit { prefs ->
@@ -613,18 +579,12 @@ class UserPrefs(private val context: Context) {
         }
     }
 
-    fun nightSlowYellowKm(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[nightSlowYellowKmKey] ?: 50 }
-
     suspend fun setNightSlowYellowKm(km: Int) {
         context.dataStore.edit { prefs ->
             val red = prefs[nightSlowRedKmKey] ?: 20
             prefs[nightSlowYellowKmKey] = km.coerceIn(red + 2, 50)
         }
     }
-
-    fun nightFastRedMin(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[nightFastRedMinKey] ?: 5 }
 
     suspend fun setNightFastRedMin(min: Int) {
         context.dataStore.edit { prefs ->
@@ -635,9 +595,6 @@ class UserPrefs(private val context: Context) {
         }
     }
 
-    fun nightFastYellowMin(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[nightFastYellowMinKey] ?: 20 }
-
     suspend fun setNightFastYellowMin(min: Int) {
         context.dataStore.edit { prefs ->
             val red = prefs[nightFastRedMinKey] ?: 5
@@ -645,57 +602,35 @@ class UserPrefs(private val context: Context) {
         }
     }
 
-    fun nightSlowRedZoneArmed(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[nightSlowRedArmedKey] ?: true }
-
-    suspend fun setNightSlowRedZoneArmed(armed: Boolean) {
+    suspend fun setNightSlowRedArmed(armed: Boolean) {
         context.dataStore.edit { it[nightSlowRedArmedKey] = armed }
     }
+    suspend fun setNightSlowRedZoneArmed(armed: Boolean) = setNightSlowRedArmed(armed)
 
-    fun nightSlowYellowZoneArmed(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[nightSlowYellowArmedKey] ?: true }
-
-    suspend fun setNightSlowYellowZoneArmed(armed: Boolean) {
+    suspend fun setNightSlowYellowArmed(armed: Boolean) {
         context.dataStore.edit { it[nightSlowYellowArmedKey] = armed }
     }
+    suspend fun setNightSlowYellowZoneArmed(armed: Boolean) = setNightSlowYellowArmed(armed)
 
-    fun nightFastRedZoneArmed(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[nightFastRedArmedKey] ?: true }
-
-    suspend fun setNightFastRedZoneArmed(armed: Boolean) {
+    suspend fun setNightFastRedArmed(armed: Boolean) {
         context.dataStore.edit { it[nightFastRedArmedKey] = armed }
     }
+    suspend fun setNightFastRedZoneArmed(armed: Boolean) = setNightFastRedArmed(armed)
 
-    fun nightFastYellowZoneArmed(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[nightFastYellowArmedKey] ?: true }
-
-    suspend fun setNightFastYellowZoneArmed(armed: Boolean) {
+    suspend fun setNightFastYellowArmed(armed: Boolean) {
         context.dataStore.edit { it[nightFastYellowArmedKey] = armed }
     }
-
-    fun nightZoneSirenOverride(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[nightZoneSirenOverrideKey] ?: false }
+    suspend fun setNightFastYellowZoneArmed(armed: Boolean) = setNightFastYellowArmed(armed)
 
     suspend fun setNightZoneSirenOverride(override: Boolean) {
         context.dataStore.edit { it[nightZoneSirenOverrideKey] = override }
     }
 
-    fun nightOfficialSirenOverride(): Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[nightOfficialSirenOverrideKey] ?: false }
-
     suspend fun setNightOfficialSirenOverride(override: Boolean) {
         context.dataStore.edit { it[nightOfficialSirenOverrideKey] = override }
     }
-}
 
-fun threatMapFlow(prefs: UserPrefs): Flow<Set<ThreatType>> {
-    return combine(ThreatType.values().map { prefs.threatMapVisible(it) }) { visible ->
-        ThreatType.values().filterIndexed { i, _ -> visible[i] }.toSet()
-    }
-}
-
-fun threatAlertFlow(prefs: UserPrefs): Flow<Set<ThreatType>> {
-    return combine(ThreatType.values().map { prefs.threatAlertsEnabled(it) }) { enabled ->
-        ThreatType.values().filterIndexed { i, _ -> enabled[i] }.toSet()
+    suspend fun clearAll() {
+        context.dataStore.edit { it.clear() }
     }
 }
