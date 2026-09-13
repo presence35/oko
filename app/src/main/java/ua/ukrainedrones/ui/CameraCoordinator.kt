@@ -2,6 +2,7 @@ package ua.ukrainedrones
 
 import android.graphics.Point
 import kotlin.math.abs
+import kotlin.math.cos
 import org.osmdroid.api.IGeoPoint
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
@@ -41,24 +42,28 @@ internal class MapCameraCoordinator {
     var lockUntilMs: Long = 0
         private set
 
-    /** Single-threat anchor: the selected threat always settles at ANCHOR_Y_FRACTION of the
-     *  visible band, horizontally centred, keeping the current zoom (pan-only). */
-    fun anchorThreat(map: MapView, lat: Double, lon: Double, topCoverPx: Int, bottomCoverPx: Int) {
+    /** Monotonic bump on every [armFit] — lets the map retrigger the single deferred camera
+     *  move for each new reveal/anchor request (first open, switch, reveal on a selected
+     *  threat, reopen). */
+    var pendingVersion: Int = 0
+        private set
+
+    /** Single-threat anchor: pan the selected threat to the exact centre of the screen (50% x,
+     *  50% y), keeping the current zoom (pan-only). One motion per selection. */
+    fun anchorThreat(map: MapView, lat: Double, lon: Double) {
         if (map.width <= 0 || map.height <= 0) return
-        val band = map.height - topCoverPx - bottomCoverPx
-        if (band <= 0) {
-            map.controller.animateTo(GeoPoint(lat, lon))
-            return
-        }
         val p = Point()
         map.projection.toPixels(GeoPoint(lat, lon), p)
-        val targetY = topCoverPx + band * ANCHOR_Y_FRACTION
-        val dyPx = targetY - p.y
-        if (abs(dyPx) < 1f) return // already at the anchor — don't micro-jitter
-        val res = TileSystem.GroundResolution(lat.coerceIn(-85.0, 85.0), map.zoomLevelDouble)
+        val dxPx = map.width / 2.0 - p.x
+        val dyPx = map.height / 2.0 - p.y
+        if (abs(dxPx) < 1f && abs(dyPx) < 1f) return // already at centre — don't micro-jitter
+        val clat = lat.coerceIn(-85.0, 85.0)
+        val res = TileSystem.GroundResolution(clat, map.zoomLevelDouble)
         val dyDeg = dyPx * res / DEGREES_PER_METER
+        // Longitude degrees shrink toward the poles: divide by cos(latitude).
+        val dxDeg = dxPx * res / (DEGREES_PER_METER * cos(java.lang.Math.toRadians(clat)))
         map.controller.animateTo(
-            GeoPoint((lat - dyDeg).coerceIn(-89.9, 89.9), lon)
+            GeoPoint((lat - dyDeg).coerceIn(-89.9, 89.9), (lon - dxDeg).coerceIn(-180.0, 180.0))
         )
     }
 
@@ -89,6 +94,7 @@ internal class MapCameraCoordinator {
     fun armFit(id: String?, lat: Double, lon: Double, focusLat: Double, focusLon: Double, tick: Long) {
         pendingFit = PendingFit(id, lat, lon, focusLat, focusLon, tick)
         lockUntilMs = System.currentTimeMillis() + CAMERA_FIT_LOCK_MS
+        pendingVersion++
     }
 
     /** Re-run the pending fit with the just-measured popup card height (refined exactly once). */
@@ -99,7 +105,7 @@ internal class MapCameraCoordinator {
         if (p.focusLat.isFinite() && p.focusLon.isFinite()) {
             fitReveal(map, p.lat, p.lon, p.focusLat, p.focusLon, topCoverPx, bottomCoverPx)
         } else {
-            anchorThreat(map, p.lat, p.lon, topCoverPx, bottomCoverPx)
+            anchorThreat(map, p.lat, p.lon)
         }
         consumeFit()
     }
@@ -152,8 +158,6 @@ internal class MapCameraCoordinator {
     }
 
     companion object {
-        /** Selected threat settles 75% down the band between the top card and bottom sheet. */
-        private const val ANCHOR_Y_FRACTION = 0.75f
         /** How long after an anchor/reveal fit the follow-me camera stays out of the way. */
         private const val CAMERA_FIT_LOCK_MS = 1_200L
         private const val DEGREES_PER_METER = 111_320.0

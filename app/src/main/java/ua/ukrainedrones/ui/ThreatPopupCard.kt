@@ -229,8 +229,8 @@ fun ThreatPopupCard(
                     iconScale.animateTo(
                         1f,
                         spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessHigh
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = 800f
                         )
                     )
                 }

@@ -659,7 +659,7 @@ private fun SetupZoneControlsStep(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        LegendChip(Color(0xFFFFD500), "Yellow fill")
+                        LegendChip(Color(0xFFFFD500), "")
                         Text(
                             s.wizardYellowFillDesc,
                             style = MaterialTheme.typography.labelSmall,
@@ -667,7 +667,7 @@ private fun SetupZoneControlsStep(
                         )
                     }
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        LegendChip(Color(0xFFD32F2F), "Red fill")
+                        LegendChip(Color(0xFFD32F2F), "")
                         Text(
                             s.wizardRedFillDesc,
                             style = MaterialTheme.typography.labelSmall,

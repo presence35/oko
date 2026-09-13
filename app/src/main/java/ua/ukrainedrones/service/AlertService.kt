@@ -112,7 +112,7 @@ class AlertService : Service() {
             try {
                 ContextCompat.startForegroundService(context, Intent(context, AlertService::class.java))
             } catch (e: Exception) {
-                // A failed start must never look like working monitoring — leave the flag off
+                // A failed start must never look like working monitoring �?" leave the flag off
                 // so the UI banner surfaces the dead state instead of going silent.
                 MonitoringStatus.setRunning(false)
                 throw e
@@ -535,7 +535,7 @@ val mappedThreats = registry.allThreats.map { list ->
         } else 0L
 
         // The trident owns the official signal, mirroring the header/widget: official red >
-        // official yellow > none. No zone-state influence, no channel-pref gating — the monitor
+        // official yellow > none. No zone-state influence, no channel-pref gating �?" the monitor
         // always shows the live official level.
         val monitorAlertLevel = when {
             state.focusOblastAlertActive -> AlertLevel.RED
@@ -617,7 +617,7 @@ val mappedThreats = registry.allThreats.map { list ->
         }
 
         // Dropping the announced region: the user stopped monitoring it (focus moved to a
-        // different oblast) OR re-pinned to a different city (even within the same oblast —
+        // different oblast) OR re-pinned to a different city (even within the same oblast �?"
         // the oblast token alone can't see that, so the announced city is tracked too).
         val pinnedCityChanged = state.focusPinned && officialAnnouncedCity != null &&
             state.focusBannerCity != officialAnnouncedCity
@@ -648,7 +648,12 @@ val mappedThreats = registry.allThreats.map { list ->
         officialAnnouncedSince = null
         officialAnnouncedReasonId = null
 
-        val officialActive = state.officialAlertsEnabled && state.focusOblastAlertActive
+        // Red-level official alert gate: user must allow red alerts
+        val redOfficialActive = state.officialAlertsEnabled && state.officialRedAlertsEnabled && state.focusOblastAlertActive
+        // Yellow-level official alert gate: user must allow yellow alerts
+        val yellowOfficialActive = state.officialAlertsEnabled && state.officialYellowAlertsEnabled && state.focusOblastYellowAlertActive
+        
+        val officialActive = redOfficialActive || yellowOfficialActive
         val officialBody = state.officialReason ?: state.focusRegion
 
         if (!debugOfficialActive && state.focusOblastAlertActive) {
@@ -676,7 +681,7 @@ val mappedThreats = registry.allThreats.map { list ->
             )
         }
 
-        if (officialActive && !wasFocusAlertActive && !posted) {
+        if (redOfficialActive && !wasFocusAlertActive && !posted) {
             val reasonThreat = state.officialReasonThreatId?.let { all[it] }
             wakeLockManager.acquireForAlert()
             postAlert(
@@ -700,7 +705,7 @@ val mappedThreats = registry.allThreats.map { list ->
             state.officialReasonThreatId != null
         ) {
             // Only refresh the shown notification when the new reason is a threat actually
-            // inside the user's zones — once the reason falls back to the bare oblast name
+            // inside the user's zones �?" once the reason falls back to the bare oblast name
             // (nothing nearby), a dismissed notification must not be re-raised about it.
             val reasonThreat = state.officialReasonThreatId?.let { all[it] }
             postAlert(
@@ -747,7 +752,7 @@ val mappedThreats = registry.allThreats.map { list ->
         }
 
         // Unified all-clear: the raw official episode for the latched region truly ended. One clear
-        // per episode, whether it rang red, yellow, or red-then-yellow — keyed on the raw end
+        // per episode, whether it rang red, yellow, or red-then-yellow �?" keyed on the raw end
         // (BEHAVIORS/ARCHITECTURE), never on the posture flags, so a red alert that narrowed
         // away from the focus city mid-episode still announces its raw-end all-clear.
         if (state.officialAlertsEnabled && officialRegionToken != null &&
@@ -815,7 +820,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     now = System.currentTimeMillis()
                 )
             }
-            // The scoped red gate dropped — retire the red posture and its ON log only. The
+            // The scoped red gate dropped �?" retire the red posture and its ON log only. The
             // episode latch is NOT released here: it lives until the raw end (all-clear) or a
             // focus switch, so a narrowed-away or a red-then-yellow episode still announces its
             // raw-end all-clear (see the unified all-clear above).

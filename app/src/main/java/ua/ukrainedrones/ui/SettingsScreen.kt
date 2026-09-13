@@ -470,7 +470,7 @@ fun SettingsScreen(
     val sheltersEnabled = state.sheltersEnabled
     val periodicGps = state.periodicGps
     val calmMessagesEnabled = state.calmMessagesEnabled
-    val hapticsEnabled = state.hapticsEnabled
+    val hapticsEnabled = uiState.hapticsEnabled
     val deathAnimationEnabled = state.deathAnimationEnabled
     val flybyAnimationEnabled = state.flybyAnimationEnabled
     val followBullet = state.followBullet
@@ -870,7 +870,7 @@ fun SettingsScreen(
                         checked = officialAlertsEnabled,
                         onCheckedChange = { v -> showExplainer("officialAlerts"); onOfficialAlertsChange(v) },
                         icon = painterResource(R.drawable.ic_trident),
-                        iconTint = if (officialAlertsEnabled) UkraineBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                        iconTint = if (officialAlertsEnabled) null else MaterialTheme.colorScheme.onSurfaceVariant,
                         iconSize = 44.dp,
                         flash = flashId == "officialAlerts"
                     )
@@ -2044,7 +2044,7 @@ private fun OfficialPairToggleRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.03f),
+        color = Color.Transparent,
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(

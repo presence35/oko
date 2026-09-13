@@ -775,8 +775,8 @@ private fun MapScreen(
                 ThreatZone.OUTER -> s.yellowZoneAlert
                 null -> when {
                     uiState.gpsFixMissing -> s.gpsUnavailableFollowMe
-                    uiState.focusOblastAlertActive -> String.format(s.alertBannerFormat, uiState.focusBannerCity)
-                    uiState.focusOblastYellowAlertActive -> String.format(s.alertYellowBannerFormat, uiState.focusBannerCity)
+                    uiState.focusOblastAlertActive -> uiState.focusBannerCity
+                    uiState.focusOblastYellowAlertActive -> uiState.focusBannerCity
                     pinnedCityName != null -> pinnedCityName
                     else -> s.appTitle
                 }

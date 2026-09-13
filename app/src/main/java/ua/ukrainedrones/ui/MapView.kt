@@ -757,7 +757,7 @@ fun NeptunMapView(
     val lastRevealTick = remember { mutableStateOf(-1) }
     val lastAnchorId = remember { mutableStateOf<String?>(null) }
     val lastCenterTick = remember { mutableStateOf(-1) }
-    val lastPopupCoverPx = remember { mutableStateOf(0) }
+    val lastArmTick = remember { mutableStateOf(0) }
     val lastZonesCoverPx = remember { mutableStateOf(0) }
     val lastFlourishTick = remember { mutableStateOf(-1) }
     // Bumped on every lifecycle RESUME so the pending tally-tap replay is retried actively.
@@ -1075,11 +1075,10 @@ fun NeptunMapView(
                     focus?.lat ?: Double.NaN, focus?.lon ?: Double.NaN,
                     reveal.tick.toLong()
                 )
-                camera.fitReveal(
-                    mapView, reveal.lat, reveal.lon,
-                    focus?.lat ?: Double.NaN, focus?.lon ?: Double.NaN,
-                    popupCoverPx, zonesSheetCoverPx
-                )
+                lastArmTick.value = camera.pendingVersion
+                // The camera move itself is deferred to the popup effect below: the card's real
+                // height lands a frame later, so the single animated pass uses the true covers
+                // instead of re-animating twice (old double-move jitter).
                 // The reveal dot is baked into the threat's own icon (top-right corner), so a
                 // marker that already exists gets its badge now; the rebuild path applies it at
                 // build time too. If the threat isn't mapped yet (cold start), the marker appears
@@ -1105,9 +1104,11 @@ fun NeptunMapView(
                 val revealFramedIt = reveal != null && reveal.tick == lastRevealTick.value &&
                     reveal.id == selectedIdNow
                 val t = uiState.mapThreats.firstOrNull { it.id == selectedIdNow }
-                if (t != null && !revealFramedIt && mapView.width > 0 && mapView.height > 0) {
+                if (t != null && !revealFramedIt) {
+                    // Arming only: the actual pan runs once from the popup effect below, after
+                    // the card's real height is measured (one animated pass, true covers).
                     camera.armFit(selectedIdNow, t.lat, t.lon, Double.NaN, Double.NaN, 0L)
-                    camera.anchorThreat(mapView, t.lat, t.lon, popupCoverPx, zonesSheetCoverPx)
+                    lastArmTick.value = camera.pendingVersion
                 }
             } else if (selectedIdNow == null && lastAnchorId.value != null) {
                 lastAnchorId.value = null
@@ -1608,19 +1609,15 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
         }
     }
 
-    // The popup card's height lands a frame AFTER a reveal/anchor fit fires (the card isn't
-    // laid out yet on the same frame). When the card first appears, re-run the pending fit with
-    // the measured height so the target stays visible below it. Only refines the fit armed for
-    // the currently-selected threat, exactly once — never a later unrelated card opening (the
-    // pending fit is owned by the coordinator and dropped on deselection).
-    LaunchedEffect(popupCoverPx) {
-        if (popupCoverPx <= 0) {
-            lastPopupCoverPx.value = 0
-            return@LaunchedEffect
-        }
-        val prev = lastPopupCoverPx.value
-        lastPopupCoverPx.value = popupCoverPx
-        if (prev != 0) return@LaunchedEffect
+    // The popup card's height lands a frame AFTER a reveal/anchor fit fires (the card isn't laid
+    // out yet on the same frame). So the desired move is ARMED in the update block above and
+    // executed HERE — exactly once, after the card measured — with the true covers: the map does
+    // a single smooth animated pass instead of re-animating a second time (the old double-move
+    // jitter). Runs on every arm (first open, switch-while-open, reveal on the selected
+    // threat, reopen of the same id); refinePendingFit id-matches and consumes, so stale or
+    // repeated triggers no-op.
+    LaunchedEffect(lastArmTick.value, popupCoverPx) {
+        if (popupCoverPx <= 0) return@LaunchedEffect
         val mv = mapViewRef.value ?: return@LaunchedEffect
         camera.refinePendingFit(mv, selectedThreatIdState, popupCoverPx, zonesSheetCoverPx)
     }
