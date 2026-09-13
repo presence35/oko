@@ -205,14 +205,13 @@ fun ThreatPopupCard(
         null -> Color(0xFF9E9E9E)
     }
 
-    // Selection-change feedback: hold the title icon small while the body slides in (~140 ms),
-        // then pop it 0.4 → 1 with a slow bouncy spring — whenever a different threat is selected
-    // (first open included). Stream refreshes keep the threat id, so they never re-trigger.
+    // Selection-change feedback: the body renders in one frame (tap feels instant); the title
+    // icon pops 0.4 → 1 with a quick spring as the only motion — whenever a different threat
+    // is selected (first open included). Stream refreshes keep the threat id, so they never
+    // re-trigger.
     // Hoisted here so card-size toggles don't reset the pop. The tap haptic lives at the
     // marker-click site (immediate); with system animations off there is no pop at all.
     val animsOff = animationsOff()
-    // Selection motion budget goes to the threat icon alone: the pop below is the ONLY card
-    // animation — the body itself must render in one frame (tap feels instant).
     val iconScale = remember { Animatable(1f) }
     var lastSelectedId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(threat.id, interactive) {
@@ -227,12 +226,11 @@ fun ThreatPopupCard(
                 // Tap-site haptic (MapView) already ticked on touch; no second buzz here.
                 if (!animsOff) {
                     iconScale.snapTo(0.4f)
-                    kotlinx.coroutines.delay(140)
                     iconScale.animateTo(
                         1f,
                         spring(
                             dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMediumLow
+                            stiffness = Spring.StiffnessHigh
                         )
                     )
                 }

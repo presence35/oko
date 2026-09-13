@@ -109,3 +109,20 @@ fun officialAlertActiveFor(
     if (!scope || cityUa.isNullOrBlank()) return sirenAlerts.any { it.inOblast(token) }
     return sirenAlerts.any { it.inOblast(token) && it.coversCity(cityUa) }
 }
+
+/** Whether an official *yellow* (tactical/artillery) alert is active for the focus point.
+ *  Level twin of [officialAlertActiveFor] with the same [scope]/[OblastAlert.coversCity]
+ *  semantics, for matches on [OblastAlert.level] == "yellow". Shared by the UI, the
+ *  notification service and the widget so the trident and the announce logic never diverge. */
+fun officialYellowAlertActiveFor(
+    alerts: List<OblastAlert>,
+    token: String?,
+    cityUa: String?,
+    scope: Boolean
+): Boolean {
+    if (token == null) return false
+    val yellow = alerts.filter { it.level == "yellow" }
+    if (yellow.isEmpty()) return false
+    if (!scope || cityUa.isNullOrBlank()) return yellow.any { it.inOblast(token) }
+    return yellow.any { it.inOblast(token) && it.coversCity(cityUa) }
+}

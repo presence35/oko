@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Opening a threat card no longer snaps the camera to your GPS position; every threat selection now settles the threat at the same on-screen anchor below the card / Opening a threat card no longer snaps the camera to your GPS position; every threat selection now settles the threat at the same on-screen anchor below the card
+- The threat card icon now pops in instantly with a snappy spring (no 140 ms dead time) / The threat card icon now pops in instantly with a snappy spring (no 140 ms dead time)
+
 - Deep refactor: the NEPTUN connection layer is now a source-agnostic source SPI (socket, decoder and reconnect supervisor split into separate pieces registered through a single source registry), so future threat data sources plug in without touching the engine or UI / Deep refactor: the NEPTUN connection layer is now a source-agnostic source SPI so future threat data sources plug in without touching the engine or UI
 - Death flourish overlay now renders in its own self-contained View (no full-map redraws during shoot-down) / Death flourish overlay now renders in its own self-contained View (no full-map redraws during shoot-down)
 - Group threat toggles now batch DataStore writes into a single disk operation for snappier response / Group threat toggles now batch DataStore writes into a single disk operation for snappier response
@@ -12,6 +15,9 @@
 - Toggling off all sources now shows "Offline" immediately instead of "Backup" for 5 minutes / When all sources are disabled, the app immediately shows "Offline" instead of incorrectly displaying "Backup" for 5 minutes
 - Connections tab now shows "Offline" when a source is manually toggled off / The connections tab now correctly records an offline episode when a source is manually disabled
 - Removed threat/alert counts from the Logs screen header / Removed threat and alert count badges from the Logs screen header
+- Zone-alert sirens are now logged as "notified" on the tick they fire, so the Decisions log's 24h count no longer under-reports real notifications / Zone-alert sirens are now logged as "notified" on the tick they fire, so the Decisions log's 24h count no longer under-reports real notifications
+- The monitor notification's trident now mirrors the official alert level (like the header and the widget) instead of turning red for your own red-zone threats / The monitor notification's trident now mirrors the official alert level (like the header and the widget) instead of turning red for your own red-zone threats
+- Yellow official alerts now finish with an all-clear, and all-clears always key on your region's raw alert ending — even when a red alert narrowed away from your city mid-episode / Yellow official alerts now finish with an all-clear, and all-clears always key on your region's raw alert ending — even when a red alert narrowed away from your city mid-episode
 
 - In landscape, the zone/red & yellow alert pills and edit-zones gear stack vertically in the bottom-right corner, the shelter button sits in the bottom-left, and the "all alerts off" warning moves above the footer — the two redundant crossed-bell icons above each pill were removed / In landscape, the zone/red & yellow alert pills and edit-zones gear stack vertically in the bottom-right corner, the shelter button sits in the bottom-left, and the "all alerts off" warning moves above the footer — the two redundant crossed-bell icons above each pill were removed
 - The zone editor bottom sheet now scrolls in portrait, so the bottom sliders are reachable on shorter screens / The zone editor bottom sheet now scrolls in portrait, so the bottom sliders are reachable on shorter screens

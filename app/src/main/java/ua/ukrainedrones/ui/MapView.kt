@@ -150,16 +150,6 @@ private val UA_PAN_LIMITS = BoundingBox(
 
 private val tileSystem = TileSystemWebMercator()
 
-/** Bounding box that fits a zone circle centred on `center`, with a 5% margin. */
-private fun zoneBoundingBox(center: IGeoPoint, radiusKm: Double): BoundingBox {
-    val marginM = radiusKm * 1000.0 * 1.05
-    val north = ua.ukrainedrones.engine.destinationPoint(center.latitude, center.longitude, marginM, 0.0)
-    val east = ua.ukrainedrones.engine.destinationPoint(center.latitude, center.longitude, marginM, 90.0)
-    val south = ua.ukrainedrones.engine.destinationPoint(center.latitude, center.longitude, marginM, 180.0)
-    val west = ua.ukrainedrones.engine.destinationPoint(center.latitude, center.longitude, marginM, 270.0)
-    return BoundingBox(north.lat, east.lon, south.lat, west.lon)
-}
-
 /** Bounding box over the nearest shelters, padded so every marker is comfortably in view. */
 private fun sheltersBoundingBox(near: List<NearestShelter>): BoundingBox? {
     if (near.isEmpty()) return null
@@ -644,51 +634,6 @@ val strokeW = 2.6f * density
     return bmp
 }
 
-/** Framing box for a notification reveal: focus near the top, threat near the bottom, with a
- *  clamped span so a huge gap (or a zero gap) still yields a valid, zoomable box. The threat is
- *  always pinned to the bottom fraction regardless of which is further north, so a northern
- *  threat (e.g. Kyiv with the focus on Odesa) never lands underneath the top popup card. When the
- *  popup card (top) or zones sheet (bottom) has been measured, the fractions shrink to fit the
- *  actual visible band so the threat never hides under an overlay. */
-private fun buildRevealBoundingBox(
-    threat: LatLng,
-    focus: LatLng?,
-    mapHeightPx: Int,
-    topCoverPx: Int,
-    bottomCoverPx: Int
-): BoundingBox {
-    if (focus == null) {
-        val span = 0.5
-        return BoundingBox(
-            threat.lat + span, threat.lon + span,
-            threat.lat - span, threat.lon - span
-        )
-    }
-    val ft: Float
-    val fb: Float
-    if (mapHeightPx > 0 && (topCoverPx > 0 || bottomCoverPx > 0)) {
-        val topFrac = (topCoverPx.toFloat() / mapHeightPx).coerceIn(0f, 0.45f)
-        val bottomFrac = (bottomCoverPx.toFloat() / mapHeightPx).coerceIn(0f, 0.45f)
-        ft = (topFrac + 0.05f).coerceAtMost(0.45f)
-        fb = (1f - bottomFrac - 0.05f).coerceAtLeast(0.55f)
-    } else {
-        ft = 0.28f  // focus vertical fraction from the top
-        fb = 0.72f  // threat vertical fraction from the top
-    }
-    val g = fb - ft
-    val gapLat = Math.abs(focus.lat - threat.lat)
-    val spanLat = Math.max(gapLat / g, REVEAL_MIN_SPAN_LAT).coerceAtMost(40.0)
-    val north = Math.max(focus.lat + ft * spanLat, threat.lat + fb * spanLat)
-    val south = Math.min(focus.lat - (1 - ft) * spanLat, threat.lat - (1 - fb) * spanLat)
-    val lonMid = (focus.lon + threat.lon) / 2
-    val gapLon = Math.abs(focus.lon - threat.lon)
-    val spanLon = Math.max(gapLon / g, REVEAL_MIN_SPAN_LON).coerceAtMost(80.0)
-    return BoundingBox(
-        north.coerceAtMost(85.0), lonMid + spanLon / 2,
-        south.coerceAtLeast(-85.0), lonMid - spanLon / 2
-    )
-}
-
 /**
  * True when nothing covers the map (no paused modal, map on screen, no shelter overlay) and the
  * app is at least visible — i.e. the map owns the user's attention and death flourishes may play.
@@ -810,7 +755,7 @@ fun NeptunMapView(
     val lastFitZonesTick = remember { mutableStateOf(-1) }
     val lastFittedYellowKm = remember { mutableStateOf<Int?>(null) }
     val lastRevealTick = remember { mutableStateOf(-1) }
-    val lastRevealPos = remember { mutableStateOf<LatLng?>(null) }
+    val lastAnchorId = remember { mutableStateOf<String?>(null) }
     val lastCenterTick = remember { mutableStateOf(-1) }
     val lastPopupCoverPx = remember { mutableStateOf(0) }
     val lastZonesCoverPx = remember { mutableStateOf(0) }
@@ -874,6 +819,7 @@ fun NeptunMapView(
         resizeThreatIcons()
     }
     val mapScope = rememberCoroutineScope()
+    val camera = remember { MapCameraCoordinator() }
     val deathFx = remember {
         DeathFxController(
             context = context,
@@ -909,22 +855,8 @@ fun NeptunMapView(
         onDispose { lifecycle.removeObserver(observer) }
     }
 
-    // Centre + zoom so the whole yellow zone sits in the visible area ABOVE the zones sheet.
-    // The bbox is extended downward so the zone occupies the top part of the viewport that is
-    // actually visible above the sheet — measured from the sheet's real height when known,
-    // falling back to a 60% assumption before the sheet has laid out.
-    val fitZoneToPanel: (MapView, IGeoPoint) -> Unit = { mv, center ->
-        val zone = zoneBoundingBox(center, uiState.activeZoneParams.slowYellowKm.toDouble())
-        val visibleFrac = if (mv.height > 0 && zonesSheetCoverPx > 0) {
-            (1f - zonesSheetCoverPx / mv.height.toFloat()).coerceIn(0.3f, 1f)
-        } else 0.6f
-        val dLat = zone.latNorth - center.latitude
-        val southPad = dLat * 2 * ((1f / visibleFrac) - 1f)
-        mv.zoomToBoundingBox(
-            BoundingBox(zone.latNorth, zone.lonEast, zone.latSouth - southPad, zone.lonWest),
-            true
-        )
-    }
+    // Centre + zoom so the whole yellow zone sits in the visible area ABOVE the zones sheet —
+    // now owned by [MapCameraCoordinator.fitZoneToPanel].
 
     val deathFrame = remember { mutableIntStateOf(0) }
     LaunchedEffect(deathFx) {
@@ -1018,13 +950,18 @@ fun NeptunMapView(
             // Camera follows the focus point (GPS while following, pinned city otherwise).
             // A tally-tap replay owns the camera while queued or running: hold still (and
             // leave the default fit pending) so the show jumps straight onto its targets
-            // instead of panning home first.
+            // instead of panning home first. An anchor/reveal fit locks the follow-me camera
+            // out for its animation window so GPS drift can't fight a fit in flight.
             val replayOwnsCamera = deathFx.isReplayActive ||
                 (uiState.flourish != null && uiState.flourish.tick != lastFlourishTick.value)
             val focus = uiState.focusLocation
-            if (focus != null && lastFollow.value != focus) {
+            if (focus != null &&
+                (lastFollow.value?.lat != focus.lat || lastFollow.value?.lon != focus.lon)
+            ) {
                 lastFollow.value = focus
-                if (!replayOwnsCamera) mapView.controller.animateTo(GeoPoint(focus.lat, focus.lon))
+                if (!replayOwnsCamera && !camera.isFollowLocked(System.currentTimeMillis())) {
+                    mapView.controller.animateTo(GeoPoint(focus.lat, focus.lon))
+                }
             } else if (focus == null && lastFollow.value != null) {
                 lastFollow.value = null
             }
@@ -1033,9 +970,9 @@ fun NeptunMapView(
             // yellow zone (camera then just follows it without re-zooming).
             if (!didDefaultFit.value && focus != null && !replayOwnsCamera) {
                 didDefaultFit.value = true
-                mapView.zoomToBoundingBox(
-                    zoneBoundingBox(GeoPoint(focus.lat, focus.lon), uiState.activeZoneParams.slowYellowKm.toDouble()),
-                    true
+                camera.fitZone(
+                    mapView, GeoPoint(focus.lat, focus.lon),
+                    uiState.activeZoneParams.slowYellowKm.toDouble()
                 )
             }
 
@@ -1043,9 +980,9 @@ fun NeptunMapView(
             val pinned = uiState.pinnedCity
             if (!uiState.followMe && pinned != null && lastPinnedCity.value != pinned.nameUa) {
                 lastPinnedCity.value = pinned.nameUa
-                mapView.zoomToBoundingBox(
-                    zoneBoundingBox(GeoPoint(pinned.lat, pinned.lon), uiState.activeZoneParams.slowYellowKm.toDouble()),
-                    true
+                camera.fitZone(
+                    mapView, GeoPoint(pinned.lat, pinned.lon),
+                    uiState.activeZoneParams.slowYellowKm.toDouble()
                 )
             } else if (uiState.followMe) {
                 lastPinnedCity.value = null
@@ -1054,7 +991,7 @@ fun NeptunMapView(
             // Header tap: zoom out so the whole of Ukraine fills the screen.
             if (fitUkraineTick != lastFitUkraineTick.value) {
                 lastFitUkraineTick.value = fitUkraineTick
-                mapView.zoomToBoundingBox(UA_VIEW_LIMITS, true)
+                camera.fitBox(mapView, UA_VIEW_LIMITS)
             }
 
             // Zone-button tap: zoom the camera to fit that zone circle with a 5% margin.
@@ -1065,7 +1002,7 @@ fun NeptunMapView(
                     ThreatZone.INNER -> uiState.activeZoneParams.slowRedKm.toDouble()
                     else -> uiState.activeZoneParams.slowYellowKm.toDouble()
                 }
-                mapView.zoomToBoundingBox(zoneBoundingBox(center, radiusKm), false)
+                camera.fitZone(mapView, center, radiusKm, animate = false)
             }
 
             // Shelter marker tapped: highlight + open its card, but keep the camera where it
@@ -1081,7 +1018,11 @@ fun NeptunMapView(
                 lastFitZonesTick.value = fitZonesTick
                 val center = focus?.let { GeoPoint(it.lat, it.lon) } ?: mapView.mapCenter
                 lastFittedYellowKm.value = uiState.activeZoneParams.slowYellowKm
-                fitZoneToPanel(mapView, center)
+                camera.fitZoneToPanel(
+                    mapView, center,
+                    uiState.activeZoneParams.slowYellowKm.toDouble(),
+                    zonesSheetCoverPx
+                )
             }
 
             // Zone-slider change while the sheet is open: the yellow circle grew (or shrank)
@@ -1097,7 +1038,13 @@ fun NeptunMapView(
                 zoneRefitJob.value = mapScope.launch {
                     delay(ZONE_REFIT_DEBOUNCE_MS)
                     mapViewRef.value?.let { mv ->
-                        focusLocationState?.let { fitZoneToPanel(mv, GeoPoint(it.lat, it.lon)) }
+                        focusLocationState?.let { loc ->
+                            camera.fitZoneToPanel(
+                                mv, GeoPoint(loc.lat, loc.lon),
+                                uiState.activeZoneParams.slowYellowKm.toDouble(),
+                                zonesSheetCoverPx
+                            )
+                        }
                     }
                 }
             }
@@ -1105,7 +1052,8 @@ fun NeptunMapView(
             // Notification tap: pan + zoom so the focus point (GPS/city) sits near the top
             // and the revealed threat near the bottom, with space between. The span scales
             // with the gap, so the zoom reflects how far the threat is. Also mark it with
-            // the green dot.
+            // the green dot. The frame is recorded as the pending fit so the popup card's
+            // real height (measured a frame later) can refine it exactly once.
             val reveal = revealRequest
             if (reveal != null && reveal.tick != lastRevealTick.value) {
                 // Clear the previous reveal dot by refreshing the old marker icon
@@ -1119,28 +1067,19 @@ fun NeptunMapView(
                     }
                 }
                 lastRevealTick.value = reveal.tick
-                val threat = LatLng(reveal.lat, reveal.lon)
-                lastRevealPos.value = threat
                 newRingState.value = NewRingState(
                     reveal.id, System.currentTimeMillis() + NEW_RING_MS
                 )
-                if (mapView.width > 0 && mapView.height > 0) {
-                    // Harden: a bad framing box (or a not-yet-laid-out map) must never crash
-                    // the composition thread — fall back to a plain centre-on-threat pan.
-                    try {
-                        mapView.zoomToBoundingBox(
-                            buildRevealBoundingBox(
-                                threat,
-                                uiState.focusLocation,
-                                mapView.height,
-                                popupCoverPx,
-                                zonesSheetCoverPx
-                            ), true
-                        )
-                    } catch (_: Exception) {
-                        mapView.controller.animateTo(GeoPoint(threat.lat, threat.lon))
-                    }
-                }
+                camera.armFit(
+                    reveal.id, reveal.lat, reveal.lon,
+                    focus?.lat ?: Double.NaN, focus?.lon ?: Double.NaN,
+                    reveal.tick.toLong()
+                )
+                camera.fitReveal(
+                    mapView, reveal.lat, reveal.lon,
+                    focus?.lat ?: Double.NaN, focus?.lon ?: Double.NaN,
+                    popupCoverPx, zonesSheetCoverPx
+                )
                 // The reveal dot is baked into the threat's own icon (top-right corner), so a
                 // marker that already exists gets its badge now; the rebuild path applies it at
                 // build time too. If the threat isn't mapped yet (cold start), the marker appears
@@ -1156,6 +1095,25 @@ fun NeptunMapView(
                 }
             }
 
+            // Selection: the selected threat always settles at the 75% anchor (centre-x, 75%
+            // down the band visible below the popup card), once per id change — and never when
+            // the change came from a reveal above (that already framed it). Deselecting drops
+            // any pending fit so a stale target can't animate later.
+            val selectedIdNow = selectedThreatIdState
+            if (selectedIdNow != null && selectedIdNow != lastAnchorId.value && !replayOwnsCamera) {
+                lastAnchorId.value = selectedIdNow
+                val revealFramedIt = reveal != null && reveal.tick == lastRevealTick.value &&
+                    reveal.id == selectedIdNow
+                val t = uiState.mapThreats.firstOrNull { it.id == selectedIdNow }
+                if (t != null && !revealFramedIt && mapView.width > 0 && mapView.height > 0) {
+                    camera.armFit(selectedIdNow, t.lat, t.lon, Double.NaN, Double.NaN, 0L)
+                    camera.anchorThreat(mapView, t.lat, t.lon, popupCoverPx, zonesSheetCoverPx)
+                }
+            } else if (selectedIdNow == null && lastAnchorId.value != null) {
+                lastAnchorId.value = null
+                camera.clearFit()
+            }
+
             // Locate button: centre the map on the threat with a tight threat-only framing
             // (no reveal dot, no focus-point inclusion).
             val center = uiState.centerRequest
@@ -1163,11 +1121,9 @@ fun NeptunMapView(
                 lastCenterTick.value = center.tick
                 if (mapView.width > 0 && mapView.height > 0) {
                     val centerPoint = GeoPoint(center.lat, center.lon)
-                    // ~20 km radius tight box around the threat, leaving room for the popup
+                    // ~12 km radius tight box around the threat, leaving room for the popup
                     // card above and zones sheet below.
-                    val radiusM = 12_000.0
-                    val bbox = zoneBoundingBox(centerPoint, radiusM / 1000.0)
-                    mapView.zoomToBoundingBox(bbox, true)
+                    camera.fitZone(mapView, centerPoint, 12.0)
                 }
             }
 
@@ -1652,11 +1608,11 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
         }
     }
 
-    // The popup card's height lands a frame AFTER the reveal fires (the card isn't laid out yet
-    // on the same frame). Once it's measured, reframe the revealed threat so it stays visible
-    // below the card. Only reframes on the 0→>0 transition (a card first appearing): a card
-    // already open means the reveal was framed with its height known, and resizing an open card
-    // must not re-pan the camera.
+    // The popup card's height lands a frame AFTER a reveal/anchor fit fires (the card isn't
+    // laid out yet on the same frame). When the card first appears, re-run the pending fit with
+    // the measured height so the target stays visible below it. Only refines the fit armed for
+    // the currently-selected threat, exactly once — never a later unrelated card opening (the
+    // pending fit is owned by the coordinator and dropped on deselection).
     LaunchedEffect(popupCoverPx) {
         if (popupCoverPx <= 0) {
             lastPopupCoverPx.value = 0
@@ -1665,16 +1621,8 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
         val prev = lastPopupCoverPx.value
         lastPopupCoverPx.value = popupCoverPx
         if (prev != 0) return@LaunchedEffect
-        val pos = lastRevealPos.value ?: return@LaunchedEffect
         val mv = mapViewRef.value ?: return@LaunchedEffect
-        if (mv.width <= 0 || mv.height <= 0) return@LaunchedEffect
-        val focusPt = focusLocationState ?: return@LaunchedEffect
-        try {
-            mv.zoomToBoundingBox(
-                buildRevealBoundingBox(pos, focusPt, mv.height, popupCoverPx, zonesSheetCoverPx),
-                true
-            )
-        } catch (_: Exception) {}
+        camera.refinePendingFit(mv, selectedThreatIdState, popupCoverPx, zonesSheetCoverPx)
     }
 
     // The zones sheet's height is measured a frame after the sheet opens — the initial fit ran
@@ -1691,7 +1639,11 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
         val mv = mapViewRef.value ?: return@LaunchedEffect
         if (mv.width <= 0 || mv.height <= 0) return@LaunchedEffect
         val center = focusLocationState?.let { GeoPoint(it.lat, it.lon) } ?: mv.mapCenter
-        fitZoneToPanel(mv, center)
+        camera.fitZoneToPanel(
+            mv, center,
+            uiState.activeZoneParams.slowYellowKm.toDouble(),
+            zonesSheetCoverPx
+        )
     }
 
     // Shelter mode: while the overlay is up, unlock deep zoom (street-level shelter detail)
@@ -1708,10 +1660,10 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
         val near = focusLocationState?.let { f -> shelterIndex?.nearest(f.lat, f.lon, limit = 25) }
         val box = near?.let { sheltersBoundingBox(it) }
         if (box != null) {
-            mapView.zoomToBoundingBox(box, false)
+            camera.fitBox(mapView, box, animate = false)
         } else {
             val center = focusLocationState?.let { GeoPoint(it.lat, it.lon) } ?: mapView.mapCenter
-            mapView.controller.animateTo(center, 18.0, 400L)
+            camera.animateTo(mapView, center, 18.0, 400L)
         }
     }
 

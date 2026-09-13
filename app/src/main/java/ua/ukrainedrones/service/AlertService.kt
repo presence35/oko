@@ -45,6 +45,7 @@ import ua.ukrainedrones.engine.inOblast
 import ua.ukrainedrones.engine.alertRegionName
 import ua.ukrainedrones.engine.isOblastWide
 import ua.ukrainedrones.engine.officialAlertActiveFor
+import ua.ukrainedrones.engine.officialYellowAlertActiveFor
 import ua.ukrainedrones.engine.threatBody
 import ua.ukrainedrones.UpdateInfo
 import ua.ukrainedrones.UpdateManager
@@ -171,6 +172,7 @@ class AlertService : Service() {
 
     private data class MonitorState(
         val focusOblastAlertActive: Boolean,
+        val focusOblastYellowAlertActive: Boolean,
         val focusOblastLevel: AlertLevel,
         val focusOblastRawLevel: AlertLevel,
         val focusToken: String?,
@@ -433,7 +435,10 @@ val mappedThreats = registry.allThreats.map { list ->
                 val focusOblastAlertSince = focusToken?.let { token ->
                     alerts.firstOrNull { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }?.since
                 }
-                val effectiveOfficialActive = focusOblastLevel >= AlertLevel.RED
+                // Official facts come from the same engine gates the UI/widget consume (no mirror
+                // rule): the trident, the announce latch and the monitor tint all derive here.
+                val focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, p.officialAlertCityScope)
+                val focusOblastYellowAlertActive = officialYellowAlertActiveFor(alerts, focusToken, focusCityUa, p.officialAlertCityScope)
 
                 val activeOfficialAlert = focusToken?.let { token ->
                     alerts.firstOrNull { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }
@@ -463,7 +468,8 @@ val mappedThreats = registry.allThreats.map { list ->
                 val slowVib = VIBRATION_ZONE
 
                 MonitorState(
-                    focusOblastAlertActive = effectiveOfficialActive,
+                    focusOblastAlertActive = focusOblastAlertActive,
+                    focusOblastYellowAlertActive = focusOblastYellowAlertActive,
                     focusOblastLevel = focusOblastLevel,
                     focusOblastRawLevel = focusOblastRawLevel,
                     focusToken = focusToken,
@@ -528,11 +534,12 @@ val mappedThreats = registry.allThreats.map { list ->
             nowMono - offlineSince
         } else 0L
 
+        // The trident owns the official signal, mirroring the header/widget: official red >
+        // official yellow > none. No zone-state influence, no channel-pref gating — the monitor
+        // always shows the live official level.
         val monitorAlertLevel = when {
-            (state.officialAlertsEnabled && state.officialRedAlertsEnabled && state.focusOblastAlertActive) ||
-                state.zoneThreats.values.any { it == ThreatZone.INNER } -> AlertLevel.RED
-            state.officialAlertsEnabled && state.yellowAlertsEnabled &&
-                state.focusOblastLevel == AlertLevel.YELLOW -> AlertLevel.YELLOW
+            state.focusOblastAlertActive -> AlertLevel.RED
+            state.focusOblastYellowAlertActive -> AlertLevel.YELLOW
             else -> AlertLevel.NONE
         }
         val monitorTitle = when {
@@ -622,6 +629,7 @@ val mappedThreats = registry.allThreats.map { list ->
             debugOfficialActive = false
             officialRegionToken = null
             wasFocusAlertActive = false
+            wasYellowAlertActive = false
             officialAnnouncedCity = null
             clearOfficialAnnounced()
         }
@@ -640,7 +648,7 @@ val mappedThreats = registry.allThreats.map { list ->
         officialAnnouncedSince = null
         officialAnnouncedReasonId = null
 
-        val officialActive = state.officialAlertsEnabled && state.officialRedAlertsEnabled && state.focusOblastAlertActive
+        val officialActive = state.officialAlertsEnabled && state.focusOblastAlertActive
         val officialBody = state.officialReason ?: state.focusRegion
 
         if (!debugOfficialActive && state.focusOblastAlertActive) {
@@ -653,9 +661,9 @@ val mappedThreats = registry.allThreats.map { list ->
                 vibrationLevel = reasonThreat?.let {
                     if (isFastType(it.type.toThreatType())) state.fastVibrationLevel else state.slowVibrationLevel
                 } ?: VIBRATION_STRONG,
-                notified = state.officialAlertsEnabled && state.officialRedAlertsEnabled && !posted,
+                notified = state.officialAlertsEnabled && !posted,
                 reason = when {
-                    !state.officialAlertsEnabled || !state.officialRedAlertsEnabled -> DebugLogReason.TOGGLE_OFF
+                    !state.officialAlertsEnabled -> DebugLogReason.TOGGLE_OFF
                     posted -> DebugLogReason.COALESCED
                     else -> DebugLogReason.FIRED
                 },
@@ -738,16 +746,17 @@ val mappedThreats = registry.allThreats.map { list ->
             )
         }
 
-        if (state.officialAlertsEnabled && wasFocusAlertActive && state.focusOblastRawLevel == AlertLevel.NONE &&
-            state.focusToken == officialRegionToken
+        // Unified all-clear: the raw official episode for the latched region truly ended. One clear
+        // per episode, whether it rang red, yellow, or red-then-yellow — keyed on the raw end
+        // (BEHAVIORS/ARCHITECTURE), never on the posture flags, so a red alert that narrowed
+        // away from the focus city mid-episode still announces its raw-end all-clear.
+        if (state.officialAlertsEnabled && officialRegionToken != null &&
+            state.focusOblastRawLevel == AlertLevel.NONE && state.focusToken == officialRegionToken
         ) {
-            val officialChannelsOn = state.officialRedAlertsEnabled || state.yellowAlertsEnabled
-            if (alertable.isEmpty() && officialChannelsOn) {
+            if (alertable.isEmpty()) {
                 cancelAlert()
             }
-            if (officialChannelsOn) {
-                postAllClear(s, state.focusBannerCity)
-            }
+            postAllClear(s, state.focusBannerCity)
             currentReasonThreatId = null
             officialRegionToken = null
             debugOfficialActive = false
@@ -759,7 +768,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 night = state.nightActive,
                 sirenOverride = state.officialSirenOverride,
                 vibrationLevel = null,
-                notified = officialChannelsOn,
+                notified = true,
                 reason = DebugLogReason.FIRED,
                 threatId = null,
                 threatType = null,
@@ -769,7 +778,7 @@ val mappedThreats = registry.allThreats.map { list ->
             )
         }
 
-        if (state.focusOblastLevel >= AlertLevel.YELLOW && state.focusOblastLevel < AlertLevel.RED &&
+        if (state.focusOblastLevel == AlertLevel.YELLOW && !state.focusOblastAlertActive &&
             state.officialAlertsEnabled && state.yellowAlertsEnabled && !wasYellowAlertActive && !posted
         ) {
             postAlert(
@@ -781,6 +790,8 @@ val mappedThreats = registry.allThreats.map { list ->
                 vibrationLevel = VIBRATION_STRONG
             )
             wasYellowAlertActive = true
+            // Raise the shared episode latch so the unified raw-end all-clear fires for yellow too.
+            officialRegionToken = state.focusToken
         }
         if (state.focusOblastLevel < AlertLevel.YELLOW && wasYellowAlertActive) {
             cancelAlert()
@@ -804,10 +815,11 @@ val mappedThreats = registry.allThreats.map { list ->
                     now = System.currentTimeMillis()
                 )
             }
+            // The scoped red gate dropped — retire the red posture and its ON log only. The
+            // episode latch is NOT released here: it lives until the raw end (all-clear) or a
+            // focus switch, so a narrowed-away or a red-then-yellow episode still announces its
+            // raw-end all-clear (see the unified all-clear above).
             wasFocusAlertActive = false
-            officialRegionToken = null
-            officialAnnouncedCity = null
-            clearOfficialAnnounced()
         }
 
         val nowForSweep = System.currentTimeMillis()

@@ -84,8 +84,8 @@ class ThreatEngine(
             if (stale || focus == null) continue
             if (t.advisory || t.areaOnly || t.type in silencedTypes) continue
 
-            val tierLat = if (props.isFast) predicted.lat else t.lat
-            val tierLon = if (props.isFast) predicted.lon else t.lon
+            val tierLat = predicted.lat
+            val tierLon = predicted.lon
             val distKm = distanceHaversine(focus.lat, focus.lon, tierLat, tierLon) / 1000.0
             val speedKmh = speed?.times(3.6)
             val tier = zoneTier(props, distKm, speedKmh, params)
@@ -117,10 +117,7 @@ class ThreatEngine(
         // re-implement alert matching. Orchestration (region latch, announce-once, sound policy)
         // stays in AlertService.
         val focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, cityScope)
-        val focusOblastYellowAlertActive = focusToken != null && alerts.filter { it.level == "yellow" }.let { yellow ->
-            if (!cityScope || focusCityUa.isNullOrBlank()) yellow.any { it.inOblast(focusToken) }
-            else yellow.any { it.inOblast(focusToken) && it.coversCity(focusCityUa) }
-        }
+        val focusOblastYellowAlertActive = officialYellowAlertActiveFor(alerts, focusToken, focusCityUa, cityScope)
         val redCities = computeRedCities(alerts, fillRegions)
         val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts.filter { it.level != "yellow" }, fillRegions)
         val (fillYellowOblastTokens, fillYellowRaionKeys) = computeFillKeys(alerts.filter { it.level == "yellow" }, fillRegions)

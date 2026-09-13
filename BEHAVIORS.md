@@ -254,9 +254,11 @@ scope=false → oblast-wide matching
 scope=true  → oblast + city name matching (coversCity)
 Falls back to oblast-wide when city name is unknown.
 The red siren flag (`focusOblastAlertActive`, level "red") and the yellow flag
-(`focusOblastYellowAlertActive`, level "yellow") are derived with the same scoping, in
-`ThreatEngine.evaluate()`. Red wins over yellow in consumers' UI priority; the flags stay
-independent so messaging can be per-level. Consumers never re-implement this matching.
+(`focusOblastYellowAlertActive`, level "yellow") are derived with the same scoping: the red
+flag through `officialAlertActiveFor`, the yellow flag through its twin
+`officialYellowAlertActiveFor`, both in `ThreatEngine.evaluate()`. Red wins over yellow in
+consumers' UI priority; the flags stay independent so messaging can be per-level. Consumers
+never re-implement this matching.
 ```
 
 ### `deriveOfficialAlertReason(alert, threats, focus, params, lang, now)` — Human-Readable Reason
@@ -327,7 +329,9 @@ Thread-safe. Owned by engine. Not a global singleton.
 15. **Official-alert evaluation is engine-owned.** The gate, red-city labels and the
     reason all derive in `ThreatEngine.evaluate` / `engine/OblastAlert.kt`; consumers only
     orchestrate (region latch, announce-once, sound policy) and read the facts. The widget
-    reads `eval.focusOblastAlertActive` — no third implementation anywhere.
+    and the notification service consume the same `focusOblastAlertActive` /
+    `focusOblastYellowAlertActive` facts (`officialAlertActiveFor` /
+    `officialYellowAlertActiveFor`) — no third implementation anywhere.
 
 ## Consumer Behaviors (Reference)
 
@@ -339,7 +343,7 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 |---|---|---|
 | Zone siren | Threat enters armed zone tier | 20s grace, coalescing |
 | Official siren | `officialAlertActiveFor()` true | Region-latched, persists across restart |
-| All-clear | Official alert ends for focus region | Only fires for the region that was ringing |
+| All-clear | Raw official episode ends for the latched focus region | One clear per episode: red, yellow, or red-then-yellow; never more than one. Keyed on the raw ending, so a mid-episode scope drop (alert narrowed away from your city) still gets its all-clear |
 | Offline critical | Connection lost >5 min | Forced notification regardless of settings |
 | Offline bypass silent | Sub-toggle of offline critical | Plays sound in silent mode |
 | Night siren overrides | Night window active | Separate zone + official override flags |
