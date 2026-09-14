@@ -459,6 +459,9 @@ fun computeRedCities(alerts: List<OblastAlert>, fillRegions: Boolean): Set<Strin
             if (speedKmh == null || speedKmh <= 0.0) return null
             return distKm / speedKmh * 60.0
         }
+
+        fun formatEtaMinutes(min: Double): String =
+            min.roundToInt().coerceAtLeast(1).toString()
     }
 }
 

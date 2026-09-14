@@ -597,7 +597,7 @@ fastYellowArmed = p.fastYellowArmed,
             val (id, zone) = newEntries.first()
             postedId = id
             val t = all[id]
-            val body = t?.let { threatBody(it, state.lang) } ?: s.notifBodyRegion
+            val body = t?.let { threatBody(it, state.lang) + etaSuffix(it, state) } ?: s.notifBodyRegion
 
             wakeLockManager.acquireForAlert()
             postAlert(
@@ -660,7 +660,7 @@ fastYellowArmed = p.fastYellowArmed,
         // is "any selected channel has its fact active" — the all-clear gate and the ON log
         // key on it; each banner posts under its own channel's flag.
         val officialActive = redActive || yellowActive
-        val officialBody = state.officialReason ?: state.focusRegion
+        val officialBody = state.officialReason ?: state.officialRegion ?: state.focusRegion
 
         if (!debugOfficialActive && state.focusOblastAlertActive) {
             debugOfficialActive = true
@@ -694,7 +694,7 @@ fastYellowArmed = p.fastYellowArmed,
                 null,
                 state.focusOblastLevel.name.lowercase(),
                 String.format(s.alertBannerFormat, state.focusBannerCity),
-                officialBody,
+                officialBody + etaSuffix(reasonThreat, state),
                 state.officialSirenOverride,
                 revealThreat = reasonThreat,
                 vibrationLevel = reasonThreat?.let {
@@ -718,7 +718,7 @@ fastYellowArmed = p.fastYellowArmed,
                 null,
                 state.focusOblastLevel.name.lowercase(),
                 String.format(s.alertBannerFormat, state.focusBannerCity),
-                officialBody,
+                officialBody + etaSuffix(reasonThreat, state),
                 state.officialSirenOverride,
                 revealThreat = reasonThreat,
                 vibrationLevel = reasonThreat?.let {
@@ -892,6 +892,14 @@ fastYellowArmed = p.fastYellowArmed,
         val focus = state.focusLocation ?: return null
         if (t == null) return null
         return distanceFlat(focus.lat, focus.lon, t.lat, t.lon) / 1000.0
+    }
+
+    private fun etaSuffix(t: NormalizedThreat?, state: MonitorState): String {
+        if (t == null || state.focusLocation == null) return ""
+        val distKm = distanceFromFocusKm(t, state) ?: return ""
+        val eta = ThreatEngine.etaMinutes(distKm, t.speedKmh) ?: return ""
+        val unit = Strings.get(state.lang).etaUnit
+        return ", ~${ThreatEngine.formatEtaMinutes(eta)} $unit"
     }
 
     private fun notifyMonitor(

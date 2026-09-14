@@ -4,6 +4,8 @@
 
 - Opening a threat card no longer snaps the camera to your GPS position; every threat selection now settles the threat at the same on-screen anchor below the card / Opening a threat card no longer snaps the camera to your GPS position; every threat selection now settles the threat at the same on-screen anchor below the card
 - The threat card icon now pops in instantly with a snappy spring (no 140 ms dead time) / The threat card icon now pops in instantly with a snappy spring (no 140 ms dead time)
+- Red official-alert notifications now show the colour in their title (e.g. "Donetsk: red alert"), and the body states the exact region the alert source named / Red official-alert notifications now show the colour in their title (e.g. "Donetsk: red alert"), and the body states the exact region the alert source named
+- Threat notifications (red-zone, yellow-zone and official alerts with a deduced threat) now show the estimated time until the threat reaches your location / Threat notifications (red-zone, yellow-zone and official alerts with a deduced threat) now show the estimated time until the threat reaches your location
 
 - Deep refactor: the NEPTUN connection layer is now a source-agnostic source SPI (socket, decoder and reconnect supervisor split into separate pieces registered through a single source registry), so future threat data sources plug in without touching the engine or UI / Deep refactor: the NEPTUN connection layer is now a source-agnostic source SPI so future threat data sources plug in without touching the engine or UI
 - Death flourish overlay now renders in its own self-contained View (no full-map redraws during shoot-down) / Death flourish overlay now renders in its own self-contained View (no full-map redraws during shoot-down)

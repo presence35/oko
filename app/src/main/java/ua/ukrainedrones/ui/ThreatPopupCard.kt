@@ -311,7 +311,7 @@ fun ThreatPopupCard(
                     // The metric pair (ETA / distance) in display order.
                     val pillSpecs = buildList {
                         proximity?.etaToUserMin?.let { eta ->
-                            add(PillSpec(formatEtaMinutes(eta), s.etaUnit, GpsDot, null))
+                            add(PillSpec(ThreatEngine.formatEtaMinutes(eta), s.etaUnit, GpsDot, null))
                         }
                         add(PillSpec(formatKm(distUser), s.kmUnit, null, distCd))
                     }
@@ -730,7 +730,7 @@ private fun PillTrio(
 ) {
     proximity?.etaToUserMin?.let { eta ->
         MetricPill(
-            number = formatEtaMinutes(eta),
+            number = ThreatEngine.formatEtaMinutes(eta),
             unit = s.etaUnit,
             dotColor = GpsDot
         )
@@ -816,9 +816,6 @@ private fun MetricPill(
 }
 
 private fun formatKm(km: Double): String = km.roundToInt().toString()
-
-private fun formatEtaMinutes(min: Double): String =
-    min.roundToInt().coerceAtLeast(1).toString()
 
 /** Maps uncertainty km to a 1–5 quality rating (more bars = tighter fix). */
 private fun uncertaintyBars(km: Double): Int {
