@@ -130,6 +130,7 @@ class MainActivity : ComponentActivity() {
         val lats = intent?.getDoubleArrayExtra(NeutralizedTally.EXTRA_FLOURISH_LATS) ?: return
         val lons = intent.getDoubleArrayExtra(NeutralizedTally.EXTRA_FLOURISH_LONS) ?: return
         val types = intent.getStringArrayExtra(NeutralizedTally.EXTRA_FLOURISH_TYPES) ?: return
+        val regions = intent.getStringArrayExtra(NeutralizedTally.EXTRA_FLOURISH_REGIONS)
         val n = minOf(lats.size, lons.size, types.size)
         if (n == 0) return
         val records = buildList {
@@ -140,7 +141,7 @@ class MainActivity : ComponentActivity() {
                     lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0
                 ) continue
                 val type = runCatching { ThreatType.valueOf(types[i]) }.getOrNull() ?: continue
-                add(FlourishRecord(lat, lon, type))
+                add(FlourishRecord(lat, lon, type, regions?.getOrNull(i)))
             }
         }
         if (records.isNotEmpty()) viewModel.triggerFlourish(records)

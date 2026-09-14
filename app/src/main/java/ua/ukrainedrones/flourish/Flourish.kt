@@ -1,14 +1,21 @@
 package ua.ukrainedrones
 
 import ua.ukrainedrones.engine.LatLng
+import ua.ukrainedrones.engine.canonicalToken
 import ua.ukrainedrones.engine.distanceFlat
+import ua.ukrainedrones.engine.matchOblast
 
 import androidx.compose.runtime.Immutable
 import org.osmdroid.util.BoundingBox
 
 /** A resolved threat remembered by the service for the tally-tap replay flourish. */
 @Immutable
-data class FlourishRecord(val lat: Double, val lon: Double, val type: ThreatType)
+data class FlourishRecord(
+    val lat: Double,
+    val lon: Double,
+    val type: ThreatType,
+    val region: String? = null
+)
 
 /** One-shot replay show: the remembered resolutions to shoot down, in arrival order. */
 @Immutable
@@ -38,8 +45,8 @@ data class ReplayProgress(
 }
 
 /** Floor for the reveal frame's lat/lon span — stops over-zoom on a very close threat. */
-const val REVEAL_MIN_SPAN_LAT = 0.10
-const val REVEAL_MIN_SPAN_LON = 0.16
+const val REVEAL_MIN_SPAN_LAT = 0.15
+const val REVEAL_MIN_SPAN_LON = 0.22
 
 /** Bounding box over every resolution in the replay flourish (plus the focus) so a single
  *  zoom-out shows the whole show at once — never pans per bullet. Adds a margin so threats on
@@ -59,8 +66,8 @@ internal fun flourishesBoundingBox(records: List<FlourishRecord>, focus: LatLng?
     }
     val spanLat = maxOf(maxLat - minLat, REVEAL_MIN_SPAN_LAT)
     val spanLon = maxOf(maxLon - minLon, REVEAL_MIN_SPAN_LON)
-    val marginLat = spanLat * 0.15
-    val marginLon = spanLon * 0.15
+    val marginLat = spanLat * 0.25
+    val marginLon = spanLon * 0.25
     val latMid = (maxLat + minLat) / 2
     val lonMid = (maxLon + minLon) / 2
     return BoundingBox(
@@ -94,6 +101,23 @@ internal fun clusterFlourish(
         if (!placed) groups.add(mutableListOf(r))
     }
     return groups
+}
+
+/**
+ * Oblast-based clustering for the replay flourish: group records by the canonical stem of
+ * their server region text (falling back to a nearest-city geo lookup), used in All-of-Ukraine
+ * mode so each oblast plays as one group instead of scattering single-threat groups. Deterministic
+ * (arrival order preserved); a missing region goes to a trailing "other" bucket.
+ */
+internal fun clusterFlourishByOblast(records: List<FlourishRecord>): List<List<FlourishRecord>> {
+    val groups = linkedMapOf<String, MutableList<FlourishRecord>>()
+    for (r in records) {
+        val key = r.region?.let { canonicalToken(it) }
+            ?: matchOblast(r.lat, r.lon)?.stem
+            ?: "other"
+        groups.getOrPut(key) { mutableListOf() }.add(r)
+    }
+    return groups.values.toList()
 }
 
 /** When a selected threat vanishes it shows the compact "shot-down" card and drops the

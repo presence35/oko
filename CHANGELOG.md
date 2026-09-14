@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- The auto shoot-down countdown now pauses while you manually shoot down a threat, then fires when the animation ends / The auto shoot-down countdown now pauses while you manually shoot down a threat, then fires when the animation ends
+- The tally-tap replay now groups shoot-downs by oblast (with a wider zoom for context) when All-of-Ukraine is on / The tally-tap replay now groups shoot-downs by oblast (with a wider zoom for context) when All-of-Ukraine is on
 - Opening a threat card no longer snaps the camera to your GPS position; every threat selection now settles the threat at the same on-screen anchor below the card / Opening a threat card no longer snaps the camera to your GPS position; every threat selection now settles the threat at the same on-screen anchor below the card
 - The threat card icon now pops in instantly with a snappy spring (no 140 ms dead time) / The threat card icon now pops in instantly with a snappy spring (no 140 ms dead time)
 - Red official-alert notifications now show the colour in their title (e.g. "Donetsk: red alert"), and the body states the exact region the alert source named / Red official-alert notifications now show the colour in their title (e.g. "Donetsk: red alert"), and the body states the exact region the alert source named

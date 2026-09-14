@@ -200,9 +200,14 @@ class DeathFxController(
         countdownJob = scope.launch {
             try {
                 for (n in 3 downTo 1) {
+                    // If a manual death animation is in flight, hold the countdown at its
+                    // current number until it finishes — the tick resumes seamlessly after.
+                    if (overlay.isActive) overlay.active.first { !it }
                     _countdown.value = n
                     delay(1000L)
                 }
+                // Final hold: don't fire while the manual explosion is still on screen.
+                if (overlay.isActive) overlay.active.first { !it }
                 _countdown.value = null
                 _strikeType.value = null
                 _autoStrikeActive.value = true
@@ -358,11 +363,19 @@ class DeathFxController(
             savedHomeZoom = preZoom
         }
         cameraReturnJob?.cancel()
-        // A group spans about a third of the current viewport width — zoomed in, groups are
-        // tight; zoomed out, everything clusters.
-        val mpp = TileSystem.GroundResolution(mapView.mapCenter.latitude, mapView.zoomLevelDouble)
-        val groupDist = mpp * mapView.width * 0.45f
-        val groups = clusterFlourish(records, groupDist.toDouble())
+        // All-of-Ukraine mode groups by oblast so each region plays as one coherent group
+        // (one zoomed-out shot per oblast instead of scattered single-threat groups). Otherwise
+        // a group spans about 45% of the current viewport width — zoomed in, groups are tight.
+        val allUkraine = runCatching {
+            UserPrefs(context).preferences.first().neutralizedTallyAllUkraine
+        }.getOrDefault(false)
+        val groups = if (allUkraine) {
+            clusterFlourishByOblast(records)
+        } else {
+            val mpp = TileSystem.GroundResolution(mapView.mapCenter.latitude, mapView.zoomLevelDouble)
+            val groupDist = mpp * mapView.width * 0.45f
+            clusterFlourish(records, groupDist.toDouble())
+        }
         DebugLog.recordFlourish(
             DebugLogReason.FIRED,
             detail = showDetail(records.size, groups.size),

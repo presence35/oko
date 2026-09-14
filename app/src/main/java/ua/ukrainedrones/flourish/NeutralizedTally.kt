@@ -31,6 +31,7 @@ class NeutralizedTally(
         const val EXTRA_FLOURISH_LATS = "flourish_lats"
         const val EXTRA_FLOURISH_LONS = "flourish_lons"
         const val EXTRA_FLOURISH_TYPES = "flourish_types"
+        const val EXTRA_FLOURISH_REGIONS = "flourish_regions"
         const val CHANNEL_NEUTRALIZED = "neutralized"
         private const val NOTIF_NEUTRALIZED = 6
     }
@@ -56,7 +57,12 @@ class NeutralizedTally(
 
     // Running memory of resolved threats (position + type) so tapping the tally notification can
     // replay a shot-down show. Capped at 21; flourish survives alerts and background.
-    private data class ResolvedRecord(val lat: Double, val lon: Double, val type: ThreatType)
+    private data class ResolvedRecord(
+        val lat: Double,
+        val lon: Double,
+        val type: ThreatType,
+        val region: String?
+    )
     private val resolvedMemory = ArrayDeque<ResolvedRecord>()
 
     // NEPTUN re-sends resolutions (the same re-send the map's dud mechanism guards against) —
@@ -74,7 +80,7 @@ class NeutralizedTally(
         while (seenRemovalIds.size > 64) seenRemovalIds.removeFirst()
         neutralizedCount++
         perTypeCounts[removed.type] = (perTypeCounts[removed.type] ?: 0) + 1
-        resolvedMemory.addLast(ResolvedRecord(removed.lat, removed.lon, removed.type))
+        resolvedMemory.addLast(ResolvedRecord(removed.lat, removed.lon, removed.type, removed.region))
         while (resolvedMemory.size > 21) resolvedMemory.removeFirst()
         postNeutralizedTally(lang)
     }
@@ -139,6 +145,7 @@ class NeutralizedTally(
         val latArr = resolvedMemory.map { it.lat }.toDoubleArray()
         val lonArr = resolvedMemory.map { it.lon }.toDoubleArray()
         val typeArr = resolvedMemory.map { it.type.name }.toTypedArray()
+        val regionArr = resolvedMemory.map { it.region }.toTypedArray()
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -146,6 +153,7 @@ class NeutralizedTally(
             putExtra(EXTRA_FLOURISH_LATS, latArr)
             putExtra(EXTRA_FLOURISH_LONS, lonArr)
             putExtra(EXTRA_FLOURISH_TYPES, typeArr)
+            putExtra(EXTRA_FLOURISH_REGIONS, regionArr)
         }
         return PendingIntent.getActivity(
             context, 3, intent,

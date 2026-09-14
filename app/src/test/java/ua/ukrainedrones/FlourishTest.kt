@@ -50,6 +50,30 @@ class FlourishTest {
     }
 
     @Test
+    fun `clusterFlourishByOblast groups by canonical region token`() {
+        // "Київська область" and "Київська" both canonicalize to "Київська" → same group.
+        val kyiv1 = FlourishRecord(50.45, 30.52, ThreatType.SHAHED, "Київська область")
+        val kyiv2 = FlourishRecord(50.35, 30.60, ThreatType.KAB, "Київська")
+        val odesa = FlourishRecord(46.48, 30.73, ThreatType.SHAHED, "Одеська область")
+        val groups = clusterFlourishByOblast(listOf(kyiv1, kyiv2, odesa))
+        assertEquals(2, groups.size)
+        assertEquals(2, groups[0].size)
+        assertEquals(1, groups[1].size)
+    }
+
+    @Test
+    fun `clusterFlourishByOblast preserves arrival order within groups`() {
+        val r1 = FlourishRecord(50.45, 30.52, ThreatType.SHAHED, "Дніпропетровська область")
+        val r2 = FlourishRecord(50.35, 30.60, ThreatType.KAB, "Одеська область")
+        val r3 = FlourishRecord(50.40, 30.55, ThreatType.FPV_LOITERING, "Дніпропетровська область")
+        val groups = clusterFlourishByOblast(listOf(r1, r2, r3))
+        assertEquals(2, groups.size)
+        assertEquals(r1, groups[0][0])
+        assertEquals(r3, groups[0][1])
+        assertEquals(r2, groups[1][0])
+    }
+
+    @Test
     fun `selection drops only when the threat is gone and the animation is on`() {
         assertTrue(FlourishPolicy.dropSelection(selectedGone = true, animOn = true))
         assertFalse(FlourishPolicy.dropSelection(selectedGone = true, animOn = false))
