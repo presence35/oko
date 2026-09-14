@@ -191,7 +191,6 @@ class AlertService : Service() {
         val slowYellowArmed: Boolean,
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
-        val officialAlertsEnabled: Boolean,
         val officialRedAlertsEnabled: Boolean,
         val yellowAlertsEnabled: Boolean = true,
         val zoneSirenOverride: Boolean,
@@ -206,7 +205,12 @@ class AlertService : Service() {
         val gpsFixMissing: Boolean = false,
         val nightActive: Boolean,
         val enabled: Set<ThreatType>
-    )
+    ) {
+        /** Derived summary of the two sub-channels — the master toggle. Mirrors the UI so the
+         *  all-clear gate and the OFF log key on the same red||yellow fact the row shows. */
+        val officialAlertsEnabled: Boolean
+            get() = officialRedAlertsEnabled || yellowAlertsEnabled
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -433,7 +437,8 @@ val mappedThreats = registry.allThreats.map { list ->
                 val focusOblastLevel = alerts.maxLevelFor(focusToken, focusCityUa, p.officialAlertCityScope)
                 val focusOblastRawLevel = alerts.maxLevelFor(focusToken, null, false)
                 val focusOblastAlertSince = focusToken?.let { token ->
-                    alerts.firstOrNull { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }?.since
+                    alerts.filter { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }
+                        .maxByOrNull { it.isOblastWide() }?.since
                 }
                 // Official facts come from the same engine gates the UI/widget consume (no mirror
                 // rule): the trident, the announce latch and the monitor tint all derive here.
@@ -441,7 +446,8 @@ val mappedThreats = registry.allThreats.map { list ->
                 val focusOblastYellowAlertActive = officialYellowAlertActiveFor(alerts, focusToken, focusCityUa, p.officialAlertCityScope)
 
                 val activeOfficialAlert = focusToken?.let { token ->
-                    alerts.firstOrNull { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }
+                    alerts.filter { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }
+                        .maxByOrNull { it.isOblastWide() }
                 }
                 val (officialReason, officialReasonThreatId) = if (activeOfficialAlert != null) {
                     engine.deriveOfficialAlertReason(
@@ -487,10 +493,9 @@ val mappedThreats = registry.allThreats.map { list ->
                     slowRedArmed = p.slowRedArmed,
                     slowYellowArmed = p.slowYellowArmed,
                     fastRedArmed = p.fastRedArmed,
-                    fastYellowArmed = p.fastYellowArmed,
-                    officialAlertsEnabled = p.officialAlertsEnabled,
-                    officialRedAlertsEnabled = p.officialRedAlertsEnabled,
-                    yellowAlertsEnabled = p.officialYellowAlertsEnabled,
+fastYellowArmed = p.fastYellowArmed,
+            officialRedAlertsEnabled = p.officialRedAlertsEnabled,
+            yellowAlertsEnabled = p.officialYellowAlertsEnabled,
                     zoneSirenOverride = zoneSirenOverride,
                     officialSirenOverride = officialSirenOverride,
                     degraded = registry.degraded.value,
@@ -648,12 +653,12 @@ val mappedThreats = registry.allThreats.map { list ->
         officialAnnouncedSince = null
         officialAnnouncedReasonId = null
 
-        // Red-level official alert gate: user must allow red alerts
-        val redOfficialActive = state.officialAlertsEnabled && state.officialRedAlertsEnabled && state.focusOblastAlertActive
-        // Yellow-level official alert gate: user must allow yellow alerts
-        val yellowOfficialActive = state.officialAlertsEnabled && state.officialYellowAlertsEnabled && state.focusOblastYellowAlertActive
-        
-        val officialActive = redOfficialActive || yellowOfficialActive
+        val redActive = state.officialRedAlertsEnabled && state.focusOblastAlertActive
+        val yellowActive = state.yellowAlertsEnabled && state.focusOblastYellowAlertActive
+        // The master is the derived summary of its two sub-channels (red || yellow), so this
+        // is "any selected channel has its fact active" — the all-clear gate and the ON log
+        // key on it; each banner posts under its own channel's flag.
+        val officialActive = redActive || yellowActive
         val officialBody = state.officialReason ?: state.focusRegion
 
         if (!debugOfficialActive && state.focusOblastAlertActive) {
@@ -666,9 +671,9 @@ val mappedThreats = registry.allThreats.map { list ->
                 vibrationLevel = reasonThreat?.let {
                     if (isFastType(it.type.toThreatType())) state.fastVibrationLevel else state.slowVibrationLevel
                 } ?: VIBRATION_STRONG,
-                notified = state.officialAlertsEnabled && !posted,
+                notified = redActive && !posted,
                 reason = when {
-                    !state.officialAlertsEnabled -> DebugLogReason.TOGGLE_OFF
+                    !redActive -> DebugLogReason.TOGGLE_OFF
                     posted -> DebugLogReason.COALESCED
                     else -> DebugLogReason.FIRED
                 },
@@ -681,7 +686,7 @@ val mappedThreats = registry.allThreats.map { list ->
             )
         }
 
-        if (redOfficialActive && !wasFocusAlertActive && !posted) {
+        if (redActive && !wasFocusAlertActive && !posted) {
             val reasonThreat = state.officialReasonThreatId?.let { all[it] }
             wakeLockManager.acquireForAlert()
             postAlert(
@@ -784,7 +789,7 @@ val mappedThreats = registry.allThreats.map { list ->
         }
 
         if (state.focusOblastLevel == AlertLevel.YELLOW && !state.focusOblastAlertActive &&
-            state.officialAlertsEnabled && state.yellowAlertsEnabled && !wasYellowAlertActive && !posted
+            state.yellowAlertsEnabled && !wasYellowAlertActive && !posted
         ) {
             postAlert(
                 null,

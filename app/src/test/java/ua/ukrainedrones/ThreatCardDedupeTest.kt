@@ -10,8 +10,9 @@ class ThreatCardDedupeTest {
     fun typePlusRepeatedRegionIsHidden() {
         assertTrue(
             repeatsShownInfo(
-                "UAV - Kobleve, Mykolaiv oblast",
-                typeLabel = "UAV",
+                "Drone - Kobleve, Mykolaiv oblast",
+                typeLabel = "Drone",
+                labelEn = "Drone",
                 regionText = "Kobleve · Mykolaiv oblast"
             )
         )
@@ -20,14 +21,21 @@ class ThreatCardDedupeTest {
     @Test
     fun realSentenceSurvives() {
         assertFalse(
-            repeatsShownInfo("UAV patrolling over the sea", "UAV", "Odesa oblast")
+            repeatsShownInfo("Drone patrolling over the sea", "Drone", "Drone", "Odesa oblast")
         )
     }
 
     @Test
-    fun directionalCourseSurvives() {
+    fun courseWithDifferentDestinationSurvives() {
         assertFalse(
-            repeatsShownInfo("UAV heading toward Chornomorsk", "UAV", "Chornomorsk · Odesa oblast")
+            repeatsShownInfo("Drone heading toward Chornomorsk", "Drone", "Drone", "Kobleve · Mykolaiv oblast")
+        )
+    }
+
+    @Test
+    fun courseWithSameDestinationHidden() {
+        assertTrue(
+            repeatsShownInfo("Drone heading toward Chornomorsk", "Drone", "Drone", "Chornomorsk · Odesa oblast")
         )
     }
 
@@ -37,6 +45,7 @@ class ThreatCardDedupeTest {
             repeatsShownInfo(
                 "БпЛА - Коблеве, Миколаївська область",
                 typeLabel = "БпЛА",
+                labelEn = "Drone",
                 regionText = "Коблеве · Миколаївська область"
             )
         )
@@ -44,20 +53,27 @@ class ThreatCardDedupeTest {
 
     @Test
     fun typeOnlyLineHidden() {
-        assertTrue(repeatsShownInfo("UAV", "UAV", "Odesa oblast"))
+        assertTrue(repeatsShownInfo("Drone", "Drone", "Drone", "Odesa oblast"))
     }
 
     @Test
     fun regionPhraseRemovedBeforeShorterLocality() {
         assertTrue(
-            repeatsShownInfo("БпЛА Київська область", "БпЛА", "Київ · Київська область")
+            repeatsShownInfo("БпЛА Київська область", "БпЛА", "Drone", "Київ · Київська область")
         )
     }
 
     @Test
     fun extraInfoBeyondNamesSurvives() {
         assertFalse(
-            repeatsShownInfo("UAV circling, air defense active", "UAV", "Kobleve · Mykolaiv oblast")
+            repeatsShownInfo("Drone circling, air defense active", "Drone", "Drone", "Kobleve · Mykolaiv oblast")
+        )
+    }
+
+    @Test
+    fun guidedBombRepeatingTypeAndPlaceHidden() {
+        assertTrue(
+            repeatsShownInfo("Guided bomb heading toward Khmelnytskyi", "KAB", "KAB", "Khmelnytskyi")
         )
     }
 }

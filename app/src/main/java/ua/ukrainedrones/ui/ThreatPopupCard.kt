@@ -484,10 +484,10 @@ fun ThreatPopupCard(
                         HorizontalDivider(color = Color(0xFF3A3A3A))
                         Spacer(Modifier.height(10.dp))
 
-                        // NEPTUN's course assessment, e.g. "UAV heading toward Chornomorsk"
+                        // NEPTUN's course assessment, e.g. "Drone heading toward Chornomorsk"
                         val course = translateCourseAssessment(threat.explanationShort, lang)
                             ?.let { firstSentence(it) }
-                            ?.takeUnless { repeatsShownInfo(it, typeLabel, displayRegion) }
+                            ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, displayRegion) }
                         course?.let {
                             Text(it, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB0B0B0))
                             Spacer(Modifier.height(8.dp))
@@ -574,15 +574,17 @@ private fun firstSentence(text: String): String {
 
 /** True when the course line carries nothing beyond the type label and the place names
  *  already shown in the header: deleting those leaves no real words behind. */
-internal fun repeatsShownInfo(course: String, typeLabel: String, regionText: String): Boolean {
+internal fun repeatsShownInfo(course: String, typeLabel: String, labelEn: String, regionText: String): Boolean {
     fun norm(s: String): String = s.lowercase()
         .map { if (it.isLetterOrDigit()) it else ' ' }
         .joinToString("")
         .replace(Regex("\\s+"), " ")
         .trim()
     var rest = " ${norm(course)} "
-    val drops = (listOf(typeLabel) +
-            listOf("UAV", "БпЛА", "Shahed", "Шахед", "Шахеди", "Drone", "Дрон") +
+    val drops = (listOf(typeLabel, labelEn) +
+            listOf("БпЛА", "Shahed", "Шахед", "Шахеди", "Drone", "Дрон") +
+            listOf("guided bomb", "guided bombs", "cruise missile", "ballistic missile", "high-speed target") +
+            listOf("heading toward", "moving toward", "in the area of", "from the direction of") +
             regionText.split('·', ','))
         .map { norm(it) }
         .filter { it.isNotBlank() }

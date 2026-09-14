@@ -797,8 +797,8 @@ fun SettingsScreen(
                     icon = rememberVectorPainter(Icons.Default.Notifications),
                     expanded = collapse.alerts,
                     subtitle = s.alertsSubtitle(
-                        officialAlertsEnabled && officialRedAlertsEnabled,
-                        officialAlertsEnabled && officialYellowAlertsEnabled,
+                        officialRedAlertsEnabled,
+                        officialYellowAlertsEnabled,
                         sirenOverride
                     ),
                     onToggle = { onCollapseChange(collapse.copy(alerts = !collapse.alerts)) }

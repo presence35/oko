@@ -95,7 +95,6 @@ data class UiState(
     val nightFastYellowArmed: Boolean = true,
     val nightZoneSirenOverride: Boolean = false,
     val nightOfficialSirenOverride: Boolean = false,
-    val officialAlertsEnabled: Boolean = true,
     val officialRedAlertsEnabled: Boolean = true,
     val officialYellowAlertsEnabled: Boolean = true,
     val officialAlertCityScope: Boolean = false,
@@ -161,7 +160,12 @@ data class UiState(
     val threatDataStale: Boolean = false,
     val notificationsDisabledBySystem: Boolean = false,
     val protectionState: ProtectionState = ProtectionState.ACTIVE
-)
+) {
+    /** Derived summary of the two sub-channels — the master toggle. Can never be ON while red
+     *  and yellow are both OFF, so the row can never read enabled with nothing selected. */
+    val officialAlertsEnabled: Boolean
+        get() = officialRedAlertsEnabled || officialYellowAlertsEnabled
+}
 
 @Immutable
 data class SettingsState(
@@ -180,9 +184,9 @@ data class SettingsState(
     val slowYellowArmed: Boolean get() = prefs.slowYellowArmed
     val fastRedArmed: Boolean get() = prefs.fastRedArmed
     val fastYellowArmed: Boolean get() = prefs.fastYellowArmed
-    val officialAlertsEnabled: Boolean get() = prefs.officialAlertsEnabled
     val officialRedAlertsEnabled: Boolean get() = prefs.officialRedAlertsEnabled
     val officialYellowAlertsEnabled: Boolean get() = prefs.officialYellowAlertsEnabled
+    val officialAlertsEnabled: Boolean get() = officialRedAlertsEnabled || officialYellowAlertsEnabled
     val officialAlertCityScope: Boolean get() = prefs.officialAlertCityScope
     val sirenOverride: Boolean get() = prefs.sirenOverride
     val criticalOfflineOverride: Boolean get() = prefs.criticalOfflineOverride
@@ -409,7 +413,6 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val slowYellowArmed: Boolean,
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
-        val officialAlertsEnabled: Boolean,
         val officialRedAlertsEnabled: Boolean,
         val officialYellowAlertsEnabled: Boolean,
         val officialAlertCityScope: Boolean,
@@ -508,7 +511,6 @@ val fastGroupCollapsed: Boolean,
             slowYellowArmed = slowYellowArmed,
             fastRedArmed = fastRedArmed,
             fastYellowArmed = fastYellowArmed,
-            officialAlertsEnabled = officialAlertsEnabled,
             officialRedAlertsEnabled = officialRedAlertsEnabled,
             officialYellowAlertsEnabled = officialYellowAlertsEnabled,
             officialAlertCityScope = officialAlertCityScope,
@@ -664,7 +666,6 @@ showBorders = prefs.showBorders,
             slowYellowArmed = prefs.slowYellowArmed,
             fastRedArmed = prefs.fastRedArmed,
             fastYellowArmed = prefs.fastYellowArmed,
-            officialAlertsEnabled = prefs.officialAlertsEnabled,
             officialRedAlertsEnabled = prefs.officialRedAlertsEnabled,
             officialYellowAlertsEnabled = prefs.officialYellowAlertsEnabled,
             officialAlertCityScope = prefs.officialAlertCityScope,
@@ -732,7 +733,6 @@ showBorders = prefs.showBorders,
                 activeFastRedArmed = activeArmed.fastRed,
                 activeSlowYellowArmed = activeArmed.slowYellow,
                 activeFastYellowArmed = activeArmed.fastYellow,
-                officialAlertsEnabled = prefs.officialAlertsEnabled,
                 officialRedAlertsEnabled = prefs.officialRedAlertsEnabled,
                 officialYellowAlertsEnabled = prefs.officialYellowAlertsEnabled,
                 criticalOfflineOverride = prefs.criticalOfflineOverride,
@@ -1033,7 +1033,13 @@ fun setAlertsArmed(armed: Boolean) {
     }
 
     fun setOfficialAlertsEnabled(enabled: Boolean) {
-        viewModelScope.launch { prefs.setOfficialAlertsEnabled(enabled) }
+        // The master is a derived summary of its two sub-channels: enabling it arms both,
+        // disabling it disarms both. No separate stored preference — it can never be ON
+        // while red and yellow are both OFF.
+        viewModelScope.launch {
+            prefs.setOfficialRedAlertsEnabled(enabled)
+            prefs.setYellowAlertsEnabled(enabled)
+        }
     }
 
     fun setOfficialRedAlertsEnabled(enabled: Boolean) {
@@ -1662,7 +1668,6 @@ private fun deriveProtectionState(
     activeFastRedArmed: Boolean,
     activeSlowYellowArmed: Boolean,
     activeFastYellowArmed: Boolean,
-    officialAlertsEnabled: Boolean,
     officialRedAlertsEnabled: Boolean,
     officialYellowAlertsEnabled: Boolean,
     criticalOfflineOverride: Boolean,
@@ -1672,7 +1677,7 @@ private fun deriveProtectionState(
     if (!monitoringRunning) return ProtectionState.OFFLINE
     val anyZoneArmed = activeSlowRedArmed || activeFastRedArmed || activeSlowYellowArmed || activeFastYellowArmed
     val allChannelsOff = !anyZoneArmed &&
-        !(officialAlertsEnabled && (officialRedAlertsEnabled || officialYellowAlertsEnabled))
+        !(officialRedAlertsEnabled || officialYellowAlertsEnabled)
     val reduced = notificationsDisabledBySystem ||
         allChannelsOff ||
         silencedTypesCount == ThreatType.values().size ||

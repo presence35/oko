@@ -39,7 +39,7 @@ class ThreatTest {
     fun `catalog - SHAHED label is correct`() {
         val info = ThreatTypeCatalog.INFO[ThreatType.SHAHED]!!
         assertEquals("БпЛА", info.labelUa)
-        assertEquals("UAV", info.labelEn)
+        assertEquals("Drone", info.labelEn)
     }
 
     // ─────────────────────────────────────────────────────────────

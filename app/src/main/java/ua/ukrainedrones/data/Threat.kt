@@ -51,11 +51,11 @@ object ThreatTypeCatalog {
     val INFO: Map<ThreatType, ThreatTypeInfo> = mapOf(
         ThreatType.SHAHED to ThreatTypeInfo(
             labelUa = "БпЛА",
-            labelEn = "UAV",
+            labelEn = "Drone",
             descriptionUa = "Ударні безпілотники, зокрема «Шахеди».",
             descriptionEn = "Strike drones, including \"Shahed\"-type.",
             detailsUa = "Shahed-136 (Герань-2) — дрон-камікадзе. Великі хвилі, найчастіше вночі, низько (50–200 м) на ~180 км/год, БЧ ~40 кг, дальність до ~1000 км, години барражування. Через малу швидкість зазвичай є 10–30 хв. Звук нагадує мопед/газонокосарку. Сприймай будь-яку БпЛА-тривогу серйозно — дрон може відокремитися від хвилі будь-де.",
-            detailsEn = "Shahed-136 / Geran-2 is a one-way attack drone. Large waves, often at night, flying low (50–200 m) at ~180 km/h, ~40 kg warhead, range up to ~1,000 km, hours of loiter. Because it's slow, you usually get 10–30 min of warning. It sounds like a moped/lawnmower. Treat any UAV alert as real — one can drop out of the wave at any point."
+            detailsEn = "Shahed-136 / Geran-2 is a one-way attack drone. Large waves, often at night, flying low (50–200 m) at ~180 km/h, ~40 kg warhead, range up to ~1,000 km, hours of loiter. Because it's slow, you usually get 10–30 min of warning. It sounds like a moped/lawnmower. Treat any Drone alert as real — one can drop out of the wave at any point."
         ),
         ThreatType.FPV_LOITERING to ThreatTypeInfo(
             labelUa = "FPV-дрон",
@@ -117,7 +117,7 @@ object ThreatTypeCatalog {
             descriptionUa = "Сигнали, тип яких ще уточнюється джерелами.",
             descriptionEn = "Signals whose type is still being confirmed by sources.",
             detailsUa = "Джерела бачать об'єкт, але тип ще не підтверджено — це може бути БпЛА, ракета чи імітатор. Показані швидкість і дальність — орієнтовні. Не вважай, що «це просто так»: стався до сигналу як до реального, поки він не розв'язався, і керуйся офіційними сигналами.",
-            detailsEn = "Sources see an object but haven't confirmed the type — it could be a UAV, missile or decoy. Speed/range shown are guesses. Don't assume \"probably nothing\": treat it as a real alert until it resolves, and stay with official signals.",
+            detailsEn = "Sources see an object but haven't confirmed the type — it could be a drone, missile or decoy. Speed/range shown are guesses. Don't assume \"probably nothing\": treat it as a real alert until it resolves, and stay with official signals.",
             jokeUa = "Об'єкт Шредінгера: і дрон, і ракета — поки хтось не скаже інакше.",
             jokeEn = "Schrödinger's object: both a drone and a missile until someone says otherwise."
         )
@@ -234,25 +234,25 @@ private fun parseTrail(o: JSONObject): List<TrailPoint> {
 }
 
 private val COURSE_PATTERNS: List<Pair<Regex, String>> = listOf(
-    Regex("^(?:Група|Рій) БпЛА курсом на (.+)$", RegexOption.IGNORE_CASE) to "Group of UAVs heading toward {X}",
+    Regex("^(?:Група|Рій) БпЛА курсом на (.+)$", RegexOption.IGNORE_CASE) to "Group of drones heading toward {X}",
     Regex("^Шахеди? курсом на (.+)$", RegexOption.IGNORE_CASE) to "Shahed heading toward {X}",
-    Regex("^БпЛА курсом на (.+)$", RegexOption.IGNORE_CASE) to "UAV heading toward {X}",
-    Regex("^БпЛА (?:летить |рухається )?(?:зі сторони|з боку|з напрямку) (.+)$", RegexOption.IGNORE_CASE) to "UAV from the direction of {X}",
+    Regex("^БпЛА курсом на (.+)$", RegexOption.IGNORE_CASE) to "Drone heading toward {X}",
+    Regex("^БпЛА (?:летить |рухається )?(?:зі сторони|з боку|з напрямку) (.+)$", RegexOption.IGNORE_CASE) to "Drone from the direction of {X}",
     Regex("^Шахеди? (?:зі сторони|з боку|з напрямку) (.+)$", RegexOption.IGNORE_CASE) to "Shahed from the direction of {X}",
     Regex("^(?:Ракета|Крилата ракета) (?:летить |рухається )?(?:у напрямку|в напрямку|на) (.+)$", RegexOption.IGNORE_CASE) to "Missile heading toward {X}",
     Regex("^Швидкісна ціль (?:у напрямку|в напрямку|на|курсом на) (.+)$", RegexOption.IGNORE_CASE) to "High-speed target heading toward {X}",
     Regex("^КАБи? (?:у напрямку|в напрямку|на|курсом на) (.+)$", RegexOption.IGNORE_CASE) to "Guided bomb heading toward {X}",
-    // A "swarm" loitering reads differently from a single UAV patrolling — keep the distinction.
-    Regex("^Рій БпЛА (?:баражує|барражує) над (.+)$", RegexOption.IGNORE_CASE) to "Swarm UAV loiters over {X}",
-    Regex("^Рій БпЛА (?:баражує|барражує) (?:в районі|у районі) (.+)$", RegexOption.IGNORE_CASE) to "Swarm UAV loiters in the area of {X}",
-    Regex("^Рій БпЛА (?:баражує|барражує) (.+)$", RegexOption.IGNORE_CASE) to "Swarm UAV loiters {X}",
-    Regex("^(?:БпЛА|Шахед|Шахеди|Група БпЛА|Рій БпЛА) (?:баражує|барражує|баражують|баражуют|барражують|барражуют|патрулює|патрулюють) над (.+)$", RegexOption.IGNORE_CASE) to "UAV patrolling over {X}",
-    Regex("^(?:БпЛА|Шахед|Шахеди|Група БпЛА|Рій БпЛА) (?:баражує|барражує|баражують|баражуют|барражують|барражуют|патрулює|патрулюють) (?:в районі|у районі) (.+)$", RegexOption.IGNORE_CASE) to "UAV patrolling in the area of {X}",
-    Regex("^(?:БпЛА|Шахед|Шахеди|Група БпЛА|Рій БпЛА) (?:баражує|барражує|баражують|баражуют|барражують|барражуют|патрулює|патрулюють) (.+)$", RegexOption.IGNORE_CASE) to "UAV patrolling {X}",
-    Regex("^(?:БпЛА|Шахед|Шахеди) (?:маневрує|маневрують|маневруют|кружляє|кружляють) (?:в районі|у районі) (.+)$", RegexOption.IGNORE_CASE) to "UAV maneuvering in the area of {X}",
-    Regex("^(?:БпЛА|Шахед|Шахеди) (?:маневрує|маневрують|маневруют|кружляє|кружляють) над (.+)$", RegexOption.IGNORE_CASE) to "UAV maneuvering over {X}",
-    Regex("^БпЛА над (.+)$", RegexOption.IGNORE_CASE) to "UAV over {X}",
-    Regex("^БпЛА (?:рухається|прямує) (?:в напрямку|у напрямку|в бік|у бік) (.+)$", RegexOption.IGNORE_CASE) to "UAV moving toward {X}",
+    // A "swarm" loitering reads differently from a single drone patrolling — keep the distinction.
+    Regex("^Рій БпЛА (?:баражує|барражує) над (.+)$", RegexOption.IGNORE_CASE) to "Swarm of drones loiters over {X}",
+    Regex("^Рій БпЛА (?:баражує|барражує) (?:в районі|у районі) (.+)$", RegexOption.IGNORE_CASE) to "Swarm of drones loiters in the area of {X}",
+    Regex("^Рій БпЛА (?:баражує|барражує) (.+)$", RegexOption.IGNORE_CASE) to "Swarm of drones loiters {X}",
+    Regex("^(?:БпЛА|Шахед|Шахеди|Група БпЛА|Рій БпЛА) (?:баражує|барражує|баражують|баражуют|барражують|барражуют|патрулює|патрулюють) над (.+)$", RegexOption.IGNORE_CASE) to "Drone patrolling over {X}",
+    Regex("^(?:БпЛА|Шахед|Шахеди|Група БпЛА|Рій БпЛА) (?:баражує|барражує|баражують|баражуют|барражують|барражуют|патрулює|патрулюють) (?:в районі|у районі) (.+)$", RegexOption.IGNORE_CASE) to "Drone patrolling in the area of {X}",
+    Regex("^(?:БпЛА|Шахед|Шахеди|Група БпЛА|Рій БпЛА) (?:баражує|барражує|баражують|баражуют|барражують|барражуют|патрулює|патрулюють) (.+)$", RegexOption.IGNORE_CASE) to "Drone patrolling {X}",
+    Regex("^(?:БпЛА|Шахед|Шахеди) (?:маневрує|маневрують|маневруют|кружляє|кружляють) (?:в районі|у районі) (.+)$", RegexOption.IGNORE_CASE) to "Drone maneuvering in the area of {X}",
+    Regex("^(?:БпЛА|Шахед|Шахеди) (?:маневрує|маневрують|маневруют|кружляє|кружляють) над (.+)$", RegexOption.IGNORE_CASE) to "Drone maneuvering over {X}",
+    Regex("^БпЛА над (.+)$", RegexOption.IGNORE_CASE) to "Drone over {X}",
+    Regex("^БпЛА (?:рухається|прямує) (?:в напрямку|у напрямку|в бік|у бік) (.+)$", RegexOption.IGNORE_CASE) to "Drone moving toward {X}",
     Regex("^Курс на (.+)$", RegexOption.IGNORE_CASE) to "Course toward {X}"
 )
 
@@ -352,7 +352,7 @@ private val COURSE_GLOSSARY: List<Pair<String, String>> = listOf(
     "на наднизькій висоті" to "at ultra-low altitude",
     "робота ппо" to "air defense active",
     "працює ппо" to "air defense active",
-    "БпЛА" to "UAV",
+    "БпЛА" to "Drone",
     "шахед" to "Shahed",
     "шахеди" to "Shaheds",
     "КАБ" to "guided bomb",

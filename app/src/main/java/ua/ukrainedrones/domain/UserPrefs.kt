@@ -36,7 +36,6 @@ data class UserPreferences(
     val slowYellowArmed: Boolean = true,
     val fastRedArmed: Boolean = true,
     val fastYellowArmed: Boolean = true,
-    val officialAlertsEnabled: Boolean = true,
     val officialRedAlertsEnabled: Boolean = true,
     val yellowAlertsEnabled: Boolean = true,
     val sirenOverride: Boolean = false,
@@ -119,7 +118,6 @@ class UserPrefs(private val context: Context) {
     private val slowYellowArmedKey = booleanPreferencesKey("slow_yellow_armed")
     private val fastRedArmedKey = booleanPreferencesKey("fast_red_armed")
     private val fastYellowArmedKey = booleanPreferencesKey("fast_yellow_armed")
-    private val officialAlertsKey = booleanPreferencesKey("official_alerts_enabled")
     private val officialRedAlertsKey = booleanPreferencesKey("official_red_alerts_enabled")
     private val yellowAlertsKey = booleanPreferencesKey("yellow_alerts_enabled")
     private val sirenOverrideKey = booleanPreferencesKey("siren_override")
@@ -213,7 +211,6 @@ class UserPrefs(private val context: Context) {
             slowYellowArmed = this[slowYellowArmedKey] ?: true,
             fastRedArmed = this[fastRedArmedKey] ?: true,
             fastYellowArmed = this[fastYellowArmedKey] ?: true,
-            officialAlertsEnabled = this[officialAlertsKey] ?: true,
             officialRedAlertsEnabled = this[officialRedAlertsKey] ?: true,
             yellowAlertsEnabled = this[yellowAlertsKey] ?: true,
             sirenOverride = this[sirenOverrideKey] ?: false,
@@ -321,10 +318,6 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setFastYellowZoneArmed(armed: Boolean) {
         context.dataStore.edit { it[fastYellowArmedKey] = armed }
-    }
-
-    suspend fun setOfficialAlertsEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[officialAlertsKey] = enabled }
     }
 
     suspend fun setOfficialRedAlertsEnabled(enabled: Boolean) {

@@ -76,7 +76,7 @@ class ThreatEvaluatorTest {
             locality = "Київ"
         )
         val body = threatBody(threat, AppLanguage.EN)
-        assertEquals("UAV — Kyiv", body)
+        assertEquals("Drone — Kyiv", body)
     }
 
     @Test

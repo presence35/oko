@@ -307,7 +307,7 @@ class ThreatEngineTest {
     }
 
     @Test
-    fun `evaluate - UAV inside red returns INNER`() {
+    fun `evaluate - Drone inside red returns INNER`() {
         val threat = makeThreat(
             lat = userLat + 0.05, lon = userLng, speedKmh = 180.0
         )
@@ -326,7 +326,7 @@ class ThreatEngineTest {
     }
 
     @Test
-    fun `evaluate - UAV between red and yellow returns OUTER`() {
+    fun `evaluate - Drone between red and yellow returns OUTER`() {
         val threat = makeThreat(
             lat = userLat + 0.20, lon = userLng, speedKmh = 180.0
         )

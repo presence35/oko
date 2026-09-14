@@ -213,7 +213,6 @@ internal val English: Strings.StringSet = Strings.StringSet(
         pinCityTitle = "Pin to a city",
         pinCityDesc = "The map centre and zones pin to the selected city.",
         alertBannerFormat = "%1\$s: alert",
-        alertRedBannerFormat = "%1\$s: red alert",
         alertYellowBannerFormat = "%1\$s: yellow alert",
         notifBodyRegionFormat = "%1\$s oblast",
         notifOfficialFormat = "Official alert in %1\$s",
@@ -571,7 +570,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
             Triple(
                 "Your threat types",
                 "Each type has separate Map and Alerts switches — the map and siren only show what you picked.",
-                "Turn off the nightly noise (recon or FPV) but keep missiles and UAVs on — you won't miss critical alerts."
+                "Turn off the nightly noise (recon or FPV) but keep missiles and drones on — you won't miss critical alerts."
             ),
             Triple(
                 "Official alerts",
