@@ -67,6 +67,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -1037,42 +1038,52 @@ private fun MapScreen(
                     }
                 }
 
-                if (!flourishActive) {
-                    val alertsOff = !uiState.activeSlowRedArmed && !uiState.activeFastRedArmed &&
-                        !uiState.activeSlowYellowArmed && !uiState.activeFastYellowArmed
-                    val notifsDisabled = uiState.notificationsDisabledBySystem
-                    val landscape = LocalConfiguration.current.orientation ==
-                        Configuration.ORIENTATION_LANDSCAPE
-                    if (landscape && (alertsOff || notifsDisabled)) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 4.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AllAlertsOffWarning(
-                                label = if (alertsOff) s.allAlertsOffLabel else s.notificationsDisabledLabel,
-                                onClick = openZonesPanel
-                            )
-                        }
+                // The threat strip is the map's permanent bottom band: it never unmounts, it
+                // just fades under the flourish bar, so the map viewport never resizes and
+                // never recenters on a shootdown. (The flourish footer overlays this band.)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .alpha(if (flourishActive) 0f else 1f)
+                ) {
+                    Surface(
+                        tonalElevation = 2.dp
+                    ) {
+                        ThreatStripFooter(
+                            inner = uiState.threatsInner,
+                            outer = uiState.threatsOuter,
+                            hiddenTypes = uiState.hiddenTypes,
+                            silencedTypes = uiState.silencedTypes,
+                            focusLocation = uiState.focusLocation,
+                            iconSet = uiState.iconSet,
+                            calmMessage = remember(uiState.language, uiState.calmMessagesEnabled) {
+                                noThreatsMessage(uiState.language, uiState.calmMessagesEnabled)
+                            },
+                            onThreatStripTap = onThreatStripTap
+                        )
                     }
-                    Box {
-                        Surface(
-                            tonalElevation = 2.dp
-                        ) {
-                            ThreatStripFooter(
-                                inner = uiState.threatsInner,
-                                outer = uiState.threatsOuter,
-                                hiddenTypes = uiState.hiddenTypes,
-                                silencedTypes = uiState.silencedTypes,
-                                focusLocation = uiState.focusLocation,
-                                iconSet = uiState.iconSet,
-                                calmMessage = remember(uiState.language, uiState.calmMessagesEnabled) {
-                                    noThreatsMessage(uiState.language, uiState.calmMessagesEnabled)
-                                },
-                                onThreatStripTap = onThreatStripTap
-                            )
-                        }
+                }
+            }
+
+            // Landscape "alerts off" banner: an overlay above the strip band, not a layout
+            // element, so it never resizes the map (the same resize bug as the strip).
+            if (!flourishActive) {
+                val alertsOff = !uiState.activeSlowRedArmed && !uiState.activeFastRedArmed &&
+                    !uiState.activeSlowYellowArmed && !uiState.activeFastYellowArmed
+                val notifsDisabled = uiState.notificationsDisabledBySystem
+                val landscape = LocalConfiguration.current.orientation ==
+                    Configuration.ORIENTATION_LANDSCAPE
+                if (landscape && (alertsOff || notifsDisabled)) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(start = 20.dp, end = 20.dp, bottom = FOOTER_BAND_DP + 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AllAlertsOffWarning(
+                            label = if (alertsOff) s.allAlertsOffLabel else s.notificationsDisabledLabel,
+                            onClick = openZonesPanel
+                        )
                     }
                 }
             }

@@ -82,14 +82,10 @@ object Strings {
         val nightModeDesc: String,
         val nightStartTimeLabel: String,
         val nightEndTimeLabel: String,
-        val nightSoundLabel: String,
-        val nightZoneSirenOverrideTitle: String,
-        val nightZoneSirenOverrideDesc: String,
-        val nightOfficialSirenOverrideTitle: String,
-        val nightOfficialSirenOverrideDesc: String,
-        val nightOfficialAlertCityScopeTitle: String,
-        val nightOfficialAlertCityScopeDesc: String,
-        val nightCustomZonesTitle: String,
+val nightSoundLabel: String,
+         val nightZoneSirenOverrideTitle: String,
+         val nightOfficialSirenOverrideTitle: String,
+         val nightCustomZonesTitle: String,
         val nightCustomZonesDesc: String,
         val nightMuteExitNote: String,
         val allAlertsOffLabel: String,
@@ -704,13 +700,9 @@ val tapToCancelLabel: String,
         val nightModeDesc: String get() = settings.nightModeDesc
         val nightStartTimeLabel: String get() = settings.nightStartTimeLabel
         val nightEndTimeLabel: String get() = settings.nightEndTimeLabel
-        val nightSoundLabel: String get() = settings.nightSoundLabel
-        val nightZoneSirenOverrideTitle: String get() = settings.nightZoneSirenOverrideTitle
-        val nightZoneSirenOverrideDesc: String get() = settings.nightZoneSirenOverrideDesc
+val nightSoundLabel: String get() = settings.nightSoundLabel
+         val nightZoneSirenOverrideTitle: String get() = settings.nightZoneSirenOverrideTitle
          val nightOfficialSirenOverrideTitle: String get() = settings.nightOfficialSirenOverrideTitle
-         val nightOfficialSirenOverrideDesc: String get() = settings.nightOfficialSirenOverrideDesc
-         val nightOfficialAlertCityScopeTitle: String get() = settings.nightOfficialAlertCityScopeTitle
-         val nightOfficialAlertCityScopeDesc: String get() = settings.nightOfficialAlertCityScopeDesc
          val nightCustomZonesTitle: String get() = settings.nightCustomZonesTitle
         val nightCustomZonesDesc: String get() = settings.nightCustomZonesDesc
         val nightMuteExitNote: String get() = settings.nightMuteExitNote

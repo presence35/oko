@@ -404,7 +404,7 @@ class DeathFxController(
             }
             // Jump straight onto this group (no animated glide — bullets must never fly while
             // the camera is still moving), then re-point pending flights to the new edges.
-            val box = flourishesBoundingBox(group, null)
+            val box = if (allUkraine) flourishGroupBoundingBox(group) else flourishesBoundingBox(group, null)
             runCatching { mapView.zoomToBoundingBox(box, false) }
             overlay.rebasePendingOrigins { randomEdgeOrigin() }
             // Fire loop aligned to the pre-spawned schedule (drift-free vs the spawn clock):

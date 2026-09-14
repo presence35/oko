@@ -1,5 +1,6 @@
 package ua.ukrainedrones
 
+import ua.ukrainedrones.community.CompactOblastBoundaries
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.canonicalToken
 import ua.ukrainedrones.engine.distanceFlat
@@ -76,6 +77,49 @@ internal fun flourishesBoundingBox(records: List<FlourishRecord>, focus: LatLng?
     )
 }
 
+/** Same span/margin math as [flourishesBoundingBox], but over an explicit extent. */
+internal fun boundingBoxFromExtent(
+    minLat: Double,
+    maxLat: Double,
+    minLon: Double,
+    maxLon: Double
+): BoundingBox {
+    val spanLat = maxOf(maxLat - minLat, REVEAL_MIN_SPAN_LAT)
+    val spanLon = maxOf(maxLon - minLon, REVEAL_MIN_SPAN_LON)
+    val marginLat = spanLat * 0.25
+    val marginLon = spanLon * 0.25
+    val latMid = (maxLat + minLat) / 2
+    val lonMid = (maxLon + minLon) / 2
+    return BoundingBox(
+        (latMid + spanLat / 2 + marginLat).coerceAtMost(85.0), lonMid + spanLon / 2 + marginLon,
+        (latMid - spanLat / 2 - marginLat).coerceAtLeast(-85.0), lonMid - spanLon / 2 - marginLon
+    )
+}
+
+/**
+ * Canonical oblast key for a record — the same rule [clusterFlourishByOblast] uses to group
+ * (region text → canonical stem, else nearest-city geo lookup, else "other").
+ */
+internal fun flourishOblastKey(r: FlourishRecord): String =
+    r.region?.let { canonicalToken(it) } ?: matchOblast(r.lat, r.lon)?.stem ?: "other"
+
+/**
+ * Zoom target for an oblast group: the whole oblast extent when its boundary is known (so the
+ * camera frames the entire region, not just the remembered threat points), else the group's own
+ * spread. Used by the tally-tap replay in All-of-Ukraine mode.
+ */
+internal fun flourishGroupBoundingBox(group: List<FlourishRecord>): BoundingBox {
+    if (group.isEmpty()) return flourishesBoundingBox(emptyList(), null)
+    val first = group.first()
+    val polygon = CompactOblastBoundaries.get(flourishOblastKey(first))
+    if (polygon != null) {
+        polygon.boundingBox()?.let { b ->
+            return boundingBoxFromExtent(b.minLat, b.maxLat, b.minLon, b.maxLon)
+        }
+    }
+    return flourishesBoundingBox(group, null)
+}
+
 /**
  * Greedy spatial clustering of a replay flourish into groups, so the camera can zoom onto each
  * group in turn instead of one over-wide fit. A record joins a group when it is within
@@ -112,9 +156,7 @@ internal fun clusterFlourish(
 internal fun clusterFlourishByOblast(records: List<FlourishRecord>): List<List<FlourishRecord>> {
     val groups = linkedMapOf<String, MutableList<FlourishRecord>>()
     for (r in records) {
-        val key = r.region?.let { canonicalToken(it) }
-            ?: matchOblast(r.lat, r.lon)?.stem
-            ?: "other"
+        val key = flourishOblastKey(r)
         groups.getOrPut(key) { mutableListOf() }.add(r)
     }
     return groups.values.toList()

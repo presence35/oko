@@ -103,7 +103,39 @@ data class CompactPolygon(
     fun toPoints(scale: Double = 1000.0): List<List<LatLon>> {
         return rings.map { it.toPoints(scale) }
     }
+
+    /**
+     * Axis-aligned extent of every ring, in one pass, zero allocation.
+     * Returns null when the polygon has no points (degenerate).
+     */
+    fun boundingBox(scale: Double = 1000.0): GeoBounds? {
+        var minLat = 90.0
+        var maxLat = -90.0
+        var minLon = 180.0
+        var maxLon = -180.0
+        var seen = false
+        for (ring in rings) {
+            ring.forEachPoint(scale) { lat, lon ->
+                if (lat < minLat) minLat = lat
+                if (lat > maxLat) maxLat = lat
+                if (lon < minLon) minLon = lon
+                if (lon > maxLon) maxLon = lon
+                seen = true
+            }
+        }
+        return if (seen) GeoBounds(minLat, maxLat, minLon, maxLon) else null
+    }
 }
+
+/**
+ * Axis-aligned extent of a [CompactPolygon], in WGS-84 [LAT, LON] order.
+ */
+data class GeoBounds(
+    val minLat: Double,
+    val maxLat: Double,
+    val minLon: Double,
+    val maxLon: Double
+)
 
 /**
  * Raw, language-agnostic boundary entry.

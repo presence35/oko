@@ -19,6 +19,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
+/**
+ * Height of the map's permanent bottom band: the threat strip row (44dp cell + 16dp row
+ * padding) — the strip never unmounts, it just fades under the flourish bar, so the map
+ * viewport never resizes and never recenters. The flourish bar spans at least this much.
+ */
+internal val FOOTER_BAND_DP = 60.dp
+
 @Composable
 private fun StopPill(label: String) {
     Surface(
@@ -65,6 +72,7 @@ fun BoxScope.FlourishFooter(
         modifier = Modifier
             .fillMaxWidth()
             .align(Alignment.BottomCenter)
+            .heightIn(min = FOOTER_BAND_DP)
             .background(if (isCountdown) Color.Black.copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.55f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

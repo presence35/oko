@@ -1028,8 +1028,10 @@ fun SettingsScreen(
                         fastRedArmed = nightFastRedArmed,
                         fastYellowArmed = nightFastYellowArmed,
                         zoneSirenOverride = nightZoneSirenOverride,
-                        officialSirenOverride = nightOfficialSirenOverride,
-                        daySlowRedKm = slowRedKm,
+officialSirenOverride = nightOfficialSirenOverride,
+                         daySirenOverride = sirenOverride,
+                         dayOfficialAlertCityScope = officialAlertCityScope,
+                         daySlowRedKm = slowRedKm,
                         daySlowYellowKm = slowYellowKm,
                         dayFastRedMin = fastRedMin,
                         dayFastYellowMin = fastYellowMin,
@@ -1717,9 +1719,11 @@ private fun NightModeCard(
     slowYellowArmed: Boolean,
     fastRedArmed: Boolean,
     fastYellowArmed: Boolean,
-    zoneSirenOverride: Boolean,
-    officialSirenOverride: Boolean,
-    daySlowRedKm: Int,
+zoneSirenOverride: Boolean,
+     officialSirenOverride: Boolean,
+     daySirenOverride: Boolean,
+     dayOfficialAlertCityScope: Boolean,
+     daySlowRedKm: Int,
     daySlowYellowKm: Int,
     dayFastRedMin: Int,
     dayFastYellowMin: Int,
@@ -1767,32 +1771,32 @@ private fun NightModeCard(
             Box(modifier = Modifier.padding(horizontal = 14.dp)) {
                 SectionCaption(s.nightSoundLabel)
             }
-            Column(modifier = Modifier.padding(horizontal = 14.dp)) {
-                AlertToggleRow(
-                    title = s.nightOfficialSirenOverrideTitle,
-                    description = s.nightOfficialSirenOverrideDesc,
-                    checked = officialSirenOverride,
-                    onCheckedChange = onOfficialSirenOverrideChange,
-                    icon = painterResource(R.drawable.ic_trident)
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                AlertToggleRow(
-                    title = s.nightZoneSirenOverrideTitle,
-                    description = s.nightZoneSirenOverrideDesc,
-                    checked = zoneSirenOverride,
-                    onCheckedChange = onZoneSirenOverrideChange,
-                    icon = painterResource(R.drawable.ic_volume_up),
+Column(modifier = Modifier.padding(horizontal = 14.dp)) {
+                 AlertToggleRow(
+                     title = s.nightOfficialSirenOverrideTitle,
+                     description = "Day: ${if (daySirenOverride) "ON" else "OFF"}",
+                     checked = officialSirenOverride,
+                     onCheckedChange = onOfficialSirenOverrideChange,
+                     icon = painterResource(R.drawable.ic_trident)
+                 )
+                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                 AlertToggleRow(
+                     title = s.nightZoneSirenOverrideTitle,
+                     description = "Day: ${if (daySirenOverride) "ON" else "OFF"}",
+                     checked = zoneSirenOverride,
+                     onCheckedChange = onZoneSirenOverrideChange,
+                     icon = painterResource(R.drawable.ic_volume_up),
                      iconTint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                AlertToggleRow(
-                    title = s.nightOfficialAlertCityScopeTitle,
-                    description = s.nightOfficialAlertCityScopeDesc,
-                    checked = nightOfficialAlertCityScope,
-                    onCheckedChange = onNightOfficialAlertCityScopeChange,
-                    icon = painterResource(R.drawable.ic_trident),
-                    iconTint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+                 )
+                 AlertToggleRow(
+                     title = s.officialAlertScopeTitle,
+                     description = "Day: ${if (dayOfficialAlertCityScope) "ON" else "OFF"}",
+                     checked = nightOfficialAlertCityScope,
+                     onCheckedChange = onNightOfficialAlertCityScopeChange,
+                     icon = painterResource(R.drawable.ic_city_medium),
+                     iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                 )
+             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             AlertToggleRow(
                 title = s.nightCustomZonesTitle,
@@ -2176,7 +2180,7 @@ private fun CityLabelTogglesRow(
                 label = { Text(mediumLabel, style = MaterialTheme.typography.labelLarge) },
                 leadingIcon = {
                     Icon(
-                        painter = painterResource(R.drawable.ic_city),
+                        painter = painterResource(R.drawable.ic_city_medium),
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )

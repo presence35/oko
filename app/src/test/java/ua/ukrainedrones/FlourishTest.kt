@@ -1,9 +1,12 @@
 package ua.ukrainedrones
 
+import org.osmdroid.util.BoundingBox
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+
+import ua.ukrainedrones.community.CompactOblastBoundaries
 
 class FlourishTest {
 
@@ -78,6 +81,42 @@ class FlourishTest {
         assertTrue(FlourishPolicy.dropSelection(selectedGone = true, animOn = true))
         assertFalse(FlourishPolicy.dropSelection(selectedGone = true, animOn = false))
         assertFalse(FlourishPolicy.dropSelection(selectedGone = false, animOn = true))
+    }
+
+    @Test
+    fun `flourishGroupBoundingBox frames the whole oblast extent, not just the threat points`() {
+        // One threat in the middle of Odeska — the box must span the whole region, not a
+        // ~20km box around the single record.
+        val group = listOf(FlourishRecord(46.48, 30.73, ThreatType.SHAHED, "Одеська область"))
+        val box = flourishGroupBoundingBox(group)
+        val bounds = CompactOblastBoundaries.get("odeska")!!.boundingBox()!!
+        assertTrue(box.latitudeSouth <= bounds.minLat + 1e-6)
+        assertTrue(box.latitudeNorth >= bounds.maxLat - 1e-6)
+        assertTrue(box.longitudeWest <= bounds.minLon + 1e-6)
+        assertTrue(box.longitudeEast >= bounds.maxLon - 1e-6)
+    }
+
+    @Test
+    fun `flourishGroupBoundingBox falls back to the group spread when the region is unknown`() {
+        val group = listOf(FlourishRecord(46.48, 30.73, ThreatType.SHAHED, "Місто Нове"))
+        val box = flourishGroupBoundingBox(group)
+        // Unresolvable key → the box hugs the record (min-span floor), not the whole oblast.
+        val expected = flourishesBoundingBox(group, null)
+        assertEquals(expected.latitudeSouth, box.latitudeSouth, 1e-9)
+        assertEquals(expected.longitudeEast, box.longitudeEast, 1e-9)
+    }
+
+    @Test
+    fun `flourishGroupBoundingBox zooms out past the group spread`() {
+        // Two threats in the same oblast but far apart: the box is the oblast extent, which
+        // is wider than the threats' own spread.
+        val group = listOf(
+            FlourishRecord(47.0, 30.0, ThreatType.SHAHED, "Одеська область"),
+            FlourishRecord(46.0, 30.0, ThreatType.SHAHED, "Одеська область")
+        )
+        val box = flourishGroupBoundingBox(group)
+        val bounds = CompactOblastBoundaries.get("odeska")!!.boundingBox()!!
+        assertTrue(box.latitudeNorth - box.latitudeSouth >= bounds.maxLat - bounds.minLat)
     }
 
     @Test

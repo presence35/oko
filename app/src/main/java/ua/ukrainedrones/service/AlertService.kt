@@ -126,16 +126,9 @@ class AlertService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var monitoringJob: Job? = null
-    private var wasFocusAlertActive = false
-    private var wasYellowAlertActive = false
-    private var officialRegionToken: String? = null
-    private var currentReasonThreatId: String? = null
-    private var officialAnnouncedToken: String? = null
-    private var officialAnnouncedSince: String? = null
-    private var officialAnnouncedReasonId: String? = null
-    private var officialAnnouncedCity: String? = null
+    private var lastShownId: String? = null
+    private var lastRedEpisode: String? = null
     private var knownZones: Map<String, ThreatZone> = emptyMap()
-    private var debugOfficialActive = false
     private var lastChannelLang: AppLanguage? = null
     private var emptySince: Long? = null
 
@@ -329,10 +322,13 @@ class AlertService : Service() {
         }
 
         monitoringJob = scope.launch {
-            officialAnnouncedToken = svcState.officialAnnouncedToken().first().ifBlank { null }
-            officialAnnouncedSince = svcState.officialAnnouncedSince().first().ifBlank { null }
-            officialAnnouncedReasonId = svcState.officialAnnouncedReasonId().first().ifBlank { null }
-            officialAnnouncedCity = svcState.officialAnnouncedCity().first().ifBlank { null }
+            // Restore red episode identity from persisted ServiceState keys
+            val _annToken = svcState.officialAnnouncedToken().first().ifBlank { null }
+            val _annSince = svcState.officialAnnouncedSince().first().ifBlank { null }
+            val _annCity = svcState.officialAnnouncedCity().first().ifBlank { null }
+            if (_annToken != null && _annSince != null && _annCity != null) {
+                lastRedEpisode = "$_annToken|$_annSince|$_annCity"
+            }
 
             // Restore active zone alerts across service restarts (Check 7 fix)
             val savedZonesJson = svcState.activeZoneAlerts().first()
@@ -587,33 +583,6 @@ fastYellowArmed = p.fastYellowArmed,
             .mapNotNull { (id, spatial) -> alertTier(id, spatial)?.let { id to it } }
             .toMap()
 
-        var posted = false
-        var postedId: String? = null
-        val newEntries = alertable.entries
-            .filter { (id, zone) -> knownZones[id] != zone }
-            .sortedBy { it.value.ordinal }
-
-        if (newEntries.isNotEmpty()) {
-            val (id, zone) = newEntries.first()
-            postedId = id
-            val t = all[id]
-            val body = t?.let { threatBody(it, state.lang) + etaSuffix(it, state) } ?: s.notifBodyRegion
-
-            wakeLockManager.acquireForAlert()
-            postAlert(
-                zone,
-                if (zone == ThreatZone.INNER) "red" else "yellow",
-                bannerFor(zone, s),
-                body,
-                state.zoneSirenOverride,
-                revealThreat = t,
-                vibrationLevel = if (t?.let { isFastType(it.type.toThreatType()) } ?: false) state.fastVibrationLevel else state.slowVibrationLevel
-            )
-            posted = true
-            knownZones = knownZones + (id to zone)
-            persistKnownZones()
-        }
-
         val droppedZoneIds = knownZones.keys.filterNot { id ->
             id in state.zoneThreats.keys || AppSources.registry.wasUserShotRecently(id)
         }
@@ -622,216 +591,148 @@ fastYellowArmed = p.fastYellowArmed,
             persistKnownZones()
         }
 
-        // Dropping the announced region: the user stopped monitoring it (focus moved to a
-        // different oblast) OR re-pinned to a different city (even within the same oblast �?"
-        // the oblast token alone can't see that, so the announced city is tracked too).
-        val pinnedCityChanged = state.focusPinned && officialAnnouncedCity != null &&
-            state.focusBannerCity != officialAnnouncedCity
-        if (officialRegionToken != null && (state.focusToken != officialRegionToken || pinnedCityChanged)) {
-            if (alertable.isEmpty()) {
-                cancelAlert()
+        /** Desired end-state for NOTIF_ALERT. null = nothing should be showing. */
+        data class Primary(
+            val identity: String,
+            val title: String,
+            val body: String,
+            val revealThreat: NormalizedThreat?,
+            val silent: Boolean,
+            val vibration: Int,
+            val isOnset: Boolean,
+            val zone: ThreatZone?,
+            val level: String,
+        )
+
+        /** Build the desired notification end-state from current tick inputs. */
+        fun buildPrimary(state: MonitorState, all: Map<String, NormalizedThreat>): Primary? {
+            val s = Strings.get(state.lang)
+            if (alertable.isNotEmpty()) {
+                val (id, zone) = alertable.entries.sortedBy { it.value.ordinal }.first()
+                val t = all[id]
+                return Primary(
+                    identity = "zone|$id|$zone",
+                    title = bannerFor(zone, s),
+                    body = t?.let { threatBody(it, state.lang) + etaSuffix(t, state) } ?: s.notifBodyRegion,
+                    revealThreat = t,
+                    silent = false,
+                    vibration = t?.let { if (isFastType(it.type.toThreatType())) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
+                    isOnset = knownZones[id] != zone,
+                    zone = zone, level = if (zone == ThreatZone.INNER) "red" else "yellow"
+                )
             }
-            currentReasonThreatId = null
-            debugOfficialActive = false
-            officialRegionToken = null
-            wasFocusAlertActive = false
-            wasYellowAlertActive = false
-            officialAnnouncedCity = null
-            clearOfficialAnnounced()
-        }
-
-        if (!wasFocusAlertActive && officialAnnouncedToken != null && officialAnnouncedSince != null &&
-            state.focusToken == officialAnnouncedToken &&
-            state.focusOblastAlertSince != null &&
-            state.focusOblastAlertSince == officialAnnouncedSince
-        ) {
-            wasFocusAlertActive = true
-            currentReasonThreatId = officialAnnouncedReasonId
-            officialRegionToken = state.focusToken
-            officialAnnouncedCity = state.focusBannerCity
-        }
-        officialAnnouncedToken = null
-        officialAnnouncedSince = null
-        officialAnnouncedReasonId = null
-
-        val redActive = state.officialRedAlertsEnabled && state.focusOblastAlertActive
-        val yellowActive = state.yellowAlertsEnabled && state.focusOblastYellowAlertActive
-        // The master is the derived summary of its two sub-channels (red || yellow), so this
-        // is "any selected channel has its fact active" — the all-clear gate and the ON log
-        // key on it; each banner posts under its own channel's flag.
-        val officialActive = redActive || yellowActive
-        val officialBody = state.officialReason ?: state.officialRegion ?: state.focusRegion
-
-        if (!debugOfficialActive && state.focusOblastAlertActive) {
-            debugOfficialActive = true
-            val reasonThreat = state.officialReasonThreatId?.let { all[it] }
-            DebugLog.recordOfficial(
-                DebugLogKind.OFFICIAL_ON,
-                night = state.nightActive,
-                sirenOverride = state.officialSirenOverride,
-                vibrationLevel = reasonThreat?.let {
-                    if (isFastType(it.type.toThreatType())) state.fastVibrationLevel else state.slowVibrationLevel
-                } ?: VIBRATION_STRONG,
-                notified = redActive && !posted,
-                reason = when {
-                    !redActive -> DebugLogReason.TOGGLE_OFF
-                    posted -> DebugLogReason.COALESCED
-                    else -> DebugLogReason.FIRED
-                },
-                threatId = reasonThreat?.id,
-                threatType = reasonThreat?.type?.toThreatType(),
-                locality = reasonThreat?.let { it.locality ?: it.district ?: it.region }
-                    ?: state.officialRegion ?: state.focusCityUa,
-                distanceKm = distanceFromFocusKm(reasonThreat, state),
-                now = System.currentTimeMillis()
-            )
-        }
-
-        if (redActive && !wasFocusAlertActive && !posted) {
-            val reasonThreat = state.officialReasonThreatId?.let { all[it] }
-            wakeLockManager.acquireForAlert()
-            postAlert(
-                null,
-                state.focusOblastLevel.name.lowercase(),
-                String.format(s.alertBannerFormat, state.focusBannerCity),
-                officialBody + etaSuffix(reasonThreat, state),
-                state.officialSirenOverride,
-                revealThreat = reasonThreat,
-                vibrationLevel = reasonThreat?.let {
-                    if (isFastType(it.type.toThreatType())) state.fastVibrationLevel else state.slowVibrationLevel
-                } ?: VIBRATION_STRONG
-            )
-            currentReasonThreatId = state.officialReasonThreatId
-            officialRegionToken = state.focusToken
-            wasFocusAlertActive = true
-            officialAnnouncedCity = state.focusBannerCity
-            persistOfficialAnnounced(state)
-        } else if (officialActive && wasFocusAlertActive && !posted && alertable.isEmpty() &&
-            state.officialReasonThreatId != currentReasonThreatId && alertNotificationShowing() &&
-            state.officialReasonThreatId != null
-        ) {
-            // Only refresh the shown notification when the new reason is a threat actually
-            // inside the user's zones �?" once the reason falls back to the bare oblast name
-            // (nothing nearby), a dismissed notification must not be re-raised about it.
-            val reasonThreat = state.officialReasonThreatId?.let { all[it] }
-            postAlert(
-                null,
-                state.focusOblastLevel.name.lowercase(),
-                String.format(s.alertBannerFormat, state.focusBannerCity),
-                officialBody + etaSuffix(reasonThreat, state),
-                state.officialSirenOverride,
-                revealThreat = reasonThreat,
-                vibrationLevel = reasonThreat?.let {
-                    if (isFastType(it.type.toThreatType())) state.fastVibrationLevel else state.slowVibrationLevel
-                } ?: VIBRATION_STRONG,
-                silent = true
-            )
-            currentReasonThreatId = state.officialReasonThreatId
-            officialAnnouncedCity = state.focusBannerCity
-            persistOfficialAnnounced(state)
-        }
-
-        if (state.officialAlertsEnabled && wasFocusAlertActive && state.focusOblastRawLevel >= AlertLevel.RED &&
-            !state.focusOblastAlertActive
-        ) {
-            if (alertable.isEmpty()) {
-                cancelAlert()
+            if (state.officialRedAlertsEnabled && state.focusOblastAlertActive) {
+                val reasonThreat = state.officialReasonThreatId?.let { all[it] }
+                val episodeBoundary = "${state.focusToken}|${state.focusOblastAlertSince}|${state.focusBannerCity}"
+                return Primary(
+                    identity = "red|${state.focusToken}|${state.focusOblastAlertSince}|${state.focusBannerCity}|${state.officialReasonThreatId}",
+                    title = String.format(s.alertBannerFormat, state.focusBannerCity),
+                    body = (state.officialReason ?: state.officialRegion ?: state.focusRegion) + etaSuffix(reasonThreat, state),
+                    revealThreat = reasonThreat,
+                    silent = lastRedEpisode == episodeBoundary,
+                    vibration = reasonThreat?.let { if (isFastType(it.type.toThreatType())) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
+                    isOnset = lastRedEpisode != episodeBoundary,
+                    zone = null, level = state.focusOblastLevel.name.lowercase()
+                )
             }
-            currentReasonThreatId = null
-            debugOfficialActive = false
-            wasFocusAlertActive = false
-            officialAnnouncedCity = null
-            clearOfficialAnnounced()
-            DebugLog.recordOfficial(
-                DebugLogKind.OFFICIAL_OFF,
-                night = state.nightActive,
-                sirenOverride = state.officialSirenOverride,
-                vibrationLevel = null,
-                notified = false,
-                reason = DebugLogReason.TOGGLE_OFF,
-                threatId = null,
-                threatType = null,
-                locality = state.officialRegion ?: state.focusCityUa,
-                distanceKm = null,
-                now = System.currentTimeMillis()
-            )
-        }
-
-        // Unified all-clear: the raw official episode for the latched region truly ended. One clear
-        // per episode, whether it rang red, yellow, or red-then-yellow �?" keyed on the raw end
-        // (BEHAVIORS/ARCHITECTURE), never on the posture flags, so a red alert that narrowed
-        // away from the focus city mid-episode still announces its raw-end all-clear.
-        if (state.officialAlertsEnabled && officialRegionToken != null &&
-            state.focusOblastRawLevel == AlertLevel.NONE && state.focusToken == officialRegionToken
-        ) {
-            if (alertable.isEmpty()) {
-                cancelAlert()
+            if (state.yellowAlertsEnabled && state.focusOblastYellowAlertActive) {
+                return Primary(
+                    identity = "yellow|${state.focusToken}|${state.focusBannerCity}",
+                    title = String.format(s.alertYellowBannerFormat, state.focusBannerCity),
+                    body = state.officialReason ?: state.officialRegion ?: state.focusRegion,
+                    revealThreat = null, silent = false, vibration = VIBRATION_STRONG,
+                    isOnset = lastShownId != "yellow|${state.focusToken}|${state.focusBannerCity}",
+                    zone = null, level = "yellow"
+                )
             }
-            postAllClear(s, state.focusBannerCity)
-            currentReasonThreatId = null
-            officialRegionToken = null
-            debugOfficialActive = false
-            wasYellowAlertActive = false
-            officialAnnouncedCity = null
-            clearOfficialAnnounced()
-            DebugLog.recordOfficial(
-                DebugLogKind.OFFICIAL_OFF,
-                night = state.nightActive,
-                sirenOverride = state.officialSirenOverride,
-                vibrationLevel = null,
-                notified = true,
-                reason = DebugLogReason.FIRED,
-                threatId = null,
-                threatType = null,
-                locality = state.officialRegion ?: state.focusCityUa,
-                distanceKm = null,
-                now = System.currentTimeMillis()
-            )
+            return null
         }
 
-        if (state.focusOblastLevel == AlertLevel.YELLOW && !state.focusOblastAlertActive &&
-            state.yellowAlertsEnabled && !wasYellowAlertActive && !posted
-        ) {
-            postAlert(
-                null,
-                "yellow",
-                String.format(s.alertYellowBannerFormat, state.focusBannerCity),
-                officialBody,
-                state.officialSirenOverride,
-                vibrationLevel = VIBRATION_STRONG
-            )
-            wasYellowAlertActive = true
-            // Raise the shared episode latch so the unified raw-end all-clear fires for yellow too.
-            officialRegionToken = state.focusToken
-        }
-        if (state.focusOblastLevel < AlertLevel.YELLOW && wasYellowAlertActive) {
-            cancelAlert()
-            wasYellowAlertActive = false
-        }
-
-        if (!state.focusOblastAlertActive) {
-            if (debugOfficialActive) {
-                debugOfficialActive = false
+        /** Reconcile red episode side-effects: wakeLock, DebugLog ON, persistence, all-clear. */
+        fun reconcileEpisode(primary: Primary?, state: MonitorState, all: Map<String, NormalizedThreat>) {
+            if (primary?.level == "red" && state.officialRedAlertsEnabled && state.focusOblastAlertActive) {
+                val reasonThreat = primary.revealThreat
+                val episodeBoundary = primary.identity.substringAfter("red|").substringBeforeLast('|')
+                if (lastRedEpisode != episodeBoundary) {
+                    wakeLockManager.acquireForAlert()
+                    DebugLog.recordOfficial(
+                        DebugLogKind.OFFICIAL_ON, night = state.nightActive,
+                        sirenOverride = state.officialSirenOverride,
+                        vibrationLevel = reasonThreat?.let { if (isFastType(it.type.toThreatType())) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
+                        notified = true, reason = DebugLogReason.FIRED,
+                        threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
+                        locality = reasonThreat?.let { it.locality ?: it.district ?: it.region } ?: state.officialRegion ?: state.focusCityUa,
+                        distanceKm = distanceFromFocusKm(reasonThreat, state), now = System.currentTimeMillis()
+                    )
+                    persistOfficialAnnounced(state)
+                    lastRedEpisode = episodeBoundary
+                }
+            }
+            if (lastRedEpisode != null && state.focusOblastRawLevel == AlertLevel.NONE && state.officialAlertsEnabled) {
+                if (alertable.isEmpty()) cancelAlert()
+                postAllClear(s, state.focusBannerCity)
                 DebugLog.recordOfficial(
-                    DebugLogKind.OFFICIAL_OFF,
-                    night = state.nightActive,
-                    sirenOverride = state.officialSirenOverride,
-                    vibrationLevel = null,
-                    notified = false,
-                    reason = DebugLogReason.TOGGLE_OFF,
-                    threatId = null,
-                    threatType = null,
-                    locality = state.officialRegion ?: state.focusCityUa,
-                    distanceKm = null,
+                    DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
+                    sirenOverride = state.officialSirenOverride, vibrationLevel = null,
+                    notified = true, reason = DebugLogReason.FIRED,
+                    threatId = null, threatType = null,
+                    locality = state.officialRegion ?: state.focusCityUa, distanceKm = null,
+                    now = System.currentTimeMillis()
+                )
+                lastRedEpisode = null
+            }
+            if (lastShownId?.startsWith("red|") == true && primary == null &&
+                state.focusOblastRawLevel >= AlertLevel.RED && state.officialAlertsEnabled
+            ) {
+                DebugLog.recordOfficial(
+                    DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
+                    sirenOverride = state.officialSirenOverride, vibrationLevel = null,
+                    notified = false, reason = DebugLogReason.TOGGLE_OFF,
+                    threatId = null, threatType = null,
+                    locality = state.officialRegion ?: state.focusCityUa, distanceKm = null,
                     now = System.currentTimeMillis()
                 )
             }
-            // The scoped red gate dropped �?" retire the red posture and its ON log only. The
-            // episode latch is NOT released here: it lives until the raw end (all-clear) or a
-            // focus switch, so a narrowed-away or a red-then-yellow episode still announces its
-            // raw-end all-clear (see the unified all-clear above).
-            wasFocusAlertActive = false
         }
+
+        /** Reconcile NOTIF_ALERT post/cancel based on primary vs lastShownId. */
+        fun reconcileNotif(primary: Primary?, state: MonitorState) {
+            if (primary?.identity != lastShownId) {
+                when {
+                    primary == null -> {
+                        if (lastShownId?.startsWith("red|") != true || state.focusOblastRawLevel < AlertLevel.RED || !state.officialAlertsEnabled) {
+                            if (knownZones.isEmpty() && state.zoneThreats.isEmpty() && !state.focusOblastAlertActive && !state.focusOblastYellowAlertActive) {
+                                knownZones = emptyMap(); persistKnownZones()
+                            }
+                            cancelAlert()
+                        }
+                    }
+                    primary.isOnset -> {
+                        wakeLockManager.acquireForAlert()
+                        postAlert(primary.zone, primary.level, primary.title, primary.body,
+                            state.zoneSirenOverride ?: state.officialSirenOverride,
+                            revealThreat = primary.revealThreat, vibrationLevel = primary.vibration)
+                        if (primary.zone != null) {
+                            knownZones = knownZones + (primary.identity.substringAfter("zone|").substringBefore('|') to primary.zone!!)
+                            persistKnownZones()
+                        }
+                    }
+                    alertNotificationShowing() -> {
+                        postAlert(primary.zone, primary.level, primary.title, primary.body,
+                            state.zoneSirenOverride ?: state.officialSirenOverride,
+                            revealThreat = primary.revealThreat, silent = true, vibrationLevel = primary.vibration)
+                    }
+                    else -> { /* dismissed, don't re-raise */ }
+                }
+                lastShownId = primary?.identity
+            }
+        }
+
+        // Invoke the reconcile pipeline
+        val primary = buildPrimary(state, all)
+        val postedId = if (primary?.zone != null && primary.isOnset) primary.identity.substringAfter("zone|").substringBefore('|') else null
+        reconcileEpisode(primary, state, all)
+        reconcileNotif(primary, state)
 
         val nowForSweep = System.currentTimeMillis()
         if (nowForSweep - lastSweepAtMs >= SWEEP_THROTTLE_MS) {
@@ -855,7 +756,7 @@ fastYellowArmed = p.fastYellowArmed,
             )
         }
 
-        if (state.zoneThreats.isEmpty() && !state.focusOblastAlertActive) {
+        if (state.zoneThreats.isEmpty() && !state.focusOblastAlertActive && !state.focusOblastYellowAlertActive) {
             val since = emptySince
             if (since == null) {
                 emptySince = System.currentTimeMillis()
@@ -951,7 +852,8 @@ fastYellowArmed = p.fastYellowArmed,
             body = body,
             sirenOverride = sirenOverride,
             revealThreat = revealThreat,
-            vibrationLevel = vibrationLevel
+            vibrationLevel = vibrationLevel,
+            silent = silent
         )
     }
 

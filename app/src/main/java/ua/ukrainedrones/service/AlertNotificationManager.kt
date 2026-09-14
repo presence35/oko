@@ -229,7 +229,8 @@ class AlertNotificationManager(private val context: Context) {
         body: String,
         sirenOverride: Boolean,
         revealThreat: NormalizedThreat? = null,
-        vibrationLevel: Int = 3
+        vibrationLevel: Int = 3,
+        silent: Boolean = false
     ) {
         val channel = when {
             zone == ThreatZone.INNER && sirenOverride -> CHANNEL_ALERTS_ALARM
@@ -245,6 +246,7 @@ class AlertNotificationManager(private val context: Context) {
             .setAutoCancel(true)
             .setVibrate(vibrationPattern(vibrationLevel))
             .setContentIntent(openAppIntent(revealThreat))
+            .setOnlyAlertOnce(silent)
             .build()
         safeNotify(NOTIF_ALERT, notif)
     }
