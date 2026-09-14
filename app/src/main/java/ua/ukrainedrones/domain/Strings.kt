@@ -87,6 +87,8 @@ object Strings {
         val nightZoneSirenOverrideDesc: String,
         val nightOfficialSirenOverrideTitle: String,
         val nightOfficialSirenOverrideDesc: String,
+        val nightOfficialAlertCityScopeTitle: String,
+        val nightOfficialAlertCityScopeDesc: String,
         val nightCustomZonesTitle: String,
         val nightCustomZonesDesc: String,
         val nightMuteExitNote: String,
@@ -705,9 +707,11 @@ val tapToCancelLabel: String,
         val nightSoundLabel: String get() = settings.nightSoundLabel
         val nightZoneSirenOverrideTitle: String get() = settings.nightZoneSirenOverrideTitle
         val nightZoneSirenOverrideDesc: String get() = settings.nightZoneSirenOverrideDesc
-        val nightOfficialSirenOverrideTitle: String get() = settings.nightOfficialSirenOverrideTitle
-        val nightOfficialSirenOverrideDesc: String get() = settings.nightOfficialSirenOverrideDesc
-        val nightCustomZonesTitle: String get() = settings.nightCustomZonesTitle
+         val nightOfficialSirenOverrideTitle: String get() = settings.nightOfficialSirenOverrideTitle
+         val nightOfficialSirenOverrideDesc: String get() = settings.nightOfficialSirenOverrideDesc
+         val nightOfficialAlertCityScopeTitle: String get() = settings.nightOfficialAlertCityScopeTitle
+         val nightOfficialAlertCityScopeDesc: String get() = settings.nightOfficialAlertCityScopeDesc
+         val nightCustomZonesTitle: String get() = settings.nightCustomZonesTitle
         val nightCustomZonesDesc: String get() = settings.nightCustomZonesDesc
         val nightMuteExitNote: String get() = settings.nightMuteExitNote
         val allAlertsOffLabel: String get() = settings.allAlertsOffLabel

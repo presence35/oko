@@ -85,7 +85,7 @@ object DebugLog {
 
     private val engine = ThreatEngine(NEPTUN_TYPES)
 
-    internal const val MAX_ENTRIES = 500
+    internal const val MAX_ENTRIES = 4269
 
     /** Entries older than this are pruned on load/append (24 hours — a debug trail, not history). */
     internal const val AUTO_CLEAR_AGE_MS = 24L * 60 * 60 * 1000

@@ -75,6 +75,7 @@ data class UserPreferences(
     val nightFastYellowArmed: Boolean = true,
     val nightZoneSirenOverride: Boolean = false,
     val nightOfficialSirenOverride: Boolean = false,
+    val nightOfficialAlertCityScope: Boolean = false,
     val flybyAnimationEnabled: Boolean = true,
     val threatIconZoom: Boolean = true,
     val sheltersEnabled: Boolean = true,
@@ -160,6 +161,7 @@ class UserPrefs(private val context: Context) {
     private val nightFastYellowArmedKey = booleanPreferencesKey("night_fast_yellow_armed")
     private val nightZoneSirenOverrideKey = booleanPreferencesKey("night_zone_siren_override")
     private val nightOfficialSirenOverrideKey = booleanPreferencesKey("night_official_siren_override")
+    private val nightOfficialAlertCityScopeKey = booleanPreferencesKey("night_official_alert_city_scope")
     private val flybyAnimationEnabledKey = booleanPreferencesKey("flyby_animation_enabled")
     private val threatIconZoomKey = booleanPreferencesKey("threat_icon_zoom")
     private val sheltersEnabledKey = booleanPreferencesKey("shelters_enabled")
@@ -250,6 +252,7 @@ class UserPrefs(private val context: Context) {
             nightFastYellowArmed = this[nightFastYellowArmedKey] ?: true,
             nightZoneSirenOverride = this[nightZoneSirenOverrideKey] ?: false,
             nightOfficialSirenOverride = this[nightOfficialSirenOverrideKey] ?: false,
+            nightOfficialAlertCityScope = this[nightOfficialAlertCityScopeKey] ?: false,
             flybyAnimationEnabled = this[flybyAnimationEnabledKey] ?: true,
             threatIconZoom = this[threatIconZoomKey] ?: true,
             sheltersEnabled = this[sheltersEnabledKey] ?: true,
@@ -621,6 +624,10 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setNightOfficialSirenOverride(override: Boolean) {
         context.dataStore.edit { it[nightOfficialSirenOverrideKey] = override }
+    }
+
+    suspend fun setNightOfficialAlertCityScope(enabled: Boolean) {
+        context.dataStore.edit { it[nightOfficialAlertCityScopeKey] = enabled }
     }
 
     suspend fun clearAll() {

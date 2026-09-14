@@ -434,7 +434,8 @@ val mappedThreats = registry.allThreats.map { list ->
 
                 // Scoped level: highest level matching the user's focus + scope (siren gate).
                 // Raw level: highest level in the oblast, no scope filter (all-clear gate).
-                val focusOblastLevel = alerts.maxLevelFor(focusToken, focusCityUa, p.officialAlertCityScope)
+                val effectiveCityScope = p.officialAlertCityScope || (nightActive && p.nightOfficialAlertCityScope)
+                val focusOblastLevel = alerts.maxLevelFor(focusToken, focusCityUa, effectiveCityScope)
                 val focusOblastRawLevel = alerts.maxLevelFor(focusToken, null, false)
                 val focusOblastAlertSince = focusToken?.let { token ->
                     alerts.filter { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }
@@ -442,8 +443,8 @@ val mappedThreats = registry.allThreats.map { list ->
                 }
                 // Official facts come from the same engine gates the UI/widget consume (no mirror
                 // rule): the trident, the announce latch and the monitor tint all derive here.
-                val focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, p.officialAlertCityScope)
-                val focusOblastYellowAlertActive = officialYellowAlertActiveFor(alerts, focusToken, focusCityUa, p.officialAlertCityScope)
+                val focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, effectiveCityScope)
+                val focusOblastYellowAlertActive = officialYellowAlertActiveFor(alerts, focusToken, focusCityUa, effectiveCityScope)
 
                 val activeOfficialAlert = focusToken?.let { token ->
                     alerts.filter { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }

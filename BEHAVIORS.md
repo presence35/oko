@@ -258,7 +258,9 @@ The red siren flag (`focusOblastAlertActive`, level "red") and the yellow flag
 flag through `officialAlertActiveFor`, the yellow flag through its twin
 `officialYellowAlertActiveFor`, both in `ThreatEngine.evaluate()`. Red wins over yellow in
 consumers' UI priority; the flags stay independent so messaging can be per-level. Consumers
-never re-implement this matching.
+never re-implement this matching. Night mode overrides scope: when the night window is
+active and `nightOfficialAlertCityScope` is true, city-level scoping applies at night
+regardless of the day setting.
 ```
 
 ### `deriveOfficialAlertReason(alert, threats, focus, params, lang, now)` — Human-Readable Reason

@@ -97,8 +97,9 @@ data class UiState(
     val nightOfficialSirenOverride: Boolean = false,
     val officialRedAlertsEnabled: Boolean = true,
     val officialYellowAlertsEnabled: Boolean = true,
-    val officialAlertCityScope: Boolean = false,
-    val sirenOverride: Boolean = false,
+     val officialAlertCityScope: Boolean = false,
+     val nightOfficialAlertCityScope: Boolean = false,
+     val sirenOverride: Boolean = false,
     val criticalOfflineOverride: Boolean = true,
     val criticalOfflineBypassSilent: Boolean = false,
     val hiddenTypes: Set<ThreatType> = emptySet(),      // hidden from the map
@@ -206,6 +207,7 @@ data class SettingsState(
     val nightFastYellowArmed: Boolean get() = prefs.nightFastYellowArmed
     val nightZoneSirenOverride: Boolean get() = prefs.nightZoneSirenOverride
     val nightOfficialSirenOverride: Boolean get() = prefs.nightOfficialSirenOverride
+    val nightOfficialAlertCityScope: Boolean get() = prefs.nightOfficialAlertCityScope
     val followMe: Boolean get() = prefs.followMe
     val pinnedCity: City? get() = prefs.pinnedCity?.let { Cities.byUa[it] }
     val pinnedCityName: String? get() = prefs.pinnedCity
@@ -416,6 +418,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val officialRedAlertsEnabled: Boolean,
         val officialYellowAlertsEnabled: Boolean,
         val officialAlertCityScope: Boolean,
+        val nightOfficialAlertCityScope: Boolean,
         val sirenOverride: Boolean,
         val followMe: Boolean,
         val criticalOfflineOverride: Boolean,
@@ -514,6 +517,7 @@ val fastGroupCollapsed: Boolean,
             officialRedAlertsEnabled = officialRedAlertsEnabled,
             officialYellowAlertsEnabled = officialYellowAlertsEnabled,
             officialAlertCityScope = officialAlertCityScope,
+            nightOfficialAlertCityScope = nightOfficialAlertCityScope,
             sirenOverride = sirenOverride,
             followMe = followMe,
             criticalOfflineOverride = criticalOfflineOverride,
@@ -652,7 +656,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             nowMono = nowMono,
             reveal = live.reveal,
             flourish = live.flourish,
-            officialAlertCityScope = prefs.officialAlertCityScope,
+            officialAlertCityScope = prefs.officialAlertCityScope || (nightActive && prefs.nightOfficialAlertCityScope),
             fillAlertRegions = prefs.fillAlertRegions,
 showBorders = prefs.showBorders,
             showRegionBorders = prefs.showRegionBorders
@@ -669,6 +673,7 @@ showBorders = prefs.showBorders,
             officialRedAlertsEnabled = prefs.officialRedAlertsEnabled,
             officialYellowAlertsEnabled = prefs.officialYellowAlertsEnabled,
             officialAlertCityScope = prefs.officialAlertCityScope,
+            nightOfficialAlertCityScope = prefs.nightOfficialAlertCityScope,
             sirenOverride = prefs.sirenOverride,
             criticalOfflineOverride = prefs.criticalOfflineOverride,
             criticalOfflineBypassSilent = prefs.criticalOfflineBypassSilent,
@@ -1145,6 +1150,10 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setNightOfficialSirenOverride(override: Boolean) {
         viewModelScope.launch { prefs.setNightOfficialSirenOverride(override) }
+    }
+
+    fun setNightOfficialAlertCityScope(enabled: Boolean) {
+        viewModelScope.launch { prefs.setNightOfficialAlertCityScope(enabled) }
     }
 
     fun setSheltersEnabled(enabled: Boolean) {

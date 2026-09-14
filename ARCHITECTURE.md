@@ -358,10 +358,11 @@ Treat these as a contract. If you change one, update **every** place that relies
   snapshots are the sole truth; if nothing is authoritative the last-known state is held (never
   fabricated all-clear).
   This means an active REST fallback (Ubilling) supersedes the primary's stale held alerts during
-  an outage, so a real all-clear can't be masked. Alert **scope** (oblast/city) is engine-owned:
+  an outage, so a real all-clear can't be masked.   Alert **scope** (oblast/city) is engine-owned:
   both consumers read the `officialAlertActiveFor(...)` gate in `engine/OblastAlert.kt`, and the
   map's red city labels (`redCities`) come from the engine result — oblast-wide alerts cover the
-  whole stem, City scope narrows only city/raion-named alerts. NEPTUN's list is held (never
+  whole stem, City scope narrows only city/raion-named alerts. At night, `nightOfficialAlertCityScope`
+  overrides the day `officialAlertCityScope` when active. NEPTUN's list is held (never
   cleared) while its socket is down — but once a fallback takes over,
   the fallback's snapshot is authoritative for the regions it reports. A continuous
   Neptun→Ubilling→Neptun handover never re-rings: the runtime announce latch keys on the alert

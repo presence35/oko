@@ -19,6 +19,8 @@ Only when the user says **"release it"**, perform a full release:
 - Changelog entries are short one-liners: `- EN text / UA text`. Each line is split on the first ` / ` to produce the release notes for `version.json`. No multi-paragraph essays.
 - The server `version.json` is generated from `app/version.properties` (versionCode/versionName) plus the `## [Unreleased]` entries in `CHANGELOG.md` (auto-derived at release time). FTP creds live in `app/upload.properties` (git-ignored).
 - Version numbers: `versionCode` is a monotonic integer; `versionName` is human-readable. Keep both bumped together (the `bumpVersion` task does this).
+- **EN-only strings during normal work.** Do NOT translate strings to UA — write only the
+  EN text, and put it in the UA slot too as a placeholder so `Strings` compiles).
 
 ## Development conventions
 
@@ -48,9 +50,6 @@ evaluation contract. Read `ARCHITECTURE.md` for module map and data-flow context
 - Don't add comments unless asked.
 - UA/EN text goes through `Strings` (`Strings.get(lang).StringSet`), not Android resource
   localization.
-- **EN-only strings during normal work.** Do NOT translate new strings to UA — write only the
-  EN text (put it in the UA slot too as a placeholder so `Strings` compiles). A dedicated
-  "translate" command/session fills real UA later--Saves tokens.
 - **Editing files with non-ASCII text** (Cyrillic — `Strings.kt`, `Cities.kt`, etc.): never use
   raw `Get-Content`/`Set-Content` in PowerShell 5.1 — it reads/writes ANSI and corrupts UTF-8
   (mojibake + adds a BOM). Use .NET instead:

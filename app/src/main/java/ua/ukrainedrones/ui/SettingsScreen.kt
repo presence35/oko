@@ -392,6 +392,7 @@ fun SettingsScreen(
     onNightFastYellowArmedChange: (Boolean) -> Unit,
     onNightZoneSirenOverrideChange: (Boolean) -> Unit,
     onNightOfficialSirenOverrideChange: (Boolean) -> Unit,
+    onNightOfficialAlertCityScopeChange: (Boolean) -> Unit,
     onFollowMeChange: (Boolean) -> Unit,
     onPinnedCityChange: (City?) -> Unit,
     onPeriodicGpsChange: (Boolean) -> Unit,
@@ -454,6 +455,7 @@ fun SettingsScreen(
     val nightFastYellowArmed = state.nightFastYellowArmed
     val nightZoneSirenOverride = state.nightZoneSirenOverride
     val nightOfficialSirenOverride = state.nightOfficialSirenOverride
+    val nightOfficialAlertCityScope = state.nightOfficialAlertCityScope
     val disclaimerCollapsed = state.disclaimerCollapsed
     val disclaimerReadCount = state.disclaimerReadCount
     val followMe = state.followMe
@@ -1043,7 +1045,9 @@ fun SettingsScreen(
                         onFastRedArmedChange = onNightFastRedArmedChange,
                         onFastYellowArmedChange = onNightFastYellowArmedChange,
                         onZoneSirenOverrideChange = onNightZoneSirenOverrideChange,
-                        onOfficialSirenOverrideChange = onNightOfficialSirenOverrideChange
+                        onOfficialSirenOverrideChange = onNightOfficialSirenOverrideChange,
+                        nightOfficialAlertCityScope = nightOfficialAlertCityScope,
+                        onNightOfficialAlertCityScopeChange = onNightOfficialAlertCityScopeChange
                     )
                 }
             }
@@ -1731,7 +1735,9 @@ private fun NightModeCard(
     onFastRedArmedChange: (Boolean) -> Unit,
     onFastYellowArmedChange: (Boolean) -> Unit,
     onZoneSirenOverrideChange: (Boolean) -> Unit,
-    onOfficialSirenOverrideChange: (Boolean) -> Unit
+    onOfficialSirenOverrideChange: (Boolean) -> Unit,
+    nightOfficialAlertCityScope: Boolean,
+    onNightOfficialAlertCityScopeChange: (Boolean) -> Unit
 ) {
     val s = Strings.get(lang)
     var editing by remember { mutableStateOf<String?>(null) }  // "start" | "end" | null
@@ -1776,6 +1782,14 @@ private fun NightModeCard(
                     checked = zoneSirenOverride,
                     onCheckedChange = onZoneSirenOverrideChange,
                     icon = painterResource(R.drawable.ic_volume_up),
+                     iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                AlertToggleRow(
+                    title = s.nightOfficialAlertCityScopeTitle,
+                    description = s.nightOfficialAlertCityScopeDesc,
+                    checked = nightOfficialAlertCityScope,
+                    onCheckedChange = onNightOfficialAlertCityScopeChange,
+                    icon = painterResource(R.drawable.ic_trident),
                     iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
