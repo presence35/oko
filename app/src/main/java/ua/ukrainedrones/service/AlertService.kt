@@ -151,14 +151,28 @@ class AlertService : Service() {
     private val notificationManager by lazy { AlertNotificationManager(applicationContext) }
     private val wakeLockManager by lazy { AlertWakeLockManager(applicationContext) }
     private val audioAlarmDispatcher by lazy { AudioAlarmDispatcher(applicationContext) }
+    @Volatile private var allClearSwipedAway = false
     private val debrisBuffer by lazy {
-        FallingDebrisBuffer(scope) {
-            lastCleanAllClearCity?.let { city ->
-                val s = Strings.get(lastChannelLang ?: AppLanguage.EN)
-                postAllClear(s, city)
-                audioAlarmDispatcher.dispatchAllClearChime()
+        FallingDebrisBuffer(
+            scope = scope,
+            onTick = { sec ->
+                if (!allClearSwipedAway && notificationManager.isAllClearNotificationActive()) {
+                    lastCleanAllClearCity?.let { city ->
+                        val s = Strings.get(lastChannelLang ?: AppLanguage.EN)
+                        postAllClear(s, city, debrisSeconds = sec, silent = true)
+                    }
+                }
+            },
+            onCompleted = {
+                if (!allClearSwipedAway && notificationManager.isAllClearNotificationActive()) {
+                    lastCleanAllClearCity?.let { city ->
+                        val s = Strings.get(lastChannelLang ?: AppLanguage.EN)
+                        postAllClear(s, city, debrisSeconds = 0, silent = true)
+                    }
+                    audioAlarmDispatcher.dispatchSmallVibration()
+                }
             }
-        }
+        )
     }
     @Volatile private var lastCleanAllClearCity: String? = null
 

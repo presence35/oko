@@ -1132,7 +1132,7 @@ private fun RetryLogCard(
             val countdownSec = ((r.nextAtMs - now) / 1000L).coerceAtLeast(0)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    String.format(s.offlineLiveFormat, minutesOffline, 20, r.attempt + 1),
+                    String.format(s.offlineLiveFormat, minutesOffline, r.attempt + 1),
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
                     color = DebugAmber

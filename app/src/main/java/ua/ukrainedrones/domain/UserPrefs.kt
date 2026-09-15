@@ -39,6 +39,7 @@ data class UserPreferences(
     val officialRedAlertsEnabled: Boolean = true,
     val yellowAlertsEnabled: Boolean = true,
     val sirenOverride: Boolean = false,
+    val fallingDebrisDelaySec: Int = 0,
     val disclaimerCollapsed: Boolean = false,
     val disclaimerReadCount: Int = 0,
     val followMe: Boolean = true,
@@ -122,6 +123,7 @@ class UserPrefs(private val context: Context) {
     private val officialRedAlertsKey = booleanPreferencesKey("official_red_alerts_enabled")
     private val yellowAlertsKey = booleanPreferencesKey("yellow_alerts_enabled")
     private val sirenOverrideKey = booleanPreferencesKey("siren_override")
+    private val fallingDebrisDelaySecKey = intPreferencesKey("falling_debris_delay_sec")
     private val disclaimerCollapsedKey = booleanPreferencesKey("disclaimer_collapsed")
     private val disclaimerReadCountKey = intPreferencesKey("disclaimer_read_count")
     private val followMeKey = booleanPreferencesKey("follow_me")
@@ -216,6 +218,7 @@ class UserPrefs(private val context: Context) {
             officialRedAlertsEnabled = this[officialRedAlertsKey] ?: true,
             yellowAlertsEnabled = this[yellowAlertsKey] ?: true,
             sirenOverride = this[sirenOverrideKey] ?: false,
+            fallingDebrisDelaySec = this[fallingDebrisDelaySecKey] ?: 0,
             disclaimerCollapsed = this[disclaimerCollapsedKey] ?: false,
             disclaimerReadCount = this[disclaimerReadCountKey] ?: 0,
             followMe = this[followMeKey] ?: true,
@@ -333,6 +336,10 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setSirenOverride(override: Boolean) {
         context.dataStore.edit { it[sirenOverrideKey] = override }
+    }
+
+    suspend fun setFallingDebrisDelaySec(sec: Int) {
+        context.dataStore.edit { it[fallingDebrisDelaySecKey] = sec.coerceIn(0, 600) }
     }
 
     suspend fun setThreatMapVisible(type: ThreatType, visible: Boolean) {

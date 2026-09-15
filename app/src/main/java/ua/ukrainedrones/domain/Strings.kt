@@ -78,6 +78,9 @@ object Strings {
         val officialAlertScopeDesc: String,
         val sirenOverrideTitle: String,
         val sirenOverrideDesc: String,
+        val fallingDebrisDelayTitle: String,
+        val fallingDebrisDelayDesc: String,
+        val fallingDebrisOffLabel: String,
         val nightModeLabel: String,
         val nightModeDesc: String,
         val nightStartTimeLabel: String,
@@ -265,6 +268,8 @@ val nightSoundLabel: String,
         val connLogDurFormat: String,
         val allClearTitle: String,
         val allClearText: String,
+        val fallingDebrisNotifCountdown: String,
+        val fallingDebrisFooterCountdown: String,
         val batteryTitle: String,
         val batteryBody: String,
         val batteryAllowButton: String,
@@ -697,6 +702,9 @@ val tapToCancelLabel: String,
         val officialAlertScopeDesc: String get() = settings.officialAlertScopeDesc
         val sirenOverrideTitle: String get() = settings.sirenOverrideTitle
         val sirenOverrideDesc: String get() = settings.sirenOverrideDesc
+        val fallingDebrisDelayTitle: String get() = settings.fallingDebrisDelayTitle
+        val fallingDebrisDelayDesc: String get() = settings.fallingDebrisDelayDesc
+        val fallingDebrisOffLabel: String get() = settings.fallingDebrisOffLabel
         val nightModeLabel: String get() = settings.nightModeLabel
         val nightModeDesc: String get() = settings.nightModeDesc
         val nightStartTimeLabel: String get() = settings.nightStartTimeLabel
@@ -935,6 +943,8 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val connLogDurFormat: String get() = misc.connLogDurFormat
         val allClearTitle: String get() = misc.allClearTitle
         val allClearText: String get() = misc.allClearText
+        val fallingDebrisNotifCountdown: String get() = misc.fallingDebrisNotifCountdown
+        val fallingDebrisFooterCountdown: String get() = misc.fallingDebrisFooterCountdown
         val batteryTitle: String get() = misc.batteryTitle
         val batteryBody: String get() = misc.batteryBody
         val batteryAllowButton: String get() = misc.batteryAllowButton

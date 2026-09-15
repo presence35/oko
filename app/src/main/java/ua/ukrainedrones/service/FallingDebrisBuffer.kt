@@ -12,10 +12,13 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class FallingDebrisBuffer(
     private val scope: CoroutineScope,
+    private val onTick: ((Int) -> Unit)? = null,
     private val onCompleted: () -> Unit
 ) {
-    private val _secondsRemaining = MutableStateFlow(0)
-    val secondsRemaining: StateFlow<Int> = _secondsRemaining.asStateFlow()
+    companion object {
+        private val _secondsRemaining = MutableStateFlow(0)
+        val secondsRemaining: StateFlow<Int> = _secondsRemaining.asStateFlow()
+    }
 
     private var countdownJob: Job? = null
 
@@ -34,6 +37,7 @@ class FallingDebrisBuffer(
         countdownJob = scope.launch(Dispatchers.Default) {
             for (sec in durationSeconds downTo 1) {
                 _secondsRemaining.value = sec
+                onTick?.invoke(sec)
                 delay(1000L)
             }
             _secondsRemaining.value = 0

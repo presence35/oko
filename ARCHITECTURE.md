@@ -119,6 +119,14 @@ Consumers talk only to `SourceRegistry`; the source feed (WS socket, decoder, re
 private inside each `Source`. Every source reports normalized engine currency
 (`NormalizedThreat`/`OblastAlert`), never a source-specific format.
 
+**Fundamental Ownership & Invariant: Source Owns Reality**
+- The **Source** is the authoritative source of truth for raw tracks, reported fixes, course vectors,
+  and type properties (including `staleAfterMs`, `ghostCapMs`, nominal speed, and reach).
+- The **Engine** (`ThreatEngine`) and **Consumers** (UI, `AlertService`) are strictly downstream readers.
+  They do NOT apply unauthorized track pruning, synthetic dead-reckoning caches, or custom timeouts
+  that contradict the active Source's declared contract. A track lives as long as the Source and its
+  catalog say it lives; the engine only evaluates zones/scores/staleness based on that catalog.
+
 | File | Responsibility |
 | --- | --- |
 | `source/Source.kt` | The source SPI interface: `id`/`name`/`sourceType` (WS/REST), `operationalMode` (STREAMING/POLLING/STANDBY), `typeCatalog`, `threats`/`alerts`/`connectionState: StateFlow<SourceState>`/`enabled` + `setEnabled`, `testConnection()` (`SourceTestResult`), `removedThreats` SharedFlow, and default no-ops (`markUserShot`/`wasUserShotRecently`/`retryNow`/`pauseRetries`/`onAppForeground`/`siteUrl`). Source-agnostic: no NEPTUN types in the contract. |
@@ -207,6 +215,7 @@ private inside each `Source`. Every source reports normalized engine currency
 | File | Responsibility |
 | --- | --- |
 | `AlertService.kt` | Foreground service; reads `AppSources.registry` flows (`allThreats`, `allAlerts`, `removedThreats`, health) via combine — never a specific source (`specialUse` on API 34+, `dataSync` on API 29–33 — Android 15 caps `dataSync` FGS at 6h per 24h in the background, which would stop a 24/7 monitor) — the always-on monitor. Owns background monitoring and the notification lifecycle: siren/chime/all-clear (20s zone grace, coalescing), the always-visible monitor notification switching to offline wording + Retry on a drop (no separate one-shot offline alert) and a large trident icon tinted from the engine's official level (red/yellow/none — mirrors the header; never reacts to the app's own red/outer zones), resolved-threat tally, per-notification vibration, `DebugLog` feed. Zone-alert dedup: ids drop from `knownZones` only when they leave the zones *and* their `userShotAt` grace (3 s) has passed, so a same-id respawn of a shot-down drone never re-alerts. | The resolved-threat tally counts by **focus oblast** by default (GPS-follow or pinned city's oblast, matched via the shared `inOblast` (`engine/OblastUtils.kt`)); an "All of Ukraine" opt-in (`neutralized_tally_all_ukraine`) lifts it to any resolution country-wide. Tapping the tally notification opens `MainActivity` directly with the last **21** remembered resolutions (position + type + region token) baked into the tap for the map's replay flourish; a red alert (official or INNER zone) erases that memory. Zone-alert dedup: ids drop from `knownZones` only when they leave the zones *and* their `userShotAt` grace (3 s) has passed, so a same-id respawn of a shot-down drone never re-alerts. *Note:* the official-alert all-clear is region-latched: it fires only while the focus is still on the region whose alert was ringing (`state.focusToken == officialRegionToken`); switching the focus away to a non-alerting region — **or re-pinning to a different city, even within the same oblast** (the announced city is tracked alongside the token) — silently drops tracking (no false all-clear, no lingering siren), and returning to the still-alerting region re-announces fresh. The silent reason-refresh only re-posts while the new reason is a threat inside the user's zones; a reason that falls back to the bare oblast name never re-raises a dismissed notification. `ACTION_NEUTRALIZED_DISMISS` (swipe or tap-consumed tally) resets the tally. The offline drop is persisted (`offline_pending_since`) so it re-flags after a service kill; evaluates via the shared domain functions, never local formulas. Official-alert lifecycle keys on the RAW episode (`focusOblastAlertRaw`): the City-level scope toggle only gates announce/suppress — flipping it mid-alert never fires a false all-clear nor re-rings (suppression cancels silently; returning coverage announces fresh). Reconnect milestone flags reset **and** the milestone notification is cancelled on the reconnect transition; official-alert notifications track their own notified-state (turning the toggle back on mid-alert re-announces); `ConnectionLog`/`DebugLog` restore is awaited before `NeptunClient.start()`. Notification taps that carry a threat use their own `PendingIntent` request code (1) so the reveal extras can't be clobbered by the plain status/tally/milestone intents (0); the ongoing status title reads "Monitoring GPS" when following and "Monitoring \<city\>" when pinned, and it switches to the offline wording with a Retry action once a drop outlasts the shared grace. A daily 16:20 coroutine checks `UpdateManager` silently and posts one silent "new version available" notification per new build (`last_notified_update_code` pref, `NOTIF_UPDATE`); its tap carries `EXTRA_SHOW_UPDATE` with its own `PendingIntent` request code (4). |
+| `FallingDebrisBuffer.kt` | Safety delay countdown timer holding back the audible All-Clear chime after an alert drops. Pure, source-agnostic timer with zero city tracking and zero secondary mirrors; aborts instantaneously upon any new threat onset. |
 | `MonitoringStatus.kt` | In-memory `running` StateFlow mirroring whether `AlertService` is alive in this process. Set true by `AlertService.start()`/`onStartCommand`, false by `onDestroy`; the UI replaces the whole header with a tappable "SERVICE OFFLINE" banner when it's false. The socket alone is not proof alerting works — the connection is owned by the app process, not the service. |
 | `AlertWatchdog.kt` | WorkManager periodic worker (15 min) that restarts `AlertService` if `MonitoringStatus.running` is false and `bootRestartEnabled` is true. Scheduled from `BootReceiver` and `MainActivity.onCreate`. Closes the process-kill silent dead state. |
 | `BootReceiver.kt` | Restarts `AlertService` on `BOOT_COMPLETED` / `MY_PACKAGE_REPLACED`, gated on the user's `boot_restart_enabled` pref (Settings → Alerts). When monitoring is not auto-restarted, posts a persistent "Monitoring paused after reboot — tap to start" notification. Always schedules `AlertWatchdog`. |
@@ -426,11 +435,13 @@ Owns:
 - WS socket + reconnect machine (`WsTransport`)
 - frame parsing + feed state (`NeptunDecoder`)
 - per-source `SourceState` mapping
+- authoritative track lifecycle and source type properties catalog (`NEPTUN_TYPES` owning `staleAfterMs`, `ghostCapMs`, reach, nominal speeds)
 
 Must not:
 - decide alert tiers
 - access UI state
 - post notifications
+- delegate track pruning or lifecycles to arbitrary downstream timers outside the SPI catalog
 
 ### MainViewModel
 

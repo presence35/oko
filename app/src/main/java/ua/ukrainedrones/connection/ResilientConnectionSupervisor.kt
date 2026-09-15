@@ -16,6 +16,8 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import ua.ukrainedrones.ConnectionLog
+import ua.ukrainedrones.ConnStatus
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -87,6 +89,25 @@ class ResilientConnectionSupervisor(
     private var pauseUntilMono = 0L
     @Volatile private var activeSource: String? = null
 
+    private fun updateConnectionState(newState: ConnectionState) {
+        _connectionState.value = newState
+        val now = System.currentTimeMillis()
+        when (newState) {
+            is ConnectionState.Connected -> {
+                ConnectionLog.observe(ConnStatus.ONLINE, now, activeSource)
+            }
+            is ConnectionState.Degraded -> {
+                ConnectionLog.observe(ConnStatus.DEGRADED, now, activeSource)
+            }
+            is ConnectionState.Offline, ConnectionState.Disconnected, is ConnectionState.Paused -> {
+                ConnectionLog.observe(ConnStatus.OFFLINE, now, activeSource)
+            }
+            is ConnectionState.Connecting -> {
+                // Keep previous state until connection resolves
+            }
+        }
+    }
+
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
             val valid = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
@@ -135,19 +156,19 @@ class ResilientConnectionSupervisor(
         startWatchdogLoop()
 
         if (isPaused()) {
-            _connectionState.value = ConnectionState.Paused(
+            updateConnectionState(ConnectionState.Paused(
                 untilMs = System.currentTimeMillis() + (pauseUntilMono - Monotonic.now()),
                 since = System.currentTimeMillis(),
                 reconnectStartMillis = savedReconnectStartMs
-            )
+            ))
         } else if (valid) {
             triggerReconnect("Initial start")
         } else {
-            _connectionState.value = ConnectionState.Offline(
+            updateConnectionState(ConnectionState.Offline(
                 since = System.currentTimeMillis(),
                 reconnectStartMillis = if (savedReconnectStartMs > 0L) savedReconnectStartMs else System.currentTimeMillis(),
                 reason = "No validated internet"
-            )
+            ))
             recordEvent(ConnEventKind.NO_NETWORK)
         }
     }
@@ -160,7 +181,7 @@ class ResilientConnectionSupervisor(
         watchdogJob?.cancel()
         connectJob?.cancel()
         closeCurrentSocket("Supervisor stopped")
-        _connectionState.value = ConnectionState.Disconnected
+        updateConnectionState(ConnectionState.Disconnected)
     }
 
     private fun handleNetworkLost(reason: String) {
@@ -169,11 +190,11 @@ class ResilientConnectionSupervisor(
         connectJob?.cancel()
         val now = System.currentTimeMillis()
         val currentStart = _connectionState.value.reconnectStartMillisOrZero
-        _connectionState.value = ConnectionState.Offline(
+        updateConnectionState(ConnectionState.Offline(
             since = now,
             reconnectStartMillis = if (currentStart > 0L) currentStart else now,
             reason = reason
-        )
+        ))
         recordEvent(ConnEventKind.NO_NETWORK)
     }
 
@@ -206,12 +227,12 @@ class ResilientConnectionSupervisor(
                         scheduleReconnectWithBackoff("42s silence watchdog")
                     } else if (silenceDuration >= DEGRADED_STALE_MS && cs !is ConnectionState.Degraded) {
                         val gen = connectionGeneration.get()
-                        _connectionState.value = ConnectionState.Degraded(
+                        updateConnectionState(ConnectionState.Degraded(
                             generation = gen,
                             openedAtMs = System.currentTimeMillis() - silenceDuration,
                             lastFrameAtMs = System.currentTimeMillis() - silenceDuration,
                             quietDurationMs = silenceDuration
-                        )
+                        ))
                         recordEvent(ConnEventKind.DEGRADED)
                     }
                 }
@@ -245,12 +266,12 @@ class ResilientConnectionSupervisor(
             recordEvent(ConnEventKind.RETRY_SCHEDULED, attempt, delayMs)
 
             val currentStart = _connectionState.value.reconnectStartMillisOrZero
-            _connectionState.value = ConnectionState.Offline(
+            updateConnectionState(ConnectionState.Offline(
                 since = System.currentTimeMillis(),
                 reconnectStartMillis = if (currentStart > 0L) currentStart else System.currentTimeMillis(),
                 reason = reason,
                 attempt = attempt
-            )
+            ))
 
             delay(delayMs)
             if (isRunning.get() && isNetworkValidated.get() && !isPaused()) {
@@ -262,12 +283,12 @@ class ResilientConnectionSupervisor(
     private fun executeConnect() {
         closeCurrentSocket("Starting fresh connection")
         val gen = connectionGeneration.incrementAndGet()
-        _connectionState.value = ConnectionState.Connecting(
+        updateConnectionState(ConnectionState.Connecting(
             generation = gen,
             attempt = reconnectAttempts.get(),
             nextRetryAtMs = 0L,
             networkValidated = isNetworkValidated.get()
-        )
+        ))
 
         val request = Request.Builder()
             .url(endpointUrl)
@@ -284,7 +305,7 @@ class ResilientConnectionSupervisor(
                 reconnectAttempts.set(0)
                 _retryState.value = null
                 val nowWall = System.currentTimeMillis()
-                _connectionState.value = ConnectionState.Connected(gen, nowWall, nowWall)
+                updateConnectionState(ConnectionState.Connected(gen, nowWall, nowWall))
                 onBaselineRequired()
             }
 
@@ -297,7 +318,7 @@ class ResilientConnectionSupervisor(
                 val currentCs = _connectionState.value
                 if (currentCs !is ConnectionState.Connected) {
                     val openedAt = if (currentCs is ConnectionState.Degraded) currentCs.openedAtMs else System.currentTimeMillis()
-                    _connectionState.value = ConnectionState.Connected(gen, openedAt, System.currentTimeMillis())
+                    updateConnectionState(ConnectionState.Connected(gen, openedAt, System.currentTimeMillis()))
                 }
                 onFrameReceived(text)
             }
@@ -338,11 +359,11 @@ class ResilientConnectionSupervisor(
         closeCurrentSocket("User paused retries")
         val now = System.currentTimeMillis()
         val currentStart = _connectionState.value.reconnectStartMillisOrZero
-        _connectionState.value = ConnectionState.Paused(
+        updateConnectionState(ConnectionState.Paused(
             untilMs = now + (minutes * 60_000L),
             since = now,
             reconnectStartMillis = if (currentStart > 0L) currentStart else now
-        )
+        ))
         recordEvent(ConnEventKind.PAUSED, detail = "$minutes min")
     }
 
@@ -365,6 +386,7 @@ class ResilientConnectionSupervisor(
 
     fun setActiveSource(sourceId: String?) {
         activeSource = sourceId
+        ConnectionLog.setPendingSource(sourceId)
     }
 
     fun recordEvent(

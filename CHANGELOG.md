@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed ghosting and prematurely disappearing threats by removing unauthorized 120s engine-side pruning so threats persist according to their source's declared staleness and ghosting caps / Fixed ghosting and prematurely disappearing threats by removing unauthorized 120s engine-side pruning so threats persist according to their source's declared staleness and ghosting caps
+- Simplified falling debris safety buffer into a pure countdown timer, removing extraneous city-tracking state and mirrors / Simplified falling debris safety buffer into a pure countdown timer, removing extraneous city-tracking state and mirrors
 - Red official-alert notifications now refresh silently when the deduced threat changes within the same episode — no more re-vibration on every reason update / Red official-alert notifications now refresh silently when the deduced threat changes within the same episode — no more re-vibration on every reason update
 - Deep refactor: the alert notification state machine (9 latches, 5 cancel paths, 5 post paths) collapsed into a single `Primary` reconcile — the notif identity is now a stable key, so ETA churn no longer re-sounds / Deep refactor: the alert notification state machine (9 latches, 5 cancel paths, 5 post paths) collapsed into a single `Primary` reconcile — the notif identity is now a stable key, so ETA churn no longer re-sounds
 

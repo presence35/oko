@@ -38,6 +38,7 @@ class AlertNotificationManager(private val context: Context) {
         private val NotifYellow = Color.parseColor("#F9A825")
         const val ACTION_RETRY = "ua.ukrainedrones.RETRY"
         const val ACTION_IGNORE_RETRY = "ua.ukrainedrones.IGNORE_RETRY"
+        const val ACTION_ALLCLEAR_DISMISSED = "ua.ukrainedrones.ALLCLEAR_DISMISSED"
         const val EXTRA_REVEAL_ID = "reveal_threat_id"
         const val EXTRA_REVEAL_LAT = "reveal_threat_lat"
         const val EXTRA_REVEAL_LON = "reveal_threat_lon"
@@ -251,7 +252,7 @@ class AlertNotificationManager(private val context: Context) {
         safeNotify(NOTIF_ALERT, notif)
     }
 
-    fun postAllClearNotification(title: String, body: String) {
+    fun postAllClearNotification(title: String, body: String, silent: Boolean = false) {
         val notif = NotificationCompat.Builder(context, CHANNEL_ALLCLEAR)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
@@ -259,8 +260,31 @@ class AlertNotificationManager(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(openAppIntent())
+            .setDeleteIntent(allClearDeleteIntent())
+            .setOnlyAlertOnce(silent)
             .build()
         safeNotify(NOTIF_ALLCLEAR, notif)
+    }
+
+    fun isAllClearNotificationActive(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.activeNotifications?.any { it.id == NOTIF_ALLCLEAR } == true
+        } else {
+            true
+        }
+    }
+
+    private fun allClearDeleteIntent(): PendingIntent {
+        val intent = Intent(context, AlertService::class.java).apply {
+            action = ACTION_ALLCLEAR_DISMISSED
+        }
+        return PendingIntent.getService(
+            context,
+            12,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 
     fun postOfflineNotification(title: String, text: String, retryLabel: String) {

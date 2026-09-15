@@ -108,6 +108,22 @@ class AudioAlarmDispatcher(
     }
 
     /**
+     * Subtle vibration when a background countdown completes (e.g. falling debris advisory).
+     */
+    fun dispatchSmallVibration() {
+        try {
+            if (vibrator.hasVibrator()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createOneShot(150L, VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(150L)
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    /**
      * Plays critical offline warning chime.
      */
     fun dispatchCriticalOffline(overrideSilence: Boolean = true) {
