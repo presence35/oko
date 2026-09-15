@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Airplane-mode / no-network now shows "Offline" immediately instead of "degraded" — the `ConnectivityManager.NetworkCallback` was created but never registered, so airplane mode was never actively detected and the socket lingered for 30 s before the watchdog fired / Режим льотки / без мережі тепер показує "Офлайн" одразу, а не "Зменшено" — `ConnectivityManager.NetworkCallback` створювався, але ніде не реєструвався, тому режим льотки не виявлявся активно, а сокет витримував 30 с перш ніж вартовий спрацював
+- 5-minute critical offline notification now fires correctly during reconnect backoff / Критичне повідомлення про 5-хвилинний офлайн тепер спрацьовує правильно під час повторних спроб
+- All-clear notification no longer fires when switching to a location outside the alerting oblast / Повідомлення про відбій тривоги більше не спливає при перемиканні на місце поза областю, де була тривога
+
 - Red official-alert notifications now refresh silently when the deduced threat changes within the same episode — no more re-vibration on every reason update / Red official-alert notifications now refresh silently when the deduced threat changes within the same episode — no more re-vibration on every reason update
 - Deep refactor: the alert notification state machine (9 latches, 5 cancel paths, 5 post paths) collapsed into a single `Primary` reconcile — the notif identity is now a stable key, so ETA churn no longer re-sounds / Deep refactor: the alert notification state machine (9 latches, 5 cancel paths, 5 post paths) collapsed into a single `Primary` reconcile — the notif identity is now a stable key, so ETA churn no longer re-sounds
 

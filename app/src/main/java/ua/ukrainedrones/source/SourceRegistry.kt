@@ -281,13 +281,24 @@ class SourceRegistry {
         }
     }
 
-    /** Offline escalation (red + offline notification): degraded past the episode grace with no
-     *  fallback delivering. Consumers pass a monotonic `now` (mirror rule: derivation lives here)
-     *  — [degradedSince] is stamped on the monotonic clock so a wall-clock jump can't trigger or
-     *  stall the escalation. */
+    /** Offline escalation (red + offline notification): immediate when the transport is physically
+     *  down (no network, paused, or disconnected), and degraded past the episode grace with no
+     *  fallback covering for the silent-socket case. Consumers pass a monotonic `now` (mirror
+     *  rule: derivation lives here) — [degradedSince] is stamped on the monotonic clock so a
+     *  wall-clock jump can't trigger or stall the escalation. */
     fun isOffline(now: Long): Boolean {
         if (enabledSources.isEmpty()) return true
-        if (!_degraded.value || _coveredByFallback.value) return false
+        if (_coveredByFallback.value) return false
+
+        // Immediate offline when the transport is physically down. The 5-minute grace applies
+        // only to DEGRADED (silent socket / server outage) so transient feed stalls don't
+        // immediately alarm the user.
+        val transportDown = _connectionState.value == SourceState.OFFLINE ||
+                            _connectionState.value == SourceState.DISCONNECTED ||
+                            _connectionState.value == SourceState.PAUSED
+        if (transportDown) return true
+
+        if (!_degraded.value) return false
         val since = _degradedSince.value ?: return false
         return now - since >= OFFLINE_EPISODE_MS
     }

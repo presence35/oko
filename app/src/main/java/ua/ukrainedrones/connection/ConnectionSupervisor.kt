@@ -50,6 +50,7 @@ class ConnectionSupervisor(
 
     private var milestoneMonitorJob: Job? = null
     private var lastRecordedState: ConnectionState? = null
+    @Volatile private var outageStartMillis: Long = 0L
 
     /** The alert source currently providing coverage (null = primary/Neptun). Mirrored to
      *  ConnectionLog entries so the log shows which source was active per episode. */
@@ -101,6 +102,7 @@ class ConnectionSupervisor(
                 resetMilestones()
                 _retryState.value = null
                 ConnectionLog.observe(ConnStatus.ONLINE, now, activeSource)
+                outageStartMillis = 0L
             }
 
             is ConnectionState.Degraded -> {
@@ -108,6 +110,7 @@ class ConnectionSupervisor(
                     recordEvent(ConnEventKind.DEGRADED)
                 }
                 ConnectionLog.observe(ConnStatus.DEGRADED, now, activeSource)
+                outageStartMillis = 0L
             }
 
             is ConnectionState.Connecting -> {
@@ -122,6 +125,7 @@ class ConnectionSupervisor(
                     val kind = if (state.networkValidated) ConnEventKind.RETRY_SCHEDULED else ConnEventKind.NO_NETWORK
                     recordEvent(kind, state.attempt, delayMs)
                 }
+                if (outageStartMillis == 0L) outageStartMillis = System.currentTimeMillis()
             }
 
             is ConnectionState.Offline -> {
@@ -129,16 +133,19 @@ class ConnectionSupervisor(
                     recordEvent(ConnEventKind.CONNECTION_LOST)
                 }
                 ConnectionLog.observe(ConnStatus.OFFLINE, now, activeSource)
+                if (outageStartMillis == 0L) outageStartMillis = state.reconnectStartMillis
             }
 
             is ConnectionState.Paused -> {
                 _retryState.value = null
                 recordEvent(ConnEventKind.PAUSED)
+                outageStartMillis = 0L
             }
 
             ConnectionState.Disconnected -> {
                 _retryState.value = null
                 ConnectionLog.observe(ConnStatus.OFFLINE, now, activeSource)
+                if (outageStartMillis == 0L) outageStartMillis = System.currentTimeMillis()
             }
         }
     }
@@ -157,8 +164,15 @@ class ConnectionSupervisor(
             while (isActive) {
                 delay(1000)
                 val state = connectionState.value
-                if (state is ConnectionState.Offline) {
-                    val outageDuration = System.currentTimeMillis() - state.reconnectStartMillis
+                if (state is ConnectionState.Offline || state is ConnectionState.Connecting) {
+                    if (outageStartMillis == 0L) {
+                        outageStartMillis = if (state is ConnectionState.Offline) {
+                            state.reconnectStartMillis
+                        } else {
+                            System.currentTimeMillis()
+                        }
+                    }
+                    val outageDuration = System.currentTimeMillis() - outageStartMillis
                     checkMilestones(outageDuration)
                 }
             }

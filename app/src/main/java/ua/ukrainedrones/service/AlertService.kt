@@ -53,6 +53,8 @@ import ua.ukrainedrones.UpdateState
 import ua.ukrainedrones.engine.ZoneParams
 import ua.ukrainedrones.data.ApiMonitor
 import ua.ukrainedrones.ConnectionLog
+import ua.ukrainedrones.connection.ConnEvent
+import ua.ukrainedrones.connection.ConnEventKind
 import ua.ukrainedrones.DebugLog
 import ua.ukrainedrones.DebugLogContext
 import ua.ukrainedrones.DebugLogKind
@@ -350,6 +352,22 @@ class AlertService : Service() {
                 offlineRestorePending = true
             }
 
+            // Observe connection milestones and post the 5-minute critical offline notification.
+            launch {
+                AppSources.registry.connEvents.collect { events ->
+                    val milestone = events.lastOrNull { it.kind == ConnEventKind.MILESTONE_5 }
+                    if (milestone != null && !notifCriticalShown) {
+                        notifCriticalShown = true
+                        val s = Strings.get(AppLanguage.EN)
+                        notificationManager.postCriticalOfflineNotification(
+                            title = s.offlineStatusTitle,
+                            text = s.offlineCritical5Min,
+                            retryLabel = s.offlineRetryAction
+                        )
+                    }
+                }
+            }
+
             val nowFlow = MutableStateFlow(System.currentTimeMillis())
             launch {
                 while (true) {
@@ -557,6 +575,10 @@ fastYellowArmed = p.fastYellowArmed,
             else -> ""
         }
 
+        if (!isOfflineNow && notifCriticalShown) {
+            notifCriticalShown = false
+        }
+
         notifyMonitor(
             title = monitorTitle,
             text = monitorText,
@@ -669,17 +691,20 @@ fastYellowArmed = p.fastYellowArmed,
                 }
             }
             if (lastRedEpisode != null && state.focusOblastRawLevel == AlertLevel.NONE && state.officialAlertsEnabled) {
-                if (alertable.isEmpty()) cancelAlert()
-                postAllClear(s, state.focusBannerCity)
-                DebugLog.recordOfficial(
-                    DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
-                    sirenOverride = state.officialSirenOverride, vibrationLevel = null,
-                    notified = true, reason = DebugLogReason.FIRED,
-                    threatId = null, threatType = null,
-                    locality = state.officialRegion ?: state.focusCityUa, distanceKm = null,
-                    now = System.currentTimeMillis()
-                )
-                lastRedEpisode = null
+                val lastOblast = lastRedEpisode?.split("|")?.firstOrNull()
+                if (lastOblast != null && lastOblast == state.focusToken) {
+                    if (alertable.isEmpty()) cancelAlert()
+                    postAllClear(s, state.focusBannerCity)
+                    DebugLog.recordOfficial(
+                        DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
+                        sirenOverride = state.officialSirenOverride, vibrationLevel = null,
+                        notified = true, reason = DebugLogReason.FIRED,
+                        threatId = null, threatType = null,
+                        locality = state.officialRegion ?: state.focusCityUa, distanceKm = null,
+                        now = System.currentTimeMillis()
+                    )
+                    lastRedEpisode = null
+                }
             }
             if (lastShownId?.startsWith("red|") == true && primary == null &&
                 state.focusOblastRawLevel >= AlertLevel.RED && state.officialAlertsEnabled

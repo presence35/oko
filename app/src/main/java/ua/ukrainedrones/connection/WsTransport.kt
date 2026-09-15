@@ -132,12 +132,14 @@ class WsTransport(
         if (savedIgnoreUntilMs > 0L) ignoreUntilMs = savedIgnoreUntilMs
         isManuallyStopped = false
         if (_connectionState.value.isConnected) return
+        networkMonitor.start()
         startWatchdog()
         connect()
     }
 
     fun stop() {
         isManuallyStopped = true
+        networkMonitor.stop()
         reconnectJob?.cancel()
         reconnectJob = null
         watchdogJob?.cancel()
