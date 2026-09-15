@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- 51 cities across all alert-capable oblasts promoted from MINOR to MEDIUM tier so their names appear at zoom 6.5 instead of 10.0 when under air-raid alert / 51 міст у всіх областях, здатних мати повітряну тривогу, підвищено з MINOR до MEDIUM, щоб їхні назви з'являлися на рівні наближення 6.5 замість 10.0 під час повітряної тривоги
 - Explosion animation now varies per threat type — core flash colour, spark count/colour, ring intensity, icon shards, and optional HD extras (smoke puffs, debris) / Вибухова анімація тепер змінюється залежно від типу загрози — колір спалаху, кількість і колір іскор, інтенсивність кілець, уламки іконки та додаткові HD-ефекти (дим, уламки)
 - Fixed official-alert city scope notifications not sounding for cities whose name differs from their raion's name by resolving city raions via CityRaions / Fixed official-alert city scope notifications not sounding for cities whose name differs from their raion's name by resolving city raions via CityRaions
 - Fixed ghosting and prematurely disappearing threats by removing unauthorized 120s engine-side pruning so threats persist according to their source's declared staleness and ghosting caps / Fixed ghosting and prematurely disappearing threats by removing unauthorized 120s engine-side pruning so threats persist according to their source's declared staleness and ghosting caps

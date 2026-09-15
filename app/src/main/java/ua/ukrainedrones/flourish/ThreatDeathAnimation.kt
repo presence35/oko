@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RadialGradient
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
@@ -45,6 +46,8 @@ private const val MAX_DEATHS = 32
 private data class Shard(
     val dx: Float, val dy: Float,
     val spin: Float,
+    val sx: Float, val sy: Float,
+    val sw: Float, val sh: Float,
     val sizeMul: Float = 1f
 )
 
@@ -210,6 +213,10 @@ class ThreatDeathOverlay : Overlay() {
                     ExplosionKind.AVIATION -> 0.45f
                     else -> 0.6f
                 },
+                sx = rnd.nextFloat() * 0.6f,
+                sy = rnd.nextFloat() * 0.6f,
+                sw = 0.25f + rnd.nextFloat() * 0.3f,
+                sh = 0.25f + rnd.nextFloat() * 0.3f,
                 sizeMul = when (kind) {
                     ExplosionKind.AVIATION -> 1.25f + rnd.nextFloat() * 0.4f
                     ExplosionKind.FPV -> 0.75f + rnd.nextFloat() * 0.3f
@@ -429,10 +436,14 @@ class ThreatDeathOverlay : Overlay() {
                         val sy = y + s.dy * elapsedMs + 0.00004f * density * elapsedMs * elapsedMs
                         val rot = s.spin * elapsedMs
                         val sz = 10f * density * s.sizeMul * (1f - 0.3f * e)
+                        val srcL = (s.sx * iw).toInt().coerceIn(0, iw - 1)
+                        val srcT = (s.sy * ih).toInt().coerceIn(0, ih - 1)
+                        val srcR = ((s.sx + s.sw) * iw).toInt().coerceIn(srcL + 1, iw)
+                        val srcB = ((s.sy + s.sh) * ih).toInt().coerceIn(srcT + 1, ih)
                         canvas.save()
                         canvas.translate(sx, sy)
                         canvas.rotate(rot)
-                        canvas.drawBitmap(iconBmp, null, RectF(-sz, -sz, sz, sz), shardPaint)
+                        canvas.drawBitmap(iconBmp, Rect(srcL, srcT, srcR, srcB), RectF(-sz, -sz, sz, sz), shardPaint)
                         canvas.restore()
                     }
                 }
