@@ -172,10 +172,7 @@ fun computeRedCities(alerts: List<OblastAlert>, fillRegions: Boolean): Set<Strin
                 if (!regionAlert) continue
                 if (fillRegions) {
                     val regionAlerts = alerts.filter { it.inOblast(token) && !it.isOblastWide() }
-                    val raion = CityRaions.cityRaion[city.nameUa]
-                    val covered = regionAlerts.any { a ->
-                        (raion != null && raionCovers(a, raion)) || a.coversCity(city.nameUa)
-                    }
+                    val covered = regionAlerts.any { it.coversCity(city.nameUa) }
                     if (covered) add(city.nameUa)
                 } else {
                     add(city.nameUa)
@@ -212,14 +209,6 @@ fun computeRedCities(alerts: List<OblastAlert>, fillRegions: Boolean): Set<Strin
             }
         }
         return fillOblastTokens to fillRaionKeys
-    }
-
-    /** True when the alert's raion key/name matches this city's raion ([CityRaions]). */
-    private fun raionCovers(alert: OblastAlert, raion: String): Boolean {
-        val key = alert.key.trim().lowercase()
-        val name = alert.name.lowercase()
-        val r = raion.lowercase()
-        return (key.isNotEmpty() && (r.contains(key) || key.contains(r))) || name.contains(r)
     }
 
     /** Human-readable attribution for an active official alert: the highest-scoring live threat

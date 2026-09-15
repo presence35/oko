@@ -70,6 +70,13 @@ class OblastAlertScopeTest {
     }
 
     @Test
+    fun `coversCity - raion alert covers city via CityRaions even when name stem differs`() {
+        val a = alert("кальміуський", "Кальміуський район", "Донецька область")
+        assertTrue(a.coversCity("Докучаєвськ"))
+        assertFalse(a.coversCity("Краматорськ"))
+    }
+
+    @Test
     fun `officialAlertActiveFor - scope off rings the whole oblast`() {
         val alerts = listOf(alert("луганська", "Луганська область", "Луганська область"))
         assertTrue(officialAlertActiveFor(alerts, "Луганськ", null, scope = false))
@@ -87,6 +94,13 @@ class OblastAlertScopeTest {
         val alerts = listOf(alert("бердянський", "Бердянський район", "Запорізька область"))
         assertTrue(officialAlertActiveFor(alerts, "Запорізьк", "Бердянськ", scope = true))
         assertFalse(officialAlertActiveFor(alerts, "Запорізьк", "Запоріжжя", scope = true))
+    }
+
+    @Test
+    fun `officialAlertActiveFor - city scope with raion alert covers city via CityRaions`() {
+        val alerts = listOf(alert("кальміуський", "Кальміуський район", "Донецька область"))
+        assertTrue(officialAlertActiveFor(alerts, "Донецьк", "Докучаєвськ", scope = true))
+        assertFalse(officialAlertActiveFor(alerts, "Донецьк", "Краматорськ", scope = true))
     }
 
     @Test

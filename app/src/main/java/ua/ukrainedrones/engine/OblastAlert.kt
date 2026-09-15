@@ -1,5 +1,7 @@
 package ua.ukrainedrones.engine
 
+import ua.ukrainedrones.CityRaions
+
 /** A regional air-raid alert as produced by any source (NEPTUN, Ubilling, Test). Source-agnostic
  *  alert currency — parsing of source-specific JSON happens in the plugins/data layer, never here. */
 data class OblastAlert(
@@ -56,14 +58,25 @@ fun OblastAlert.isOblastWide(): Boolean {
 }
 
 /**
+ * True when the alert's raion key/name matches the given raion name ([CityRaions]).
+ */
+fun OblastAlert.raionCovers(raion: String): Boolean {
+    val k = key.trim().lowercase()
+    val n = name.lowercase()
+    val r = raion.lowercase()
+    return (k.isNotEmpty() && (r.contains(k) || k.contains(r))) || n.contains(r)
+}
+
+/**
  * True when the official alert actually covers the focus city, for the "City alerts" scope.
- * NEPTUN's raion-level entries name the district (e.g. "Одеський район") while the city is
- * "Одеса" — Ukrainian adjectival stems drop the ending, so we match on a shared 4-char stem
- * rather than exact substring (a safety app may over-ring a neighbouring city, never miss one).
+ * First checks whether the alert covers the city's registered raion ([CityRaions]).
+ * Otherwise falls back to matching direct name or a shared 4-char stem.
  * Oblast-wide alerts ([OblastAlert.isOblastWide]) cover every city, so they return true here.
  */
 fun OblastAlert.coversCity(cityUa: String): Boolean {
     if (isOblastWide()) return true
+    val raion = CityRaions.cityRaion[cityUa]
+    if (raion != null && raionCovers(raion)) return true
     val c = cityUa.trim().lowercase()
     if (c.length < 4) return c.isNotEmpty() &&
         (key.lowercase().contains(c) || name.lowercase().contains(c))

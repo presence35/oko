@@ -978,10 +978,19 @@ fastYellowArmed = p.fastYellowArmed,
         }
     }
 
-    private fun postAllClear(s: Strings.StringSet, city: String) {
+    private fun postAllClear(s: Strings.StringSet, city: String, debrisSeconds: Int = 0, silent: Boolean = false) {
+        val body = if (debrisSeconds > 0) {
+            val mm = debrisSeconds / 60
+            val ss = debrisSeconds % 60
+            val formattedTime = String.format("%d:%02d", mm, ss)
+            "${s.allClearText} ${String.format(s.fallingDebrisNotifCountdown, formattedTime)}"
+        } else {
+            s.allClearText
+        }
         notificationManager.postAllClearNotification(
             title = String.format(s.allClearTitle, city),
-            body = s.allClearText
+            body = body,
+            silent = silent
         )
     }
 
