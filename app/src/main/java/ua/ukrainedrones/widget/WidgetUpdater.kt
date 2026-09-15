@@ -98,7 +98,8 @@ object WidgetUpdater {
                     mapEnabled = tail.mapEnabled,
                     now = now,
                     degraded = AppSources.registry.degraded.value,
-                    offline = AppSources.registry.isOffline(Monotonic.now())
+                    offline = AppSources.registry.isOffline(Monotonic.now()),
+                    typeCatalog = AppSources.registry.typeCatalog.value
                 ) to Pair(tail.lang, tail.iconSet)
             }.collect { (snapshot, tail) ->
                 persist(context, snapshot, tail.first, tail.second)

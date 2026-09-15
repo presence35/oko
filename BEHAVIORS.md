@@ -110,20 +110,27 @@ val DEFAULT_THREAT_PROPS = ThreatProps(
 )
 ```
 
-### NEPTUN Plugin Overrides (for reference)
+### Source-Owned Type Catalogs (NEPTUN values live in NeptunSource)
 
-```kotlin
-val NEPTUN_TYPES = mapOf(
-    "shahed"       to ThreatProps(isFast = false, reachKm = 1000.0, alwaysInnerWithinReach = false, staleAfterMs = 300_000, ghostCapMs = 900_000, nominalSpeedMps = 50.0, horizonSec = 300.0, maxGhostMeters = 18_000.0),
-    "fpv"          to ThreatProps(isFast = false, reachKm = 40.0,   alwaysInnerWithinReach = false, staleAfterMs = 300_000, ghostCapMs = 900_000, nominalSpeedMps = 33.33, horizonSec = 300.0, maxGhostMeters = 18_000.0),
-    "cruise"       to ThreatProps(isFast = true,  reachKm = 1500.0, alwaysInnerWithinReach = false, staleAfterMs = 180_000, ghostCapMs = 900_000, nominalSpeedMps = 236.11, horizonSec = 180.0, maxGhostMeters = 30_000.0),
-    "ballistic"    to ThreatProps(isFast = true,  reachKm = 1500.0, alwaysInnerWithinReach = false, staleAfterMs = 90_000,  ghostCapMs = 900_000, nominalSpeedMps = 916.67, horizonSec = 90.0, maxGhostMeters = 20_000.0),
-    "kab"          to ThreatProps(isFast = true,  reachKm = 70.0,   alwaysInnerWithinReach = false, staleAfterMs = 180_000, ghostCapMs = 900_000, nominalSpeedMps = 250.0, horizonSec = 180.0, maxGhostMeters = 10_000.0),
-    "aviation"     to ThreatProps(isFast = true,  reachKm = 9999.0, alwaysInnerWithinReach = true,  staleAfterMs = 240_000, ghostCapMs = 7_200_000, nominalSpeedMps = 250.0, horizonSec = 240.0, maxGhostMeters = 24_000.0),
-    "recon"        to ThreatProps(isFast = false, reachKm = 50.0,   alwaysInnerWithinReach = false, staleAfterMs = 300_000, ghostCapMs = 900_000, nominalSpeedMps = 22.22, horizonSec = 300.0, maxGhostMeters = 12_000.0),
-    "unknown"      to ThreatProps(isFast = false, reachKm = 1500.0, alwaysInnerWithinReach = false, staleAfterMs = 300_000, ghostCapMs = 900_000, nominalSpeedMps = null, horizonSec = 240.0, maxGhostMeters = 10_000.0),
-)
+Per-type VALUES are owned by their source, never by the engine. The engine owns only the
+`ThreatProps` struct (shape) plus `DEFAULT_THREAT_PROPS` (fallback for types no source
+defines). NEPTUN's catalog lives in `source/NeptunSource.kt` (`NEPTUN_TYPES`, exposed as
+`Source.typeCatalog`) with the values NEPTUN sends, and reaches every consumer merged via
+`SourceRegistry.typeCatalog`:
+
 ```
+Source.typeCatalog → SourceRegistry.typeCatalog → ThreatEngine(catalog) → propsFor(type)
+```
+
+RULES (violations broke the build's layering before — do not reintroduce):
+- No file outside its owning `Source` implementation may import or name a concrete
+  catalog (`NEPTUN_TYPES` or any successor). Only `NeptunSource` references `NEPTUN_TYPES`.
+- `engine/`, UI, service, widget and domain code take props ONLY via an injected catalog
+  (`ThreatEngine(catalog)`, `engine.propsFor(type)`, `registry.typeCatalog`, or an explicit
+  `typeCatalog`/`catalog` parameter). Static per-type lookups are a violation.
+- Pure helpers (`computeWidgetSnapshot`, `computeSweep`, `isFastType`, `typicalSpeedKmh`)
+  take the catalog as an explicit parameter, defaulting to empty (which falls back to
+  `DEFAULT_THREAT_PROPS`) — never a hardcoded source map.
 
 ## Behaviors (Pure Functions)
 
@@ -307,9 +314,12 @@ Thread-safe. Owned by engine. Not a global singleton.
 2. **Pure & deterministic.** Explicit inputs, no hidden state, no async delays in core
    functions. Given the same inputs, always produces the same outputs.
 3. **Source-agnostic.** Engine works with `NormalizedThreat` and `ThreatProps`. Never
-   touches source-specific formats (NEPTUN JSON, etc.).
-4. **Plugin-provided type properties.** Engine defaults exist but plugins override.
-   New threat types work without engine changes.
+    touches source-specific formats (NEPTUN JSON, etc.) and never names a concrete source
+    catalog — per-type values arrive only via the injected `ThreatEngine(catalog)`.
+4. **Source-owned type properties.** The engine owns the `ThreatProps` struct +
+    `DEFAULT_THREAT_PROPS` fallback; every per-type value lives in its `Source`
+    implementation and flows `Source.typeCatalog → SourceRegistry.typeCatalog`.
+    New threat types work without engine changes; new sources ship their own catalog.
 5. **Haversine for distance.** All distance calculations use Haversine, not
    equirectangular.
 6. **Motion heading is shared — but only server-reported course drives drift.** Icon facing

@@ -47,6 +47,14 @@ object LocationTracker {
     private const val NETWORK_SEED_INTERVAL_MS = 8_000L
     const val MAX_LOCATION_AGE_MS = 15 * 60 * 1000L // 15 minutes freshness threshold
 
+    // Last-known fix persisted so a force-stopped relaunch knows where the user was
+    // instantly: the focus/token resolve from yesterday's fix (staleness is fine —
+    // a possibly-old position beats a null one) while a live fix is re-acquired.
+    private const val PERSIST_PREFS = "oko_last_location"
+    private const val KEY_LAT = "lat"
+    private const val KEY_LON = "lon"
+    private const val KEY_FIX_MS = "fix_ms"
+
     private val _location = MutableStateFlow<LatLng?>(null)
     val location: StateFlow<LatLng?> = _location.asStateFlow()
 
@@ -90,6 +98,8 @@ object LocationTracker {
         listener = l
 
         try {
+            // Persisted fix first (survives force-stop), then the platform last-known.
+            hydratePersisted(app)
             pickLastKnown(app)?.let { recordFix(it) }
 
             val lm = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
@@ -287,6 +297,37 @@ object LocationTracker {
             _lastPreciseFixAtMs.value = fixTime
         }
         _isRefreshing.value = false
+        persistFix(loc.latitude, loc.longitude, fixTime)
+    }
+
+    /** Restore the last fix recorded before the process died (force-stop / reboot).
+     *  Received-time is deliberately left at the fix time so [isFresh] still reports
+     *  stale — callers alert on the old position, they just know it's old. */
+    private fun hydratePersisted(app: Context) {
+        if (_location.value != null) return
+        runCatching {
+            val prefs = app.getSharedPreferences(PERSIST_PREFS, Context.MODE_PRIVATE)
+            if (!prefs.contains(KEY_LAT) || !prefs.contains(KEY_LON) || !prefs.contains(KEY_FIX_MS)) return
+            val lat = prefs.getString(KEY_LAT, null)?.toDoubleOrNull() ?: return
+            val lon = prefs.getString(KEY_LON, null)?.toDoubleOrNull() ?: return
+            val fixMs = prefs.getString(KEY_FIX_MS, null)?.toLongOrNull() ?: return
+            if (!lat.isFinite() || !lon.isFinite()) return
+            if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return
+            _location.value = LatLng(lat, lon)
+            _lastFixAtMs.value = fixMs
+            _lastReceivedAtMs.value = fixMs
+        }
+    }
+
+    private fun persistFix(lat: Double, lon: Double, fixMs: Long) {
+        val app = appContext ?: return
+        runCatching {
+            app.getSharedPreferences(PERSIST_PREFS, Context.MODE_PRIVATE).edit()
+                .putString(KEY_LAT, lat.toString())
+                .putString(KEY_LON, lon.toString())
+                .putString(KEY_FIX_MS, fixMs.toString())
+                .apply()
+        }
     }
 
     private fun hasPermission(ctx: Context): Boolean =

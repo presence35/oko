@@ -52,10 +52,16 @@ class MainActivity : ComponentActivity() {
         cleanLegacyOsmdroidCache()
         ConnectionLog.attach(applicationContext)
         DebugLog.attach(applicationContext)
+        // Registry first: after an OS force-stop the process is fresh and anything
+        // touching AppSources.registry before init throws (immediate crash on launch).
+        AppSources.ensureInit(applicationContext)
         // Monitoring is always-on: "Stop Monitoring & Exit" is a session-only stop, so a
         // cold start (re)arms the service before the first frame — no silent dead state.
-        AlertService.start(this@MainActivity)
-        ua.ukrainedrones.service.AlertWatchdog.schedule(applicationContext)
+        // Never let a failed service/worker start crash the launch itself: a freshly
+        // force-stopped app can still be background-restricted for FGS starts, and the
+        // UI banner already surfaces the dead state instead of going silent.
+        runCatching { AlertService.start(this@MainActivity) }
+        runCatching { ua.ukrainedrones.service.AlertWatchdog.schedule(applicationContext) }
         setContent {
             // Cap the system font scale so extreme accessibility sizes can't break the layout;
             // the popup/banner still wrap and scroll up to this ceiling.
@@ -174,7 +180,10 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         // Mirror the website's focus handler — refresh positions and reset the stale window.
-        AppSources.registry.onAppForeground()
+        // Guarded: after a force-stop the registry may still be null here if init lost
+        // the race with the service start — never crash the foreground on it.
+        AppSources.ensureInit(applicationContext)
+        runCatching { AppSources.registry.onAppForeground() }
     }
 
     /**

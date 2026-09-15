@@ -36,16 +36,13 @@ import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.AlertLevel
-import ua.ukrainedrones.engine.maxLevelFor
+import ua.ukrainedrones.engine.officialStateFor
 import ua.ukrainedrones.Transliteration
 import ua.ukrainedrones.ThreatType
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.inOblast
 import ua.ukrainedrones.engine.alertRegionName
-import ua.ukrainedrones.engine.isOblastWide
-import ua.ukrainedrones.engine.officialAlertActiveFor
-import ua.ukrainedrones.engine.officialYellowAlertActiveFor
 import ua.ukrainedrones.engine.threatBody
 import ua.ukrainedrones.UpdateInfo
 import ua.ukrainedrones.UpdateManager
@@ -53,8 +50,6 @@ import ua.ukrainedrones.UpdateState
 import ua.ukrainedrones.engine.ZoneParams
 import ua.ukrainedrones.data.ApiMonitor
 import ua.ukrainedrones.ConnectionLog
-import ua.ukrainedrones.connection.ConnEvent
-import ua.ukrainedrones.connection.ConnEventKind
 import ua.ukrainedrones.DebugLog
 import ua.ukrainedrones.DebugLogContext
 import ua.ukrainedrones.DebugLogKind
@@ -72,6 +67,8 @@ import ua.ukrainedrones.NeutralizedTally
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.service.ServiceState
 import ua.ukrainedrones.service.MonitoringStatus
+import ua.ukrainedrones.service.AudioAlarmDispatcher
+import ua.ukrainedrones.service.FallingDebrisBuffer
 
 class AlertService : Service() {
 
@@ -129,7 +126,9 @@ class AlertService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var monitoringJob: Job? = null
     private var lastShownId: String? = null
-    private var lastRedEpisode: String? = null
+    /** Announced official episode for ANY level (red/yellow share it): LEVEL|token|since|city.
+     *  Persisted pre-level as token|since|city — adopted silently on upgrade (see restore). */
+    private var lastOfficialEpisode: String? = null
     private var knownZones: Map<String, ThreatZone> = emptyMap()
     private var lastChannelLang: AppLanguage? = null
     private var emptySince: Long? = null
@@ -151,6 +150,17 @@ class AlertService : Service() {
 
     private val notificationManager by lazy { AlertNotificationManager(applicationContext) }
     private val wakeLockManager by lazy { AlertWakeLockManager(applicationContext) }
+    private val audioAlarmDispatcher by lazy { AudioAlarmDispatcher(applicationContext) }
+    private val debrisBuffer by lazy {
+        FallingDebrisBuffer(scope) {
+            lastCleanAllClearCity?.let { city ->
+                val s = Strings.get(lastChannelLang ?: AppLanguage.EN)
+                postAllClear(s, city)
+                audioAlarmDispatcher.dispatchAllClearChime()
+            }
+        }
+    }
+    @Volatile private var lastCleanAllClearCity: String? = null
 
     private var hasActiveThreats = false
     private var isOutage = false
@@ -324,12 +334,14 @@ class AlertService : Service() {
         }
 
         monitoringJob = scope.launch {
-            // Restore red episode identity from persisted ServiceState keys
+            // Restore announced official-episode identity from persisted ServiceState
+            // keys. Pre-level rows store token|since|city; adopted silently against the
+            // first live boundary so an app update never re-sirens an ongoing alert.
             val _annToken = svcState.officialAnnouncedToken().first().ifBlank { null }
             val _annSince = svcState.officialAnnouncedSince().first().ifBlank { null }
             val _annCity = svcState.officialAnnouncedCity().first().ifBlank { null }
             if (_annToken != null && _annSince != null && _annCity != null) {
-                lastRedEpisode = "$_annToken|$_annSince|$_annCity"
+                lastOfficialEpisode = "$_annToken|$_annSince|$_annCity"
             }
 
             // Restore active zone alerts across service restarts (Check 7 fix)
@@ -350,22 +362,6 @@ class AlertService : Service() {
             if (svcState.offlinePendingSince().first() > 0) {
                 wasConnected = false
                 offlineRestorePending = true
-            }
-
-            // Observe connection milestones and post the 5-minute critical offline notification.
-            launch {
-                AppSources.registry.connEvents.collect { events ->
-                    val milestone = events.lastOrNull { it.kind == ConnEventKind.MILESTONE_5 }
-                    if (milestone != null && !notifCriticalShown) {
-                        notifCriticalShown = true
-                        val s = Strings.get(AppLanguage.EN)
-                        notificationManager.postCriticalOfflineNotification(
-                            title = s.offlineStatusTitle,
-                            text = s.offlineCritical5Min,
-                            retryLabel = s.offlineRetryAction
-                        )
-                    }
-                }
             }
 
             val nowFlow = MutableStateFlow(System.currentTimeMillis())
@@ -446,24 +442,20 @@ val mappedThreats = registry.allThreats.map { list ->
                 val focusToken = focus.attribution.token
                 currentToken = focusToken
 
-                // Scoped level: highest level matching the user's focus + scope (siren gate).
-                // Raw level: highest level in the oblast, no scope filter (all-clear gate).
+                // One official fact, derived once: scoped (siren gate) + raw (all-clear
+                // gate) from the same matcher the UI/widget consume (mirror rule). Red and
+                // yellow share this path — official is official; only the notif toggles
+                // and tint/copy differ downstream.
                 val effectiveCityScope = p.officialAlertCityScope || (nightActive && p.nightOfficialAlertCityScope)
-                val focusOblastLevel = alerts.maxLevelFor(focusToken, focusCityUa, effectiveCityScope)
-                val focusOblastRawLevel = alerts.maxLevelFor(focusToken, null, false)
-                val focusOblastAlertSince = focusToken?.let { token ->
-                    alerts.filter { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }
-                        .maxByOrNull { it.isOblastWide() }?.since
-                }
-                // Official facts come from the same engine gates the UI/widget consume (no mirror
-                // rule): the trident, the announce latch and the monitor tint all derive here.
-                val focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, effectiveCityScope)
-                val focusOblastYellowAlertActive = officialYellowAlertActiveFor(alerts, focusToken, focusCityUa, effectiveCityScope)
+                val official = alerts.officialStateFor(focusToken, focusCityUa, effectiveCityScope)
+                val officialRaw = alerts.officialStateFor(focusToken, null, false)
+                val focusOblastLevel = official.level
+                val focusOblastRawLevel = officialRaw.level
+                val focusOblastAlertSince = official.alert?.since
+                val focusOblastAlertActive = official.level == AlertLevel.RED
+                val focusOblastYellowAlertActive = official.level == AlertLevel.YELLOW
 
-                val activeOfficialAlert = focusToken?.let { token ->
-                    alerts.filter { it.inOblast(token) && (it.level == "red" || it.isOblastWide()) }
-                        .maxByOrNull { it.isOblastWide() }
-                }
+                val activeOfficialAlert = official.alert
                 val (officialReason, officialReasonThreatId) = if (activeOfficialAlert != null) {
                     engine.deriveOfficialAlertReason(
                         activeOfficialAlert,
@@ -539,6 +531,7 @@ fastYellowArmed = p.fastYellowArmed,
         }
 
         val registry = AppSources.registry
+        val typeCatalog = registry.typeCatalog.value
         val isDegradedNow = state.degraded
         // Offline escalation and its age are measured on the monotonic clock (see PluginRegistry);
         // the wall `now` is still used for engine staleness and display stamps below.
@@ -575,10 +568,6 @@ fastYellowArmed = p.fastYellowArmed,
             else -> ""
         }
 
-        if (!isOfflineNow && notifCriticalShown) {
-            notifCriticalShown = false
-        }
-
         notifyMonitor(
             title = monitorTitle,
             text = monitorText,
@@ -592,7 +581,7 @@ fastYellowArmed = p.fastYellowArmed,
         val all = state.threats
 
         fun alertTier(id: String, spatial: ThreatZone): ThreatZone? {
-            val fast = all[id]?.let { isFastType(it.type.toThreatType()) } ?: false
+            val fast = all[id]?.let { isFastType(it.type.toThreatType(), typeCatalog) } ?: false
             val red = if (fast) state.fastRedArmed else state.slowRedArmed
             val yellow = if (fast) state.fastYellowArmed else state.slowYellowArmed
             return when (spatial) {
@@ -626,6 +615,22 @@ fastYellowArmed = p.fastYellowArmed,
             val level: String,
         )
 
+        /** Unified official-episode boundary for ANY level: LEVEL|token|since|city.
+         *  Pre-level persisted rows hold token|since|city — [isNewEpisode] treats a
+         *  suffix-matching legacy row as the same episode (silent adopt, no re-siren). */
+        fun officialBoundary(state: MonitorState): String? {
+            if (state.focusOblastLevel == AlertLevel.NONE) return null
+            return "${state.focusOblastLevel}|${state.focusToken}|${state.focusOblastAlertSince}|${state.focusBannerCity}"
+        }
+
+        fun isNewEpisode(state: MonitorState): Boolean {
+            val boundary = officialBoundary(state) ?: return false
+            val stored = lastOfficialEpisode ?: return true
+            if (stored == boundary) return false
+            // Legacy pre-level row for the same episode — adopt it below, not a new onset.
+            return stored != boundary.substringAfter('|')
+        }
+
         /** Build the desired notification end-state from current tick inputs. */
         fun buildPrimary(state: MonitorState, all: Map<String, NormalizedThreat>): Primary? {
             val s = Strings.get(state.lang)
@@ -638,76 +643,116 @@ fastYellowArmed = p.fastYellowArmed,
                     body = t?.let { threatBody(it, state.lang) + etaSuffix(t, state) } ?: s.notifBodyRegion,
                     revealThreat = t,
                     silent = false,
-                    vibration = t?.let { if (isFastType(it.type.toThreatType())) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
+                    vibration = t?.let { if (isFastType(it.type.toThreatType(), typeCatalog)) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
                     isOnset = knownZones[id] != zone,
                     zone = zone, level = if (zone == ThreatZone.INNER) "red" else "yellow"
                 )
             }
-            if (state.officialRedAlertsEnabled && state.focusOblastAlertActive) {
-                val reasonThreat = state.officialReasonThreatId?.let { all[it] }
-                val episodeBoundary = "${state.focusToken}|${state.focusOblastAlertSince}|${state.focusBannerCity}"
-                return Primary(
-                    identity = "red|${state.focusToken}|${state.focusOblastAlertSince}|${state.focusBannerCity}|${state.officialReasonThreatId}",
-                    title = String.format(s.alertBannerFormat, state.focusBannerCity),
-                    body = (state.officialReason ?: state.officialRegion ?: state.focusRegion) + etaSuffix(reasonThreat, state),
-                    revealThreat = reasonThreat,
-                    silent = lastRedEpisode == episodeBoundary,
-                    vibration = reasonThreat?.let { if (isFastType(it.type.toThreatType())) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
-                    isOnset = lastRedEpisode != episodeBoundary,
-                    zone = null, level = state.focusOblastLevel.name.lowercase()
-                )
-            }
-            if (state.yellowAlertsEnabled && state.focusOblastYellowAlertActive) {
-                return Primary(
-                    identity = "yellow|${state.focusToken}|${state.focusBannerCity}",
-                    title = String.format(s.alertYellowBannerFormat, state.focusBannerCity),
-                    body = state.officialReason ?: state.officialRegion ?: state.focusRegion,
-                    revealThreat = null, silent = false, vibration = VIBRATION_STRONG,
-                    isOnset = lastShownId != "yellow|${state.focusToken}|${state.focusBannerCity}",
-                    zone = null, level = "yellow"
-                )
+            // Official is official: one branch for any level. Only the toggle gate,
+            // copy and sound differ per level — the episode latch is shared.
+            if (state.focusOblastLevel != AlertLevel.NONE) {
+                val announced = if (state.focusOblastLevel == AlertLevel.RED) state.officialRedAlertsEnabled
+                else state.yellowAlertsEnabled
+                if (announced) {
+                    val onset = isNewEpisode(state)
+                    if (state.focusOblastLevel == AlertLevel.RED) {
+                        val reasonThreat = state.officialReasonThreatId?.let { all[it] }
+                        return Primary(
+                            identity = "red|${state.focusToken}|${state.focusOblastAlertSince}|${state.focusBannerCity}|${state.officialReasonThreatId}",
+                            title = String.format(s.alertBannerFormat, state.focusBannerCity),
+                            body = (state.officialReason ?: state.officialRegion ?: state.focusRegion) + etaSuffix(reasonThreat, state),
+                            revealThreat = reasonThreat,
+                            silent = !onset,
+                            vibration = reasonThreat?.let { if (isFastType(it.type.toThreatType(), typeCatalog)) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
+                            isOnset = onset,
+                            zone = null, level = state.focusOblastLevel.name.lowercase()
+                        )
+                    }
+                    return Primary(
+                        identity = "yellow|${state.focusToken}|${state.focusOblastAlertSince}|${state.focusBannerCity}",
+                        title = String.format(s.alertYellowBannerFormat, state.focusBannerCity),
+                        body = state.officialReason ?: state.officialRegion ?: state.focusRegion,
+                        revealThreat = null, silent = !onset, vibration = VIBRATION_STRONG,
+                        isOnset = onset,
+                        zone = null, level = "yellow"
+                    )
+                }
             }
             return null
         }
 
-        /** Reconcile red episode side-effects: wakeLock, DebugLog ON, persistence, all-clear. */
+        /** Reconcile official-episode side-effects for ANY level: wakeLock, DebugLog ON
+         *  (always — the log sees every official episode even when its notifs are off
+         *  or a zone alert wins the tick), persistence, all-clear. */
         fun reconcileEpisode(primary: Primary?, state: MonitorState, all: Map<String, NormalizedThreat>) {
-            if (primary?.level == "red" && state.officialRedAlertsEnabled && state.focusOblastAlertActive) {
-                val reasonThreat = primary.revealThreat
-                val episodeBoundary = primary.identity.substringAfter("red|").substringBeforeLast('|')
-                if (lastRedEpisode != episodeBoundary) {
-                    wakeLockManager.acquireForAlert()
-                    DebugLog.recordOfficial(
-                        DebugLogKind.OFFICIAL_ON, night = state.nightActive,
-                        sirenOverride = state.officialSirenOverride,
-                        vibrationLevel = reasonThreat?.let { if (isFastType(it.type.toThreatType())) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
-                        notified = true, reason = DebugLogReason.FIRED,
-                        threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
-                        locality = reasonThreat?.let { it.locality ?: it.district ?: it.region } ?: state.officialRegion ?: state.focusCityUa,
-                        distanceKm = distanceFromFocusKm(reasonThreat, state), now = System.currentTimeMillis()
-                    )
-                    persistOfficialAnnounced(state)
-                    lastRedEpisode = episodeBoundary
-                }
+            val boundary = officialBoundary(state)
+            // Silent adopt of a legacy pre-level persisted row for the same episode.
+            if (boundary != null && lastOfficialEpisode != null &&
+                lastOfficialEpisode != boundary && lastOfficialEpisode == boundary.substringAfter('|')
+            ) {
+                lastOfficialEpisode = boundary
             }
-            if (lastRedEpisode != null && state.focusOblastRawLevel == AlertLevel.NONE && state.officialAlertsEnabled) {
-                val lastOblast = lastRedEpisode?.split("|")?.firstOrNull()
-                if (lastOblast != null && lastOblast == state.focusToken) {
-                    if (alertable.isEmpty()) cancelAlert()
-                    postAllClear(s, state.focusBannerCity)
-                    DebugLog.recordOfficial(
-                        DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
-                        sirenOverride = state.officialSirenOverride, vibrationLevel = null,
-                        notified = true, reason = DebugLogReason.FIRED,
-                        threatId = null, threatType = null,
-                        locality = state.officialRegion ?: state.focusCityUa, distanceKm = null,
+            if (boundary != null && lastOfficialEpisode != boundary) {
+                val audible = if (state.focusOblastLevel == AlertLevel.RED) state.officialRedAlertsEnabled
+                else state.yellowAlertsEnabled
+                val reasonThreat = if (state.focusOblastLevel == AlertLevel.RED) {
+                    state.officialReasonThreatId?.let { all[it] }
+                } else null
+                val vibration = reasonThreat?.let {
+                    if (isFastType(it.type.toThreatType(), typeCatalog)) state.fastVibrationLevel else state.slowVibrationLevel
+                } ?: VIBRATION_STRONG
+                val locality = reasonThreat?.let { it.locality ?: it.district ?: it.region }
+                    ?: state.officialRegion ?: state.focusCityUa
+                when {
+                    // A zone alert won the shared slot — the official episode still happened.
+                    primary?.zone != null -> DebugLog.recordOfficial(
+                        DebugLogKind.OFFICIAL_ON, night = state.nightActive,
+                        sirenOverride = state.officialSirenOverride, vibrationLevel = vibration,
+                        notified = false, reason = DebugLogReason.COALESCED,
+                        threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
+                        locality = locality, distanceKm = distanceFromFocusKm(reasonThreat, state),
                         now = System.currentTimeMillis()
                     )
-                    lastRedEpisode = null
+                    audible -> {
+                        wakeLockManager.acquireForAlert()
+                        DebugLog.recordOfficial(
+                            DebugLogKind.OFFICIAL_ON, night = state.nightActive,
+                            sirenOverride = state.officialSirenOverride, vibrationLevel = vibration,
+                            notified = true, reason = DebugLogReason.FIRED,
+                            threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
+                            locality = locality, distanceKm = distanceFromFocusKm(reasonThreat, state),
+                            now = System.currentTimeMillis()
+                        )
+                        persistOfficialAnnounced(state)
+                    }
+                    else -> DebugLog.recordOfficial(
+                        DebugLogKind.OFFICIAL_ON, night = state.nightActive,
+                        sirenOverride = state.officialSirenOverride, vibrationLevel = vibration,
+                        notified = false, reason = DebugLogReason.TOGGLE_OFF,
+                        threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
+                        locality = locality, distanceKm = distanceFromFocusKm(reasonThreat, state),
+                        now = System.currentTimeMillis()
+                    )
                 }
+                lastOfficialEpisode = boundary
             }
-            if (lastShownId?.startsWith("red|") == true && primary == null &&
-                state.focusOblastRawLevel >= AlertLevel.RED && state.officialAlertsEnabled
+            if (lastOfficialEpisode != null && state.focusOblastRawLevel == AlertLevel.NONE && state.officialAlertsEnabled) {
+                if (alertable.isEmpty()) cancelAlert()
+                lastCleanAllClearCity = state.focusBannerCity
+                debrisBuffer.startDebrisBuffer(durationSeconds = 180)
+                DebugLog.recordOfficial(
+                    DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
+                    sirenOverride = state.officialSirenOverride, vibrationLevel = null,
+                    notified = true, reason = DebugLogReason.FIRED,
+                    threatId = null, threatType = null,
+                    locality = state.officialRegion ?: state.focusCityUa, distanceKm = null,
+                    now = System.currentTimeMillis()
+                )
+                lastOfficialEpisode = null
+            }
+            val shownOfficial = lastShownId?.startsWith("red|") == true || lastShownId?.startsWith("yellow|") == true
+            if (shownOfficial && primary == null &&
+                state.focusOblastRawLevel != AlertLevel.NONE && state.officialAlertsEnabled
             ) {
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
@@ -725,7 +770,12 @@ fastYellowArmed = p.fastYellowArmed,
             if (primary?.identity != lastShownId) {
                 when {
                     primary == null -> {
-                        if (lastShownId?.startsWith("red|") != true || state.focusOblastRawLevel < AlertLevel.RED || !state.officialAlertsEnabled) {
+                        // Don't tear down a live official notification on a flicker tick:
+                        // any official id stays up while any official level is live upstream.
+                        val shownOfficialStillLive =
+                            (lastShownId?.startsWith("red|") == true || lastShownId?.startsWith("yellow|") == true) &&
+                                state.focusOblastRawLevel != AlertLevel.NONE && state.officialAlertsEnabled
+                        if (!shownOfficialStillLive) {
                             if (knownZones.isEmpty() && state.zoneThreats.isEmpty() && !state.focusOblastAlertActive && !state.focusOblastYellowAlertActive) {
                                 knownZones = emptyMap(); persistKnownZones()
                             }
@@ -733,7 +783,12 @@ fastYellowArmed = p.fastYellowArmed,
                         }
                     }
                     primary.isOnset -> {
+                        debrisBuffer.abortBuffer("New threat onset")
                         wakeLockManager.acquireForAlert()
+                        audioAlarmDispatcher.dispatchDangerAlarm(
+                            isRed = (primary.level == "red"),
+                            overrideSilence = (state.zoneSirenOverride ?: state.officialSirenOverride)
+                        )
                         postAlert(primary.zone, primary.level, primary.title, primary.body,
                             state.zoneSirenOverride ?: state.officialSirenOverride,
                             revealThreat = primary.revealThreat, vibrationLevel = primary.vibration)
@@ -776,7 +831,8 @@ fastYellowArmed = p.fastYellowArmed,
                     sirenOverride = state.zoneSirenOverride,
                     fastVibrationLevel = state.fastVibrationLevel,
                     slowVibrationLevel = state.slowVibrationLevel,
-                    now = now
+                    now = now,
+                    typeCatalog = typeCatalog
                 )
             )
         }
@@ -795,7 +851,7 @@ fastYellowArmed = p.fastYellowArmed,
             emptySince = null
         }
 
-        hasActiveThreats = state.zoneThreats.isNotEmpty() || state.focusOblastAlertActive
+        hasActiveThreats = state.zoneThreats.isNotEmpty() || state.focusOblastLevel != AlertLevel.NONE
         isOutage = !AppSources.registry.wsHealthy.value
     }
 
@@ -883,6 +939,7 @@ fastYellowArmed = p.fastYellowArmed,
     }
 
     private fun cancelAlert() {
+        audioAlarmDispatcher.stopActiveAlert()
         notificationManager.cancelNotification(NOTIF_ALERT)
     }
 
@@ -975,6 +1032,8 @@ fastYellowArmed = p.fastYellowArmed,
 
     override fun onDestroy() {
         MonitoringStatus.setRunning(false)
+        audioAlarmDispatcher.release()
+        debrisBuffer.reset()
         screenReceiver?.let { unregisterReceiver(it) }
         screenReceiver = null
         monitoringJob?.cancel()

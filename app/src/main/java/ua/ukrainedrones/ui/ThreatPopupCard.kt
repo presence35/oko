@@ -2,7 +2,6 @@ package ua.ukrainedrones
 
 import ua.ukrainedrones.engine.SpeedSource
 import ua.ukrainedrones.engine.ThreatEngine
-import ua.ukrainedrones.engine.NEPTUN_TYPES
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
@@ -146,7 +145,8 @@ private fun ThreatElapsedText(
             now = System.currentTimeMillis()
         }
     }
-    val engine = remember { ThreatEngine(NEPTUN_TYPES) }
+    val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
+    val engine = remember(typeCatalog) { ThreatEngine(typeCatalog) }
     val nt = threat
     val stale = engine.isStale(nt, engine.propsFor(nt.type), now)
     val elapsedText = if (stale) strings.lastSeenAgoFormat.format(formatElapsedMss(threat.updatedAtMillis, now))
@@ -173,7 +173,8 @@ fun ThreatPopupCard(
     fakeNeutralize: Boolean = false
 ) {
     val s = Strings.get(lang)
-    val engine = remember { ThreatEngine(NEPTUN_TYPES) }
+    val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
+    val engine = remember(typeCatalog) { ThreatEngine(typeCatalog) }
     val typeInfo = threatTypeInfoByString(threat.type) ?: ThreatTypeCatalog.INFO.getValue(ThreatType.UNKNOWN)
     val typeLabel = if (lang == AppLanguage.UA) typeInfo.labelUa else typeInfo.labelEn
     // Wave count (group size) prefixes the title when the server reports it.
@@ -196,7 +197,7 @@ fun ThreatPopupCard(
     val confirmations = threat.confirmations.takeIf { it > 0 }
 
     val band = proximity?.let { p ->
-        val props = NEPTUN_TYPES[threat.type] ?: return@let null
+        val props = typeCatalog[threat.type] ?: return@let null
         engine.zoneTier(props, p.distToUserKm ?: return@let null, p.speedKmh, p.params)
     }
     val bandColor = when (band) {

@@ -9,8 +9,8 @@ fun String.toThreatType(): ThreatType = ThreatType.fromApi(this)
 fun threatTypeInfoByString(type: String): ThreatTypeInfo? =
     ThreatTypeCatalog.INFO[type.toThreatType()]
 
-fun isFastType(type: ThreatType): Boolean =
-    NEPTUN_TYPES[type.apiKey]?.isFast ?: DEFAULT_THREAT_PROPS.isFast
+fun isFastType(type: ThreatType, catalog: Map<String, ThreatProps> = emptyMap()): Boolean =
+    catalog[type.apiKey]?.isFast ?: DEFAULT_THREAT_PROPS.isFast
 
-fun typicalSpeedKmh(type: ThreatType): Double? =
-    NEPTUN_TYPES[type.apiKey]?.nominalSpeedMps?.times(3.6)
+fun typicalSpeedKmh(type: ThreatType, catalog: Map<String, ThreatProps> = emptyMap()): Double? =
+    catalog[type.apiKey]?.nominalSpeedMps?.times(3.6)

@@ -28,10 +28,25 @@ object AppSources {
     @Synchronized
     fun init(context: Context) {
         if (_registry != null) return
+        appContext = context.applicationContext
         val registry = SourceRegistry()
         registry.register(NeptunSource(context), scope)
         registry.register(TestSource(), scope)
         _registry = registry
+    }
+
+    @Volatile
+    private var appContext: Context? = null
+
+    /**
+     * Idempotent best-effort init for entry points that must never crash when the
+     * process was force-stopped (registry is null) — e.g. Activity.onStart racing
+     * the foreground-service start. Real init still happens in MainViewModel /
+     * AlertService; this only guarantees [registry] never throws on a cold start.
+     */
+    @Synchronized
+    fun ensureInit(context: Context) {
+        runCatching { init(context) }
     }
 
     fun setAppForeground(foreground: Boolean) {

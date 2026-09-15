@@ -403,7 +403,8 @@ private fun WizardThreatGrid(
             )
         )
         Spacer(Modifier.height(14.dp))
-        val groups = fastAndSlowGroups(lang)
+        val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
+        val groups = fastAndSlowGroups(lang, typeCatalog)
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxWidth()

@@ -1144,7 +1144,8 @@ officialSirenOverride = nightOfficialSirenOverride,
                     subtitle = s.threatsSubtitle(hiddenTypes.size, silencedTypes.size),
                     onToggle = { onCollapseChange(collapse.copy(threats = !collapse.threats)) }
                 ) {
-                    fastAndSlowGroups(lang).forEachIndexed { index, (groupIcon, groupTitle, types) ->
+                    val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
+                    fastAndSlowGroups(lang, typeCatalog).forEachIndexed { index, (groupIcon, groupTitle, types) ->
                         if (index == 1) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -2254,7 +2255,8 @@ private fun ThreatSettingsCard(
     val joke = if (lang == AppLanguage.UA) info.jokeUa else info.jokeEn
     val onMap = type !in hiddenTypes
     val onAlerts = type !in silencedTypes
-    val typicalSpeed = typicalSpeedKmh(type)?.roundToInt()
+    val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
+    val typicalSpeed = typicalSpeedKmh(type, typeCatalog)?.roundToInt()
 
     Card(modifier = Modifier.fillMaxWidth().explainerFlash(flash)) {
         Column {

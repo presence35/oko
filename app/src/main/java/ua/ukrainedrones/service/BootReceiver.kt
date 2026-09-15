@@ -7,18 +7,34 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import ua.ukrainedrones.engine.MonitorCoreImpl
 import ua.ukrainedrones.service.AlertWatchdog
+import ua.ukrainedrones.service.EmergencyResurrectionWorker
 
+/**
+ * Boot and Package-Replacement Receiver.
+ * Enforces safety-asymmetric alerting:
+ * If the device rebooted or crashed while an active threat or siren was live,
+ * resurrect AlertService immediately to sound the alert.
+ */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
-                AlertWatchdog.schedule(context.applicationContext)
+                val appContext = context.applicationContext
+                AlertWatchdog.schedule(appContext)
+                EmergencyResurrectionWorker.schedule(appContext)
+
+                // Check safety-asymmetric resurrection invariant
+                val prefs = appContext.getSharedPreferences(MonitorCoreImpl.PREFS_NAME, Context.MODE_PRIVATE)
+                val hadActiveAlert = prefs.getBoolean(MonitorCoreImpl.KEY_HAD_ACTIVE_ALERT, false)
+
                 val bootRestart = runBlocking {
-                    UserPrefs(context.applicationContext).preferences.first().bootRestartEnabled
+                    UserPrefs(appContext).preferences.first().bootRestartEnabled
                 }
-                if (bootRestart) {
+
+                if (hadActiveAlert || bootRestart) {
                     AlertService.start(context)
                 } else {
                     postBootPausedNotification(context)

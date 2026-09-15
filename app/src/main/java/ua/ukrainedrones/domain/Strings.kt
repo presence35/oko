@@ -287,6 +287,7 @@ val nightSoundLabel: String,
         val alertAgeSecSuffix: String,
         val alertAgeMinSuffix: String,
         val alertAgeHrSuffix: String,
+        val alertAgeAgo: String,
         val logsTitle: String,
         val logsFilterConnections: String,
         val logsFilterDecisions: String,
@@ -956,6 +957,7 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val alertAgeSecSuffix: String get() = misc.alertAgeSecSuffix
         val alertAgeMinSuffix: String get() = misc.alertAgeMinSuffix
         val alertAgeHrSuffix: String get() = misc.alertAgeHrSuffix
+        val alertAgeAgo: String get() = misc.alertAgeAgo
         val logsTitle: String get() = misc.logsTitle
         val logsFilterConnections: String get() = misc.logsFilterConnections
         val logsFilterDecisions: String get() = misc.logsFilterDecisions
@@ -1314,11 +1316,12 @@ fun formatRelativeTime(updatedAtIso: String?, lang: AppLanguage): String {
  */
 fun formatAlertAge(nowMillis: Long, atMillis: Long, s: Strings.StringSet): String {
     val secs = ((nowMillis - atMillis) / 1000).coerceAtLeast(1)
-    return when {
-        secs < 60 -> "$secs ${s.alertAgeSecSuffix}"
-        secs < 3600 -> "${secs / 60} ${s.alertAgeMinSuffix}"
-        else -> "${secs / 3600} ${s.alertAgeHrSuffix}"
+    val compact = when {
+        secs < 60 -> "$secs${s.alertAgeSecSuffix}"
+        secs < 3600 -> "${secs / 60}${s.alertAgeMinSuffix}"
+        else -> "${secs / 3600}${s.alertAgeHrSuffix}"
     }
+    return "$compact ${s.alertAgeAgo}"
 }
 
 /**

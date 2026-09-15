@@ -91,38 +91,57 @@ fun OblastAlert.raionName(): String? {
 }
 
 /**
- * Whether an official alert is active for the focus point. [scope] chooses the granularity:
- * `false` = the whole oblast rings (current behaviour); `true` = only when the alert covers the
+ * The single official-alert fact for the focus point: the highest severity matching
+ * [token]+[scope], or NONE. Official is official — red and yellow share this path;
+ * only the user notif toggles and the tint/copy differ downstream. [scope] chooses the
+ * granularity: `false` = the whole oblast rings; `true` = only when the alert covers the
  * focus city by name ([OblastAlert.coversCity]). Falls back to oblast-wide matching when the
  * city name is unknown (no pin / no GPS fix), so a city-scoped user never misses an oblast that
  * can't be narrowed. Single gate shared by the UI, the notification service and the widget.
+ */
+data class OfficialState(
+    val level: AlertLevel,
+    val alert: OblastAlert?
+)
+
+fun List<OblastAlert>.officialStateFor(
+    token: String?,
+    cityUa: String?,
+    scope: Boolean
+): OfficialState {
+    if (token.isNullOrBlank()) return OfficialState(AlertLevel.NONE, null)
+    fun matches(level: String): OblastAlert? {
+        val inScope: (OblastAlert) -> Boolean =
+            if (!scope || cityUa.isNullOrBlank()) ({ a -> a.inOblast(token) })
+            else ({ a -> a.inOblast(token) && a.coversCity(cityUa) })
+        // Oblast-wide entries cover every city, so they match any scope; raion/city
+        // entries must name the focus city when scoped. Red preferred over yellow —
+        // callers see one level, never two competing facts.
+        return filter { it.level == level && inScope(it) }
+            .maxByOrNull { it.isOblastWide() }
+    }
+    matches("red")?.let { return OfficialState(AlertLevel.RED, it) }
+    matches("yellow")?.let { return OfficialState(AlertLevel.YELLOW, it) }
+    return OfficialState(AlertLevel.NONE, null)
+}
+
+/**
+ * Whether an official alert is active for the focus point. Thin view over
+ * [officialStateFor] — kept for call-site readability, never a parallel matching rule.
  */
 fun officialAlertActiveFor(
     alerts: List<OblastAlert>,
     token: String?,
     cityUa: String?,
     scope: Boolean
-): Boolean {
-    if (token == null) return false
-    // Audio sirens only trigger for "red" level alarms (or full oblast alerts). Yellow artillery alerts remain visual/informative.
-    val sirenAlerts = alerts.filter { it.level == "red" || it.isOblastWide() }
-    if (!scope || cityUa.isNullOrBlank()) return sirenAlerts.any { it.inOblast(token) }
-    return sirenAlerts.any { it.inOblast(token) && it.coversCity(cityUa) }
-}
+): Boolean = alerts.officialStateFor(token, cityUa, scope).level == AlertLevel.RED
 
 /** Whether an official *yellow* (tactical/artillery) alert is active for the focus point.
- *  Level twin of [officialAlertActiveFor] with the same [scope]/[OblastAlert.coversCity]
- *  semantics, for matches on [OblastAlert.level] == "yellow". Shared by the UI, the
- *  notification service and the widget so the trident and the announce logic never diverge. */
+ *  Thin view over [officialStateFor] — kept for call-site readability, never a parallel
+ *  matching rule. */
 fun officialYellowAlertActiveFor(
     alerts: List<OblastAlert>,
     token: String?,
     cityUa: String?,
     scope: Boolean
-): Boolean {
-    if (token == null) return false
-    val yellow = alerts.filter { it.level == "yellow" }
-    if (yellow.isEmpty()) return false
-    if (!scope || cityUa.isNullOrBlank()) return yellow.any { it.inOblast(token) }
-    return yellow.any { it.inOblast(token) && it.coversCity(cityUa) }
-}
+): Boolean = alerts.officialStateFor(token, cityUa, scope).level == AlertLevel.YELLOW

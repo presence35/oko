@@ -116,12 +116,15 @@ class ThreatEngine(
         // red-city labels and the human-readable reason all come from here — consumers never
         // re-implement alert matching. Orchestration (region latch, announce-once, sound policy)
         // stays in AlertService.
-        val focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, cityScope)
-        val focusOblastYellowAlertActive = officialYellowAlertActiveFor(alerts, focusToken, focusCityUa, cityScope)
+        // One official fact, derived once: level views below are projections, never
+        // parallel matching rules, so trident/monitor/service can never diverge.
+        val official = alerts.officialStateFor(focusToken, focusCityUa, cityScope)
+        val focusOblastAlertActive = official.level == AlertLevel.RED
+        val focusOblastYellowAlertActive = official.level == AlertLevel.YELLOW
         val redCities = computeRedCities(alerts, fillRegions)
         val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts.filter { it.level != "yellow" }, fillRegions)
         val (fillYellowOblastTokens, fillYellowRaionKeys) = computeFillKeys(alerts.filter { it.level == "yellow" }, fillRegions)
-        val activeAlert = focusToken?.let { token -> alerts.firstOrNull { it.inOblast(token) } }
+        val activeAlert = official.alert
         val (officialReason, reasonThreatId) = if (activeAlert != null) {
             deriveOfficialAlertReason(activeAlert, threats, focus, params, lang, now)
         } else {

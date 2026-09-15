@@ -1,7 +1,7 @@
 package ua.ukrainedrones
 
-import ua.ukrainedrones.engine.NEPTUN_TYPES
 import ua.ukrainedrones.engine.ThreatEngine
+import ua.ukrainedrones.engine.ThreatProps
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.ZoneParams
 import ua.ukrainedrones.engine.LatLng
@@ -65,11 +65,13 @@ fun computeWidgetSnapshot(
     mapEnabled: Set<ThreatType>,
     now: Long = System.currentTimeMillis(),
     degraded: Boolean = false,
-    offline: Boolean = false
+    offline: Boolean = false,
+    /** Merged per-type props from SourceRegistry.typeCatalog — never a concrete source map. */
+    typeCatalog: Map<String, ThreatProps> = emptyMap()
 ): WidgetSnapshot {
     val threatList = threats.values
         .filter { it.type.toThreatType() in mapEnabled }
-    val engine = ThreatEngine(NEPTUN_TYPES)
+    val engine = ThreatEngine(typeCatalog)
     val eval = engine.evaluate(
         threats = threatList,
         focus = focus,

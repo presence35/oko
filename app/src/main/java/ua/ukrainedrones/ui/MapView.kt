@@ -8,7 +8,6 @@ import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.distanceFlat
-import ua.ukrainedrones.engine.NEPTUN_TYPES
 import ua.ukrainedrones.source.RESOLVED_REPLAY_GRACE_MS
 import ua.ukrainedrones.courseTargetPlace
 import ua.ukrainedrones.community.CompactOblastBoundaries
@@ -683,7 +682,8 @@ fun NeptunMapView(
     onFlourishEjected: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val engine = remember { ThreatEngine(NEPTUN_TYPES) }
+    val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
+    val engine = remember(typeCatalog) { ThreatEngine(typeCatalog) }
     val context = LocalContext.current
     val strings = Strings.get(lang)
 

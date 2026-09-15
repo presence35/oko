@@ -8,6 +8,8 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -17,12 +19,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ua.ukrainedrones.engine.ThreatProps
 import ua.ukrainedrones.engine.isFastType
 
 /** The two threat groupings shown in Settings: fast (missiles, bombs) and slow (drones). */
-internal fun fastAndSlowGroups(lang: AppLanguage): List<Triple<Int, String, Set<ThreatType>>> {
+internal fun fastAndSlowGroups(
+    lang: AppLanguage,
+    catalog: Map<String, ThreatProps> = emptyMap()
+): List<Triple<Int, String, Set<ThreatType>>> {
     val s = Strings.get(lang)
-    val fast = ThreatType.entries.filter { isFastType(it) }.toSet()
+    val fast = ThreatType.entries.filter { isFastType(it, catalog) }.toSet()
     val slow = ThreatType.values().toSet() - fast
     return listOf(
         Triple(R.drawable.ic_lightning, s.fastGroupLabel, fast),
@@ -115,8 +121,9 @@ fun SlimThreatToggles(
     modifier: Modifier = Modifier
 ) {
     val s = Strings.get(lang)
+    val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
     Column(modifier = modifier) {
-        fastAndSlowGroups(lang).forEach { (groupIcon, groupTitle, types) ->
+        fastAndSlowGroups(lang, typeCatalog).forEach { (groupIcon, groupTitle, types) ->
             val groupMapOn = types.none { it in hiddenTypes }
             val groupAlertsOn = types.none { it in silencedTypes }
             Row(
