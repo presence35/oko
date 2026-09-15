@@ -230,6 +230,7 @@ data class SettingsState(
     val sheltersWithKids: Boolean get() = prefs.sheltersWithKidsEnabled
     val justFunMasterEnabled: Boolean get() = prefs.justFunMasterEnabled
     val deathAnimationEnabled: Boolean get() = prefs.deathAnimationEnabled
+    val highQualityExplosions: Boolean get() = prefs.highQualityExplosions
     val flybyAnimationEnabled: Boolean get() = prefs.flybyAnimationEnabled
     val followBullet: Boolean get() = prefs.followBullet
     val neutralizedTallyEnabled: Boolean get() = prefs.neutralizedTallyEnabled
@@ -1359,6 +1360,10 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setDeathAnimationEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setDeathAnimationEnabled(enabled) }
+    }
+
+    fun setHighQualityExplosions(enabled: Boolean) {
+        viewModelScope.launch { prefs.setHighQualityExplosions(enabled) }
     }
 
     /** Master "Just Fun" switch: a global kill-switch for every flourish. Enforced inside the

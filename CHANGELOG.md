@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Explosion animation now varies per threat type — core flash colour, spark count/colour, ring intensity, icon shards, and optional HD extras (smoke puffs, debris) / Вибухова анімація тепер змінюється залежно від типу загрози — колір спалаху, кількість і колір іскор, інтенсивність кілець, уламки іконки та додаткові HD-ефекти (дим, уламки)
 - Fixed official-alert city scope notifications not sounding for cities whose name differs from their raion's name by resolving city raions via CityRaions / Fixed official-alert city scope notifications not sounding for cities whose name differs from their raion's name by resolving city raions via CityRaions
 - Fixed ghosting and prematurely disappearing threats by removing unauthorized 120s engine-side pruning so threats persist according to their source's declared staleness and ghosting caps / Fixed ghosting and prematurely disappearing threats by removing unauthorized 120s engine-side pruning so threats persist according to their source's declared staleness and ghosting caps
 - Simplified falling debris safety buffer into a pure countdown timer, removing extraneous city-tracking state and mirrors / Simplified falling debris safety buffer into a pure countdown timer, removing extraneous city-tracking state and mirrors

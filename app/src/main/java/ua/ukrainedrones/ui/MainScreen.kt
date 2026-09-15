@@ -399,6 +399,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onDeathAnimationChange = remember { { viewModel.setDeathAnimationEnabled(it) } },
                 onFlybyAnimationChange = remember { { viewModel.setFlybyAnimationEnabled(it) } },
                 onFollowBulletChange = remember { { viewModel.setFollowBullet(it) } },
+                onHighQualityExplosionsChange = remember { { viewModel.setHighQualityExplosions(it) } },
                 onNeutralizedTallyChange = remember { { viewModel.setNeutralizedTallyEnabled(it) } },
                 onNeutralizedTallyAllUkraineChange = remember { { viewModel.setNeutralizedTallyAllUkraine(it) } },
                 onThreatIconZoomChange = remember { { viewModel.setThreatIconZoom(it) } },

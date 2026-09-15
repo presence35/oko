@@ -42,65 +42,62 @@ private const val QUICK_EXPLOSION_LEN_MS = 800L
  *  silently ate bullets mid-show. */
 private const val MAX_DEATHS = 32
 
-/**
- * A dying threat. [icon] is the marker's own drawable, so the icon keeps rendering here through
- * the bullet flight and vanishes the instant the explosion starts (the threat re-draws on the
- * next overlay rebuild). [origin] is where the projectile takes off from — the nearest major
- * city to the target (else your GPS position / pinned city) at spawn time; null skips the
- * flight visuals.
- *
- * A [dud] carries no icon and never explodes: it's a follow-up projectile fired when the
- * threat turned out to be already destroyed (e.g. the server re-sent the resolution), so it
- * streaks past the old position and off-screen, then is dropped from memory.
- */
+private data class Shard(
+    val dx: Float, val dy: Float,
+    val spin: Float,
+    val sizeMul: Float = 1f
+)
+
+private enum class ExplosionKind {
+    SHAHED, BALLISTIC, CRUISE, FPV, AVIATION, KAB, RECON, UNKNOWN;
+
+    companion object {
+        fun fromType(type: ThreatType): ExplosionKind = when (type) {
+            ThreatType.SHAHED -> SHAHED
+            ThreatType.BALLISTIC -> BALLISTIC
+            ThreatType.CRUISE_MISSILE -> CRUISE
+            ThreatType.FPV_LOITERING -> FPV
+            ThreatType.AVIATION -> AVIATION
+            ThreatType.KAB -> KAB
+            ThreatType.RECON -> RECON
+            ThreatType.UNKNOWN -> UNKNOWN
+        }
+    }
+}
+
 private class ActiveDeath(
     val id: String?,
     val geo: GeoPoint,
-    /** Take-off point for the pending flight. Mutable: pre-spawned replay targets re-base it
-     *  to the new viewport's edge once the camera lands ([rebasePendingOrigins]). */
     var origin: GeoPoint?,
-    /** When the bullet FIRES (epochRealtime). Pre-spawned replay targets use a future start:
-     *  until then only the icon renders — the threat already stands there when the camera
-     *  lands, so nothing appears out of nowhere. */
     val start: Long,
     val icon: Drawable?,
     val rotationDeg: Float,
     val alpha: Float,
     val dud: Boolean,
-    /** Total lifetime; quick-boom deaths (replay intermediates) compress the explosion. */
-    val durationMs: Long = DEATH_DURATION_MS
-)
+    val durationMs: Long = DEATH_DURATION_MS,
+    val kind: ExplosionKind = ExplosionKind.SHAHED
+) {
+    var shards: Array<Shard>? = null
+}
 
-/**
- * Playful "neutralized" flourish drawn on the map at a threat's last position: a small
- * projectile always enters from just off the screen edge, along the line from the nearest
- * major city (else your GPS position or pinned city) through the target, and explodes on
- * impact. Rendered as an osmdroid overlay so the map's own
- * projection places it exactly at the geo points (tracking pan/zoom) and `draw()` is re-invoked
- * on every invalidate — a per-frame ticker in the map view keeps it animating for
- * [DEATH_DURATION_MS].
- */
 class ThreatDeathOverlay : Overlay() {
 
     private val deaths = mutableListOf<ActiveDeath>()
 
     private val _active = MutableStateFlow(false)
-    /** True while at least one bullet/explosion is on screen — the footer can swap its copy. */
     val active: StateFlow<Boolean> = _active.asStateFlow()
 
     val isActive: Boolean get() = deaths.isNotEmpty()
+
+    var highQuality: Boolean = true
 
     private fun syncActive() {
         val nowActive = deaths.isNotEmpty()
         if (_active.value != nowActive) _active.value = nowActive
     }
 
-    /** Whether a death animation is already in flight for [id]. */
     fun isActiveFor(id: String?): Boolean = id != null && deaths.any { it.id == id }
 
-    /** Re-point every not-yet-fired bullet's take-off edge via [newOrigin]. Called right after
-     *  a camera jump so pre-spawned flights enter from the CURRENT screen edge (their edge
-     *  was picked on whatever viewport was up when they were pre-spawned). */
     fun rebasePendingOrigins(newOrigin: () -> GeoPoint?) {
         val now = SystemClock.elapsedRealtime()
         for (d in deaths) {
@@ -116,24 +113,22 @@ class ThreatDeathOverlay : Overlay() {
         rotationDeg: Float = 0f,
         alpha: Float = 1f,
         quickBoom: Boolean = false,
-        fireAtDelayMs: Long = 0L
+        fireAtDelayMs: Long = 0L,
+        type: ThreatType = ThreatType.UNKNOWN
     ) {
         if (deaths.size >= MAX_DEATHS) return
         deaths.add(
             ActiveDeath(
                 id, geo, origin, SystemClock.elapsedRealtime() + fireAtDelayMs.coerceAtLeast(0L),
                 icon, rotationDeg, alpha, dud = false,
-                // Quick boom: impact + a brief flash — used for intermediate replay groups so the
-                // show pans on right after the hits instead of lingering through every explosion.
                 durationMs = if (quickBoom) DEATH_EXPLOSION_START_MS + QUICK_EXPLOSION_LEN_MS
-                             else DEATH_DURATION_MS
+                             else DEATH_DURATION_MS,
+                kind = ExplosionKind.fromType(type)
             )
         )
         syncActive()
     }
 
-    /** Follow-up projectile for an already-destroyed threat: no icon, never explodes, just
-     *  flies through and off-screen. Without an [origin] there's nothing to fly, so skip. */
     fun spawnDud(id: String?, geo: GeoPoint, origin: GeoPoint?) {
         if (origin == null || deaths.size >= MAX_DEATHS) return
         deaths.add(
@@ -142,7 +137,6 @@ class ThreatDeathOverlay : Overlay() {
         syncActive()
     }
 
-    /** Drop every active death instantly — used when a red alert ejects the flourish. */
     fun clear() {
         deaths.clear()
         syncActive()
@@ -156,8 +150,6 @@ class ThreatDeathOverlay : Overlay() {
     private val flashPaint = Paint().apply { isAntiAlias = true }
     private val sparkPaint = Paint().apply { isAntiAlias = true }
     private val bulletPaint = Paint().apply { isAntiAlias = true }
-    // Explosion glow, pre-rendered once per density instead of allocating a RadialGradient
-    // every frame per exploding death (the old per-frame shader churn was the jank source).
     private var glowBitmap: Bitmap? = null
     private val reuse = android.graphics.Point()
     private val reuseOrigin = android.graphics.Point()
@@ -165,7 +157,6 @@ class ThreatDeathOverlay : Overlay() {
 
     private var bulletBitmap: Bitmap? = null
 
-    /** White-hot core -> amber -> transparent radial glow, rendered once and scaled per frame. */
     private fun explosionGlow(density: Float): Bitmap {
         glowBitmap?.let { return it }
         val size = (96 * density).toInt().coerceAtLeast(32)
@@ -189,7 +180,77 @@ class ThreatDeathOverlay : Overlay() {
         return bmp
     }
 
-        override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+    private fun createShards(kind: ExplosionKind, density: Float, hq: Boolean, seed: Int): Array<Shard> {
+        val rnd = kotlin.random.Random(seed)
+        val count = when {
+            hq && kind == ExplosionKind.AVIATION -> 12
+            hq -> 10
+            kind == ExplosionKind.FPV -> 7
+            else -> 8
+        }
+        return Array(count) {
+            val ang = rnd.nextFloat() * 2f * PI.toFloat()
+            val baseSpeed = when (kind) {
+                ExplosionKind.BALLISTIC -> 0.14f
+                ExplosionKind.FPV -> 0.16f
+                ExplosionKind.AVIATION -> 0.11f
+                else -> 0.10f
+            }
+            val speed = (baseSpeed + rnd.nextFloat() * 0.12f) * density
+            val upward = when (kind) {
+                ExplosionKind.BALLISTIC -> -0.04f
+                ExplosionKind.SHAHED -> -0.015f
+                else -> -0.02f
+            } * density
+            Shard(
+                dx = cos(ang) * speed,
+                dy = sin(ang) * speed + upward,
+                spin = (rnd.nextFloat() - 0.5f) * when (kind) {
+                    ExplosionKind.FPV -> 1.1f
+                    ExplosionKind.AVIATION -> 0.45f
+                    else -> 0.6f
+                },
+                sizeMul = when (kind) {
+                    ExplosionKind.AVIATION -> 1.25f + rnd.nextFloat() * 0.4f
+                    ExplosionKind.FPV -> 0.75f + rnd.nextFloat() * 0.3f
+                    else -> 1f
+                }
+            )
+        }
+    }
+
+    private fun drawSmokePuffs(canvas: Canvas, x: Float, y: Float, e: Float, fade: Float, density: Float, maxR: Float) {
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb((90 * fade).toInt(), 40, 40, 40)
+            style = Paint.Style.FILL
+        }
+        repeat(4) { i ->
+            val a = i * 1.7f
+            val r = maxR * (0.3f + 0.5f * e) * (0.7f + i * 0.15f)
+            canvas.drawCircle(
+                x + cos(a) * maxR * 0.25f * e,
+                y + sin(a) * maxR * 0.2f * e,
+                r * 0.35f, p
+            )
+        }
+    }
+
+    private fun drawLargeDebris(canvas: Canvas, x: Float, y: Float, e: Float, fade: Float, density: Float, maxR: Float) {
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb((140 * fade).toInt(), 80, 80, 80)
+            style = Paint.Style.FILL
+        }
+        repeat(3) { i ->
+            val ang = i * 2.1f + 0.5f
+            val dist = maxR * (0.2f + 0.5f * e) * (0.8f + i * 0.1f)
+            val sx = x + cos(ang) * dist
+            val sy = y + sin(ang) * dist + 0.00004f * density * e * e * maxR * maxR
+            val sz = (4f + i * 2f) * density * (1f - 0.4f * e)
+            canvas.drawRect(sx - sz, sy - sz * 0.6f, sx + sz, sy + sz * 0.6f, p)
+        }
+    }
+
+    override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
         if (shadow) return
         if (deaths.isEmpty()) return
         val density = mapView.context.resources.displayMetrics.density
@@ -204,10 +265,7 @@ class ThreatDeathOverlay : Overlay() {
             return
         }
 
-                for (d in deaths) {
-            // Pre-fired target (bullet not launched yet): only the icon renders, standing at
-            // the geo position — so pre-spawned replay targets are already in place when the
-            // camera lands instead of popping up as their bullet fires.
+        for (d in deaths) {
             val rawElapsed = now - d.start
             if (rawElapsed < 0) {
                 d.icon?.let { icon ->
@@ -224,8 +282,6 @@ class ThreatDeathOverlay : Overlay() {
                 }
                 continue
             }
-            // Per-death timeline: quick-boom deaths compress the explosion window, so boomT
-            // and the fade curve are derived from each death's own duration.
             val dur = d.durationMs.toFloat()
             val boomT = DEATH_EXPLOSION_START_MS / dur
             val boomLenT = (d.durationMs - DEATH_EXPLOSION_START_MS) / dur
@@ -234,8 +290,6 @@ class ThreatDeathOverlay : Overlay() {
             val y = reuse.y.toFloat()
             val t = (rawElapsed.toFloat() / dur).coerceIn(0f, 1f)
 
-            // The threat's own icon lingers through the bullet flight, then vanishes the instant
-            // the explosion starts — no fading away, the detonation replaces it.
             d.icon?.let { icon ->
                 val w = icon.intrinsicWidth.coerceAtLeast(1) / 2f
                 val h = icon.intrinsicHeight.coerceAtLeast(1) / 2f
@@ -249,11 +303,6 @@ class ThreatDeathOverlay : Overlay() {
                 canvas.restore()
             }
 
-            // Flight (impact): a small projectile always enters from just off the screen edge,
-            // along the line from the origin (a random point on the viewport edge, clamped to
-            // Ukraine — so it can never take off from "another country") through the target —
-            // it glides in from the edge and detonates on impact, which lands at p=1 exactly
-            // when the explosion below starts.
             if (t in 0f..boomT && d.origin != null) {
                 mapView.projection.toPixels(d.origin, reuseOrigin)
                 val ox = reuseOrigin.x.toFloat()
@@ -265,9 +314,6 @@ class ThreatDeathOverlay : Overlay() {
                 if (dist > 1f) {
                     val W = mapView.width.toFloat()
                     val H = mapView.height.toFloat()
-                    // Slab test: where the line origin→threat crosses the viewport rectangle.
-                    // When the origin is on-screen tnear is negative (the edge behind it), so
-                    // the bullet still crosses the whole viewport toward the target.
                     var tnear = -Float.MAX_VALUE
                     var tfar = Float.MAX_VALUE
                     val t1x = -ox / dx
@@ -279,14 +325,9 @@ class ThreatDeathOverlay : Overlay() {
                     tnear = maxOf(tnear, minOf(t1y, t2y))
                     tfar = minOf(tfar, maxOf(t1y, t2y))
                     if (tfar > 0f && tnear.isFinite()) {
-                        // Start a little outside the edge so it glides in, never popping up
-                        // mid-air (which happens when the GPS dot is far off-screen).
                         val inv = (10f * density) / dist
                         val sx = ox + dx * tnear - dx * inv
                         val sy = oy + dy * tnear - dy * inv
-                        // A dud keeps going past the (already destroyed) target and exits the
-                        // screen — extend the endpoint by the viewport diagonal so it always
-                        // clears the edge regardless of pan/zoom.
                         val tx = if (d.dud) {
                             val diag = sqrt(W * W + H * H)
                             x + dx / dist * diag
@@ -299,7 +340,6 @@ class ThreatDeathOverlay : Overlay() {
                         val by = sy + (ty - sy) * p
                         val headX = tx - sx
                         val headY = ty - sy
-                        // Bullet: the projectile PNG, rotated to the heading.
                         canvas.save()
                         canvas.translate(bx, by)
                         canvas.rotate((Math.toDegrees(atan2(headY.toDouble(), headX.toDouble())) + 90).toFloat())
@@ -325,36 +365,107 @@ class ThreatDeathOverlay : Overlay() {
                 }
             }
 
-            // Explosion (impact-5.0s): radial burst, center flash, shockwave ring, sparks.
-            // Duds never detonate — the projectile just exits and is pruned above.
             if (t >= boomT && !d.dud) {
                 val e = ((t - boomT) / boomLenT).coerceIn(0f, 1f)
                 val zoomScale = ((mapView.zoomLevelDouble - 9.0) / 4.0 * 2.0 + 1.0).coerceIn(1.0, 3.0).toFloat()
                 val maxR = 46f * density * zoomScale
-                val br = maxR * e
                 val fade = 1f - e
-                // Pre-rendered glow sprite scaled to the blast radius — no per-frame shader.
+                val hq = highQuality
+                val kind = d.kind
+
+                // 1. Glow (shared)
                 val glow = explosionGlow(density)
-                flashPaint.alpha = (255 * fade).toInt()
+                val br = maxR * e
+                flashPaint.alpha = (220 * fade).toInt()
                 reuseRect.set(x - br, y - br, x + br, y + br)
                 canvas.drawBitmap(glow, null, reuseRect, flashPaint)
-                flashPaint.alpha = 255
-                flashPaint.color = Color.argb((230 * fade).toInt(), 255, 255, 255)
-                canvas.drawCircle(x, y, br * 0.3f, flashPaint)
-                ringPaint.color = Color.argb((255 * fade).toInt(), 255, 213, 0)
-                ringPaint.strokeWidth = 2f * density
-                canvas.drawCircle(x, y, maxR * (0.5f + 0.9f * e), ringPaint)
-                sparkPaint.color = Color.argb((255 * fade).toInt(), 255, 193, 7)
-                val sparkDist = maxR * (0.5f + 0.8f * e)
-                val sparkR = 3f * density * fade
-                repeat(8) { i ->
-                    val a = 2.0 * PI * i / 8.0 + 0.4
+
+                // 2. Core flash — colour per type
+                flashPaint.alpha = (200 * fade).toInt()
+                flashPaint.color = when (kind) {
+                    ExplosionKind.BALLISTIC -> Color.WHITE
+                    ExplosionKind.AVIATION -> Color.rgb(180, 220, 255)
+                    ExplosionKind.CRUISE -> Color.rgb(255, 180, 80)
+                    else -> Color.WHITE
+                }
+                val coreMul = if (kind == ExplosionKind.BALLISTIC) 0.28f else 0.22f
+                canvas.drawCircle(x, y, br * coreMul, flashPaint)
+
+                // 3. Shock rings — intensity per type
+                ringPaint.strokeWidth = 2.2f * density
+                val ringAlpha = if (kind == ExplosionKind.BALLISTIC) 255 else 220
+                ringPaint.color = Color.argb((ringAlpha * fade).toInt(), 255, 213, 0)
+                canvas.drawCircle(x, y, maxR * (0.4f + 0.95f * e), ringPaint)
+
+                ringPaint.color = Color.argb((160 * fade).toInt(), 255, 120, 0)
+                canvas.drawCircle(x, y, maxR * (0.15f + 1.25f * e), ringPaint)
+
+                if (hq && kind == ExplosionKind.BALLISTIC) {
+                    ringPaint.strokeWidth = 1.1f * density
+                    ringPaint.color = Color.argb((120 * fade).toInt(), 255, 255, 200)
+                    canvas.drawCircle(x, y, maxR * (0.7f + 0.9f * e), ringPaint)
+                }
+
+                // 4. Icon shards
+                val icon = d.icon
+                if (icon != null) {
+                    if (d.shards == null) {
+                        d.shards = createShards(kind, density, hq, d.id.hashCode())
+                    }
+                    val iw = icon.intrinsicWidth.coerceAtLeast(1)
+                    val ih = icon.intrinsicHeight.coerceAtLeast(1)
+                    val iconBmp = Bitmap.createBitmap(iw, ih, Bitmap.Config.ARGB_8888).also { bmp ->
+                        val c = Canvas(bmp)
+                        icon.setBounds(0, 0, iw, ih)
+                        icon.alpha = 255
+                        icon.draw(c)
+                    }
+                    val elapsedMs = (t - boomT) * boomLenT * d.durationMs
+                    val shardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        alpha = (255 * fade).toInt()
+                    }
+                    for (s in d.shards!!) {
+                        val sx = x + s.dx * elapsedMs
+                        val sy = y + s.dy * elapsedMs + 0.00004f * density * elapsedMs * elapsedMs
+                        val rot = s.spin * elapsedMs
+                        val sz = 10f * density * s.sizeMul * (1f - 0.3f * e)
+                        canvas.save()
+                        canvas.translate(sx, sy)
+                        canvas.rotate(rot)
+                        canvas.drawBitmap(iconBmp, null, RectF(-sz, -sz, sz, sz), shardPaint)
+                        canvas.restore()
+                    }
+                }
+
+                // 5. Sparks — count & colour per type
+                val (sparkCount, sparkColor) = when (kind) {
+                    ExplosionKind.FPV -> 10 to Color.rgb(255, 220, 100)
+                    ExplosionKind.SHAHED -> 6 to Color.rgb(255, 160, 40)
+                    ExplosionKind.BALLISTIC -> 8 to Color.rgb(255, 240, 180)
+                    ExplosionKind.AVIATION -> 7 to Color.rgb(180, 220, 255)
+                    else -> 6 to Color.rgb(255, 193, 7)
+                }
+                sparkPaint.color = Color.argb((255 * fade).toInt(),
+                    Color.red(sparkColor), Color.green(sparkColor), Color.blue(sparkColor))
+                val sparkDist = maxR * (0.55f + 0.7f * e)
+                val sparkR = (if (kind == ExplosionKind.FPV) 1.8f else 2.5f) * density * fade
+                val actualSparkCount = if (hq) sparkCount + 4 else sparkCount
+                repeat(actualSparkCount) { i ->
+                    val a = 2.0 * PI * i / actualSparkCount + 0.3 + (i * 0.17)
                     canvas.drawCircle(
                         x + (cos(a) * sparkDist).toFloat(),
                         y + (sin(a) * sparkDist).toFloat(),
-                        sparkR,
-                        sparkPaint
+                        sparkR, sparkPaint
                     )
+                }
+
+                // 6. HD-only extras
+                if (hq) {
+                    when (kind) {
+                        ExplosionKind.SHAHED -> drawSmokePuffs(canvas, x, y, e, fade, density, maxR)
+                        ExplosionKind.AVIATION -> drawLargeDebris(canvas, x, y, e, fade, density, maxR)
+                        else -> {}
+                    }
                 }
             }
         }

@@ -393,6 +393,8 @@ val nightSoundLabel: String,
         val deathAnimationDesc: String,
         val followBulletTitle: String,
         val followBulletDesc: String,
+        val hdExplosionTitle: String,
+        val hdExplosionDesc: String,
         val neutralizedTallyTitle: String,
         val neutralizedTallyDesc: String,
         val neutralizedTallyAllUkraineTitle: String,
@@ -1068,6 +1070,8 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val deathAnimationDesc: String get() = misc.deathAnimationDesc
         val followBulletTitle: String get() = misc.followBulletTitle
         val followBulletDesc: String get() = misc.followBulletDesc
+        val hdExplosionTitle: String get() = misc.hdExplosionTitle
+        val hdExplosionDesc: String get() = misc.hdExplosionDesc
         val neutralizedTallyTitle: String get() = misc.neutralizedTallyTitle
         val neutralizedTallyDesc: String get() = misc.neutralizedTallyDesc
         val justFunNote: String get() = misc.justFunNote

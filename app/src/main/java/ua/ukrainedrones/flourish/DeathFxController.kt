@@ -70,6 +70,12 @@ class DeathFxController(
                     if (!enabled) clear()
                 }
         }
+        scope.launch {
+            UserPrefs(context).preferences
+                .map { it.highQualityExplosions }
+                .distinctUntilChanged()
+                .collect { hq -> overlay.highQuality = hq }
+        }
     }
 
     private val vibrator = context.getSystemService(Vibrator::class.java)
@@ -247,10 +253,11 @@ class DeathFxController(
         geo: GeoPoint,
         icon: Drawable? = null,
         rotationDeg: Float = 0f,
-        alpha: Float = 1f
+        alpha: Float = 1f,
+        type: ThreatType = ThreatType.UNKNOWN
     ): Boolean {
         if (!justFunEnabled.value) return false
-        overlay.spawn(id, geo, randomEdgeOrigin(), icon, rotationDeg, alpha)
+        overlay.spawn(id, geo, randomEdgeOrigin(), icon, rotationDeg, alpha, type = type)
         return true
     }
 
@@ -397,9 +404,9 @@ class DeathFxController(
                     icon = iconFor(rec.type),
                     rotationDeg = 0f,
                     alpha = 1f,
-                    // Intermediate groups only show the hits; the LAST group gets the full show.
                     quickBoom = !finalGroup,
-                    fireAtDelayMs = settle + k * FLOURISH_STAGGER_MS
+                    fireAtDelayMs = settle + k * FLOURISH_STAGGER_MS,
+                    type = rec.type
                 )
             }
             // Jump straight onto this group (no animated glide — bullets must never fly while

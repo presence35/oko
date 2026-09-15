@@ -55,6 +55,7 @@ data class UserPreferences(
     val showLargeCities: Boolean = true,
     val deathAnimationEnabled: Boolean = true,
     val followBullet: Boolean = true,
+    val highQualityExplosions: Boolean = true,
     val neutralizedTallyEnabled: Boolean = true,
     val neutralizedTallyAllUkraine: Boolean = false,
     val legacyCacheCleaned: Boolean = false,
@@ -142,6 +143,7 @@ class UserPrefs(private val context: Context) {
     private val showSmallCitiesKey = booleanPreferencesKey("show_small_cities")
     private val deathAnimationEnabledKey = booleanPreferencesKey("death_animation_enabled")
     private val followBulletKey = booleanPreferencesKey("follow_bullet")
+    private val highQualityExplosionsKey = booleanPreferencesKey("high_quality_explosions")
     private val neutralizedTallyEnabledKey = booleanPreferencesKey("neutralized_tally_enabled")
     private val neutralizedTallyAllUkraineKey = booleanPreferencesKey("neutralized_tally_all_ukraine")
     private val legacyCacheCleanedKey = booleanPreferencesKey("legacy_osmdroid_cleaned")
@@ -232,6 +234,7 @@ class UserPrefs(private val context: Context) {
             showMediumCities = this[showMediumCitiesKey] ?: true,
             showSmallCities = this[showSmallCitiesKey] ?: true,
             showLargeCities = this[showLargeCitiesKey] ?: true,
+            highQualityExplosions = this[highQualityExplosionsKey] ?: true,
             deathAnimationEnabled = this[deathAnimationEnabledKey] ?: true,
             followBullet = this[followBulletKey] ?: true,
             neutralizedTallyEnabled = this[neutralizedTallyEnabledKey] ?: true,
@@ -511,6 +514,10 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setShowLargeCities(show: Boolean) {
         context.dataStore.edit { it[showLargeCitiesKey] = show }
+    }
+
+    suspend fun setHighQualityExplosions(enabled: Boolean) {
+        context.dataStore.edit { it[highQualityExplosionsKey] = enabled }
     }
 
     suspend fun setDeathAnimationEnabled(enabled: Boolean) {

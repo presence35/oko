@@ -416,6 +416,7 @@ fun SettingsScreen(
     onDeathAnimationChange: (Boolean) -> Unit,
     onFlybyAnimationChange: (Boolean) -> Unit,
     onFollowBulletChange: (Boolean) -> Unit,
+    onHighQualityExplosionsChange: (Boolean) -> Unit,
     onNeutralizedTallyChange: (Boolean) -> Unit,
     onNeutralizedTallyAllUkraineChange: (Boolean) -> Unit,
     onThreatIconZoomChange: (Boolean) -> Unit,
@@ -476,6 +477,7 @@ fun SettingsScreen(
     val deathAnimationEnabled = state.deathAnimationEnabled
     val flybyAnimationEnabled = state.flybyAnimationEnabled
     val followBullet = state.followBullet
+    val highQualityExplosions = state.highQualityExplosions
     val neutralizedTallyEnabled = state.neutralizedTallyEnabled
     val neutralizedTallyAllUkraine = state.neutralizedTallyAllUkraine
     val threatIconZoom = state.threatIconZoom
@@ -1497,6 +1499,14 @@ officialSirenOverride = nightOfficialSirenOverride,
                                         onCheckedChange = onFollowBulletChange,
                                         icon = painterResource(R.drawable.bullet),
                                         iconTint = null
+                                    )
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    AlertToggleRow(
+                                        title = s.hdExplosionTitle,
+                                        description = s.hdExplosionDesc,
+                                        checked = highQualityExplosions,
+                                        onCheckedChange = onHighQualityExplosionsChange,
+                                        emoji = "\uD83D\uDD25"
                                     )
                                 }
                             }
