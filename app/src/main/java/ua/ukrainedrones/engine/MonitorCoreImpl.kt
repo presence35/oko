@@ -21,8 +21,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class MonitorCoreImpl(
     private val context: Context,
-    private val scope: CoroutineScope,
-    private val kinematicsEngine: DeadReckoningEngine = DeadReckoningEngine()
+    private val scope: CoroutineScope
 ) : MonitorCore {
 
     companion object {
@@ -30,7 +29,6 @@ class MonitorCoreImpl(
         const val KEY_HAD_ACTIVE_ALERT = "had_active_alert"
         const val KEY_LAST_ALERT_TIME = "last_alert_time"
         const val USER_SHOT_GRACE_MS = 3_000L
-        const val PROJECTION_TICK_MS = 1_000L
     }
 
     private val prefs: SharedPreferences =
@@ -50,29 +48,6 @@ class MonitorCoreImpl(
 
     private val rawThreatMap = ConcurrentHashMap<String, NormalizedThreat>()
     private val userShotAt = ConcurrentHashMap<String, Long>()
-
-    private var projectionJob: Job? = null
-
-    init {
-        startProjectionLoop()
-    }
-
-    private fun startProjectionLoop() {
-        projectionJob?.cancel()
-        projectionJob = scope.launch(Dispatchers.Default) {
-            while (isActive) {
-                delay(PROJECTION_TICK_MS)
-                if (rawThreatMap.isNotEmpty()) {
-                    val now = System.currentTimeMillis()
-                    val projected = kinematicsEngine.evaluateSnapshot(now)
-                    _threats.value = projected
-                    val activeIds = kinematicsEngine.getActiveTrackIds()
-                    rawThreatMap.keys.retainAll(activeIds)
-                    persistActiveAlertState()
-                }
-            }
-        }
-    }
 
     override fun onBaselineSyncRequired() {
         // Authoritative resync requested
@@ -99,7 +74,6 @@ class MonitorCoreImpl(
         val nowMono = Monotonic.now()
 
         rawThreatMap.clear()
-        kinematicsEngine.clear()
 
         for (t in threats) {
             val shotAt = userShotAt[t.id]
@@ -108,12 +82,11 @@ class MonitorCoreImpl(
                 continue
             }
             rawThreatMap[t.id] = t
-            kinematicsEngine.ingestThreat(t, now)
         }
 
         userShotAt.entries.removeIf { nowMono - it.value > USER_SHOT_GRACE_MS }
 
-        _threats.value = kinematicsEngine.evaluateSnapshot(now)
+        _threats.value = rawThreatMap.values.toList()
         _lastUpdateEpochMs.value = now
         _isInformationStale.value = false
 
@@ -130,8 +103,7 @@ class MonitorCoreImpl(
         }
 
         rawThreatMap[threat.id] = threat
-        kinematicsEngine.ingestThreat(threat, now)
-        _threats.value = kinematicsEngine.evaluateSnapshot(now)
+        _threats.value = rawThreatMap.values.toList()
         _lastUpdateEpochMs.value = now
         _isInformationStale.value = false
 
@@ -140,8 +112,7 @@ class MonitorCoreImpl(
 
     override fun removeThreat(threatId: String) {
         rawThreatMap.remove(threatId)
-        kinematicsEngine.removeThreat(threatId)
-        _threats.value = kinematicsEngine.evaluateSnapshot(System.currentTimeMillis())
+        _threats.value = rawThreatMap.values.toList()
         persistActiveAlertState()
     }
 

@@ -739,7 +739,7 @@ fastYellowArmed = p.fastYellowArmed,
             if (lastOfficialEpisode != null && state.focusOblastRawLevel == AlertLevel.NONE && state.officialAlertsEnabled) {
                 if (alertable.isEmpty()) cancelAlert()
                 lastCleanAllClearCity = state.focusBannerCity
-                debrisBuffer.startDebrisBuffer(durationSeconds = 180)
+                debrisBuffer.start(durationSeconds = 180)
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
                     sirenOverride = state.officialSirenOverride, vibrationLevel = null,
@@ -783,7 +783,7 @@ fastYellowArmed = p.fastYellowArmed,
                         }
                     }
                     primary.isOnset -> {
-                        debrisBuffer.abortBuffer("New threat onset")
+                        debrisBuffer.abort()
                         wakeLockManager.acquireForAlert()
                         audioAlarmDispatcher.dispatchDangerAlarm(
                             isRed = (primary.level == "red"),
@@ -1033,7 +1033,7 @@ fastYellowArmed = p.fastYellowArmed,
     override fun onDestroy() {
         MonitoringStatus.setRunning(false)
         audioAlarmDispatcher.release()
-        debrisBuffer.reset()
+        debrisBuffer.abort()
         screenReceiver?.let { unregisterReceiver(it) }
         screenReceiver = null
         monitoringJob?.cancel()
