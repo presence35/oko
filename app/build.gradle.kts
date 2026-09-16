@@ -45,7 +45,7 @@ android {
         buildConfigField("String", "TELEGRAM_BOT_TOKEN", "\"$telegramBotToken\"")
         buildConfigField("String", "TELEGRAM_CHAT_ID", "\"$telegramChatId\"")
         ndk {
-            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
+            abiFilters.addAll(listOf("arm64-v8a"))
         }
     }
 

@@ -18,12 +18,12 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.util.LruCache
 import android.view.animation.DecelerateInterpolator
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -35,8 +35,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.core.content.ContextCompat
@@ -59,7 +57,6 @@ import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.toThreatType
-import ua.ukrainedrones.flourish.DeathFxController
 import ua.ukrainedrones.source.RESOLVED_REPLAY_GRACE_MS
 import ua.ukrainedrones.ui.MapLibreBridge
 import ua.ukrainedrones.ui.MapLibreHostView
@@ -588,8 +585,15 @@ fun NeptunMapView(
     LaunchedEffect(deathFx) {
         while (true) {
             withFrameNanos {}
-            if (deathFx.isActive) deathFrame.intValue++
+            if (deathFx.isActive) {
+                deathFrame.intValue++
+                bridgeState.value?.invalidateOverlay()
+            }
         }
+    }
+
+    SideEffect {
+        bridgeState.value?.invalidateOverlay()
     }
 
     // Sync GPU layers with UI state
@@ -620,11 +624,10 @@ fun NeptunMapView(
             showRegionBorders = uiState.showRegionBorders
         )
         bridge.updateZones(
-            focusLat = uiState.focusLocation?.lat,
-            focusLon = uiState.focusLocation?.lon,
-            slowYellowKm = uiState.activeZoneParams.slowYellowKm,
-            slowRedKm = uiState.activeZoneParams.slowRedKm,
-            activeZone = uiState.activeZone
+            centerLat = uiState.focusLocation?.lat,
+            centerLon = uiState.focusLocation?.lon,
+            slowRedKm = uiState.activeZoneParams.slowRedKm.toDouble(),
+            slowYellowKm = uiState.activeZoneParams.slowYellowKm.toDouble()
         )
     }
 
@@ -957,6 +960,7 @@ LaunchedEffect(selectedId) {
             }
 
             delay(if (moving) 33 else 1000)
+            bridge.invalidateOverlay()
         }
     }
 
@@ -1023,6 +1027,102 @@ LaunchedEffect(selectedId) {
             },
             onBridgeReady = { bridge ->
                 bridgeState.value = bridge
+                bridge.onDrawOverlay = { canvas ->
+                    val projLambda: (Double, Double) -> PointF? = { lat, lon ->
+                        bridge.project(lat, lon)
+                    }
+                    val currentZoom = bridge.zoom
+                    val nowMs = System.currentTimeMillis()
+                    val ring = newRingState.value
+
+                    // 1. City labels
+                    cityLabelOverlay.draw(canvas, currentZoom, projLambda)
+
+                    // 2. Nearby shelters
+                    if (showNearbySheltersState && focusLocationState != null && shelterIndex != null) {
+                        val nearList = shelterIndex.nearest(focusLocationState!!.lat, focusLocationState!!.lon, limit = 25)
+                        for (item in nearList) {
+                            val pt = bridge.project(item.shelter.lat, item.shelter.lon) ?: continue
+                            val isSelected = selectedShelter?.shelter?.id == item.shelter.id
+                            val bmp = shelterMarkerBitmap(context, item.shelter.type, isSelected)
+                            canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height.toFloat(), null)
+                        }
+                    }
+
+                    // 3. GPS dot
+                    if (uiState.followMe) {
+                        val pos = uiState.userLocation ?: focusLocationState
+                        if (pos != null) {
+                            val pt = bridge.project(pos.lat, pos.lon)
+                            if (pt != null) {
+                                val bmp = gpsDotBitmap(context, uiState.gpsFixAvailable)
+                                canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height / 2f, null)
+                            }
+                        }
+                    }
+
+                    // 4. Pinned city pin
+                    if (!uiState.followMe && uiState.pinnedCity != null) {
+                        val city = uiState.pinnedCity!!
+                        val pt = bridge.project(city.lat, city.lon)
+                        if (pt != null) {
+                            val bmp = pinBitmap(context)
+                            canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height.toFloat() * 1.5f, null)
+                        }
+                    }
+
+                    // 5. Threat markers
+                    val matrix = Matrix()
+                    val paint = Paint().apply { isAntiAlias = true }
+                    for (t in mapThreatsState) {
+                        if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
+                        val pose = threatPoses[t.id] ?: MarkerPose(t.lat, t.lon, 0f, ThreatPoseMode.PARKED)
+                        val pt = bridge.project(pose.lat, pose.lon) ?: continue
+                        val sx = pt.x
+                        val sy = pt.y
+                        val placement = threatPlacements[t.id]
+                        val props = engine.propsFor(t.type)
+                        val stale = engine.isStale(t, props, nowMs)
+                        val revealed = ring != null && t.id == ring.id && nowMs < ring.activeUntilMs
+                        val sizeDp = if (threatIconZoomState) threatIconSizeDp(currentZoom) else 32
+                        val iconDrawable = threatIconFor(
+                            context, t.type.toThreatType(), iconSetState,
+                            revealed = revealed, areaOnly = t.areaOnly, sizeDp = sizeDp
+                        )
+                        val bmp = (iconDrawable as? BitmapDrawable)?.bitmap ?: continue
+                        val base = IconCatalog.baseDeg(t.type.toThreatType(), iconSetState)
+                        val rot = if (t.areaOnly) 0f else threatMarkerRotation(pose.headingDeg, base)
+                        val scale = restoringScales[t.id] ?: 1f
+
+                        paint.alpha = ((if (stale) 0.45f else 1.0f) * scale * 255).toInt().coerceIn(0, 255)
+
+                        matrix.reset()
+                        matrix.postTranslate(-bmp.width / 2f, -bmp.height / 2f)
+                        matrix.postRotate(rot)
+                        if (scale < 1f) matrix.postScale(scale, scale)
+                        matrix.postTranslate(sx, sy)
+                        canvas.drawBitmap(bmp, matrix, paint)
+
+                        // Sub-description / count chip
+                        val chip = chipLabel(t, placement?.chip)
+                        if (chip != null) {
+                            canvas.drawText(chip, sx, sy + bmp.height / 2f + 14f * context.resources.displayMetrics.density, chipPaint)
+                        }
+                    }
+
+                    // 6. Death FX & Flourish overlay
+                    if (deathFx.isActive) {
+                        deathFx.overlay.draw(
+                            canvas = canvas,
+                            density = context.resources.displayMetrics.density,
+                            viewWidth = bridge.width.toFloat(),
+                            viewHeight = bridge.height.toFloat(),
+                            resources = context.resources,
+                            zoom = currentZoom,
+                            project = projLambda
+                        )
+                    }
+                }
                 bridge.setOnCameraMoveListener {
                     cameraFrame.intValue++
                     onScaleChange(bridge.metersPerPixel())
@@ -1110,7 +1210,7 @@ LaunchedEffect(selectedId) {
                             sizeDp = if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32
                         )
                         val base = IconCatalog.baseDeg(threatType, iconSetState)
-                        val rotation = if (targetThreat.areaOnly) 0f else threatMarkerRotation(pose?.headingDeg ?: targetThreat.courseDeg.toFloat(), base)
+                        val rotation = if (targetThreat.areaOnly) 0f else threatMarkerRotation(pose?.headingDeg ?: engine.courseDeg(targetThreat).toFloat(), base)
                         val played = if (deathFx.isActiveFor(threatId)) {
                             deathFx.strikeDud(threatId, strikeLat, strikeLon)
                         } else {
@@ -1135,110 +1235,5 @@ LaunchedEffect(selectedId) {
                 }
             }
         )
-
-        // Custom Overlay Canvas: City Labels, Markers, Pins, GPS Dot, Flourish & Death FX
-        Canvas(modifier = Modifier.matchParentSize()) {
-            deathFrame.intValue
-            cameraFrame.intValue
-            val bridge = bridgeState.value ?: return@Canvas
-            val projLambda: (Double, Double) -> PointF? = { lat, lon ->
-                bridge.project(lat, lon)
-            }
-            val currentZoom = bridge.zoom
-            val nowMs = System.currentTimeMillis()
-            val ring = newRingState.value
-
-            drawIntoCanvas { d ->
-                val canvas = d.nativeCanvas
-
-                // 1. City labels
-                cityLabelOverlay.draw(canvas, currentZoom, projLambda)
-
-                // 2. Nearby shelters
-                if (showNearbyShelters && focusLocationState != null && shelterIndex != null) {
-                    val nearList = shelterIndex.nearest(focusLocationState!!.lat, focusLocationState!!.lon, limit = 25)
-                    for (item in nearList) {
-                        val pt = bridge.project(item.shelter.lat, item.shelter.lon) ?: continue
-                        val isSelected = selectedShelter?.shelter?.id == item.shelter.id
-                        val bmp = shelterMarkerBitmap(context, item.shelter.type, isSelected)
-                        canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height.toFloat(), null)
-                    }
-                }
-
-                // 3. GPS dot
-                if (uiState.followMe) {
-                    val pos = uiState.userLocation ?: focusLocationState
-                    if (pos != null) {
-                        val pt = bridge.project(pos.lat, pos.lon)
-                        if (pt != null) {
-                            val bmp = gpsDotBitmap(context, uiState.gpsFixAvailable)
-                            canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height / 2f, null)
-                        }
-                    }
-                }
-
-                // 4. Pinned city pin
-                if (!uiState.followMe && uiState.pinnedCity != null) {
-                    val city = uiState.pinnedCity!!
-                    val pt = bridge.project(city.lat, city.lon)
-                    if (pt != null) {
-                        val bmp = pinBitmap(context)
-                        canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height.toFloat() * 1.5f, null)
-                    }
-                }
-
-                // 5. Threat markers
-                val matrix = Matrix()
-                val paint = Paint().apply { isAntiAlias = true }
-                for (t in mapThreatsState) {
-                    if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
-                    val pose = threatPoses[t.id] ?: MarkerPose(t.lat, t.lon, 0f, ThreatPoseMode.PARKED)
-                    val pt = bridge.project(pose.lat, pose.lon) ?: continue
-                    val sx = pt.x
-                    val sy = pt.y
-                    val placement = threatPlacements[t.id]
-                    val props = engine.propsFor(t.type)
-                    val stale = engine.isStale(t, props, nowMs)
-                    val revealed = ring != null && t.id == ring.id && nowMs < ring.activeUntilMs
-                    val sizeDp = if (threatIconZoomState) threatIconSizeDp(currentZoom) else 32
-                    val iconDrawable = threatIconFor(
-                        context, t.type.toThreatType(), iconSetState,
-                        revealed = revealed, areaOnly = t.areaOnly, sizeDp = sizeDp
-                    )
-                    val bmp = (iconDrawable as? BitmapDrawable)?.bitmap ?: continue
-                    val base = IconCatalog.baseDeg(t.type.toThreatType(), iconSetState)
-                    val rot = if (t.areaOnly) 0f else threatMarkerRotation(pose.headingDeg, base)
-                    val scale = restoringScales[t.id] ?: 1f
-
-                    paint.alpha = ((if (stale) 0.45f else 1.0f) * scale * 255).toInt().coerceIn(0, 255)
-
-                    matrix.reset()
-                    matrix.postTranslate(-bmp.width / 2f, -bmp.height / 2f)
-                    matrix.postRotate(rot)
-                    if (scale < 1f) matrix.postScale(scale, scale)
-                    matrix.postTranslate(sx, sy)
-                    canvas.drawBitmap(bmp, matrix, paint)
-
-                    // Sub-description / count chip
-                    val chip = chipLabel(t, placement?.chip)
-                    if (chip != null) {
-                        canvas.drawText(chip, sx, sy + bmp.height / 2f + 14f * context.resources.displayMetrics.density, chipPaint)
-                    }
-                }
-
-                // 6. Death FX & Flourish overlay
-                if (deathFx.isActive) {
-                    deathFx.overlay.draw(
-                        canvas = canvas,
-                        density = context.resources.displayMetrics.density,
-                        viewWidth = size.width,
-                        viewHeight = size.height,
-                        resources = context.resources,
-                        zoom = currentZoom,
-                        project = projLambda
-                    )
-                }
-            }
-        }
     }
 }

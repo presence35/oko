@@ -736,9 +736,9 @@ class CityLabelOverlay(
         for (c in Cities.ALL) {
             val minZoom = when (c.tier) {
                 CityTier.MAJOR -> if (forceAll || !showLargeCities) {
-                    if (forceAll) 4.0 else Double.MAX_VALUE
+                    if (forceAll) 3.5 else Double.MAX_VALUE
                 } else when (c.reveal) {
-                    MajorReveal.OVERVIEW -> 4.0
+                    MajorReveal.OVERVIEW -> 3.5
                     MajorReveal.MID -> 7.5
                     MajorReveal.LATE -> 9.0
                 }

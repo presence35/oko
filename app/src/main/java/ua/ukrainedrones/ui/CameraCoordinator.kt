@@ -112,7 +112,7 @@ internal class MapCameraCoordinator {
         east: Double,
         south: Double,
         west: Double,
-        paddingPx: Int = 60,
+        paddingPx: Int = 80,
         durationMs: Int = 400
     ) {
         bridge.zoomToBounds(north, east, south, west, paddingPx, durationMs)

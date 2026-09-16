@@ -403,7 +403,9 @@ val mappedThreats = registry.allThreats.map { list ->
                 mappedThreats,
                 registry.allAlerts,
                 LocationTracker.location,
-                nowFlow
+                nowFlow,
+                registry.connectionState,
+                registry.degradedSince
             ) { values: Array<Any?> ->
                 @Suppress("UNCHECKED_CAST")
                 LiveInputs(

@@ -1,6 +1,9 @@
 package ua.ukrainedrones.ui
 
 import android.graphics.PointF
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
@@ -15,8 +18,13 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import ua.ukrainedrones.UA_PAN_MAX_LAT
+import ua.ukrainedrones.UA_PAN_MAX_LON
+import ua.ukrainedrones.UA_PAN_MIN_LAT
+import ua.ukrainedrones.UA_PAN_MIN_LON
 import kotlin.math.cos
 import kotlin.math.pow
 
@@ -26,8 +34,10 @@ import kotlin.math.pow
 class MapLibreBridge(
     var map: MapLibreMap? = null,
     var mapView: MapView? = null,
+    var overlayView: View? = null,
     var style: Style? = null,
-    var project: ((Double, Double) -> PointF?)? = null
+    var project: ((Double, Double) -> PointF?)? = null,
+    var onDrawOverlay: ((android.graphics.Canvas) -> Unit)? = null
 ) {
     val width: Int get() = mapView?.width ?: 0
     val height: Int get() = mapView?.height ?: 0
@@ -40,6 +50,10 @@ class MapLibreBridge(
     private var onCameraMoveCallback: (() -> Unit)? = null
     private var onMapClickCallback: ((PointF, LatLng) -> Unit)? = null
     private var onMapLongClickCallback: ((PointF, LatLng) -> Unit)? = null
+
+    fun invalidateOverlay() {
+        overlayView?.postInvalidateOnAnimation()
+    }
 
     fun setOnCameraMoveListener(listener: () -> Unit) {
         onCameraMoveCallback = listener
@@ -159,7 +173,7 @@ class MapLibreBridge(
 
 /**
  * Encapsulates the MapLibre Native MapView, Carto dark tiles, GeoJSON boundary layers,
- * and Jetpack Compose lifecycle bindings.
+ * synchronized direct overlay view, and Jetpack Compose lifecycle bindings.
  */
 @Composable
 fun MapLibreHostView(
@@ -174,12 +188,44 @@ fun MapLibreHostView(
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val bridge = remember { MapLibreBridge() }
+
+    val container = remember {
+        FrameLayout(context).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+    }
     val mapView = remember {
-        MapView(context).apply {
+        val opts = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
+        MapView(context, opts).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
             onCreate(null)
         }
     }
-    val bridge = remember { MapLibreBridge() }
+    val overlayView = remember {
+        object : View(context) {
+            init {
+                setWillNotDraw(false)
+                isClickable = false
+                isFocusable = false
+            }
+            override fun onDraw(canvas: android.graphics.Canvas) {
+                super.onDraw(canvas)
+                bridge.onDrawOverlay?.invoke(canvas)
+            }
+        }.apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+    }
 
     DisposableEffect(lifecycle, mapView) {
         val observer = LifecycleEventObserver { _, event ->
@@ -200,9 +246,14 @@ fun MapLibreHostView(
 
     AndroidView(
         factory = {
-            mapView.apply {
-                bridge.mapView = this
-                getMapAsync { mapLibreMap ->
+            container.apply {
+                removeAllViews()
+                addView(mapView)
+                addView(overlayView)
+                bridge.mapView = mapView
+                bridge.overlayView = overlayView
+
+                mapView.getMapAsync { mapLibreMap ->
                     bridge.map = mapLibreMap
                     mapLibreMap.uiSettings.apply {
                         isAttributionEnabled = false
@@ -210,13 +261,13 @@ fun MapLibreHostView(
                         isCompassEnabled = false
                         isRotateGesturesEnabled = false
                     }
-                    mapLibreMap.setMinZoomPreference(5.2)
+                    mapLibreMap.setMinZoomPreference(3.6)
                     mapLibreMap.setMaxZoomPreference(19.0)
-                    val ukraineBounds = LatLngBounds.Builder()
-                        .include(LatLng(ua.ukrainedrones.UA_TIGHT_MAX_LAT, ua.ukrainedrones.UA_TIGHT_MAX_LON))
-                        .include(LatLng(ua.ukrainedrones.UA_TIGHT_MIN_LAT, ua.ukrainedrones.UA_TIGHT_MIN_LON))
+                    val ukrainePanBounds = LatLngBounds.Builder()
+                        .include(LatLng(UA_PAN_MAX_LAT, UA_PAN_MAX_LON))
+                        .include(LatLng(UA_PAN_MIN_LAT, UA_PAN_MIN_LON))
                         .build()
-                    mapLibreMap.setLatLngBoundsForCameraBounds(ukraineBounds)
+                    mapLibreMap.setLatLngBoundsForCameraTarget(ukrainePanBounds)
 
                     val initialPos = CameraPosition.Builder()
                         .target(LatLng(initialCenterLat, initialCenterLon))
@@ -235,38 +286,46 @@ fun MapLibreHostView(
                         bridge.project = projLambda
 
                         mapLibreMap.addOnCameraMoveListener {
+                            overlayView.invalidate()
                             onCameraChange()
                             bridge.dispatchCameraMove()
                         }
                         mapLibreMap.addOnMoveListener(object : MapLibreMap.OnMoveListener {
                             override fun onMoveBegin(detector: org.maplibre.android.gestures.MoveGestureDetector) {
+                                overlayView.invalidate()
                                 onCameraChange()
                                 bridge.dispatchCameraMove()
                             }
                             override fun onMove(detector: org.maplibre.android.gestures.MoveGestureDetector) {
+                                overlayView.invalidate()
                                 onCameraChange()
                                 bridge.dispatchCameraMove()
                             }
                             override fun onMoveEnd(detector: org.maplibre.android.gestures.MoveGestureDetector) {
+                                overlayView.invalidate()
                                 onCameraChange()
                                 bridge.dispatchCameraMove()
                             }
                         })
                         mapLibreMap.addOnScaleListener(object : MapLibreMap.OnScaleListener {
                             override fun onScaleBegin(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) {
+                                overlayView.invalidate()
                                 onCameraChange()
                                 bridge.dispatchCameraMove()
                             }
                             override fun onScale(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) {
+                                overlayView.invalidate()
                                 onCameraChange()
                                 bridge.dispatchCameraMove()
                             }
                             override fun onScaleEnd(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) {
+                                overlayView.invalidate()
                                 onCameraChange()
                                 bridge.dispatchCameraMove()
                             }
                         })
                         mapLibreMap.addOnCameraIdleListener {
+                            overlayView.invalidate()
                             onCameraChange()
                             bridge.dispatchCameraMove()
                         }
@@ -283,6 +342,7 @@ fun MapLibreHostView(
                             true
                         }
                         onBridgeReady(bridge)
+                        overlayView.invalidate()
                     }
                 }
             }

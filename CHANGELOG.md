@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Restricted native libraries to 64-bit ARM (arm64-v8a) to reduce APK size to ~6MB / Restricted native libraries to 64-bit ARM (arm64-v8a) to reduce APK size to ~6MB
+- Fixed background notification delay when going offline or entering airplane mode by reacting immediately to connection state changes / Fixed background notification delay when going offline or entering airplane mode by reacting immediately to connection state changes
+- Fixed alert region fills and city label colors across zoom levels with enhanced GPU layer styling / Fixed alert region fills and city label colors across zoom levels with enhanced GPU layer styling
+
+- Expanded map zoom-out and panning boundaries with buffered pan limits and synchronized direct overlay rendering for zero-lag markers / Expanded map zoom-out and panning boundaries with buffered pan limits and synchronized direct overlay rendering for zero-lag markers
+
 - Migrated the map rendering engine to MapLibre Native SDK with hardware-accelerated OpenGL raster/vector layers and removed osmdroid / Migrated the map rendering engine to MapLibre Native SDK with hardware-accelerated OpenGL raster/vector layers and removed osmdroid
 - Added MapLibre GeoJSON layer manager and camera coordinator bridging boundaries, alert fills, and range circles / Added MapLibre GeoJSON layer manager and camera coordinator bridging boundaries, alert fills, and range circles
 - Added MapLibreStyle and MapLibreHostView composable binding the dark Carto basemap to native Android lifecycle / Added MapLibreStyle and MapLibreHostView composable binding the dark Carto basemap to native Android lifecycle

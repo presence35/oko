@@ -57,7 +57,7 @@ object MapLibreLayerManager {
         style.addSource(srcAlertYellow)
         style.addLayer(
             FillLayer(LAYER_ALERT_YELLOW, SOURCE_ALERT_YELLOW).apply {
-                setProperties(fillColor(Color.argb(38, 255, 213, 0)))
+                setProperties(fillColor(Color.argb(85, 245, 158, 11)))
             }
         )
 
@@ -65,14 +65,14 @@ object MapLibreLayerManager {
         style.addSource(srcAlertRed)
         style.addLayer(
             FillLayer(LAYER_ALERT_RED_FILL, SOURCE_ALERT_RED).apply {
-                setProperties(fillColor(Color.argb(55, 255, 60, 60)))
+                setProperties(fillColor(Color.argb(100, 239, 68, 68)))
             }
         )
         style.addLayer(
             LineLayer(LAYER_ALERT_RED_LINE, SOURCE_ALERT_RED).apply {
                 setProperties(
-                    lineColor(Color.argb(120, 255, 60, 60)),
-                    lineWidth(1.5f)
+                    lineColor(Color.argb(200, 239, 68, 68)),
+                    lineWidth(2.0f)
                 )
             }
         )

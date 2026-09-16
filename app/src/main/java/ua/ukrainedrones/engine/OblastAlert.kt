@@ -35,8 +35,21 @@ fun OblastAlert.inOblast(token: String): Boolean {
     if (t.isEmpty()) return false
     // Prefix match handles "Харківськ" → "Харківська область"; a whole-word match handles
     // Crimea ("Крим" in "Автономна Республіка Крим") and short stems.
-    return oblast.startsWith(t, ignoreCase = true) || name.startsWith(t, ignoreCase = true) ||
-        containsWord(oblast, t) || containsWord(name, t)
+    if (oblast.startsWith(t, ignoreCase = true) || name.startsWith(t, ignoreCase = true) ||
+        key.startsWith(t, ignoreCase = true) ||
+        containsWord(oblast, t) || containsWord(name, t) || containsWord(key, t)
+    ) return true
+
+    // Special cases: Kyiv city belongs to Kyiv oblast stem ("Київськ")
+    if (t.equals("Київськ", ignoreCase = true) &&
+        (name.contains("Київ", ignoreCase = true) || key.contains("kyiv", ignoreCase = true) || oblast.contains("Київ", ignoreCase = true))
+    ) return true
+    // Sevastopol city belongs to Crimea stem ("Крим")
+    if (t.equals("Крим", ignoreCase = true) &&
+        (name.contains("Севастополь", ignoreCase = true) || key.contains("sevastopol", ignoreCase = true) || oblast.contains("Севастополь", ignoreCase = true))
+    ) return true
+
+    return false
 }
 
 /**
@@ -48,13 +61,25 @@ fun OblastAlert.inOblast(token: String): Boolean {
  */
 fun OblastAlert.isOblastWide(): Boolean {
     // NEPTUN tags the whole-oblast entries explicitly; fall back to the name heuristic only
-    // for sources that don't tag (Ubilling/Test). Heuristic alone misreads e.g. "Севастополь",
-    // which is oblast-wide but whose name lacks "область"/"республіка".
+    // for sources that don't tag (Ubilling/Test).
     wide?.let { return it }
-    val k = key.lowercase()
-    val n = name.lowercase()
-    return k.contains("область") || n.contains("область") ||
-        k.contains("республіка") || n.contains("республіка")
+    val k = key.lowercase().trim()
+    val n = name.lowercase().trim()
+    if (k.contains("область") || n.contains("область") ||
+        k.contains("республіка") || n.contains("республіка") ||
+        k.contains("автономна") || n.contains("автономна") ||
+        k == "м. київ" || n == "м. київ" || k == "київ" || n == "київ" || k == "kyiv" ||
+        k == "м. севастополь" || n == "м. севастополь" || k == "севастополь" || n == "севастополь"
+    ) return true
+
+    // Detect oblast-wide adjectival names (e.g. "Харківська", "odeska") that are not raions/hromadas
+    val isSubRegion = n.contains("район") || n.contains("р-н") || n.contains("громада") || n.contains(" тг") ||
+        k.contains("район") || k.contains("р-н") || k.contains("громада") || k.contains(" тг")
+    if (!isSubRegion && (n.endsWith("ська") || n.endsWith("зька") || n.endsWith("цька") || k.endsWith("ska") || k.endsWith("zka") || k.endsWith("tska"))) {
+        return true
+    }
+
+    return false
 }
 
 /**

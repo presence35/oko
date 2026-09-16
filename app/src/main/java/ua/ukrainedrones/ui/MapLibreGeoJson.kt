@@ -69,22 +69,18 @@ object MapLibreGeoJson {
         val features = mutableListOf<String>()
         for (stem in oblastTokens) {
             val poly = CompactOblastBoundaries.get(stem) ?: continue
-            val ringStrings = poly.rings.filter { it.pointCount >= 3 }.map { ring ->
+            for (ring in poly.rings) {
+                if (ring.pointCount < 3) continue
                 val pts = ring.toPoints().joinToString(",") { "[${it.lon},${it.lat}]" }
-                "[$pts]"
-            }
-            if (ringStrings.isNotEmpty()) {
-                features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[${ringStrings.joinToString(",")}]}}""")
+                features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$pts]]}}""")
             }
         }
         for ((stem, raion) in raionKeys) {
             val poly = CompactRaionBoundaries.forKey(stem, raion) ?: continue
-            val ringStrings = poly.rings.filter { it.pointCount >= 3 }.map { ring ->
+            for (ring in poly.rings) {
+                if (ring.pointCount < 3) continue
                 val pts = ring.toPoints().joinToString(",") { "[${it.lon},${it.lat}]" }
-                "[$pts]"
-            }
-            if (ringStrings.isNotEmpty()) {
-                features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[${ringStrings.joinToString(",")}]}}""")
+                features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$pts]]}}""")
             }
         }
         return """{"type":"FeatureCollection","features":[${features.joinToString(",")}]}"""
