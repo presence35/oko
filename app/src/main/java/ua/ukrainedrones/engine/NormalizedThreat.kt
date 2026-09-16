@@ -6,6 +6,24 @@ import androidx.compose.runtime.Immutable
 data class LatLng(val lat: Double, val lon: Double)
 
 @Immutable
+data class BoundingBox(
+    val latNorth: Double,
+    val lonEast: Double,
+    val latSouth: Double,
+    val lonWest: Double
+) {
+    val north: Double get() = latNorth
+    val east: Double get() = lonEast
+    val south: Double get() = latSouth
+    val west: Double get() = lonWest
+
+    val maxLat: Double get() = latNorth
+    val maxLon: Double get() = lonEast
+    val minLat: Double get() = latSouth
+    val minLon: Double get() = lonWest
+}
+
+@Immutable
 data class TrailPoint(val lat: Double, val lon: Double, val tMillis: Long?)
 
 data class NormalizedThreat(

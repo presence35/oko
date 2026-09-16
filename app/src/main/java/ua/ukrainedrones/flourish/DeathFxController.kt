@@ -18,13 +18,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.util.TileSystem
-import org.osmdroid.views.MapView
+import ua.ukrainedrones.engine.LatLng
+import ua.ukrainedrones.ui.MapLibreBridge
 import ua.ukrainedrones.UA_TIGHT_MIN_LAT
 import ua.ukrainedrones.UA_TIGHT_MAX_LAT
 import ua.ukrainedrones.UA_TIGHT_MIN_LON
 import ua.ukrainedrones.UA_TIGHT_MAX_LON
+import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.random.Random
 
 private val UA_MIN_LAT = UA_TIGHT_MIN_LAT
@@ -47,7 +48,7 @@ private const val STRIKE_ZOOM_LEVEL = 10.0
  */
 class DeathFxController(
     private val context: Context,
-    private val mapView: () -> MapView?,
+    private val bridge: () -> MapLibreBridge?,
     private val iconFor: (ThreatType) -> Drawable,
     /** Formats the FIRED audit line, e.g. "Shots: 21 · Groups: 10" — localized by the caller. */
     private val showDetail: (records: Int, groups: Int) -> String,
@@ -87,7 +88,7 @@ class DeathFxController(
     // The original camera position before the first strike in a sequence — persists across
     // rapid successive strikes so the camera always returns to where the user actually was,
     // not to whatever mid-animation position the second strike captured.
-    private var savedHome: GeoPoint? = null
+    private var savedHome: LatLng? = null
     private var savedHomeZoom: Double = 0.0
     // The running tally-tap replay, so a red alert can cancel it mid-show (clear()).
     private var replayJob: Job? = null
@@ -157,12 +158,11 @@ class DeathFxController(
         savedHome = null
         cameraReturnJob?.cancel()
         if (home != null) {
-            val mv = mapView()
-            if (mv != null) {
+            val b = bridge()
+            if (b != null) {
                 cameraReturnJob = scope.launch {
                     forceShowAllCities.value = true
-                    mv.controller.setZoom(homeZoom)
-                    mv.controller.animateTo(home)
+                    b.animateTo(home.lat, home.lon, homeZoom)
                     forceShowAllCities.value = false
                 }
             }
@@ -250,7 +250,7 @@ class DeathFxController(
      *  caller can skip its side effects (marker hide, user-shot grace). */
     fun strike(
         id: String? = null,
-        geo: GeoPoint,
+        geo: LatLng,
         icon: Drawable? = null,
         rotationDeg: Float = 0f,
         alpha: Float = 1f,
@@ -261,23 +261,35 @@ class DeathFxController(
         return true
     }
 
+    fun strike(
+        id: String? = null,
+        lat: Double,
+        lon: Double,
+        icon: Drawable? = null,
+        rotationDeg: Float = 0f,
+        alpha: Float = 1f,
+        type: ThreatType = ThreatType.UNKNOWN
+    ): Boolean = strike(id, LatLng(lat, lon), icon, rotationDeg, alpha, type)
+
     /** Follow-up projectile for an already-destroyed threat: no icon, never explodes. Returns
      *  true only when a dud actually launched (master gate + a valid edge origin). */
-    fun strikeDud(id: String?, geo: GeoPoint): Boolean {
+    fun strikeDud(id: String?, geo: LatLng): Boolean {
         if (!justFunEnabled.value) return false
         val origin = randomEdgeOrigin() ?: return false
         overlay.spawnDud(id, geo, origin)
         return true
     }
 
+    fun strikeDud(id: String?, lat: Double, lon: Double): Boolean = strikeDud(id, LatLng(lat, lon))
+
     /** A random point exactly on the viewport edge (0px), converted to geo and clamped to
      *  Ukraine — the bullet always glides in from the screen edge, and can never originate in
      *  another country even when the whole country fills the screen. */
-    private fun randomEdgeOrigin(): GeoPoint? {
-        val mapView = mapView() ?: return null
-        if (mapView.width <= 0 || mapView.height <= 0) return null
-        val w = mapView.width.toFloat()
-        val h = mapView.height.toFloat()
+    private fun randomEdgeOrigin(): LatLng? {
+        val b = bridge() ?: return null
+        if (b.width <= 0 || b.height <= 0) return null
+        val w = b.width.toFloat()
+        val h = b.height.toFloat()
         val t = Random.nextFloat()
         val (px, py) = when (Random.nextInt(4)) {
             0 -> 0f to t * h      // left edge
@@ -285,10 +297,10 @@ class DeathFxController(
             2 -> t * w to 0f      // top edge
             else -> t * w to h    // bottom edge
         }
-        val geo = mapView.projection.fromPixels(px.toInt(), py.toInt())
-        return GeoPoint(
-            geo.latitude.coerceIn(UA_MIN_LAT, UA_MAX_LAT),
-            geo.longitude.coerceIn(UA_MIN_LON, UA_MAX_LON)
+        val geo = b.fromPixels(px, py) ?: return null
+        return LatLng(
+            geo.lat.coerceIn(UA_MIN_LAT, UA_MAX_LAT),
+            geo.lon.coerceIn(UA_MIN_LON, UA_MAX_LON)
         )
     }
 
@@ -296,36 +308,31 @@ class DeathFxController(
      *  back to where the user was once the explosion has finished. It never scrolls to the
      *  launching city. Off: the camera stays still while the animation plays. A fresh strike
      *  replaces any pending return so rapid successive shots don't fight over the camera. */
-            fun followStrike(target: GeoPoint, followBullet: Boolean) {
+    fun followStrike(target: LatLng, followBullet: Boolean) {
         // A running replay owns the camera (group jumps + precise return home) — a live
         // resolution's follow-strike would fight its final pan with a competing animateTo.
         if (replayJob?.isActive == true) return
-        val mapView = mapView() ?: return
-        if (mapView.width <= 0 || mapView.height <= 0 || !followBullet) return
-        // Snapshot the coordinates: osmdroid's getMapCenter() returns its projection's reusable
-        // internal point, which keeps mutating as the camera moves — holding it across the
-        // animation would "return" to whatever that shared point held later (a random spot).
-        // On the first strike, save the camera position as home; rapid successive strikes reuse
-        // the saved home so the camera always returns to where the user actually started.
+        val b = bridge() ?: return
+        if (b.width <= 0 || b.height <= 0 || !followBullet) return
         if (savedHome == null) {
-            savedHome = GeoPoint(mapView.mapCenter.latitude, mapView.mapCenter.longitude)
-            savedHomeZoom = mapView.zoomLevelDouble
+            savedHome = LatLng(b.centerLat, b.centerLon)
+            savedHomeZoom = b.zoom
         }
         val home = savedHome!!
         val homeZoom = savedHomeZoom
         cameraReturnJob?.cancel()
         cameraReturnJob = scope.launch {
             forceShowAllCities.value = true
-            mapView.controller.setZoom(STRIKE_ZOOM_LEVEL)
-            mapView.controller.animateTo(target)
+            b.animateTo(target.lat, target.lon, STRIKE_ZOOM_LEVEL, 400)
             delay(DEATH_EXPLOSION_START_MS + DEATH_EXPLOSION_LEN_MS + 300L)
             savedHome = null
             forceShowAllCities.value = false
-            val mv = this@DeathFxController.mapView() ?: return@launch
-            mv.controller.setZoom(homeZoom)
-            mv.controller.animateTo(home)
+            bridge()?.animateTo(home.lat, home.lon, homeZoom, 400)
         }
     }
+
+    fun followStrike(lat: Double, lon: Double, followBullet: Boolean) =
+        followStrike(LatLng(lat, lon), followBullet)
 
     /** Fun haptics: a short crisp "shot" as the bullet fires, then a longer pulse when it
      *  detonates. USAGE_ALARM keeps both audible as vibration even when the system "touch
@@ -359,11 +366,11 @@ class DeathFxController(
      */
     suspend fun replay(records: List<FlourishRecord>) {
         if (!justFunEnabled.value) return
-        val mapView = mapView() ?: return
+        val b = bridge() ?: return
         if (records.isEmpty()) return
         // Snapshot — see followStrike; getMapCenter() hands back a live mutable point.
-        val preCenter = GeoPoint(mapView.mapCenter.latitude, mapView.mapCenter.longitude)
-        val preZoom = mapView.zoomLevelDouble
+        val preCenter = LatLng(b.centerLat, b.centerLon)
+        val preZoom = b.zoom
         // Remember the home for an early eject (clear) too — not just the natural ending.
         if (savedHome == null) {
             savedHome = preCenter
@@ -379,8 +386,8 @@ class DeathFxController(
         val groups = if (allUkraine) {
             clusterFlourishByOblast(records)
         } else {
-            val mpp = TileSystem.GroundResolution(mapView.mapCenter.latitude, mapView.zoomLevelDouble)
-            val groupDist = mpp * mapView.width * 0.45f
+            val mpp = 156543.03392 * cos(Math.toRadians(b.centerLat)) / 2.0.pow(b.zoom)
+            val groupDist = mpp * b.width * 0.45f
             clusterFlourish(records, groupDist.toDouble())
         }
         DebugLog.recordFlourish(
@@ -388,7 +395,7 @@ class DeathFxController(
             detail = showDetail(records.size, groups.size),
             now = System.currentTimeMillis()
         )
-                                var index = 0
+        var index = 0
         val lastGi = groups.lastIndex
         groups.forEachIndexed { gi, group ->
             val finalGroup = gi == lastGi
@@ -399,7 +406,7 @@ class DeathFxController(
             group.forEachIndexed { k, rec ->
                 overlay.spawn(
                     id = "flourish:${index + k + 1}",
-                    geo = GeoPoint(rec.lat, rec.lon),
+                    geo = LatLng(rec.lat, rec.lon),
                     origin = randomEdgeOrigin(),
                     icon = iconFor(rec.type),
                     rotationDeg = 0f,
@@ -412,7 +419,7 @@ class DeathFxController(
             // Jump straight onto this group (no animated glide — bullets must never fly while
             // the camera is still moving), then re-point pending flights to the new edges.
             val box = if (allUkraine) flourishGroupBoundingBox(group) else flourishesBoundingBox(group, null)
-            runCatching { mapView.zoomToBoundingBox(box, false) }
+            runCatching { b.zoomToBounds(box.maxLat, box.maxLon, box.minLat, box.minLon, paddingPx = 40, durationMs = 0) }
             overlay.rebasePendingOrigins { randomEdgeOrigin() }
             // Fire loop aligned to the pre-spawned schedule (drift-free vs the spawn clock):
             // shot k launches at fireBase + k*STAGGER; haptic + footer progress advance per shot.
@@ -438,9 +445,8 @@ class DeathFxController(
         }
         _replayProgress.value = null
         // Back home, at peace.
-        val mv = mapView() ?: return
-        mv.controller.setZoom(preZoom)
-        mv.controller.animateTo(preCenter)
+        val endBridge = bridge() ?: return
+        endBridge.animateTo(preCenter.lat, preCenter.lon, preZoom, 500)
         savedHome = null
     }
 }

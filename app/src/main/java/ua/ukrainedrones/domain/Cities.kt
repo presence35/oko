@@ -8,11 +8,8 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PointF
 import androidx.compose.runtime.Immutable
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.Projection
-import org.osmdroid.views.overlay.Overlay
 
 /** Zoom-dependent label prominence: oblast seats early, big non-seat cities mid-zoom,
  *  everything else only up close. */
@@ -719,7 +716,7 @@ class CityLabelOverlay(
     private val showMediumCities: Boolean = true,
     private val showSmallCities: Boolean = true,
     private val forceShowAllProvider: () -> Boolean = { false }
-) : Overlay() {
+) {
 
     private val density = context.resources.displayMetrics.density
     private val paint = Paint().apply {
@@ -727,13 +724,14 @@ class CityLabelOverlay(
         setShadowLayer(3f, 1f, 1f, Color.BLACK)
         textAlign = Paint.Align.CENTER
     }
-    private val reuse = android.graphics.Point()
 
     private fun name(c: City) = if (lang == AppLanguage.UA) c.nameUa else c.nameEn
 
-    override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
-        if (shadow) return
-        val zoom = mapView.zoomLevelDouble.coerceAtLeast(0.0)
+    fun draw(
+        canvas: Canvas,
+        zoom: Double,
+        project: (lat: Double, lon: Double) -> PointF?
+    ) {
         val forceAll = forceShowAllProvider()
         for (c in Cities.ALL) {
             val minZoom = when (c.tier) {
@@ -748,9 +746,9 @@ class CityLabelOverlay(
                 CityTier.MINOR -> if (forceAll || showSmallCities) 10.0 else Double.MAX_VALUE
             }
             if (zoom < minZoom) continue
-            mapView.projection.toPixels(GeoPoint(c.lat, c.lon), reuse)
-            if (reuse.x < -240 || reuse.x > canvas.width + 240 ||
-                reuse.y < -60 || reuse.y > canvas.height + 60
+            val pt = project(c.lat, c.lon) ?: continue
+            if (pt.x < -240f || pt.x > canvas.width + 240f ||
+                pt.y < -60f || pt.y > canvas.height + 60f
             ) continue
             paint.textSize = (when (c.tier) {
                 CityTier.MAJOR -> (10.5 + (zoom - 4.0) * 1.2).coerceIn(10.5, 17.0)
@@ -765,7 +763,7 @@ class CityLabelOverlay(
                 level == AlertLevel.YELLOW -> 0xFFFFD740.toInt()
                 else -> 0xFFEBEBEB.toInt()
             }
-            canvas.drawText(name(c), reuse.x.toFloat(), reuse.y.toFloat() - 6f * density, paint)
+            canvas.drawText(name(c), pt.x, pt.y - 6f * density, paint)
         }
     }
 }

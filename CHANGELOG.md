@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Migrated the map rendering engine to MapLibre Native SDK with hardware-accelerated OpenGL raster/vector layers and removed osmdroid / Migrated the map rendering engine to MapLibre Native SDK with hardware-accelerated OpenGL raster/vector layers and removed osmdroid
+- Added MapLibre GeoJSON layer manager and camera coordinator bridging boundaries, alert fills, and range circles / Added MapLibre GeoJSON layer manager and camera coordinator bridging boundaries, alert fills, and range circles
+- Added MapLibreStyle and MapLibreHostView composable binding the dark Carto basemap to native Android lifecycle / Added MapLibreStyle and MapLibreHostView composable binding the dark Carto basemap to native Android lifecycle
+- Added MapLibre Native SDK dependency and configured universal multi-ABI APK packaging / Added MapLibre Native SDK dependency and configured universal multi-ABI APK packaging
+- Decoupled flourish, overlay, and city label rendering from osmdroid onto a native projection lambda layer / Decoupled flourish, overlay, and city label rendering from osmdroid onto a native projection lambda layer
 - Long-press shoot-down now works during active alerts, and shot threats reliably reappear after 2.1s / Long-press shoot-down now works during active alerts, and shot threats reliably reappear after 2.1s
 - 51 cities across all alert-capable oblasts promoted from MINOR to MEDIUM tier so their names appear at zoom 6.5 instead of 10.0 when under air-raid alert / 51 міст у всіх областях, здатних мати повітряну тривогу, підвищено з MINOR до MEDIUM, щоб їхні назви з'являлися на рівні наближення 6.5 замість 10.0 під час повітряної тривоги
 - Explosion animation now varies per threat type — core flash colour, spark count/colour, ring intensity, icon shards, and optional HD extras (smoke puffs, debris) / Вибухова анімація тепер змінюється залежно від типу загрози — колір спалаху, кількість і колір іскор, інтенсивність кілець, уламки іконки та додаткові HD-ефекти (дим, уламки)

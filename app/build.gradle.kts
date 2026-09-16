@@ -44,6 +44,9 @@ android {
         buildConfigField("String", "CARTO_API_KEY", "\"$cartoApiKey\"")
         buildConfigField("String", "TELEGRAM_BOT_TOKEN", "\"$telegramBotToken\"")
         buildConfigField("String", "TELEGRAM_CHAT_ID", "\"$telegramChatId\"")
+        ndk {
+            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
+        }
     }
 
     signingConfigs {
@@ -100,6 +103,12 @@ android {
         kotlinCompilerExtensionVersion = "1.5.14"
     }
 
+    splits {
+        abi {
+            isEnable = false
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -128,8 +137,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    // OSMdroid — free, no API key, no Google account needed
-    implementation("org.osmdroid:osmdroid-android:6.1.18")
+    // MapLibre GL Native
+    implementation("org.maplibre.gl:android-sdk:11.8.0")
 
     // WebSocket client
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

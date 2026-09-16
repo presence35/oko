@@ -44,7 +44,6 @@ import ua.ukrainedrones.engine.SpeedSource
 import ua.ukrainedrones.engine.ZoneParams
 import ua.ukrainedrones.service.ServiceState
 import ua.ukrainedrones.service.MonitoringStatus
-import org.osmdroid.util.GeoPoint
 import kotlin.math.roundToLong
 import kotlin.random.Random
 

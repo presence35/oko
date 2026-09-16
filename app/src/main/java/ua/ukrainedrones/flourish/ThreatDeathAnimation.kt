@@ -1,5 +1,8 @@
 package ua.ukrainedrones
 
+import android.graphics.PointF
+import ua.ukrainedrones.engine.LatLng
+
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -14,9 +17,6 @@ import android.os.SystemClock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Overlay
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -70,8 +70,8 @@ private enum class ExplosionKind {
 
 private class ActiveDeath(
     val id: String?,
-    val geo: GeoPoint,
-    var origin: GeoPoint?,
+    val geo: LatLng,
+    var origin: LatLng?,
     val start: Long,
     val icon: Drawable?,
     val rotationDeg: Float,
@@ -83,7 +83,7 @@ private class ActiveDeath(
     var shards: Array<Shard>? = null
 }
 
-class ThreatDeathOverlay : Overlay() {
+class ThreatDeathOverlay {
 
     private val deaths = mutableListOf<ActiveDeath>()
 
@@ -101,7 +101,7 @@ class ThreatDeathOverlay : Overlay() {
 
     fun isActiveFor(id: String?): Boolean = id != null && deaths.any { it.id == id }
 
-    fun rebasePendingOrigins(newOrigin: () -> GeoPoint?) {
+    fun rebasePendingOrigins(newOrigin: () -> LatLng?) {
         val now = SystemClock.elapsedRealtime()
         for (d in deaths) {
             if (now < d.start) d.origin = newOrigin()
@@ -110,8 +110,8 @@ class ThreatDeathOverlay : Overlay() {
 
     fun spawn(
         id: String? = null,
-        geo: GeoPoint,
-        origin: GeoPoint? = null,
+        geo: LatLng,
+        origin: LatLng? = null,
         icon: Drawable? = null,
         rotationDeg: Float = 0f,
         alpha: Float = 1f,
@@ -132,7 +132,7 @@ class ThreatDeathOverlay : Overlay() {
         syncActive()
     }
 
-    fun spawnDud(id: String?, geo: GeoPoint, origin: GeoPoint?) {
+    fun spawnDud(id: String?, geo: LatLng, origin: LatLng?) {
         if (origin == null || deaths.size >= MAX_DEATHS) return
         deaths.add(
             ActiveDeath(id, geo, origin, SystemClock.elapsedRealtime(), null, 0f, 1f, dud = true)
@@ -154,8 +154,6 @@ class ThreatDeathOverlay : Overlay() {
     private val sparkPaint = Paint().apply { isAntiAlias = true }
     private val bulletPaint = Paint().apply { isAntiAlias = true }
     private var glowBitmap: Bitmap? = null
-    private val reuse = android.graphics.Point()
-    private val reuseOrigin = android.graphics.Point()
     private val reuseRect = RectF()
 
     private var bulletBitmap: Bitmap? = null
@@ -257,10 +255,16 @@ class ThreatDeathOverlay : Overlay() {
         }
     }
 
-    override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
-        if (shadow) return
+    fun draw(
+        canvas: Canvas,
+        density: Float,
+        viewWidth: Float,
+        viewHeight: Float,
+        resources: android.content.res.Resources,
+        zoom: Double = 10.0,
+        project: (lat: Double, lon: Double) -> PointF?
+    ) {
         if (deaths.isEmpty()) return
-        val density = mapView.context.resources.displayMetrics.density
         val now = SystemClock.elapsedRealtime()
 
         deaths.removeAll {
@@ -279,9 +283,9 @@ class ThreatDeathOverlay : Overlay() {
                     val w = icon.intrinsicWidth.coerceAtLeast(1) / 2f
                     val h = icon.intrinsicHeight.coerceAtLeast(1) / 2f
                     icon.alpha = (d.alpha * 255).toInt()
-                    mapView.projection.toPixels(d.geo, reuse)
+                    val pt = project(d.geo.lat, d.geo.lon) ?: continue
                     canvas.save()
-                    canvas.translate(reuse.x.toFloat(), reuse.y.toFloat())
+                    canvas.translate(pt.x, pt.y)
                     canvas.rotate(d.rotationDeg)
                     icon.setBounds(-w.toInt(), -h.toInt(), w.toInt(), h.toInt())
                     icon.draw(canvas)
@@ -292,9 +296,9 @@ class ThreatDeathOverlay : Overlay() {
             val dur = d.durationMs.toFloat()
             val boomT = DEATH_EXPLOSION_START_MS / dur
             val boomLenT = (d.durationMs - DEATH_EXPLOSION_START_MS) / dur
-            mapView.projection.toPixels(d.geo, reuse)
-            val x = reuse.x.toFloat()
-            val y = reuse.y.toFloat()
+            val pt = project(d.geo.lat, d.geo.lon) ?: continue
+            val x = pt.x
+            val y = pt.y
             val t = (rawElapsed.toFloat() / dur).coerceIn(0f, 1f)
 
             d.icon?.let { icon ->
@@ -311,16 +315,17 @@ class ThreatDeathOverlay : Overlay() {
             }
 
             if (t in 0f..boomT && d.origin != null) {
-                mapView.projection.toPixels(d.origin, reuseOrigin)
-                val ox = reuseOrigin.x.toFloat()
-                val oy = reuseOrigin.y.toFloat()
-                val dx = x - ox
-                val dy = y - oy
-                val dist = sqrt(dx * dx + dy * dy)
-                val p = (t / boomT).coerceIn(0f, 1f)
-                if (dist > 1f) {
-                    val W = mapView.width.toFloat()
-                    val H = mapView.height.toFloat()
+                val oPt = project(d.origin!!.lat, d.origin!!.lon)
+                if (oPt != null) {
+                    val ox = oPt.x
+                    val oy = oPt.y
+                    val dx = x - ox
+                    val dy = y - oy
+                    val dist = sqrt(dx * dx + dy * dy)
+                    val p = (t / boomT).coerceIn(0f, 1f)
+                    if (dist > 1f) {
+                        val W = viewWidth
+                        val H = viewHeight
                     var tnear = -Float.MAX_VALUE
                     var tfar = Float.MAX_VALUE
                     val t1x = -ox / dx
@@ -351,7 +356,7 @@ class ThreatDeathOverlay : Overlay() {
                         canvas.translate(bx, by)
                         canvas.rotate((Math.toDegrees(atan2(headY.toDouble(), headX.toDouble())) + 90).toFloat())
                         val bitmap = bulletBitmap ?: run {
-                            BitmapFactory.decodeResource(mapView.context.resources, R.drawable.bullet)
+                            BitmapFactory.decodeResource(resources, R.drawable.bullet)
                                 ?.also { bulletBitmap = it }
                         }
                         if (bitmap != null) {
@@ -370,11 +375,12 @@ class ThreatDeathOverlay : Overlay() {
                         canvas.restore()
                     }
                 }
+                }
             }
 
             if (t >= boomT && !d.dud) {
                 val e = ((t - boomT) / boomLenT).coerceIn(0f, 1f)
-                val zoomScale = ((mapView.zoomLevelDouble - 9.0) / 4.0 * 2.0 + 1.0).coerceIn(1.0, 3.0).toFloat()
+                val zoomScale = ((zoom - 9.0) / 4.0 * 2.0 + 1.0).coerceIn(1.0, 3.0).toFloat()
                 val maxR = 46f * density * zoomScale
                 val fade = 1f - e
                 val hq = highQuality
@@ -462,10 +468,10 @@ class ThreatDeathOverlay : Overlay() {
                 val sparkR = (if (kind == ExplosionKind.FPV) 1.8f else 2.5f) * density * fade
                 val actualSparkCount = if (hq) sparkCount + 4 else sparkCount
                 repeat(actualSparkCount) { i ->
-                    val a = 2.0 * PI * i / actualSparkCount + 0.3 + (i * 0.17)
+                    val a = 2.0 * Math.PI * i / actualSparkCount + 0.3 + (i * 0.17)
                     canvas.drawCircle(
-                        x + (cos(a) * sparkDist).toFloat(),
-                        y + (sin(a) * sparkDist).toFloat(),
+                        (x + kotlin.math.cos(a) * sparkDist).toFloat(),
+                        (y + kotlin.math.sin(a) * sparkDist).toFloat(),
                         sparkR, sparkPaint
                     )
                 }

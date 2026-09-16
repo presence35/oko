@@ -1,6 +1,5 @@
 package ua.ukrainedrones
 
-import org.osmdroid.util.BoundingBox
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

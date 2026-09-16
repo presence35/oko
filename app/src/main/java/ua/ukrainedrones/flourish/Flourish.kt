@@ -1,16 +1,13 @@
 package ua.ukrainedrones
 
 import ua.ukrainedrones.community.CompactOblastBoundaries
+import ua.ukrainedrones.engine.BoundingBox
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.canonicalToken
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.matchOblast
 
 import androidx.compose.runtime.Immutable
-import org.osmdroid.util.BoundingBox
-
-/** A resolved threat remembered by the service for the tally-tap replay flourish. */
-@Immutable
 data class FlourishRecord(
     val lat: Double,
     val lon: Double,
