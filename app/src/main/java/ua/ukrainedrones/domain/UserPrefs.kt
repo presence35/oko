@@ -1,7 +1,6 @@
 package ua.ukrainedrones
 
 import android.content.Context
-import androidx.compose.runtime.Immutable
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -11,98 +10,9 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import ua.ukrainedrones.data.ThreatType
 
 private val Context.dataStore by preferencesDataStore(name = "user_prefs")
-
-enum class AppLanguage { UA, EN }
-
-enum class ThreatCardSize { SMALL, LARGE }
-
-enum class ThreatIconSet { PHOTO, ARMY, COMIC, RUSSIAN }
-
-/** How same-coordinate threats render on the map. */
-enum class OverlapMode { DEFAULT, GRID, SPREAD, COUNT }
-
-@Immutable
-data class UserPreferences(
-    val language: AppLanguage = AppLanguage.UA,
-    val languageChosen: Boolean = false,
-    val wizardCompleted: Boolean = false,
-    val slowRedKm: Int = 20,
-    val slowYellowKm: Int = 50,
-    val fastRedMin: Int = 5,
-    val fastYellowMin: Int = 20,
-    val slowRedArmed: Boolean = true,
-    val slowYellowArmed: Boolean = true,
-    val fastRedArmed: Boolean = true,
-    val fastYellowArmed: Boolean = true,
-    val officialRedAlertsEnabled: Boolean = true,
-    val yellowAlertsEnabled: Boolean = true,
-    val sirenOverride: Boolean = false,
-    val fallingDebrisDelaySec: Int = 0,
-    val disclaimerCollapsed: Boolean = false,
-    val disclaimerReadCount: Int = 0,
-    val followMe: Boolean = true,
-    val pinnedCity: String? = null,
-    val criticalOfflineOverride: Boolean = true,
-    val criticalOfflineBypassSilent: Boolean = false,
-    val threatCardSize: ThreatCardSize = ThreatCardSize.LARGE,
-    val threatIconSet: ThreatIconSet = ThreatIconSet.PHOTO,
-    val overlapMode: OverlapMode = OverlapMode.DEFAULT,
-    val showMapScale: Boolean = true,
-    val showMediumCities: Boolean = true,
-    val showSmallCities: Boolean = true,
-    val showLargeCities: Boolean = true,
-    val deathAnimationEnabled: Boolean = true,
-    val followBullet: Boolean = true,
-    val highQualityExplosions: Boolean = true,
-    val neutralizedTallyEnabled: Boolean = true,
-    val neutralizedTallyAllUkraine: Boolean = false,
-    val legacyCacheCleaned: Boolean = false,
-    val fastGroupCollapsed: Boolean = false,
-    val slowGroupCollapsed: Boolean = false,
-    val batteryOnboardShown: Boolean = false,
-    val permissionPromptDeferred: Boolean = false,
-    val nightEnabled: Boolean = true,
-    val nightStartMin: Int = 22 * 60,
-    val nightEndMin: Int = 7 * 60,
-    val nightUseCustomZones: Boolean = false,
-    val nightSlowRedKm: Int = 20,
-    val nightSlowYellowKm: Int = 50,
-    val nightFastRedMin: Int = 5,
-    val nightFastYellowMin: Int = 20,
-    val nightSlowRedArmed: Boolean = true,
-    val nightSlowYellowArmed: Boolean = true,
-    val nightFastRedArmed: Boolean = true,
-    val nightFastYellowArmed: Boolean = true,
-    val nightZoneSirenOverride: Boolean = false,
-    val nightOfficialSirenOverride: Boolean = false,
-    val nightOfficialAlertCityScope: Boolean = false,
-    val flybyAnimationEnabled: Boolean = true,
-    val threatIconZoom: Boolean = true,
-    val sheltersEnabled: Boolean = true,
-    val sheltersWithKidsEnabled: Boolean = true,
-    val periodicGps: Boolean = false,
-    val calmMessagesEnabled: Boolean = true,
-    val hapticsEnabled: Boolean? = null,
-    val officialAlertCityScope: Boolean = false,
-    val justFunMasterEnabled: Boolean = false,
-    val bootRestartEnabled: Boolean = true,
-    val fillAlertRegions: Boolean = false,
-    val showBorders: Boolean = true,
-    val showRegionBorders: Boolean = false,
-    val settingsHintRemaining: Int = 3,
-    val threatToggleHintRemaining: Int = 3,
-    val flourishEjectHintRemaining: Int = 3,
-    val shelterTipStage: Int = 0,
-    val mapVisibleTypes: Set<ThreatType> = ThreatType.values().toSet(),
-    val alertEnabledTypes: Set<ThreatType> = ThreatType.values().toSet()
-) {
-    val officialYellowAlertsEnabled: Boolean get() = yellowAlertsEnabled
-    val iconSet: ThreatIconSet get() = threatIconSet
-    val sheltersWithKids: Boolean get() = sheltersWithKidsEnabled
-    val cardSize: ThreatCardSize get() = threatCardSize
-}
 
 class UserPrefs(private val context: Context) {
 
