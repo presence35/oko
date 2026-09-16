@@ -313,9 +313,10 @@ internal fun resolveThreatPose(
 }
 
 internal data class ThreatScreenPlacement(
-    val screenX: Float?,
-    val screenY: Float?,
-    val chip: String?
+    val offsetDx: Float = 0f,
+    val offsetDy: Float = 0f,
+    val chip: String? = null,
+    val visible: Boolean = true
 )
 
 private fun chipLabel(t: NormalizedThreat, chip: String?): String? {
@@ -327,7 +328,7 @@ private fun chipLabel(t: NormalizedThreat, chip: String?): String? {
     }
 }
 
-/** Deterministic screen-space de-overlap for threats sharing a coordinate. */
+/** Deterministic screen-space de-overlap for threats sharing a coordinate or screen area. */
 private fun deOverlapThreats(
     poses: List<Triple<String, LatLng, String>>, // id, pose, type
     project: (Double, Double) -> PointF?,
@@ -336,32 +337,40 @@ private fun deOverlapThreats(
     viewWidth: Int,
     viewHeight: Int
 ): Map<String, ThreatScreenPlacement> {
-    val raw = HashMap<String, ThreatScreenPlacement>(poses.size)
+    val out = HashMap<String, ThreatScreenPlacement>(poses.size)
     if (mode == OverlapMode.DEFAULT || viewWidth <= 0 || viewHeight <= 0) {
-        for ((id, pose, _) in poses) {
-            val pt = project(pose.lat, pose.lon)
-            raw[id] = ThreatScreenPlacement(pt?.x, pt?.y, null)
+        for ((id, _, _) in poses) {
+            out[id] = ThreatScreenPlacement()
         }
-        return raw
+        return out
     }
 
-    val cells = HashMap<Pair<Int, Int>, MutableList<Triple<String, LatLng, String>>>()
+    val clusters = mutableListOf<MutableList<Triple<String, LatLng, String>>>()
+    val thresholdSq = (stepPx * stepPx).toFloat()
     for (item in poses) {
-        val (_, pose, _) = item
-        val pt = project(pose.lat, pose.lon) ?: continue
-        val key = (pt.x.toInt() / stepPx) to (pt.y.toInt() / stepPx)
-        cells.getOrPut(key) { mutableListOf() }.add(item)
+        val pt = project(item.second.lat, item.second.lon) ?: continue
+        var placed = false
+        for (cluster in clusters) {
+            val firstPt = project(cluster[0].second.lat, cluster[0].second.lon) ?: continue
+            val dx = pt.x - firstPt.x
+            val dy = pt.y - firstPt.y
+            if (dx * dx + dy * dy <= thresholdSq) {
+                cluster.add(item)
+                placed = true
+                break
+            }
+        }
+        if (!placed) {
+            clusters.add(mutableListOf(item))
+        }
     }
-    val out = HashMap<String, ThreatScreenPlacement>(poses.size)
-    for (members in cells.values) {
+
+    for (members in clusters) {
         val sorted = members.sortedBy { it.first }
         if (sorted.size == 1) {
-            val (id, pose, _) = sorted[0]
-            val pt = project(pose.lat, pose.lon)
-            out[id] = ThreatScreenPlacement(pt?.x, pt?.y, null)
+            out[sorted[0].first] = ThreatScreenPlacement()
             continue
         }
-        val firstPt = project(sorted[0].second.lat, sorted[0].second.lon) ?: continue
         when (mode) {
             OverlapMode.GRID -> {
                 val cols = kotlin.math.ceil(kotlin.math.sqrt(sorted.size.toDouble())).toInt().coerceAtLeast(1)
@@ -369,15 +378,15 @@ private fun deOverlapThreats(
                 sorted.forEachIndexed { i, (id, _, _) ->
                     val dx = (i % cols - (cols - 1) / 2.0) * stepPx
                     val dy = (i / cols - (rows - 1) / 2.0) * stepPx
-                    out[id] = ThreatScreenPlacement((firstPt.x + dx).toFloat(), (firstPt.y + dy).toFloat(), null)
+                    out[id] = ThreatScreenPlacement(dx.toFloat(), dy.toFloat(), null, true)
                 }
             }
             OverlapMode.SPREAD -> {
-                val half = stepPx / 2.0
+                val half = stepPx * 0.75f
                 sorted.forEachIndexed { i, (id, _, _) ->
-                    val dx = i * half
-                    val dy = if (i % 2 == 0) 0.0 else half
-                    out[id] = ThreatScreenPlacement((firstPt.x + dx).toFloat(), (firstPt.y + dy).toFloat(), null)
+                    val dx = (i - (sorted.size - 1) / 2.0) * half
+                    val dy = if (i % 2 == 0) -half * 0.25f else half * 0.25f
+                    out[id] = ThreatScreenPlacement(dx.toFloat(), dy.toFloat(), null, true)
                 }
             }
             OverlapMode.COUNT -> {
@@ -391,15 +400,18 @@ private fun deOverlapThreats(
                     val dy = (i / cols - (rows - 1) / 2.0) * stepPx
                     val count = byType.getValue(type).size
                     out[id] = ThreatScreenPlacement(
-                        (firstPt.x + dx).toFloat(), (firstPt.y + dy).toFloat(),
-                        if (count > 1) "$count" else null
+                        dx.toFloat(), dy.toFloat(),
+                        if (count > 1) "$count" else null,
+                        true
                     )
                 }
                 for (m in sorted) {
-                    if (m.first !in out) out[m.first] = ThreatScreenPlacement(null, null, null)
+                    if (m.first !in out) out[m.first] = ThreatScreenPlacement(visible = false)
                 }
             }
-            else -> {}
+            else -> {
+                for (m in sorted) out[m.first] = ThreatScreenPlacement()
+            }
         }
     }
     return out
@@ -1076,11 +1088,12 @@ LaunchedEffect(selectedId) {
                     val paint = Paint().apply { isAntiAlias = true }
                     for (t in mapThreatsState) {
                         if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
+                        val placement = threatPlacements[t.id]
+                        if (placement != null && !placement.visible) continue
                         val pose = threatPoses[t.id] ?: MarkerPose(t.lat, t.lon, 0f, ThreatPoseMode.PARKED)
                         val pt = bridge.project(pose.lat, pose.lon) ?: continue
-                        val sx = pt.x
-                        val sy = pt.y
-                        val placement = threatPlacements[t.id]
+                        val sx = pt.x + (placement?.offsetDx ?: 0f)
+                        val sy = pt.y + (placement?.offsetDy ?: 0f)
                         val props = engine.propsFor(t.type)
                         val stale = engine.isStale(t, props, nowMs)
                         val revealed = ring != null && t.id == ring.id && nowMs < ring.activeUntilMs
@@ -1163,10 +1176,14 @@ LaunchedEffect(selectedId) {
                     var bestThreat: NormalizedThreat? = null
                     var bestDist = threshold
                     for (t in mapThreatsState) {
+                        val placement = threatPlacements[t.id]
+                        if (placement != null && !placement.visible) continue
                         val pose = threatPoses[t.id] ?: MarkerPose(t.lat, t.lon, 0f, ThreatPoseMode.PARKED)
                         val sp = bridge.project(pose.lat, pose.lon) ?: continue
-                        val dx = sp.x - screenPt.x
-                        val dy = sp.y - screenPt.y
+                        val sx = sp.x + (placement?.offsetDx ?: 0f)
+                        val sy = sp.y + (placement?.offsetDy ?: 0f)
+                        val dx = sx - screenPt.x
+                        val dy = sy - screenPt.y
                         val d = sqrt(dx * dx + dy * dy)
                         if (d <= bestDist) {
                             bestThreat = t
@@ -1188,10 +1205,14 @@ LaunchedEffect(selectedId) {
                     var bestThreat: NormalizedThreat? = null
                     var bestDist = threshold
                     for (t in mapThreatsState) {
+                        val placement = threatPlacements[t.id]
+                        if (placement != null && !placement.visible) continue
                         val pose = threatPoses[t.id] ?: MarkerPose(t.lat, t.lon, 0f, ThreatPoseMode.PARKED)
                         val sp = bridge.project(pose.lat, pose.lon) ?: continue
-                        val dx = sp.x - screenPt.x
-                        val dy = sp.y - screenPt.y
+                        val sx = sp.x + (placement?.offsetDx ?: 0f)
+                        val sy = sp.y + (placement?.offsetDy ?: 0f)
+                        val dx = sx - screenPt.x
+                        val dy = sy - screenPt.y
                         val d = sqrt(dx * dx + dy * dy)
                         if (d <= bestDist) {
                             bestThreat = t

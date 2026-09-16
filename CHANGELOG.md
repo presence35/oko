@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed overlapping threats rendering in GRID, SPREAD, and COUNT modes with distance-based clustering and coordinate-relative screen offsets / Fixed overlapping threats rendering in GRID, SPREAD, and COUNT modes with distance-based clustering and coordinate-relative screen offsets
 - Restricted native libraries to 64-bit ARM (arm64-v8a) to reduce APK size to ~6MB / Restricted native libraries to 64-bit ARM (arm64-v8a) to reduce APK size to ~6MB
 - Fixed background notification delay when going offline or entering airplane mode by reacting immediately to connection state changes / Fixed background notification delay when going offline or entering airplane mode by reacting immediately to connection state changes
 - Fixed alert region fills and city label colors across zoom levels with enhanced GPU layer styling / Fixed alert region fills and city label colors across zoom levels with enhanced GPU layer styling
