@@ -111,8 +111,8 @@ import kotlin.math.sin
 
 private enum class Screen { MAP, SETTINGS, GUIDE, SHELTERS, LOGS }
 
-private val UkraineBlue = Color(0xFF005BBB)
-private val UkraineYellow = Color(0xFFFFD500)
+private val _ukraineBlue = Color(0xFF005BBB)
+private val _ukraineYellow = Color(0xFFFFD500)
 private val AlertRed = Color(0xFFD32F2F)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -828,7 +828,7 @@ private fun MapScreen(
                             )
                             else -> MaterialTheme.typography.titleMedium.copy(
                                 brush = Brush.linearGradient(
-                                    listOf(UkraineBlue, UkraineYellow)
+                                    listOf(_ukraineBlue, _ukraineYellow)
                                 )
                             )
                         }

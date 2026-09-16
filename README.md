@@ -1,20 +1,23 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Ukraine Drones (NEPTUN)
 
-# Run and deploy your AI Studio app
+A live air-threat monitoring app for Ukraine. Single-module Android app (`:app`) built with
+Jetpack Compose (Material 3, dark-only) and OSMdroid, streaming from the public
+[NEPTUN](https://neptun.in.ua) API over WebSocket — no backend of our own, no Firebase, no
+push.
 
-This contains everything you need to run your app locally.
+For the technical map of the codebase — module structure, ownership boundaries, invariants —
+see [`ARCHITECTURE.md`](ARCHITECTURE.md). For the threat-evaluation engine's behavioral
+contract, see [`BEHAVIORS.md`](BEHAVIORS.md). For release/dev workflow conventions, see
+[`AGENTS.md`](AGENTS.md).
 
-View your app in AI Studio: https://ai.studio/apps/af525372-52a5-4185-964c-c14ab40195aa
+## Build
 
-## Run Locally
+```
+.\gradlew.bat :app:assembleDebug   # debug APK, no secrets needed
+.\gradlew.bat :app:testDebugUnitTest
+```
 
-**Prerequisites:**  Node.js
+Requires Kotlin 1.9.24, JDK 17, minSdk 26 / targetSdk 35 (namespace `ua.ukrainedrones`).
 
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Release builds (`:app:release`) require git-ignored `app/keystore.properties` (signing) and
+`app/upload.properties` (FTP creds) — see `AGENTS.md` for the full release workflow.

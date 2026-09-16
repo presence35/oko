@@ -21,12 +21,15 @@ import android.view.MotionEvent
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Rect
 import android.util.LruCache
 import android.graphics.Path
 import android.graphics.Point
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.graphics.drawable.Drawable
 import android.view.animation.DecelerateInterpolator

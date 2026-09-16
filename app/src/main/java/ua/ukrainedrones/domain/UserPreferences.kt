@@ -1,7 +1,7 @@
 package ua.ukrainedrones
 
 import androidx.compose.runtime.Immutable
-import ua.ukrainedrones.data.ThreatType
+import ua.ukrainedrones.ThreatType
 
 enum class AppLanguage { UA, EN }
 

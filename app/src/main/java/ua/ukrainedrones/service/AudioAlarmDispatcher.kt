@@ -13,12 +13,12 @@ import ua.ukrainedrones.R
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * High-priority, zero-disk-write audio and haptic dispatcher for emergency alerts.
+ * High-priority, zero-disk-write audio dispatcher for emergency alerts.
  *
  * Safety Invariants:
  * 1. ZERO disk I/O on the critical audio triggering path.
  * 2. Pre-loaded in-memory audio buffers via SoundPool with USAGE_ALARM and FLAG_AUDIBILITY_ENFORCED.
- * 3. Bypasses device silence/vibrate settings when override option is armed.
+ * 3. Vibration is handled exclusively by notification channels; this class only manages audio.
  */
 class AudioAlarmDispatcher(
     private val context: Context
@@ -92,8 +92,6 @@ class AudioAlarmDispatcher(
                 activeLoopStreamId = soundPool?.play(soundId, 1.0f, 1.0f, 10, loopCount, 1.0f) ?: 0
             }
         }
-
-        triggerEmergencyHaptics()
     }
 
     /**
@@ -134,7 +132,6 @@ class AudioAlarmDispatcher(
                 soundPool?.play(soundCriticalOfflineId, 1.0f, 1.0f, 8, 0, 1.0f)
             }
         }
-        triggerEmergencyHaptics()
     }
 
     fun stopActiveAlert() {
@@ -155,23 +152,6 @@ class AudioAlarmDispatcher(
                     (maxVol * 0.85).toInt(),
                     AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE
                 )
-            }
-        } catch (_: Exception) {}
-    }
-
-    private fun triggerEmergencyHaptics() {
-        try {
-            if (vibrator.hasVibrator()) {
-                val timings = longArrayOf(0, 800, 300, 800, 300, 1200, 500)
-                val amplitudes = intArrayOf(0, 255, 0, 255, 0, 255, 0)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    // repeat = -1: Discrete one-shot pattern (never loop endlessly)
-                    val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
-                    vibrator.vibrate(effect)
-                } else {
-                    @Suppress("DEPRECATION")
-                    vibrator.vibrate(timings, -1)
-                }
             }
         } catch (_: Exception) {}
     }

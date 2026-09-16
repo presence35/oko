@@ -29,7 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import ua.ukrainedrones.data.IconCatalog
+import ua.ukrainedrones.IconCatalog
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.SpeedSource

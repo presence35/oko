@@ -52,8 +52,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlin.math.roundToInt
 
-private val UkraineBlue = Color(0xFF005BBB)
-private val UkraineYellow = Color(0xFFFFD500)
+private val _ukraineBlue = Color(0xFF005BBB)
+private val _ukraineYellow = Color(0xFFFFD500)
 
 @Composable
 internal fun FirstLaunchWizard(
@@ -338,7 +338,7 @@ internal fun FirstLaunchWizard(
                             .align(Alignment.TopStart)
                             .fillMaxWidth(progressFrac)
                             .height(3.dp)
-                            .background(Brush.horizontalGradient(listOf(UkraineYellow, UkraineBlue)))
+                            .background(Brush.horizontalGradient(listOf(_ukraineYellow, _ukraineBlue)))
                     )
                 }
             }

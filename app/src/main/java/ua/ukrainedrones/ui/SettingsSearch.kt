@@ -1,7 +1,7 @@
 package ua.ukrainedrones
 
-import ua.ukrainedrones.data.ThreatTypeCatalog
-import ua.ukrainedrones.domain.City
+import ua.ukrainedrones.ThreatTypeCatalog
+import ua.ukrainedrones.City
 
 /** Collapse state of the Settings sections, hoisted to MainScreen. Reset to all-collapsed on
  *  every Settings open (see `openSettings`), so the user always lands on a clean list. */

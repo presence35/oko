@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
-import ua.ukrainedrones.domain.City
+import ua.ukrainedrones.City
 
 @Composable
 internal fun PinCityRow(

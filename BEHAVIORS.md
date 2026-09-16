@@ -61,7 +61,8 @@ data class NormalizedThreat(
     val locality: String?,
     val explanationShort: String?,
     val title: String,
-    val sourceMeta: Map<String, Any> = emptyMap()  // opaque to engine
+    val sourceMeta: Map<String, Any> = emptyMap(),  // opaque to engine
+    val simulated: Boolean = false  // Test-source watermark; engine never branches on it
 )
 
 data class TrailPoint(val lat: Double, val lon: Double, val tMillis: Long?)
@@ -401,7 +402,7 @@ No log feeds back into engine evaluation. All logging is write-only.
 
 ## Plugin contract
 
-The `ThreatSource` interface, plugin registry health authority and theme plugin contract are
+The `Source` interface, `SourceRegistry` health authority and theme plugin contract are
 documented in `ARCHITECTURE.md` (module map + "Official alert sources" invariant). This doc is
 the behavioral contract only: engine + consumers. The interface has grown beyond the original
 sketch (`id`, `sourceType`, `operationalMode`, `enabled`/`setEnabled`, `testConnection`, and the

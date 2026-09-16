@@ -30,8 +30,11 @@ recorded retirement path, and the industry direction is vector-only. Target stac
 - **Sizing**: 38 osmdroid touchpoints across 10 files. Full rewrites: `MapView.kt`
   (~1200 lines), `UkraineTileProvider.kt` (obsolete — Ukraine-only tile blocking becomes hard
   camera bounds). Rework: `flourish/` death animations + `Cities.kt` label overlay draw
-  directly onto osmdroid canvases. Decouple: `GeoPoint` leaks into `domain/` (`Prediction`,
-  `ThreatEvaluator`, `Cities`) — replace with a local lat/lon value class.
+  directly onto osmdroid canvases. Decouple: `GeoPoint` leaks into `domain/`, confined to
+  `Cities.kt` — and it's more than a coordinate leak: the file doesn't just import `GeoPoint`,
+  it implements an osmdroid `Overlay` and takes `MapView`/`Projection` directly, i.e. it's a
+  render component currently living in `domain/`. Budget this as "extract a map-overlay piece
+  out of `domain/`," not a value-class swap.
 - **Gotchas**: osmdroid `TileWriter` cache disappears (MapLibre manages its own); zone circles,
   threat markers and shelter pins become GeoJSON layers or annotation plugins; attribution
   string changes to OpenMapTiles/OSM/OpenFreeMap.

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -57,8 +58,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import ua.ukrainedrones.domain.City
-import ua.ukrainedrones.engine.ThreatType
+import ua.ukrainedrones.City
+import ua.ukrainedrones.ThreatType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1399,62 +1400,17 @@ fun SettingsScreen(
     }
 }
 
-    // One-time explainer popup dialogs
     activeExplainer?.let { exp ->
-        AlertDialog(
-            onDismissRequest = dismissExplainer,
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    exp.icon?.let { iconRes ->
-                        Icon(
-                            painter = painterResource(iconRes),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Text(exp.title)
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    exp.body.split("\n\n").forEach { paragraph ->
-                        Text(
-                            paragraph,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    exp.caveat?.let { caveat ->
-                        Spacer(Modifier.height(4.dp))
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        ) {
-                            Text(
-                                caveat,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(8.dp)
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = dismissExplainer) { Text(s.explainerGotIt) }
-            }
-        )
+        FeatureExplainerDialog(exp, s, dismissExplainer)
     }
 
     if (showBootRestartOffConfirm) {
         AlertDialog(
             onDismissRequest = { showBootRestartOffConfirm = false },
-            title = { Text(s.bootRestartOffConfirmTitle) },
+            title = { Text(s.bootRestartWarningTitle) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(s.bootRestartOffConfirmBody)
+                    Text(s.bootRestartWarningBody)
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
@@ -1468,7 +1424,7 @@ fun SettingsScreen(
                             WarningTriangle()
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                s.bootRestartOffConfirmWarning,
+                                s.bootRestartWarningBody,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )

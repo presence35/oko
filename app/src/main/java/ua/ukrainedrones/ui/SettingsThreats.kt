@@ -21,9 +21,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import ua.ukrainedrones.data.IconCatalog
-import ua.ukrainedrones.data.ThreatTypeCatalog
-import ua.ukrainedrones.engine.ThreatType
+import ua.ukrainedrones.IconCatalog
+import ua.ukrainedrones.ThreatTypeCatalog
+import ua.ukrainedrones.ThreatType
 import kotlin.math.roundToInt
 
 /** A single threat's settings card: icon + name/desc, compact Map/Alerts switches on the right. */
