@@ -14,6 +14,16 @@ object MapLibreGeoJson {
     /** Empty FeatureCollection sentinel. */
     const val EMPTY = """{"type":"FeatureCollection","features":[]}"""
 
+    /**
+     * Inverted mask covering everything outside Ukraine's boundary,
+     * dimming/blacking out unnecessary foreign detail.
+     */
+    fun outsideUkraineMask(): String {
+        val ukraineRing = ua.ukrainedrones.UKRAINE_BORDER.joinToString(",") { "[${it.lon},${it.lat}]" }
+        val worldOuter = "[-180.0,-85.0],[180.0,-85.0],[180.0,85.0],[-180.0,85.0],[-180.0,-85.0]"
+        return """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$worldOuter],[$ukraineRing]]}}]}"""
+    }
+
     /** Ukraine land border outline — hugs land/river borders and skips open sea coastline. */
     fun landBorder(): String {
         val coords = UKRAINE_LAND_BORDER.joinToString(",") { "[${it.lon},${it.lat}]" }
@@ -81,29 +91,23 @@ object MapLibreGeoJson {
     }
 
     /**
-     * Range warning circles (outer yellow and inner red) centered on the user's active focus point.
+     * Single range warning circle centered on the user's active focus point.
      */
-    fun zoneCircles(
+    fun singleCircle(
         centerLat: Double?,
         centerLon: Double?,
-        redRadiusKm: Double,
-        yellowRadiusKm: Double,
+        radiusKm: Double,
         segments: Int = 64
     ): String {
-        if (centerLat == null || centerLon == null || !centerLat.isFinite() || !centerLon.isFinite()) {
+        if (centerLat == null || centerLon == null || !centerLat.isFinite() || !centerLon.isFinite() || radiusKm <= 0.0) {
             return EMPTY
         }
-        fun makeCircle(radiusKm: Double, zoneName: String): String {
-            val radiusM = radiusKm * 1000.0
-            val coords = (0..segments).map { i ->
-                val bearing = 360.0 * (i % segments) / segments
-                val pt = destinationPoint(centerLat, centerLon, radiusM, bearing)
-                "[${pt.lon},${pt.lat}]"
-            }.joinToString(",")
-            return """{"type":"Feature","properties":{"zone":"$zoneName"},"geometry":{"type":"LineString","coordinates":[$coords]}}"""
-        }
-        val redFeature = makeCircle(redRadiusKm, "red")
-        val yellowFeature = makeCircle(yellowRadiusKm, "yellow")
-        return """{"type":"FeatureCollection","features":[$redFeature,$yellowFeature]}"""
+        val radiusM = radiusKm * 1000.0
+        val coords = (0..segments).map { i ->
+            val bearing = 360.0 * (i % segments) / segments
+            val pt = destinationPoint(centerLat, centerLon, radiusM, bearing)
+            "[${pt.lon},${pt.lat}]"
+        }.joinToString(",")
+        return """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
     }
 }

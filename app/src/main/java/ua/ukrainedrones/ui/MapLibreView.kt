@@ -17,7 +17,6 @@ import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
-import ua.ukrainedrones.engine.ThreatZone
 import kotlin.math.cos
 import kotlin.math.pow
 
@@ -151,8 +150,7 @@ class MapLibreBridge(
         centerLat: Double?,
         centerLon: Double?,
         slowRedKm: Double,
-        slowYellowKm: Double,
-        activeZone: ThreatZone? = null
+        slowYellowKm: Double
     ) {
         val s = style ?: return
         MapLibreLayerManager.updateZoneCircles(s, centerLat, centerLon, slowRedKm, slowYellowKm)
@@ -212,8 +210,14 @@ fun MapLibreHostView(
                         isCompassEnabled = false
                         isRotateGesturesEnabled = false
                     }
-                    mapLibreMap.setMinZoomPreference(4.5)
+                    mapLibreMap.setMinZoomPreference(5.2)
                     mapLibreMap.setMaxZoomPreference(19.0)
+                    val ukraineBounds = LatLngBounds.Builder()
+                        .include(LatLng(ua.ukrainedrones.UA_TIGHT_MAX_LAT, ua.ukrainedrones.UA_TIGHT_MAX_LON))
+                        .include(LatLng(ua.ukrainedrones.UA_TIGHT_MIN_LAT, ua.ukrainedrones.UA_TIGHT_MIN_LON))
+                        .build()
+                    mapLibreMap.setLatLngBoundsForCameraBounds(ukraineBounds)
+
                     val initialPos = CameraPosition.Builder()
                         .target(LatLng(initialCenterLat, initialCenterLon))
                         .zoom(initialZoom)
@@ -234,6 +238,34 @@ fun MapLibreHostView(
                             onCameraChange()
                             bridge.dispatchCameraMove()
                         }
+                        mapLibreMap.addOnMoveListener(object : MapLibreMap.OnMoveListener {
+                            override fun onMoveBegin(detector: org.maplibre.android.gestures.MoveGestureDetector) {
+                                onCameraChange()
+                                bridge.dispatchCameraMove()
+                            }
+                            override fun onMove(detector: org.maplibre.android.gestures.MoveGestureDetector) {
+                                onCameraChange()
+                                bridge.dispatchCameraMove()
+                            }
+                            override fun onMoveEnd(detector: org.maplibre.android.gestures.MoveGestureDetector) {
+                                onCameraChange()
+                                bridge.dispatchCameraMove()
+                            }
+                        })
+                        mapLibreMap.addOnScaleListener(object : MapLibreMap.OnScaleListener {
+                            override fun onScaleBegin(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) {
+                                onCameraChange()
+                                bridge.dispatchCameraMove()
+                            }
+                            override fun onScale(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) {
+                                onCameraChange()
+                                bridge.dispatchCameraMove()
+                            }
+                            override fun onScaleEnd(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) {
+                                onCameraChange()
+                                bridge.dispatchCameraMove()
+                            }
+                        })
                         mapLibreMap.addOnCameraIdleListener {
                             onCameraChange()
                             bridge.dispatchCameraMove()

@@ -59,7 +59,7 @@ import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.toThreatType
-import ua.ukrainedrones.DeathFxController
+import ua.ukrainedrones.flourish.DeathFxController
 import ua.ukrainedrones.source.RESOLVED_REPLAY_GRACE_MS
 import ua.ukrainedrones.ui.MapLibreBridge
 import ua.ukrainedrones.ui.MapLibreHostView
@@ -532,7 +532,6 @@ fun NeptunMapView(
     val lastFitZonesTick = remember { mutableStateOf(-1) }
     val lastFittedYellowKm = remember { mutableStateOf<Int?>(null) }
     val lastRevealTick = remember { mutableStateOf(-1) }
-    val lastAnchorId = remember { mutableStateOf<String?>(null) }
     val lastCenterTick = remember { mutableStateOf(-1) }
     val lastArmTick = remember { mutableStateOf(0) }
     val lastZonesCoverPx = remember { mutableStateOf(0) }
@@ -585,6 +584,7 @@ fun NeptunMapView(
     }
 
     val deathFrame = remember { mutableIntStateOf(0) }
+    val cameraFrame = remember { mutableIntStateOf(0) }
     LaunchedEffect(deathFx) {
         while (true) {
             withFrameNanos {}
@@ -620,10 +620,10 @@ fun NeptunMapView(
             showRegionBorders = uiState.showRegionBorders
         )
         bridge.updateZones(
-            centerLat = uiState.focusLocation?.lat,
-            centerLon = uiState.focusLocation?.lon,
-            slowRedKm = uiState.activeZoneParams.slowRedKm,
+            focusLat = uiState.focusLocation?.lat,
+            focusLon = uiState.focusLocation?.lon,
             slowYellowKm = uiState.activeZoneParams.slowYellowKm,
+            slowRedKm = uiState.activeZoneParams.slowRedKm,
             activeZone = uiState.activeZone
         )
     }
@@ -743,25 +743,12 @@ fun NeptunMapView(
         }
     }
 
-    // Selected threat anchor
-    LaunchedEffect(selectedId) {
-        val selectedIdNow = selectedId
-        val replayOwnsCamera = deathFx.isReplayActive ||
-            (uiState.flourish != null && uiState.flourish.tick != lastFlourishTick.value)
-        if (selectedIdNow != null && selectedIdNow != lastAnchorId.value && !replayOwnsCamera) {
-            lastAnchorId.value = selectedIdNow
-            val reveal = revealRequest
-            val revealFramedIt = reveal != null && reveal.tick == lastRevealTick.value && reveal.id == selectedIdNow
-            val t = uiState.mapThreats.firstOrNull { it.id == selectedIdNow }
-            if (t != null && !revealFramedIt) {
-                camera.armFit(selectedIdNow, t.lat, t.lon, Double.NaN, Double.NaN, 0L)
-                lastArmTick.value = camera.pendingVersion
-            }
-        } else if (selectedIdNow == null && lastAnchorId.value != null) {
-            lastAnchorId.value = null
-            camera.clearFit()
-        }
-    }
+    // Tapping a threat marker only updates the selection state and presents the
+// popup card — it no longer pans the map. Deselecting clears any in-flight
+// reveal fit (and its follow-me lock) so a stale pending fit can't linger.
+LaunchedEffect(selectedId) {
+    if (selectedId == null) camera.clearFit()
+}
 
     // Refine pending camera fit once popup card is measured
     LaunchedEffect(lastArmTick.value, popupCoverPx) {
@@ -1031,9 +1018,13 @@ fun NeptunMapView(
     Box(modifier = modifier.fillMaxSize()) {
         MapLibreHostView(
             modifier = Modifier.fillMaxSize(),
+            onCameraChange = {
+                cameraFrame.intValue++
+            },
             onBridgeReady = { bridge ->
                 bridgeState.value = bridge
                 bridge.setOnCameraMoveListener {
+                    cameraFrame.intValue++
                     onScaleChange(bridge.metersPerPixel())
                     if (showNearbySheltersState &&
                         System.currentTimeMillis() >= shelterEntryGuardUntil.value &&
@@ -1072,10 +1063,10 @@ fun NeptunMapView(
                     var bestThreat: NormalizedThreat? = null
                     var bestDist = threshold
                     for (t in mapThreatsState) {
-                        val sp = threatPlacements[t.id] ?: continue
-                        if (sp.screenX == null || sp.screenY == null) continue
-                        val dx = sp.screenX - screenPt.x
-                        val dy = sp.screenY - screenPt.y
+                        val pose = threatPoses[t.id] ?: MarkerPose(t.lat, t.lon, 0f, ThreatPoseMode.PARKED)
+                        val sp = bridge.project(pose.lat, pose.lon) ?: continue
+                        val dx = sp.x - screenPt.x
+                        val dy = sp.y - screenPt.y
                         val d = sqrt(dx * dx + dy * dy)
                         if (d <= bestDist) {
                             bestThreat = t
@@ -1097,10 +1088,10 @@ fun NeptunMapView(
                     var bestThreat: NormalizedThreat? = null
                     var bestDist = threshold
                     for (t in mapThreatsState) {
-                        val sp = threatPlacements[t.id] ?: continue
-                        if (sp.screenX == null || sp.screenY == null) continue
-                        val dx = sp.screenX - screenPt.x
-                        val dy = sp.screenY - screenPt.y
+                        val pose = threatPoses[t.id] ?: MarkerPose(t.lat, t.lon, 0f, ThreatPoseMode.PARKED)
+                        val sp = bridge.project(pose.lat, pose.lon) ?: continue
+                        val dx = sp.x - screenPt.x
+                        val dy = sp.y - screenPt.y
                         val d = sqrt(dx * dx + dy * dy)
                         if (d <= bestDist) {
                             bestThreat = t
@@ -1119,7 +1110,7 @@ fun NeptunMapView(
                             sizeDp = if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32
                         )
                         val base = IconCatalog.baseDeg(threatType, iconSetState)
-                        val rotation = pose?.headingDeg ?: ((engine.courseDeg(targetThreat).toFloat() - base + 360f) % 360f)
+                        val rotation = if (targetThreat.areaOnly) 0f else threatMarkerRotation(pose?.headingDeg ?: targetThreat.courseDeg.toFloat(), base)
                         val played = if (deathFx.isActiveFor(threatId)) {
                             deathFx.strikeDud(threatId, strikeLat, strikeLon)
                         } else {
@@ -1148,6 +1139,7 @@ fun NeptunMapView(
         // Custom Overlay Canvas: City Labels, Markers, Pins, GPS Dot, Flourish & Death FX
         Canvas(modifier = Modifier.matchParentSize()) {
             deathFrame.intValue
+            cameraFrame.intValue
             val bridge = bridgeState.value ?: return@Canvas
             val projLambda: (Double, Double) -> PointF? = { lat, lon ->
                 bridge.project(lat, lon)
@@ -1200,10 +1192,11 @@ fun NeptunMapView(
                 val paint = Paint().apply { isAntiAlias = true }
                 for (t in mapThreatsState) {
                     if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
-                    val placement = threatPlacements[t.id] ?: continue
-                    val sx = placement.screenX ?: continue
-                    val sy = placement.screenY ?: continue
                     val pose = threatPoses[t.id] ?: MarkerPose(t.lat, t.lon, 0f, ThreatPoseMode.PARKED)
+                    val pt = bridge.project(pose.lat, pose.lon) ?: continue
+                    val sx = pt.x
+                    val sy = pt.y
+                    val placement = threatPlacements[t.id]
                     val props = engine.propsFor(t.type)
                     val stale = engine.isStale(t, props, nowMs)
                     val revealed = ring != null && t.id == ring.id && nowMs < ring.activeUntilMs
@@ -1227,7 +1220,7 @@ fun NeptunMapView(
                     canvas.drawBitmap(bmp, matrix, paint)
 
                     // Sub-description / count chip
-                    val chip = chipLabel(t, placement.chip)
+                    val chip = chipLabel(t, placement?.chip)
                     if (chip != null) {
                         canvas.drawText(chip, sx, sy + bmp.height / 2f + 14f * context.resources.displayMetrics.density, chipPaint)
                     }

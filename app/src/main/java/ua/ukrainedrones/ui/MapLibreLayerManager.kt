@@ -17,6 +17,9 @@ import org.maplibre.android.style.sources.GeoJsonSource
  */
 object MapLibreLayerManager {
 
+    const val SOURCE_OUTSIDE_MASK = "src_outside_mask"
+    const val LAYER_OUTSIDE_MASK = "lyr_outside_mask"
+
     const val SOURCE_LAND_BORDER = "src_land_border"
     const val LAYER_LAND_BORDER = "lyr_land_border"
 
@@ -33,10 +36,22 @@ object MapLibreLayerManager {
     const val LAYER_ALERT_RED_FILL = "lyr_alert_red_fill"
     const val LAYER_ALERT_RED_LINE = "lyr_alert_red_line"
 
-    const val SOURCE_ZONE_CIRCLES = "src_zone_circles"
-    const val LAYER_ZONE_CIRCLES = "lyr_zone_circles"
+    const val SOURCE_ZONE_RED = "src_zone_red"
+    const val LAYER_ZONE_RED = "lyr_zone_red"
+
+    const val SOURCE_ZONE_YELLOW = "src_zone_yellow"
+    const val LAYER_ZONE_YELLOW = "lyr_zone_yellow"
 
     fun setupLayers(style: Style) {
+        // 0. Outside Ukraine mask (dim international geography outside Ukraine's border)
+        val srcMask = GeoJsonSource(SOURCE_OUTSIDE_MASK, MapLibreGeoJson.outsideUkraineMask())
+        style.addSource(srcMask)
+        style.addLayer(
+            FillLayer(LAYER_OUTSIDE_MASK, SOURCE_OUTSIDE_MASK).apply {
+                setProperties(fillColor(Color.argb(230, 13, 17, 23)))
+            }
+        )
+
         // 1. Alert fills (underneath outlines)
         val srcAlertYellow = GeoJsonSource(SOURCE_ALERT_YELLOW, MapLibreGeoJson.EMPTY)
         style.addSource(srcAlertYellow)
@@ -100,13 +115,24 @@ object MapLibreLayerManager {
             }
         )
 
-        // 5. Zone warning circles
-        val srcZones = GeoJsonSource(SOURCE_ZONE_CIRCLES, MapLibreGeoJson.EMPTY)
-        style.addSource(srcZones)
+        // 5. Zone warning circles (Yellow outer, Red inner)
+        val srcZoneYellow = GeoJsonSource(SOURCE_ZONE_YELLOW, MapLibreGeoJson.EMPTY)
+        style.addSource(srcZoneYellow)
         style.addLayer(
-            LineLayer(LAYER_ZONE_CIRCLES, SOURCE_ZONE_CIRCLES).apply {
+            LineLayer(LAYER_ZONE_YELLOW, SOURCE_ZONE_YELLOW).apply {
                 setProperties(
-                    lineColor(Color.argb(180, 255, 213, 0)),
+                    lineColor(Color.argb(200, 255, 213, 0)),
+                    lineWidth(2.2f)
+                )
+            }
+        )
+
+        val srcZoneRed = GeoJsonSource(SOURCE_ZONE_RED, MapLibreGeoJson.EMPTY)
+        style.addSource(srcZoneRed)
+        style.addLayer(
+            LineLayer(LAYER_ZONE_RED, SOURCE_ZONE_RED).apply {
+                setProperties(
+                    lineColor(Color.argb(230, 239, 68, 68)),
                     lineWidth(2.5f)
                 )
             }
@@ -151,7 +177,9 @@ object MapLibreLayerManager {
         slowRedKm: Double,
         slowYellowKm: Double
     ) {
-        val zoneSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ZONE_CIRCLES)
-        zoneSrc?.setGeoJson(MapLibreGeoJson.zoneCircles(centerLat, centerLon, slowRedKm, slowYellowKm))
+        val redSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ZONE_RED)
+        val yellowSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ZONE_YELLOW)
+        redSrc?.setGeoJson(MapLibreGeoJson.singleCircle(centerLat, centerLon, slowRedKm))
+        yellowSrc?.setGeoJson(MapLibreGeoJson.singleCircle(centerLat, centerLon, slowYellowKm))
     }
 }

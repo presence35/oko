@@ -343,12 +343,12 @@ fun ThreatPopupCard(
                                         contentDescription = typeLabel
                                     )
                                 }
-                                Text(
-                                    titleLabel,
-                                    fontWeight = FontWeight.SemiBold,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White
-                                )
+Text(
+                                        titleLabel,
+                                        fontWeight = FontWeight.SemiBold,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = Color.White
+                                    )
                                 if (alertsOff) {
                                     AlertsOffChip(s)
                                 }
@@ -461,7 +461,7 @@ fun ThreatPopupCard(
                                     Text(
                                         titleLabel,
                                         fontWeight = FontWeight.SemiBold,
-                                        style = MaterialTheme.typography.titleMedium,
+                                        style = MaterialTheme.typography.titleLarge,
                                         color = Color.White
                                     )
                                     if (alertsOff) {
@@ -482,7 +482,7 @@ fun ThreatPopupCard(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         displayRegion,
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        style = MaterialTheme.typography.bodyLarge,
                                         color = Color(0xFFB0B0B0),
                                         modifier = Modifier.weight(1f, fill = false)
                                     )
@@ -490,8 +490,17 @@ fun ThreatPopupCard(
                             }
                         }
 
+                        // NEPTUN's course assessment, e.g. "Drone heading toward Chornomorsk"
+                        val course = translateCourseAssessment(threat.explanationShort, lang)
+                            ?.let { firstSentence(it) }
+                            ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, displayRegion) }
+                        course?.let {
+                            Text(it, style = MaterialTheme.typography.bodyLarge, color = Color(0xFFCCCCCC))
+                            Spacer(Modifier.height(4.dp))
+                        }
+
                         // Always-visible trio: distance + ETA + speed pills.
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(4.dp))
                         SummaryPills(
                             proximity = proximity,
                             pinnedCity = pinnedCity,
@@ -500,15 +509,6 @@ fun ThreatPopupCard(
                             modifier = Modifier.padding(start = 52.dp)
                         )
                         Spacer(Modifier.height(6.dp))
-
-                        // NEPTUN's course assessment, e.g. "Drone heading toward Chornomorsk"
-                        val course = translateCourseAssessment(threat.explanationShort, lang)
-                            ?.let { firstSentence(it) }
-                            ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, displayRegion) }
-                        course?.let {
-                            Text(it, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB0B0B0))
-                            Spacer(Modifier.height(6.dp))
-                        }
                         if (threat.advisory) {
                             Surface(shape = RoundedCornerShape(12.dp), color = AdvisoryAmber.copy(alpha = 0.18f)) {
                                 Text(
@@ -775,6 +775,8 @@ private fun MetricPill(
                 color = Color(0xFFCFCFCF),
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                softWrap = false,
                 modifier = Modifier.semantics {
                     if (contentDescription != null) this.contentDescription = contentDescription
                 }
@@ -783,7 +785,9 @@ private fun MetricPill(
             Text(
                 unit,
                 color = Color(0xFF9E9E9E),
-                style = MaterialTheme.typography.labelSmall
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                softWrap = false
             )
         }
     }

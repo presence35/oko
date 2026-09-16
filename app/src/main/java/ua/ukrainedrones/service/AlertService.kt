@@ -658,7 +658,8 @@ fastYellowArmed = p.fastYellowArmed,
                     revealThreat = t,
                     silent = false,
                     vibration = t?.let { if (isFastType(it.type.toThreatType(), typeCatalog)) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
-                    isOnset = knownZones[id] != zone,
+                    isOnset = knownZones[id] == null ||
+                        (knownZones[id] == ThreatZone.OUTER && zone == ThreatZone.INNER),
                     zone = zone, level = if (zone == ThreatZone.INNER) "red" else "yellow"
                 )
             }
@@ -806,10 +807,6 @@ fastYellowArmed = p.fastYellowArmed,
                         postAlert(primary.zone, primary.level, primary.title, primary.body,
                             state.zoneSirenOverride ?: state.officialSirenOverride,
                             revealThreat = primary.revealThreat, vibrationLevel = primary.vibration)
-                        if (primary.zone != null) {
-                            knownZones = knownZones + (primary.identity.substringAfter("zone|").substringBefore('|') to primary.zone!!)
-                            persistKnownZones()
-                        }
                     }
                     alertNotificationShowing() -> {
                         postAlert(primary.zone, primary.level, primary.title, primary.body,
@@ -825,6 +822,13 @@ fastYellowArmed = p.fastYellowArmed,
         // Invoke the reconcile pipeline
         val primary = buildPrimary(state, all)
         val postedId = if (primary?.zone != null && primary.isOnset) primary.identity.substringAfter("zone|").substringBefore('|') else null
+        // Mirror knownZones to reality every tick. buildPrimary already read the OLD
+        // map to compute isOnset above, so updating here keeps onset/escalation
+        // detection correct while letting downgrades (INNER->OUTER) and lateral
+        // moves update state silently instead of re-firing as a fresh onset.
+        val knownBefore = knownZones
+        alertable.forEach { (id, zone) -> knownZones = knownZones + (id to zone) }
+        if (knownZones != knownBefore) persistKnownZones()
         reconcileEpisode(primary, state, all)
         reconcileNotif(primary, state)
 

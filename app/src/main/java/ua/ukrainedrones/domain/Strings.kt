@@ -158,6 +158,7 @@ val nightSoundLabel: String,
         val speedUnit: String,
         val groupLabel: String,
         val uncertaintyLabel: String,
+        val uncertaintyShort: String,
         val noRegion: String,
         val unknownLocation: String,
         val minutesAgoSuffix: String,
@@ -852,6 +853,7 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val speedUnit: String get() = status.speedUnit
         val groupLabel: String get() = status.groupLabel
         val uncertaintyLabel: String get() = status.uncertaintyLabel
+        val uncertaintyShort: String get() = status.uncertaintyShort
         val noRegion: String get() = status.noRegion
         val unknownLocation: String get() = status.unknownLocation
         val minutesAgoSuffix: String get() = status.minutesAgoSuffix
