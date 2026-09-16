@@ -3,7 +3,7 @@ package ua.ukrainedrones
 import org.junit.Assert.*
 import org.junit.Test
 import ua.ukrainedrones.engine.ThreatEngine
-import ua.ukrainedrones.engine.NEPTUN_TYPES
+import ua.ukrainedrones.source.NeptunSource.Companion.NEPTUN_TYPES
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.toThreatType
 

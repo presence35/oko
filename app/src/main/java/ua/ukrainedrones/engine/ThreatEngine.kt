@@ -15,7 +15,7 @@ data class ThreatEvaluationResult(
     val mapThreats: List<NormalizedThreat> = emptyList(),
     val threatScores: List<Double> = emptyList(),
     val activeZone: ThreatZone? = null,
-    val redCities: Set<String> = emptySet(),
+    val cityAlerts: Map<String, AlertLevel> = emptyMap(),
     val fillOblastTokens: Set<String> = emptySet(),
     val fillRaionKeys: Set<Pair<String, String>> = emptySet(),
     val fillYellowOblastTokens: Set<String> = emptySet(),
@@ -27,7 +27,9 @@ data class ThreatEvaluationResult(
     val officialReason: String? = null,
     val reasonThreatId: String? = null,
     val threatLevel: Double = 0.0
-)
+) {
+    val redCities: Set<String> get() = cityAlerts.filterValues { it == AlertLevel.RED }.keys
+}
 
 data class ThreatProximity(
     val predicted: LatLng,
@@ -121,7 +123,7 @@ class ThreatEngine(
         val official = alerts.officialStateFor(focusToken, focusCityUa, cityScope)
         val focusOblastAlertActive = official.level == AlertLevel.RED
         val focusOblastYellowAlertActive = official.level == AlertLevel.YELLOW
-        val redCities = computeRedCities(alerts, fillRegions)
+        val cityAlerts = computeCityAlerts(alerts)
         val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts.filter { it.level != "yellow" }, fillRegions)
         val (fillYellowOblastTokens, fillYellowRaionKeys) = computeFillKeys(alerts.filter { it.level == "yellow" }, fillRegions)
         val activeAlert = official.alert
@@ -138,7 +140,7 @@ class ThreatEngine(
             mapThreats = mapThreats,
             threatScores = threatScores,
             activeZone = activeZone,
-            redCities = redCities,
+            cityAlerts = cityAlerts,
             fillOblastTokens = fillOblastTokens,
             fillRaionKeys = fillRaionKeys,
             fillYellowOblastTokens = fillYellowOblastTokens,
@@ -151,32 +153,29 @@ class ThreatEngine(
         )
     }
 
-    /** Cities shown red on the map — region-precise (mirrors NEPTUN):
- *  - a whole-oblast alert covers every city in the region;
- *  - a raion/city alert with the region fill ON covers only the cities in that raion
- *    ([CityRaions] membership, name-match as a last resort);
- *  - a raion/city alert with the fill OFF covers every city in the alerting oblast (broad labels
- *    stand in for the missing fill).
- *  Scope-independent, so red labels light nationwide. */
-fun computeRedCities(alerts: List<OblastAlert>, fillRegions: Boolean): Set<String> {
-        if (alerts.isEmpty()) return emptySet()
-        return buildSet {
+    /** Per-city alert level — pure computation, no fillRegions parameter.
+     *  - whole-oblast alert → all cities in the oblast get that level;
+     *  - raion/city alert → only cities covered by [OblastAlert.coversCity];
+     *  - RED takes precedence over YELLOW when multiple alerts hit the same city. */
+    fun computeCityAlerts(alerts: List<OblastAlert>): Map<String, AlertLevel> {
+        if (alerts.isEmpty()) return emptyMap()
+        return buildMap {
             for (city in Cities.ALL) {
-                val token = Cities.cityOblast[city.nameUa] ?: continue
-                val wide = alerts.any { it.inOblast(token) && it.isOblastWide() }
-                if (wide) {
-                    add(city.nameUa)
-                    continue
+                var level: AlertLevel? = null
+                for (alert in alerts) {
+                    val token = Cities.cityOblast[city.nameUa] ?: continue
+                    if (!alert.inOblast(token)) continue
+                    val alertLevel = if (alert.level.equals("yellow", true))
+                        AlertLevel.YELLOW else AlertLevel.RED
+                    if (alert.isOblastWide()) {
+                        if (level == null || alertLevel == AlertLevel.RED) level = alertLevel
+                        continue
+                    }
+                    if (alert.coversCity(city.nameUa)) {
+                        if (level == null || alertLevel == AlertLevel.RED) level = alertLevel
+                    }
                 }
-                val regionAlert = alerts.any { it.inOblast(token) && !it.isOblastWide() }
-                if (!regionAlert) continue
-                if (fillRegions) {
-                    val regionAlerts = alerts.filter { it.inOblast(token) && !it.isOblastWide() }
-                    val covered = regionAlerts.any { it.coversCity(city.nameUa) }
-                    if (covered) add(city.nameUa)
-                } else {
-                    add(city.nameUa)
-                }
+                if (level != null) put(city.nameUa, level)
             }
         }
     }

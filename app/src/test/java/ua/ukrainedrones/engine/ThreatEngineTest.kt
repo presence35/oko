@@ -3,6 +3,7 @@ package ua.ukrainedrones.engine
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import ua.ukrainedrones.source.NeptunSource.Companion.NEPTUN_TYPES
 
 class ThreatEngineTest {
 

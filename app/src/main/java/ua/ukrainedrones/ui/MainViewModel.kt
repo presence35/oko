@@ -37,6 +37,7 @@ import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.inOblast
 import ua.ukrainedrones.engine.ThreatZone
+import ua.ukrainedrones.engine.AlertLevel
 import ua.ukrainedrones.engine.toEngineString
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.SpeedSource
@@ -112,7 +113,7 @@ data class UiState(
     val followMe: Boolean = true,
     val pinnedCity: City? = null,
     val focusLocation: LatLng? = null,            // camera + zone center: GPS (follow) or pinned city
-    val redCities: Set<String> = emptySet(),      // nameUa of cities shown red (scope-aware)
+    val cityAlerts: Map<String, AlertLevel> = emptyMap(), // per-city alert level (RED > YELLOW > NONE)
     val threatLevel: Double = 0.0,                 // experimental 0..10 gauge for the popup
     val revealRequest: RevealRequest? = null,      // notification tap: pan the camera onto a threat
     val centerRequest: CenterRequest? = null,      // locate button: centre the map on a threat
@@ -166,6 +167,8 @@ data class UiState(
      *  and yellow are both OFF, so the row can never read enabled with nothing selected. */
     val officialAlertsEnabled: Boolean
         get() = officialRedAlertsEnabled || officialYellowAlertsEnabled
+
+    val redCities: Set<String> get() = cityAlerts.filterValues { it == AlertLevel.RED }.keys
 }
 
 @Immutable
@@ -924,7 +927,6 @@ showBorders = prefs.showBorders,
         val threatScores = evaluation.threatScores
         val focusOblastAlertActive = evaluation.focusOblastAlertActive
         val focusOblastYellowAlertActive = evaluation.focusOblastYellowAlertActive
-        val redCities = evaluation.redCities
 
         val activeZone: ThreatZone? = evaluation.activeZone
         val alertActive = activeZone != null || focusOblastAlertActive
@@ -960,7 +962,7 @@ showBorders = prefs.showBorders,
             pinnedCity = pinnedCity,
             focusLocation = focusLocation,
             gpsFixMissing = focus.gpsFixMissing,
-            redCities = redCities,
+            cityAlerts = evaluation.cityAlerts,
             alertOblastTokens = evaluation.fillOblastTokens,
             alertRaionKeys = evaluation.fillRaionKeys,
             alertYellowOblastTokens = evaluation.fillYellowOblastTokens,

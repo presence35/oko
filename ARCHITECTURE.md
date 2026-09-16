@@ -11,7 +11,7 @@ change a documented invariant, update the relevant section.
   targetSdk 35, namespace `ua.ukrainedrones`.
 - No runtime backend of ours: data comes straight from the public
   [NEPTUN](https://neptun.in.ua) API (WebSocket stream). No Firebase, no push.
-- Update feed: static `version.json` + APK on `odesaplay.com.ua`, self-checked daily, in-app install.
+- Update feed: static `version.json` + APK on `odesaplay.com.ua`, self-checked daily, in-app install is temporary while in beta mode, eventually it will be deprecated for official Google Play route.
 - Coroutines + flows throughout; singletons expose `StateFlow`s.
 
 ## Package structure

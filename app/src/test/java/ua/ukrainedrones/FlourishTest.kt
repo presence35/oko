@@ -90,10 +90,10 @@ class FlourishTest {
         val group = listOf(FlourishRecord(46.48, 30.73, ThreatType.SHAHED, "Одеська область"))
         val box = flourishGroupBoundingBox(group)
         val bounds = CompactOblastBoundaries.get("odeska")!!.boundingBox()!!
-        assertTrue(box.latitudeSouth <= bounds.minLat + 1e-6)
-        assertTrue(box.latitudeNorth >= bounds.maxLat - 1e-6)
-        assertTrue(box.longitudeWest <= bounds.minLon + 1e-6)
-        assertTrue(box.longitudeEast >= bounds.maxLon - 1e-6)
+        assertTrue(box.latSouth <= bounds.minLat + 1e-6)
+        assertTrue(box.latNorth >= bounds.maxLat - 1e-6)
+        assertTrue(box.lonWest <= bounds.minLon + 1e-6)
+        assertTrue(box.lonEast >= bounds.maxLon - 1e-6)
     }
 
     @Test
@@ -102,8 +102,8 @@ class FlourishTest {
         val box = flourishGroupBoundingBox(group)
         // Unresolvable key → the box hugs the record (min-span floor), not the whole oblast.
         val expected = flourishesBoundingBox(group, null)
-        assertEquals(expected.latitudeSouth, box.latitudeSouth, 1e-9)
-        assertEquals(expected.longitudeEast, box.longitudeEast, 1e-9)
+        assertEquals(expected.latSouth, box.latSouth, 1e-9)
+        assertEquals(expected.lonEast, box.lonEast, 1e-9)
     }
 
     @Test
@@ -116,7 +116,7 @@ class FlourishTest {
         )
         val box = flourishGroupBoundingBox(group)
         val bounds = CompactOblastBoundaries.get("odeska")!!.boundingBox()!!
-        assertTrue(box.latitudeNorth - box.latitudeSouth >= bounds.maxLat - bounds.minLat)
+        assertTrue(box.latNorth - box.latSouth >= bounds.maxLat - bounds.minLat)
     }
 
     @Test

@@ -14,7 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import ua.ukrainedrones.connection.Monotonic
-import ua.ukrainedrones.engine.NEPTUN_TYPES
+import ua.ukrainedrones.source.NeptunSource.Companion.NEPTUN_TYPES
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.ThreatProps

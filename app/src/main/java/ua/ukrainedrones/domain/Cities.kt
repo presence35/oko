@@ -1,5 +1,6 @@
 package ua.ukrainedrones
 
+import ua.ukrainedrones.engine.AlertLevel
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.distanceFlat
 
@@ -707,12 +708,13 @@ fun resolveFocus(
  *  progressively by [MajorReveal]: the top-5 overview set shows from the country view, MID
  *  majors from mid-zoom, the rest up close. MAJOR/MEDIUM/MINOR respect the Settings toggles
  *  ([showLargeCities] / [showMediumCities] / [showSmallCities], all on by default). Cities
- *  in [redCityNames] (by Ukrainian name) are drawn red — the set already respects the
- *  official-alert scope (whole oblast by default, city-level when the City scope is on). */
+ *  in [cityAlertLevels] are colored by alert severity (RED → red, YELLOW → amber).
+ *  Cities in [suppressedAlertCities] show off-white (the fill already communicates the alert). */
 class CityLabelOverlay(
     context: Context,
     private val lang: AppLanguage,
-    private val redCityNames: Set<String> = emptySet(),
+    private val cityAlertLevels: Map<String, AlertLevel> = emptyMap(),
+    private val suppressedAlertCities: Set<String> = emptySet(),
     private val showLargeCities: Boolean = true,
     private val showMediumCities: Boolean = true,
     private val showSmallCities: Boolean = true,
@@ -742,7 +744,7 @@ class CityLabelOverlay(
                     MajorReveal.MID -> 7.5
                     MajorReveal.LATE -> 9.0
                 }
-                CityTier.MEDIUM -> if (forceAll || showMediumCities) 6.5 else Double.MAX_VALUE
+                CityTier.MEDIUM -> if (forceAll || showMediumCities) 8.5 else Double.MAX_VALUE
                 CityTier.MINOR -> if (forceAll || showSmallCities) 10.0 else Double.MAX_VALUE
             }
             if (zoom < minZoom) continue
@@ -755,10 +757,13 @@ class CityLabelOverlay(
                 CityTier.MEDIUM -> (9.5 + (zoom - 6.5) * 0.9).coerceIn(9.5, 15.0)
                 CityTier.MINOR -> (8.5 + (zoom - 10.0) * 0.7).coerceIn(8.5, 13.0)
             }).toFloat() * density
-            paint.color = if (c.nameUa in redCityNames) {
-                Color.argb(255, 211, 47, 47)
-            } else {
-                Color.argb(230, 235, 235, 235)
+            val level = cityAlertLevels[c.nameUa] ?: AlertLevel.NONE
+            val suppressed = c.nameUa in suppressedAlertCities
+            paint.color = when {
+                suppressed || level == AlertLevel.NONE -> 0xFFEBEBEB.toInt()
+                level == AlertLevel.RED -> 0xFFFF5252.toInt()
+                level == AlertLevel.YELLOW -> 0xFFFFD740.toInt()
+                else -> 0xFFEBEBEB.toInt()
             }
             canvas.drawText(name(c), reuse.x.toFloat(), reuse.y.toFloat() - 6f * density, paint)
         }

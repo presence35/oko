@@ -5,6 +5,7 @@ import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.ThreatProps
 import ua.ukrainedrones.engine.ThreatZone
+import ua.ukrainedrones.engine.AlertLevel
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.distanceFlat
@@ -717,7 +718,7 @@ fun NeptunMapView(
         uiState.alertYellowRaionKeys,
         showNearbyShelters,
         selectedShelter?.shelter?.id,
-        uiState.redCities,
+        uiState.cityAlerts,
         uiState.mapThreats,
         lang
     ) {
@@ -742,7 +743,7 @@ fun NeptunMapView(
             if (showNearbyShelters) {
                 append('L').append(selectedShelter?.shelter?.id)
             }
-            for (city in uiState.redCities) append('C').append(city).append(';')
+            for ((city, level) in uiState.cityAlerts) append('C').append(city).append(level.name.first()).append(';')
             for (t in uiState.mapThreats) appendThreatKey(t) // staleness handled in marker loop
         }
     }
@@ -1302,22 +1303,44 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
                     }
                 }
 
-                // City labels (English names on top of label-free tiles). Region-precise red:
-                // in fill mode the wide-oblast and raion fills already cover the region, so skip
-                // red labels for cities inside a filled oblast or a filled raion; cities only
-                // covered by a city-level alert (no polygon) still read red via their labels.
-                val redLabels = if (uiState.fillAlertRegions) {
-                    uiState.redCities.filter { c ->
-                        val stem = Cities.cityOblast[c] ?: return@filter true
-                        if (stem in uiState.alertOblastTokens) return@filter false
-                        val raion = CityRaions.cityRaion[c] ?: return@filter true
-                        (stem to raion.lowercase()) !in uiState.alertRaionKeys
+                // City labels — alert-colored by severity, suppressed where a fill already
+                // communicates the same level. When fills are OFF, expand alerts to all cities
+                // in alerted oblasts (broad labels stand in for the missing fill).
+                val displayAlerts = if (!uiState.fillAlertRegions) {
+                    buildMap {
+                        putAll(uiState.cityAlerts)
+                        for (city in Cities.ALL) {
+                            if (city.nameUa in uiState.cityAlerts) continue
+                            val stem = Cities.cityOblast[city.nameUa] ?: continue
+                            when {
+                                stem in uiState.alertOblastTokens -> put(city.nameUa, AlertLevel.RED)
+                                stem in uiState.alertYellowOblastTokens -> put(city.nameUa, AlertLevel.YELLOW)
+                            }
+                        }
+                    }
+                } else uiState.cityAlerts
+
+                val suppressedCities = if (uiState.fillAlertRegions) {
+                    uiState.cityAlerts.mapNotNull { (cityName, level) ->
+                        val stem = Cities.cityOblast[cityName] ?: return@mapNotNull null
+                        val raion = CityRaions.cityRaion[cityName]?.lowercase()?.trim()
+                        val covered = when (level) {
+                            AlertLevel.RED -> stem in uiState.alertOblastTokens ||
+                                (raion != null && (stem to raion) in uiState.alertRaionKeys)
+                            AlertLevel.YELLOW -> (stem in uiState.alertYellowOblastTokens ||
+                                (raion != null && (stem to raion) in uiState.alertYellowRaionKeys)) ||
+                                stem in uiState.alertOblastTokens
+                            else -> false
+                        }
+                        if (covered) cityName else null
                     }.toSet()
-                } else uiState.redCities
+                } else emptySet()
+
                 mapView.overlays.add(
                     CityLabelOverlay(
                         context, lang,
-                        redCityNames = redLabels,
+                        cityAlertLevels = displayAlerts,
+                        suppressedAlertCities = suppressedCities,
                         uiState.showLargeCities, uiState.showMediumCities, uiState.showSmallCities,
                         forceShowAllProvider = { deathFx.forceShowAllCities.value }
                     )
