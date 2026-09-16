@@ -59,7 +59,7 @@ import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.toThreatType
-import ua.ukrainedrones.flourish.DeathFxController
+import ua.ukrainedrones.DeathFxController
 import ua.ukrainedrones.source.RESOLVED_REPLAY_GRACE_MS
 import ua.ukrainedrones.ui.MapLibreBridge
 import ua.ukrainedrones.ui.MapLibreHostView
@@ -620,10 +620,10 @@ fun NeptunMapView(
             showRegionBorders = uiState.showRegionBorders
         )
         bridge.updateZones(
-            focusLat = uiState.focusLocation?.lat,
-            focusLon = uiState.focusLocation?.lon,
-            slowYellowKm = uiState.activeZoneParams.slowYellowKm,
+            centerLat = uiState.focusLocation?.lat,
+            centerLon = uiState.focusLocation?.lon,
             slowRedKm = uiState.activeZoneParams.slowRedKm,
+            slowYellowKm = uiState.activeZoneParams.slowYellowKm,
             activeZone = uiState.activeZone
         )
     }
@@ -1119,7 +1119,7 @@ fun NeptunMapView(
                             sizeDp = if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32
                         )
                         val base = IconCatalog.baseDeg(threatType, iconSetState)
-                        val rotation = pose?.headingDeg ?: ((targetThreat.courseDeg.toFloat() - base + 360f) % 360f)
+                        val rotation = pose?.headingDeg ?: ((engine.courseDeg(targetThreat).toFloat() - base + 360f) % 360f)
                         val played = if (deathFx.isActiveFor(threatId)) {
                             deathFx.strikeDud(threatId, strikeLat, strikeLon)
                         } else {

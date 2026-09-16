@@ -17,6 +17,7 @@ import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import ua.ukrainedrones.engine.ThreatZone
 import kotlin.math.cos
 import kotlin.math.pow
 
@@ -150,7 +151,8 @@ class MapLibreBridge(
         centerLat: Double?,
         centerLon: Double?,
         slowRedKm: Double,
-        slowYellowKm: Double
+        slowYellowKm: Double,
+        activeZone: ThreatZone? = null
     ) {
         val s = style ?: return
         MapLibreLayerManager.updateZoneCircles(s, centerLat, centerLon, slowRedKm, slowYellowKm)

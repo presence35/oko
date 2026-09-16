@@ -1279,7 +1279,7 @@ private fun ThreatCardHost(
         when (state) {
             1 -> sel.selected?.let { threat ->
                 Column(
-                    modifier = if (smallCard) Modifier.widthIn(max = 300.dp) else Modifier
+                    modifier = if (smallCard) Modifier.width(IntrinsicSize.Min) else Modifier.fillMaxWidth()
                 ) {
                     ThreatPopupCard(
                         threat = threat,
@@ -1292,7 +1292,7 @@ private fun ThreatCardHost(
                         alertsOff = threat.type.toThreatType() in silencedTypes,
                         onDismiss = onDismiss,
                         fakeNeutralize = sel.fakeNeutralize,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = if (smallCard) Modifier.wrapContentWidth() else Modifier.fillMaxWidth()
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),

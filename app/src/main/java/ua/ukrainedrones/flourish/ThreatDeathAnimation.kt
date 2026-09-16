@@ -279,7 +279,8 @@ class ThreatDeathOverlay {
         for (d in deaths) {
             val rawElapsed = now - d.start
             if (rawElapsed < 0) {
-                d.icon?.let { icon ->
+                val icon = d.icon
+                if (icon != null) {
                     val w = icon.intrinsicWidth.coerceAtLeast(1) / 2f
                     val h = icon.intrinsicHeight.coerceAtLeast(1) / 2f
                     icon.alpha = (d.alpha * 255).toInt()
