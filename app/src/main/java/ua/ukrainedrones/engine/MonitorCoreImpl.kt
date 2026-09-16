@@ -76,11 +76,6 @@ class MonitorCoreImpl(
         rawThreatMap.clear()
 
         for (t in threats) {
-            val shotAt = userShotAt[t.id]
-            if (shotAt != null && nowMono - shotAt <= USER_SHOT_GRACE_MS) {
-                // Keep suppressed
-                continue
-            }
             rawThreatMap[t.id] = t
         }
 
@@ -95,12 +90,6 @@ class MonitorCoreImpl(
 
     override fun upsertThreat(threat: NormalizedThreat) {
         val now = System.currentTimeMillis()
-        val nowMono = Monotonic.now()
-
-        val shotAt = userShotAt[threat.id]
-        if (shotAt != null && nowMono - shotAt <= USER_SHOT_GRACE_MS) {
-            return
-        }
 
         rawThreatMap[threat.id] = threat
         _threats.value = rawThreatMap.values.toList()
@@ -126,7 +115,6 @@ class MonitorCoreImpl(
     override fun markUserShot(id: String) {
         if (id.isNotBlank()) {
             userShotAt[id] = Monotonic.now()
-            removeThreat(id)
         }
     }
 

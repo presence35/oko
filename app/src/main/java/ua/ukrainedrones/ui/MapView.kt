@@ -1495,10 +1495,6 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
                     MapEventsOverlay(object : MapEventsReceiver {
                         override fun singleTapConfirmedHelper(p: GeoPoint): Boolean = false
                         override fun longPressHelper(p: GeoPoint): Boolean {
-                            // Never let a playful kill during a red/official alert — the user
-                            // could accidentally shoot down the very object they need to watch,
-                            // and the 30s user-shot grace would keep its alerts quiet.
-                            if (alertActiveState) return false
                             val pressPx = Point()
                             mapView.projection.toPixels(p, pressPx)
                             val density = mapView.context.resources.displayMetrics.density
@@ -1842,6 +1838,12 @@ if (uiState.fillAlertRegions && uiState.alertOblastTokens.isNotEmpty()) {
                         anim.duration = 300
                         anim.interpolator = DecelerateInterpolator()
                         anim.addUpdateListener { scaleDrawable.scale = it.animatedValue as Float }
+                        anim.addListener(object : AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: Animator) {
+                                marker.icon = targetIcon
+                                mv.invalidate()
+                            }
+                        })
                         anim.start()
                     }
                 }
@@ -1951,6 +1953,11 @@ private class ScaleDrawable(
 ) : Drawable() {
     var scale = 0f
         set(value) { field = value; onInvalidate() }
+
+    override fun onBoundsChange(bounds: Rect) {
+        super.onBoundsChange(bounds)
+        inner.bounds = bounds
+    }
 
     override fun draw(canvas: Canvas) {
         val cx = bounds.centerX().toFloat()
