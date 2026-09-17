@@ -997,8 +997,8 @@ fastYellowArmed = p.fastYellowArmed,
 
     private fun offlineLiveBody(s: Strings.StringSet, minutes: Int): String {        val registry = AppSources.registry
         if (registry.connectionState.value == SourceState.PAUSED) return s.offlinePausedBody
-        val attempt = registry.retryState.value?.attempt ?: 0
-        return String.format(s.offlineLiveFormat, minutes, attempt + 1)
+        val attempt = registry.retryState.value?.attempt ?: 1
+        return String.format(s.offlineLiveFormat, minutes, attempt)
     }
 
     private fun postAlert(

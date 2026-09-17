@@ -232,6 +232,8 @@ class ResilientConnectionSupervisor(
         isNetworkValidated.set(false)
         closeCurrentSocket(reason)
         connectJob?.cancel()
+        // No job is scheduled from here, so any posted countdown is phantom — clear it.
+        _retryState.value = null
         val now = System.currentTimeMillis()
         // Episode age is stamped once on the Connected → down edge; flickers never rewrite it.
         val episodeStart = beginEpisodeIfNeeded(now)
@@ -286,7 +288,11 @@ class ResilientConnectionSupervisor(
                 val csNow = _connectionState.value
                 if (csNow is ConnectionState.Offline || csNow is ConnectionState.Connecting) {
                     checkMilestones(System.currentTimeMillis())
-                    checkStuckOffline(nowMono)
+                    if (!isNetworkValidated.get()) {
+                        pollNetworkValidation()
+                    } else {
+                        checkStuckOffline(nowMono)
+                    }
                 }
             }
         }
@@ -301,6 +307,28 @@ class ResilientConnectionSupervisor(
         if (nowMono - lastReconnectProgressMono.get() >= STUCK_OFFLINE_MS) {
             recordEvent(ConnEventKind.RETRY_SCHEDULED, detail = "Stuck watchdog")
             triggerReconnect("Stuck offline watchdog")
+        }
+    }
+
+    /** Proactive validation recheck while down. The OS doesn't always emit a callback when
+     *  usability returns (a validation flap mid-connect can strand us with no job and no
+     *  future event), so poll the capabilities on the watchdog tick and take the standard
+     *  restore path the moment they validate. One cheap binder call per tick — no sockets,
+     *  no attempts, no log spam while still down. */
+    private fun pollNetworkValidation() {
+        if (isPaused()) return
+        val caps = runCatching {
+            connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+        }.getOrNull() ?: return
+        val valid = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        if (!valid) return
+        if (isNetworkValidated.compareAndSet(false, true)) {
+            recordEvent(ConnEventKind.FALLBACK_RESTORED, detail = "Network validated (poll)")
+            if (isRunning.get() && !isPaused()) {
+                reconnectAttempts.set(0)
+                triggerReconnect("Network restored (poll)")
+            }
         }
     }
 
