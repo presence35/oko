@@ -257,6 +257,34 @@ private val COURSE_PATTERNS: List<Pair<Regex, String>> = listOf(
 )
 
 /**
+ * The national MiG-31K takeoff track carries descriptors, not places
+ * (`region` = "Загальнодержавна загроза", `district` = "Носій «Кинджал»"), so the
+ * generic place-transliteration path would render garbage ("Nosii ..."). Matched by
+ * the MiG token only — NEPTUN rewords the surrounding sentence, so nothing here may
+ * depend on full-sentence shape. Single owner of all MiG EN strings; [threatBody] and
+ * the card header call into this instead of branching on their own.
+ */
+private val NATIONAL_MIG_TOKEN = Regex("(?iu)міг-?31|mig-?31|загальнодержавн")
+
+/** True when [t] is the national MiG-31K takeoff track (country-wide, no real place attached). */
+fun isNationalMig(t: NormalizedThreat): Boolean {
+    if (t.id == "national-mig31k") return true
+    // Title/locality excluded: the simulator's "Test MiG-31K" title is already English
+    // and a locality is always a real place — the descriptors live in region/district/course.
+    return NATIONAL_MIG_TOKEN.containsMatchIn(
+        listOfNotNull(t.region, t.district, t.explanationShort).joinToString(" ")
+    )
+}
+
+/** EN header descriptor for the national MiG (UA keeps the raw server text). */
+fun nationalMigWhereText(): String = "Kinzhal carrier · Country-wide threat"
+
+/** EN course line for the national MiG (UA keeps the raw server text). */
+fun nationalMigCourseText(): String =
+    "MiG-31K takeoff detected — carrier of Kinzhal aeroballistic missiles. " +
+        "Threat to all of Ukraine: ballistic launch possible within minutes. Stay near shelter."
+
+/**
  * Best-effort EN rendering of NEPTUN's course assessment (`explanationShort`), which is
  * always Ukrainian. Only known sentence templates are translated; the place name is looked
  * up in our city dictionary and otherwise transliterated — a proper noun is never semantically
@@ -269,6 +297,7 @@ fun translateCourseAssessment(text: String?, lang: AppLanguage): String? {
     if (text.isNullOrBlank()) return null
     if (lang == AppLanguage.UA) return text
     val t = text.trim()
+    if (NATIONAL_MIG_TOKEN.containsMatchIn(t)) return nationalMigCourseText()
     for ((pattern, template) in COURSE_PATTERNS) {
         val m = pattern.find(t) ?: continue
         val place = m.groupValues.getOrNull(1)?.trim()?.trimEnd('.', '—', '-') ?: continue
@@ -408,7 +437,16 @@ private val COURSE_GLOSSARY: List<Pair<String, String>> = listOf(
     "ціль" to "target",
     "цілі" to "targets",
     "пуск" to "launch",
-    "пуски" to "launches"
+    "пуски" to "launches",
+    "зафіксовано" to "detected",
+    "зліт" to "takeoff",
+    "носій" to "carrier",
+    "носія" to "carrier",
+    "загроза" to "threat",
+    "загрози" to "threat",
+    "укриття" to "shelter",
+    "кинджал" to "Kinzhal",
+    "аеробалістичних" to "aeroballistic"
 )
 
 /**

@@ -5,6 +5,8 @@ import ua.ukrainedrones.Cities
 import ua.ukrainedrones.ThreatType
 import ua.ukrainedrones.ThreatTypeCatalog
 import ua.ukrainedrones.Transliteration
+import ua.ukrainedrones.isNationalMig
+import ua.ukrainedrones.nationalMigWhereText
 
 fun inOblast(region: String?, district: String?, locality: String?, token: String?): Boolean {
     if (token == null) return false
@@ -24,6 +26,8 @@ fun inFocusOblast(t: NormalizedThreat, token: String?): Boolean {
 fun threatBody(t: NormalizedThreat, lang: AppLanguage): String {
     val info = threatTypeInfoByString(t.type) ?: ThreatTypeCatalog.INFO.getValue(ThreatType.UNKNOWN)
     val label = if (lang == AppLanguage.UA) info.labelUa else info.labelEn
+    // The national MiG carries descriptors, not places — never transliterate them as a city.
+    if (lang == AppLanguage.EN && isNationalMig(t)) return "$label — ${nationalMigWhereText()}"
     val where = t.locality ?: t.district ?: t.region
     val whereText = if (where == null) null else if (lang == AppLanguage.UA) where
     else Cities.byUa[where]?.nameEn ?: Transliteration.transliterate(where)

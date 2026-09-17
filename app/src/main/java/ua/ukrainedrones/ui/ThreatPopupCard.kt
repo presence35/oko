@@ -188,8 +188,12 @@ fun ThreatPopupCard(
 
     // NEPTUN's locality text is Ukrainian; for the EN UI transliterate it (place names are
     // romanized, never semantically translated — the romanization is all an EN reader needs).
-    val displayRegion =
-        if (lang == AppLanguage.EN) Transliteration.transliterate(regionText) else regionText
+    // The national MiG carries descriptors, not places — show the fixed EN text instead.
+    val displayRegion = when {
+        lang == AppLanguage.EN && isNationalMig(threat) -> nationalMigWhereText()
+        lang == AppLanguage.EN -> Transliteration.transliterate(regionText)
+        else -> regionText
+    }
 
     // Elapsed time + stale flag from leaf composable (runs its own 1s clock, doesn't invalidate parent).
     val (elapsedText, stale) = ThreatElapsedText(threat, s)
