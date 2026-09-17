@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -8,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
 import androidx.core.content.ContextCompat
 import android.media.AudioAttributes
 import android.net.Uri
@@ -35,8 +35,8 @@ import ua.ukrainedrones.service.ServiceState
 class AlertNotificationManager(private val context: Context) {
 
     companion object {
-        private val NotifRed = Color.parseColor("#E53935")
-        private val NotifYellow = Color.parseColor("#F9A825")
+        private val NotifRed = AppPalette.AlertRed.toInt()
+        private val NotifYellow = AppPalette.AlertYellow.toInt()
         const val ACTION_RETRY = "ua.ukrainedrones.RETRY"
         const val ACTION_IGNORE_RETRY = "ua.ukrainedrones.IGNORE_RETRY"
         const val ACTION_ALLCLEAR_DISMISSED = "ua.ukrainedrones.ALLCLEAR_DISMISSED"

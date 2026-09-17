@@ -101,6 +101,7 @@ detail that matters when editing that file.
 | `MainActivity.kt` | Single activity; dark theme (via `DarkThemePlugin`); starts `AlertService`; legacy osmdroid cache cleanup. *Note:* location→notification permissions defer until first-run onboarding resolves; "Later" sets `permission_prompt_deferred` (re-armed each cold start). |
 | `theme/ThemePlugin.kt` | Theme plugin contract (`name`, `isDark`, `colors`, `typography`). |
 | `theme/DarkThemePlugin.kt` | The only shipped theme (dark-only); `MainActivity` applies `DarkThemePlugin.colors`. |
+| `theme/AppPalette.kt` | The single source of truth for every color in the app (`object`). Shipping code never hardcodes color literals — it references a token (Compose: `Color(AppPalette.X)`, canvas/MapLibre/service: `AppPalette.X.toInt()`). `DarkThemePlugin` derives its `darkColorScheme` from these tokens. |
 
 ### Data ingress (NEPTUN)
 
@@ -186,7 +187,7 @@ private inside each `Source`. Every source reports normalized engine currency
 | `Haptics.kt` | Global press-haptics: `LocalHapticsEnabled` CompositionLocal (provided from the `hapticsEnabled` pref at the MainScreen root) + `Modifier.pressTick(source)` — vibrates via `LaunchedEffect` when the element's own `MutableInteractionSource` reports pressed (the same signal as its press animation; pointer-event listeners proved unreliable here). The source must be **shared** with the element's clickable/toggleable. Raw `Vibrator`, short one-shot at full amplitude (`USAGE_ALARM` on API 30+ — same always-on channel as the shoot-down flourish) because Compose's haptic API is muted by system touch-feedback settings and predefined `EFFECT_TICK` is a silent no-op on many OEMs. Also hosts `animationsOff()` (zero animator scale → snap instead of animate) and the imperative `hapticTick()` for non-Compose tap sites. Applied across map controls, settings rows, and popup cards. |
 | `LogsScreen.kt` | Full-screen Logs: one card list over decisions (the audit trail) and connection episodes, switched by chips (Decisions / Connections / Sources / System / Tests). A **Sources** tab lists every registered alert source with its type (WS/REST), real `SourceState`, operational mode (Streaming/Polling/Standby), an enable switch (`setEnabled`), and a **Test** button that runs `testConnection()` and shows the result inline, plus a live activity feed (toggles + takeovers); connection cards tag `activeSource` on fallback episodes. A **Tests** tab lists live per-source `testConnection()` results (ok/summary + timestamp) for every registered source, with a rerun button each; the battery-OEM simulator lives on the **System** tab. The generic empty-state is skipped for Sources/Tests (they render their own content/empty text). The Decisions tab offers group-by (Timeline / Proximity = official, red zone, yellow zone, in-oblast, left / Type), a standard sort-direction icon toggle (newest/oldest) that applies within every grouping, and a "shown only" switch (only rows where a notification was actually shown); controls stay visible even when the list is empty so the shown-only switch can be flipped back. A double-arrow reveals more rows; a leading per-threat-type icon on threat rows (red trident = official on, green check = all-clear), an "ago" + absolute timestamp, day/night + effective sound, "Notification shown" or "No notification — \<reason\>", Clear button. |
 | `MapLibreGeoJson.kt` | Generates GeoJSON FeatureCollections for Ukraine land borders, oblast and raion administrative borders, active alert fills, and range warning circles. |
-| `MapLibreLayerManager.kt` | Manages MapLibre GeoJSON sources and GPU vector layers (`LineLayer`, `FillLayer`) with dynamic style updates. |
+| `MapLibreLayerManager.kt` | Manages MapLibre GeoJSON sources and GPU vector layers (`LineLayer`, `FillLayer`) with dynamic style updates; layer colors come from `AppPalette`. |
 | `MapLibreStyle.kt` | Generates MapLibre raster dark style JSON with `BuildConfig.CARTO_API_KEY` and dark background. |
 | `MapLibreView.kt` | `MapLibreHostView` + `MapLibreBridge`: Compose wrapper around MapLibre Native SDK MapView, handling lifecycle, camera, GPU vector layers, and projection bridge. |
 | `MapView.kt` | `NeptunMapView`. Owns map rendering with MapLibre Native: GPU-accelerated alert fills and border lines via `MapLibreLayerManager`, and Compose Canvas overlays for threat markers, course rotation, shelter pins, city labels, death flourish FX, and GPS dot. Threat icons scale with map zoom by default (1x→3x across only the final ~3 zoom levels before `NORMAL_MAX_ZOOM`); same-coordinate threats de-overlap per `OverlapMode`. Camera moves funnel through `ui/CameraCoordinator.kt` (`MapCameraCoordinator`). |
@@ -428,6 +429,12 @@ Treat these as a contract. If you change one, update **every** place that relies
 
 - **Siren channels.** Notification stream by default; alarm stream (DND-piercing) only with
   `sirenOverride`. All-clear never overrides.
+
+- **Single color source of truth.** Shipping code never hardcodes color literals (no `0x…`,
+  `Color.rgb/argb`, `parseColor`). Every color is an `AppPalette` token — Compose: `Color(AppPalette.X)`,
+  canvas/MapLibre/service: `AppPalette.X.toInt()`. `DarkThemePlugin` derives `darkColorScheme` from the
+  same tokens. Debug-only diagnostics (`AlertFillDiagnostics.kt`), animation explosions
+  (`ThreatDeathAnimation.kt`) and chart diagrams (`FeatureDiagrams.kt`) remain exempt.
 
 ## Ownership boundaries
 

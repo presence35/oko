@@ -219,6 +219,7 @@ class AlertService : Service() {
         val threats: Map<String, NormalizedThreat>,
         val alerts: List<OblastAlert>,
         val criticalOfflineOverride: Boolean,
+        val criticalOfflineBypassSilent: Boolean,
         val fastVibrationLevel: Int,
         val slowVibrationLevel: Int,
         val focusLocation: LatLng?,
@@ -530,6 +531,7 @@ fastYellowArmed = p.fastYellowArmed,
                     threats = threats,
                     alerts = alerts,
                     criticalOfflineOverride = p.criticalOfflineOverride,
+                    criticalOfflineBypassSilent = p.criticalOfflineBypassSilent,
                     fastVibrationLevel = fastVib,
                     slowVibrationLevel = slowVib,
                     focusLocation = focusLoc,
@@ -606,6 +608,7 @@ fastYellowArmed = p.fastYellowArmed,
             offlineMinutes >= criticalThresholdMin && criticalFiredForEpisode != episode
         ) {
             criticalFiredForEpisode = episode
+            if (state.criticalOfflineBypassSilent) audioAlarmDispatcher.dispatchCriticalOffline(true)
             notificationManager.postCriticalOfflineNotification(
                 if (criticalThresholdMin == CRITICAL_OFFLINE_ALARM_MIN) s.offlineCriticalAlarmTitle
                 else s.offlineCriticalTitle,
@@ -969,27 +972,9 @@ fastYellowArmed = p.fastYellowArmed,
             ?.let { ((nowMono - it) / 60_000L).toInt().coerceAtLeast(0) }
             ?: milestone.minutes
         when (milestone) {
-            ConnectionMilestone.M5_CRITICAL -> postCriticalOffline(s, CRITICAL_OFFLINE_MIN)
+            ConnectionMilestone.M5_CRITICAL -> Unit // critical is owned by the per-tick block
             else -> notificationManager.postOfflineNotification(
                 s.offlineStatusTitle, offlineLiveBody(s, ageMin), s.offlineRetryAction,
-                s.offlineIgnoreAction
-            )
-        }
-    }
-
-    private fun postCriticalOffline(s: Strings.StringSet, minutes: Int) {
-        val episode = AppSources.registry.degradedSince.value ?: return
-        if (criticalFiredForEpisode == episode) return
-        scope.launch {
-            val prefs = UserPrefs(applicationContext).preferences.first()
-            if (!prefs.criticalOfflineOverride) return@launch
-            criticalFiredForEpisode = episode
-            if (prefs.criticalOfflineBypassSilent) audioAlarmDispatcher.dispatchCriticalOffline(true)
-            notificationManager.postCriticalOfflineNotification(
-                if (minutes == CRITICAL_OFFLINE_ALARM_MIN) s.offlineCriticalAlarmTitle
-                else s.offlineCriticalTitle,
-                String.format(s.offlineCriticalFormat, minutes),
-                s.offlineRetryAction,
                 s.offlineIgnoreAction
             )
         }

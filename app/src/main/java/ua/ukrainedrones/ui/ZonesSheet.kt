@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,9 +23,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
-private val RedZoneColor = Color(0xFFD32F2F)
-private val YellowZoneColor = Color(0xFFF9A825)
-internal val TurtleGreen = Color(0xFF4CAF50)
+private val RedZoneColor = Color(AppPalette.AlertRed)
+private val YellowZoneColor = Color(AppPalette.AlertYellow)
+internal val TurtleGreen = Color(AppPalette.SafeGreen)
 
 /** The red/yellow accent colors used by zone sliders everywhere (sheet + Settings). */
 internal val ZoneRedColor = RedZoneColor
@@ -39,7 +40,7 @@ internal fun SheetDragHandle() {
             .width(48.dp)
             .height(24.dp)
             .clip(RoundedCornerShape(50))
-            .background(Color(0xFF555555).copy(alpha = 0.6f)),
+            .background(Color(AppPalette.BorderSoft).copy(alpha = 0.6f)),
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -47,7 +48,7 @@ internal fun SheetDragHandle() {
                 .width(36.dp)
                 .height(4.dp)
                 .clip(RoundedCornerShape(50))
-                .background(Color(0xFF888888))
+                .background(Color(AppPalette.HandleGrey))
         )
     }
 }
@@ -277,8 +278,8 @@ internal fun ZoneRow(
                 checkedThumbColor = accent,
                 checkedTrackColor = accent.copy(alpha = 0.45f),
                 checkedBorderColor = Color.Transparent,
-                uncheckedThumbColor = Color(0xFF9E9E9E),
-                uncheckedTrackColor = Color(0xFF555555),
+                uncheckedThumbColor = Color(AppPalette.TextSecondary),
+                uncheckedTrackColor = Color(AppPalette.BorderSoft),
                 uncheckedBorderColor = Color.Transparent
             )
         )
@@ -295,7 +296,7 @@ Spacer(Modifier.width(8.dp))
                         ((ref - range.start) / (range.endInclusive - range.start)).toFloat()
                     val x = thumbR + fraction * (size.width - 2 * thumbR)
                     drawLine(
-                        color = Color(0xFFB0BEC5).copy(alpha = 0.45f),
+                        color = Color(AppPalette.GhostTick).copy(alpha = 0.45f),
                         start = Offset(x, size.height * 0.25f),
                         end = Offset(x, size.height * 0.75f),
                         strokeWidth = 2.dp.toPx(),
@@ -330,7 +331,7 @@ Spacer(Modifier.width(6.dp))
                 )
                 Text(
                     "$dayLabel $reference $unit",
-                    color = Color(0xFF9E9E9E),
+                    color = Color(AppPalette.TextSecondary),
                     style = MaterialTheme.typography.labelSmall
                 )
             }

@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -33,9 +34,9 @@ internal fun ConnectionStatus(
     modifier: Modifier = Modifier
 ) {
     val connColor = when {
-        neptunDown -> Color(0xFFE57373)
-        degraded -> Color(0xFFFB8C00)
-        else -> Color(0xFF4CAF50)
+        neptunDown -> Color(AppPalette.AlertRed)
+        degraded -> Color(AppPalette.DegradedOrange)
+        else -> Color(AppPalette.SafeGreen)
     }
     val label = when {
         neptunDown -> s.connOffline

@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import android.os.Build
 import android.app.NotificationChannel
@@ -125,10 +126,10 @@ import ua.ukrainedrones.source.Source
 import ua.ukrainedrones.source.SourceEvent
 import ua.ukrainedrones.source.SourceEventKind
 
-private val DebugRed = Color(0xFFE57373)
-private val DebugAmber = Color(0xFFF9A825)
-private val DebugGreen = Color(0xFF4CAF50)
-private val DebugBlue = Color(0xFF64B5F6)
+private val DebugRed = Color(AppPalette.AlertRed)
+private val DebugAmber = Color(AppPalette.AlertYellow)
+private val DebugGreen = Color(AppPalette.SafeGreen)
+private val DebugBlue = Color(AppPalette.Primary)
 
 /** Rows shown at once; the double-arrow button reveals [VISIBLE_STEP] more. */
 private const val VISIBLE_INITIAL = 25
@@ -231,9 +232,9 @@ fun LogsDropDownSheet(
     val subtitle = if (isDecisions) String.format(s.logsSubtitleFormat, rows.size) else null
 
     val connColor = when {
-        neptunDown -> Color(0xFFE57373)
-        degraded -> Color(0xFFFB8C00)
-        else -> Color(0xFF4CAF50)
+        neptunDown -> Color(AppPalette.AlertRed)
+        degraded -> Color(AppPalette.DegradedOrange)
+        else -> Color(AppPalette.SafeGreen)
     }
     val healthWord = when {
         neptunDown -> s.connOffline
@@ -245,7 +246,7 @@ fun LogsDropDownSheet(
         modifier = modifier
             .fillMaxWidth()
             .fillMaxHeight(0.85f)
-            .background(Color(0xFF1E1E1E))
+            .background(Color(AppPalette.Card))
     ) {
         // Top Header Bar — clean single-row: title, then NEPTUN mark + domain + status + counts.
         Row(
@@ -303,7 +304,7 @@ fun LogsDropDownSheet(
         val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources, s.logsFilterSystem, s.logsFilterChannels)
         ScrollableTabRow(
             selectedTabIndex = tabFilters.indexOf(filter),
-            containerColor = Color(0xFF252525),
+            containerColor = Color(AppPalette.CardAlt),
             contentColor = MaterialTheme.colorScheme.primary,
             edgePadding = 0.dp
         ) {
@@ -1325,7 +1326,7 @@ private fun MergedAlertsDebugCard(s: Strings.StringSet) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1B1B1B))
+            .background(Color(AppPalette.CardDeep))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
@@ -1386,7 +1387,7 @@ private fun SourceEventRow(ev: SourceEvent, s: Strings.StringSet, now: Long) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF1E1E1E))
+            .background(Color(AppPalette.Card))
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1434,7 +1435,7 @@ private fun SourceCard(source: Source, state: SourceState, s: Strings.StringSet)
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF252525))
+            .background(Color(AppPalette.CardAlt))
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1518,7 +1519,7 @@ private fun SourceDataCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF252525))
+            .background(Color(AppPalette.CardAlt))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {

@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import ua.ukrainedrones.engine.LatLng
 
@@ -410,9 +411,9 @@ private fun ShelterCard(
     val name = if (lang == AppLanguage.EN) shelterNameEn(row.shelter.name) else row.shelter.name
     val type = row.shelter.type
     val typeColor = when (type) {
-        ShelterType.MOBILE -> androidx.compose.ui.graphics.Color(0xFFFFA000)
-        ShelterType.BUNKER -> androidx.compose.ui.graphics.Color(0xFF2196F3)
-        ShelterType.BASIC -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
+        ShelterType.MOBILE -> androidx.compose.ui.graphics.Color(AppPalette.ShelterMobile)
+        ShelterType.BUNKER -> androidx.compose.ui.graphics.Color(AppPalette.GpsBlue)
+        ShelterType.BASIC -> androidx.compose.ui.graphics.Color(AppPalette.SafeGreen)
     }
     val typeLabel = when (type) {
         ShelterType.MOBILE -> s.shelterTypeMobile

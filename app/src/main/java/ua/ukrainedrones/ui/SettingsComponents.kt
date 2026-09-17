@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -55,11 +56,11 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-internal val UkraineBlue = Color(0xFF005BBB)
+internal val UkraineBlue = Color(AppPalette.UkraineBlue)
 
 /** Night mode's boxed section inside the Alerts card: a darker purple tint + border. */
-internal val NightSectionBg = Color(0xFF1A1130)
-internal val NightSectionBorder = Color(0xFF44357A)
+internal val NightSectionBg = Color(AppPalette.NightSection)
+internal val NightSectionBorder = Color(AppPalette.NightBorder)
 
 /** Subtle one-shot blue border pulse around the row whose one-time explainer just closed. */
 @Composable
@@ -230,7 +231,7 @@ internal fun OfficialPairToggleRow(
                 checked = redChecked,
                 onCheckedChange = onRedChange,
                 icon = painterResource(R.drawable.ic_trident),
-                iconTint = if (redChecked) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurfaceVariant,
+                iconTint = if (redChecked) Color(AppPalette.AlertRed) else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f)
             )
             Box(
@@ -244,7 +245,7 @@ internal fun OfficialPairToggleRow(
                 checked = yellowChecked,
                 onCheckedChange = onYellowChange,
                 icon = painterResource(R.drawable.ic_trident),
-                iconTint = if (yellowChecked) Color(0xFFF9A825) else MaterialTheme.colorScheme.onSurfaceVariant,
+                iconTint = if (yellowChecked) Color(AppPalette.AlertYellow) else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -423,16 +424,16 @@ internal fun WarningTriangle(modifier: Modifier = Modifier) {
             lineTo(0f, h * 0.95f)
             close()
         }
-        drawPath(path, color = Color(0xFFF9A825))
+        drawPath(path, color = Color(AppPalette.AlertYellow))
         drawLine(
-            color = Color(0xFF3A2B00),
+            color = Color(AppPalette.WarningLine),
             start = Offset(w / 2f, h * 0.38f),
             end = Offset(w / 2f, h * 0.62f),
             strokeWidth = 2.2f,
             cap = StrokeCap.Round
         )
         drawCircle(
-            color = Color(0xFF3A2B00),
+            color = Color(AppPalette.WarningLine),
             radius = 1.4f,
             center = Offset(w / 2f, h * 0.8f)
         )

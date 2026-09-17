@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import android.content.Context
 import android.content.Intent
@@ -384,16 +385,16 @@ class ThreatWidget : GlanceAppWidget() {
             ThreatType.UNKNOWN
         )
 
-        private val BG = Color(0xFF121212)
-        private val CARD = Color(0xFF1C1C1E)
-        private val TEXT = Color(0xFFE6E6E6)
-        private val MUTED = Color(0xFF9E9E9E)
-        private val RED = Color(0xFFE53935)
-        private val AMBER = Color(0xFFFDD835)
-        private val ORANGE = Color(0xFFFB8C00)
-        private val GREEN = Color(0xFF43A047)
-        private val BLUE = Color(0xFF1E88E5)
-        private val GOLD = Color(0xFFFFD700)
+        private val BG = Color(AppPalette.Background)
+        private val CARD = Color(AppPalette.Card)
+        private val TEXT = Color(AppPalette.TextPrimary)
+        private val MUTED = Color(AppPalette.TextSecondary)
+        private val RED = Color(AppPalette.AlertRed)
+        private val AMBER = Color(AppPalette.AlertYellow)
+        private val ORANGE = Color(AppPalette.DegradedOrange)
+        private val GREEN = Color(AppPalette.SafeGreen)
+        private val BLUE = Color(AppPalette.WidgetBlue)
+        private val GOLD = Color(AppPalette.Gold)
     }
 }
 

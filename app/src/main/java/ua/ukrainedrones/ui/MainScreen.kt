@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.ThreatZone
@@ -111,9 +112,9 @@ import kotlin.math.sin
 
 private enum class Screen { MAP, SETTINGS, GUIDE, SHELTERS, LOGS }
 
-private val _ukraineBlue = Color(0xFF005BBB)
-private val _ukraineYellow = Color(0xFFFFD500)
-private val AlertRed = Color(0xFFD32F2F)
+private val _ukraineBlue = Color(AppPalette.UkraineBlue)
+private val _ukraineYellow = Color(AppPalette.AlertYellow)
+private val AlertRed = Color(AppPalette.AlertRed)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -767,7 +768,7 @@ private fun MapScreen(
             // Border colors only track the app's own zones — the trident owns the official signal.
             val borderColor = when (activeZone) {
                 ThreatZone.INNER -> AlertRed
-                ThreatZone.OUTER -> Color(0xFFF9A825)
+                ThreatZone.OUTER -> Color(AppPalette.AlertYellow)
                 null -> Color.Transparent
             }
             val pinnedCityName = if (uiState.followMe) null else uiState.pinnedCity?.let {
@@ -824,7 +825,7 @@ private fun MapScreen(
                         style = when {
                             activeZone != null -> MaterialTheme.typography.titleMedium.copy(color = Color.White)
                             officialLevel != AlertLevel.NONE -> MaterialTheme.typography.titleMedium.copy(
-                                color = if (officialLevel == AlertLevel.RED) Color(0xFFE57373) else Color(0xFFF9A825)
+                                color = if (officialLevel == AlertLevel.RED) Color(AppPalette.AlertRed) else Color(AppPalette.AlertYellow)
                             )
                             else -> MaterialTheme.typography.titleMedium.copy(
                                 brush = Brush.linearGradient(
@@ -843,7 +844,7 @@ private fun MapScreen(
                 )
                 if (uiState.protectionState == ProtectionState.REDUCED) {
                     Surface(
-                        color = Color(0xFFFFF3E0),
+                        color = Color(AppPalette.WarningBg),
                         shape = RoundedCornerShape(4.dp),
                         modifier = Modifier.padding(end = 4.dp)
                     ) {
@@ -851,7 +852,7 @@ private fun MapScreen(
                             text = s.protectionReduced,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFE65100)
+                            color = Color(AppPalette.WarningOrange)
                         )
                     }
                 }
@@ -1158,11 +1159,11 @@ private fun MapScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .onSizeChanged { zonesSheetCoverPx = it.height },
-                    color = if (editingNight) NightSectionBg else Color(0xFF1E1E1E),
+                    color = if (editingNight) NightSectionBg else Color(AppPalette.Card),
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                     border = BorderStroke(
                         width = 1.5.dp,
-                        color = if (editingNight) NightSectionBorder else Color(0xFF3A3A3A)
+                        color = if (editingNight) NightSectionBorder else Color(AppPalette.Border)
                     )
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -1376,7 +1377,7 @@ private fun ThreatStripFooter(
         Text(
             calmMessage,
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF4CAF50),
+            color = Color(AppPalette.SafeGreen),
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
@@ -1432,7 +1433,7 @@ private fun ThreatStripFooter(
 @Composable
 private fun UkraineEmblem(level: AlertLevel, modifier: Modifier = Modifier, contentDesc: String? = null) {
     val red = AlertRed
-    val yellow = Color(0xFFF9A825)
+    val yellow = Color(AppPalette.AlertYellow)
     Box(modifier = modifier.size(44.dp), contentAlignment = Alignment.Center) {
         if (level == AlertLevel.RED) {
             // Soft red halo so the emblem reads as "glowing red" during a red official alert.
@@ -1690,7 +1691,7 @@ private fun AllAlertsOffWarning(label: String, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Default.Warning,
                 contentDescription = null,
-                tint = Color(0xFFF9A825),
+                tint = Color(AppPalette.AlertYellow),
                 modifier = Modifier.size(14.dp)
             )
             Spacer(Modifier.width(4.dp))
@@ -1732,7 +1733,7 @@ private fun ZonePill(
 ) {
     val zoneColor = when (zone) {
         ThreatZone.INNER -> AlertRed
-        ThreatZone.OUTER -> Color(0xFFF9A825)
+        ThreatZone.OUTER -> Color(AppPalette.AlertYellow)
     }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1755,8 +1756,8 @@ private fun ZonePill(
                 scaleY = scale.value
                 alpha = bgAlpha.value
             }
-            .background(if (armed) zoneColor else Color(0xFF2A2A2A))
-            .border(2.dp, if (armed) zoneColor else Color(0xFF666666), CircleShape)
+            .background(if (armed) zoneColor else Color(AppPalette.Chip))
+            .border(2.dp, if (armed) zoneColor else Color(AppPalette.BorderMuted), CircleShape)
             .semantics { semanticsContentDescription = contentDescription }
             .pressTick(interactionSource)
             .clickable(
@@ -1769,7 +1770,7 @@ private fun ZonePill(
         Icon(
             painter = painterResource(id = R.drawable.ic_zoom_in),
             contentDescription = null,
-            tint = if (armed) Color.White else Color(0xFF777777),
+            tint = if (armed) Color.White else Color(AppPalette.IconDisabled),
             modifier = Modifier.size(20.dp)
         )
     }
@@ -1803,13 +1804,13 @@ private fun ThreatStatusCell(
             type = type,
             set = iconSet,
             size = 28.dp,
-            tint = if (enabled) Color.Unspecified else Color(0xFF9E9E9E)
+            tint = if (enabled) Color.Unspecified else Color(AppPalette.TextSecondary)
         )
         Text(
             "$count",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
-            color = if (enabled) MaterialTheme.colorScheme.onSurface else Color(0xFF9E9E9E)
+            color = if (enabled) MaterialTheme.colorScheme.onSurface else Color(AppPalette.TextSecondary)
         )
     }
 }
@@ -1860,7 +1861,7 @@ private fun ThreatCardSizeControl(
                     .clip(RoundedCornerShape(50))
                     .background(
                         if (i == current.ordinal) MaterialTheme.colorScheme.primary
-                        else Color(0xFF9E9E9E)
+                        else Color(AppPalette.TextSecondary)
                     )
             )
             if (i < 1) Spacer(Modifier.height(4.dp))
@@ -2032,7 +2033,7 @@ private fun MonitoringOffBanner(
         modifier = Modifier
             .fillMaxWidth()
             .background(AlertRed)
-            .border(2.5.dp, Color(0xFFB71C1C))
+            .border(2.5.dp, Color(AppPalette.AlertRed))
             .padding(horizontal = 12.dp, vertical = 10.dp)
             .onGloballyPositioned { coords -> onHeightChange(coords.size.height) }
             .pressTick(interaction)

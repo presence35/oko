@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Consolidated every hardcoded color in the app into one theme-owned palette (`AppPalette`), so the widget, map layers, notifications, and screens all share exact-tone token values / Consolidated every hardcoded color in the app into one theme-owned palette (`AppPalette`), so the widget, map layers, notifications, and screens all share exact-tone token values
+
+- Unified map alert fills, city labels, and widget badges onto a single shared alert-color palette, so red/yellow tones match everywhere / Unified map alert fills, city labels, and widget badges onto a single shared alert-color palette, so red/yellow tones match everywhere
+
 - Critical offline alerts now actually ring: with "Override silent mode" on, the alert chime plays through the alarm stream just like the sirens, so it cuts through vibrate/silent; notification channels were renamed to Inner/Outer zone alerts and the always-sound channels get enforced alarm attributes / Critical offline alerts now actually ring: with "Override silent mode" on, the alert chime plays through the alarm stream just like the sirens, so it cuts through vibrate/silent; notification channels were renamed to Inner/Outer zone alerts and the always-sound channels get enforced alarm attributes
 
 - MiG-31K takeoff alerts now read in proper English ("Kinzhal carrier · Country-wide threat") instead of transliterated Ukrainian, in the card and notifications / MiG-31K takeoff alerts now read in proper English ("Kinzhal carrier · Country-wide threat") instead of transliterated Ukrainian, in the card and notifications

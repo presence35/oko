@@ -14,8 +14,8 @@ Only when the user says **"release it"**, perform a full release:
 
 ## While working
 
-- Find elegant solutions, not the easy code.
-- Append user-visible changes to `CHANGELOG.md` under `## [Unreleased]` as you go, so any session can release them.
+- Always find elegant solutions, not the easy code!
+- Append user-visible changes to `CHANGELOG.md` under `## [Unreleased]` as you go, so any session can release them. Be highly brief.
 - Changelog entries are short one-liners: `- EN text / UA text`. Each line is split on the first ` / ` to produce the release notes for `version.json`. No multi-paragraph essays.
 - The server `version.json` is generated from `app/version.properties` (versionCode/versionName) plus the `## [Unreleased]` entries in `CHANGELOG.md` (auto-derived at release time). FTP creds live in `app/upload.properties` (git-ignored).
 - Version numbers: `versionCode` is a monotonic integer; `versionName` is human-readable. Keep both bumped together (the `bumpVersion` task does this).

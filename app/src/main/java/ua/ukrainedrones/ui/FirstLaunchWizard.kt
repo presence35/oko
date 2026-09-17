@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -52,8 +53,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlin.math.roundToInt
 
-private val _ukraineBlue = Color(0xFF005BBB)
-private val _ukraineYellow = Color(0xFFFFD500)
+private val _ukraineBlue = Color(AppPalette.UkraineBlue)
+private val _ukraineYellow = Color(AppPalette.AlertYellow)
 
 @Composable
 internal fun FirstLaunchWizard(
@@ -201,7 +202,7 @@ internal fun FirstLaunchWizard(
                                     painter = painterResource(R.drawable.neptun),
                                     contentDescription = null,
                                     modifier = Modifier.size(width = 14.dp, height = 14.dp),
-                                    colorFilter = ColorFilter.tint(Color(0xFF4CAF50))
+                                    colorFilter = ColorFilter.tint(Color(AppPalette.SafeGreen))
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
@@ -215,7 +216,7 @@ internal fun FirstLaunchWizard(
                                     modifier = Modifier
                                         .size(6.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF4CAF50))
+                                        .background(Color(AppPalette.SafeGreen))
                                 )
                             }
                             Spacer(Modifier.height(6.dp))
@@ -527,7 +528,7 @@ private fun SetupLocationStep(
                         modifier = Modifier
                             .size(14.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF2196F3))
+                            .background(Color(AppPalette.GpsBlue))
                             .border(2.dp, Color.White, CircleShape)
                     )
                 }
@@ -660,7 +661,7 @@ private fun SetupZoneControlsStep(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        LegendChip(Color(0xFFFFD500), "")
+                        LegendChip(Color(AppPalette.AlertYellow), "")
                         Text(
                             s.wizardYellowFillDesc,
                             style = MaterialTheme.typography.labelSmall,
@@ -668,7 +669,7 @@ private fun SetupZoneControlsStep(
                         )
                     }
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        LegendChip(Color(0xFFD32F2F), "")
+                        LegendChip(Color(AppPalette.AlertRed), "")
                         Text(
                             s.wizardRedFillDesc,
                             style = MaterialTheme.typography.labelSmall,
@@ -746,7 +747,7 @@ private fun SetupZoneControlsStep(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFD32F2F)),
+                            .background(Color(AppPalette.AlertRed)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -793,10 +794,10 @@ private fun SetupZoneControlsStep(
 @Composable
 private fun LegendRow(s: Strings.StringSet) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        LegendChip(Color(0xFFD32F2F), "Red fill", Modifier.weight(1f))
-        LegendChip(Color(0xFFFFD500), "Yellow fill", Modifier.weight(1f))
-        LegendChip(Color(0xFFD32F2F), "Red zone", Modifier.weight(1f), isRing = true)
-        LegendChip(Color(0xFFFFD500), "Yellow zone", Modifier.weight(1f), isRing = true)
+        LegendChip(Color(AppPalette.AlertRed), "Red fill", Modifier.weight(1f))
+        LegendChip(Color(AppPalette.AlertYellow), "Yellow fill", Modifier.weight(1f))
+        LegendChip(Color(AppPalette.AlertRed), "Red zone", Modifier.weight(1f), isRing = true)
+        LegendChip(Color(AppPalette.AlertYellow), "Yellow zone", Modifier.weight(1f), isRing = true)
     }
 }
 

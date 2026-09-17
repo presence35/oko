@@ -1,7 +1,7 @@
 package ua.ukrainedrones.ui
 
+import ua.ukrainedrones.theme.AppPalette
 import ua.ukrainedrones.community.CompactRaionBoundaries
-import android.graphics.Color
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
@@ -50,7 +50,7 @@ object MapLibreLayerManager {
         style.addSource(srcMask)
         style.addLayer(
             FillLayer(LAYER_OUTSIDE_MASK, SOURCE_OUTSIDE_MASK).apply {
-                setProperties(fillColor(Color.argb(230, 13, 17, 23)))
+                setProperties(fillColor(AppPalette.Mask.toInt()))
             }
         )
 
@@ -59,13 +59,13 @@ object MapLibreLayerManager {
         style.addSource(srcAlertYellow)
         style.addLayer(
             FillLayer(LAYER_ALERT_YELLOW, SOURCE_ALERT_YELLOW).apply {
-                setProperties(fillColor(Color.argb(90, 245, 158, 11)))
+                setProperties(fillColor(AppPalette.YellowFill.toInt()))
             }
         )
         style.addLayer(
             LineLayer(LAYER_ALERT_YELLOW_LINE, SOURCE_ALERT_YELLOW).apply {
                 setProperties(
-                    lineColor(Color.argb(190, 245, 158, 11)),
+                    lineColor(AppPalette.YellowLine.toInt()),
                     lineWidth(1.2f)
                 )
             }
@@ -75,13 +75,13 @@ object MapLibreLayerManager {
         style.addSource(srcAlertRed)
         style.addLayer(
             FillLayer(LAYER_ALERT_RED_FILL, SOURCE_ALERT_RED).apply {
-                setProperties(fillColor(Color.argb(115, 239, 68, 68)))
+                setProperties(fillColor(AppPalette.RedFill.toInt()))
             }
         )
         style.addLayer(
             LineLayer(LAYER_ALERT_RED_LINE, SOURCE_ALERT_RED).apply {
                 setProperties(
-                    lineColor(Color.argb(225, 239, 68, 68)),
+                    lineColor(AppPalette.RedLine.toInt()),
                     lineWidth(1.5f)
                 )
             }
@@ -93,7 +93,7 @@ object MapLibreLayerManager {
         style.addLayer(
             LineLayer(LAYER_LAND_BORDER, SOURCE_LAND_BORDER).apply {
                 setProperties(
-                    lineColor(Color.argb(70, 255, 255, 255)),
+                    lineColor(AppPalette.LandBorder.toInt()),
                     lineWidth(2f)
                 )
             }
@@ -105,7 +105,7 @@ object MapLibreLayerManager {
         style.addLayer(
             LineLayer(LAYER_OBLAST_BORDERS, SOURCE_OBLAST_BORDERS).apply {
                 setProperties(
-                    lineColor(Color.argb(120, 180, 180, 200)),
+                    lineColor(AppPalette.OblastBorder.toInt()),
                     lineWidth(1.5f),
                     visibility(Property.NONE)
                 )
@@ -118,7 +118,7 @@ object MapLibreLayerManager {
         style.addLayer(
             LineLayer(LAYER_RAION_BORDERS, SOURCE_RAION_BORDERS).apply {
                 setProperties(
-                    lineColor(Color.argb(70, 180, 180, 200)),
+                    lineColor(AppPalette.RaionBorder.toInt()),
                     lineWidth(1f),
                     visibility(Property.NONE)
                 )
@@ -131,7 +131,7 @@ object MapLibreLayerManager {
         style.addLayer(
             LineLayer(LAYER_ZONE_YELLOW, SOURCE_ZONE_YELLOW).apply {
                 setProperties(
-                    lineColor(Color.argb(200, 255, 213, 0)),
+                    lineColor(AppPalette.ZoneYellow.toInt()),
                     lineWidth(2.2f)
                 )
             }
@@ -142,7 +142,7 @@ object MapLibreLayerManager {
         style.addLayer(
             LineLayer(LAYER_ZONE_RED, SOURCE_ZONE_RED).apply {
                 setProperties(
-                    lineColor(Color.argb(230, 239, 68, 68)),
+                    lineColor(AppPalette.ZoneRed.toInt()),
                     lineWidth(2.5f)
                 )
             }

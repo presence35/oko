@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -410,10 +411,10 @@ internal fun CityLabelTogglesRow(
  *  can't be confused in the dark theme. */
 @Composable
 internal fun CityChipColors(selected: Boolean) = FilterChipDefaults.filterChipColors(
-    containerColor = Color(0xFF1E1E1E),
+    containerColor = Color(AppPalette.Card),
     labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
     iconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
     selectedContainerColor = MaterialTheme.colorScheme.primary,
-    selectedLabelColor = Color(0xFF0D1117),
-    selectedLeadingIconColor = Color(0xFF0D1117)
+    selectedLabelColor = Color(AppPalette.MapBackground),
+    selectedLeadingIconColor = Color(AppPalette.MapBackground)
 )

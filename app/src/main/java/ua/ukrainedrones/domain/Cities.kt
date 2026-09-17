@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import ua.ukrainedrones.engine.AlertLevel
 import ua.ukrainedrones.engine.LatLng
@@ -758,10 +759,10 @@ class CityLabelOverlay(
             val level = cityAlertLevels[c.nameUa] ?: AlertLevel.NONE
             val suppressed = c.nameUa in suppressedAlertCities
             paint.color = when {
-                suppressed || level == AlertLevel.NONE -> 0xFFEBEBEB.toInt()
-                level == AlertLevel.RED -> 0xFFFF5252.toInt()
-                level == AlertLevel.YELLOW -> 0xFFFFD740.toInt()
-                else -> 0xFFEBEBEB.toInt()
+                suppressed || level == AlertLevel.NONE -> AppPalette.CityTextDefault.toInt()
+                level == AlertLevel.RED -> AppPalette.AlertRed.toInt()
+                level == AlertLevel.YELLOW -> AppPalette.AlertYellow.toInt()
+                else -> AppPalette.CityTextDefault.toInt()
             }
             canvas.drawText(name(c), pt.x, pt.y - 6f * density, paint)
         }

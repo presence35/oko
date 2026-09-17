@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import android.content.Intent
 import android.net.Uri
@@ -38,9 +39,9 @@ fun ShelterPopupCard(
     val type = shelter.shelter.type
 
     val typeColor = when (type) {
-        ShelterType.MOBILE -> Color(0xFFFFA000) // Amber/Orange
-        ShelterType.BUNKER -> Color(0xFF2196F3) // Royal Blue
-        ShelterType.BASIC -> Color(0xFF4CAF50)  // Emerald Green
+        ShelterType.MOBILE -> Color(AppPalette.ShelterMobile) // Amber/Orange
+        ShelterType.BUNKER -> Color(AppPalette.GpsBlue) // Royal Blue
+        ShelterType.BASIC -> Color(AppPalette.SafeGreen)  // Emerald Green
     }
 
     val typeLabel = when (type) {
@@ -62,7 +63,7 @@ fun ShelterPopupCard(
             ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1E2124)
+            containerColor = Color(AppPalette.Card)
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {

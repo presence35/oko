@@ -10,13 +10,13 @@ object DarkThemePlugin : ThemePlugin {
     override val name = "dark"
     override val isDark = true
     override val colors = darkColorScheme(
-        primary = Color(0xFF64B5F6),
-        background = Color(0xFF121212),
-        surface = Color(0xFF1A1A1A),
-        surfaceVariant = Color(0xFF232323),
-        onBackground = Color(0xFFEDEDED),
-        onSurface = Color(0xFFEDEDED),
-        error = Color(0xFFE57373)
+        primary = Color(AppPalette.Primary),
+        background = Color(AppPalette.Background),
+        surface = Color(AppPalette.Surface),
+        surfaceVariant = Color(AppPalette.SurfaceVariant),
+        onBackground = Color(AppPalette.TextPrimary),
+        onSurface = Color(AppPalette.TextPrimary),
+        error = Color(AppPalette.AlertRed)
     )
     override val typography = Typography()
 }

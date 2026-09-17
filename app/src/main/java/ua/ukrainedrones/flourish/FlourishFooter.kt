@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -30,9 +31,9 @@ internal val FOOTER_BAND_DP = 60.dp
 private fun StopPill(label: String) {
     Surface(
         shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF3A2E00),
-        contentColor = Color(0xFFF9A825),
-        border = BorderStroke(1.dp, Color(0xFFF9A825).copy(alpha = 0.6f))
+        color = Color(AppPalette.StopPillBg),
+        contentColor = Color(AppPalette.AlertYellow),
+        border = BorderStroke(1.dp, Color(AppPalette.AlertYellow).copy(alpha = 0.6f))
     ) {
         Text(
             label,
@@ -65,7 +66,7 @@ fun BoxScope.FlourishFooter(
 ) {
     if (!active) return
 
-    val amber = Color(0xFFF9A825)
+    val amber = Color(AppPalette.AlertYellow)
     val isCountdown = countdown != null
 
     Box(

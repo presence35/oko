@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -80,12 +81,12 @@ fun ToastHost(topInset: Dp = 0.dp) {
                 Surface(
                     tonalElevation = 3.dp,
                     shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF2A2A2E),
+                    color = Color(AppPalette.Toast),
                     modifier = Modifier
                         .widthIn(min = 160.dp, max = 360.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .border(1.dp, Color(0xFF4A4A4E), RoundedCornerShape(12.dp))
-                        .background(Color(0xFF2A2A2E))
+                        .border(1.dp, Color(AppPalette.ToastBorder), RoundedCornerShape(12.dp))
+                        .background(Color(AppPalette.Toast))
                 ) {
                     Text(
                         req.text,

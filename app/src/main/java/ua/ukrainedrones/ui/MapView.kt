@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -165,7 +166,7 @@ private fun threatIconFor(
             val r = 4f * density
             val cx = w - r - 1.5f * density
             val cy = r + 1.5f * density
-            val dotColor = if (areaOnly) Color.rgb(255, 183, 77) else Color.rgb(76, 175, 80)
+            val dotColor = if (areaOnly) AppPalette.AreaOnlyDot.toInt() else AppPalette.SafeGreen.toInt()
             canvas.drawCircle(cx, cy, r, Paint().apply {
                 isAntiAlias = true
                 color = dotColor
@@ -191,9 +192,9 @@ private fun gpsDotBitmap(context: Context, hasFix: Boolean): Bitmap {
     val cx = size / 2f
     val cy = size / 2f
     val (glowA, glowRgb) = if (hasFix) {
-        Color.argb(120, 33, 150, 243) to intArrayOf(33, 150, 243)
+        AppPalette.GpsGlow.toInt() to intArrayOf(33, 150, 243)
     } else {
-        Color.argb(110, 158, 158, 158) to intArrayOf(158, 158, 158)
+        AppPalette.GpsGlowOff.toInt() to intArrayOf(158, 158, 158)
     }
     val glow = Paint().apply {
         shader = RadialGradient(
@@ -206,7 +207,7 @@ private fun gpsDotBitmap(context: Context, hasFix: Boolean): Bitmap {
     canvas.drawCircle(cx, cy, glowR, glow)
     canvas.drawCircle(cx, cy, coreR, Paint().apply {
         isAntiAlias = true
-        color = if (hasFix) Color.rgb(33, 150, 243) else Color.rgb(158, 158, 158)
+        color = if (hasFix) AppPalette.GpsBlue.toInt() else AppPalette.TextSecondary.toInt()
     })
     canvas.drawCircle(cx, cy, coreR * 0.55f, Paint().apply {
         style = Paint.Style.STROKE
@@ -235,7 +236,7 @@ private fun pinBitmap(context: Context): Bitmap {
     canvas.drawPath(path, Paint().apply {
         isAntiAlias = true
         style = Paint.Style.FILL
-        color = Color.rgb(0, 91, 187)
+        color = AppPalette.UkraineBlue.toInt()
     })
     canvas.drawPath(path, Paint().apply {
         isAntiAlias = true
@@ -252,7 +253,7 @@ private fun pinBitmap(context: Context): Bitmap {
     canvas.drawCircle(w / 2f, h * 0.28f, innerR * 0.55f, Paint().apply {
         isAntiAlias = true
         style = Paint.Style.FILL
-        color = Color.rgb(255, 213, 0)
+        color = AppPalette.AlertYellow.toInt()
     })
     return bmp
 }
@@ -433,9 +434,9 @@ private fun shelterMarkerBitmap(
 
     val density = context.resources.displayMetrics.density
     val typeColor = when (type) {
-        ShelterType.MOBILE -> Color.rgb(255, 160, 0)
-        ShelterType.BASIC -> Color.rgb(76, 175, 80)
-        ShelterType.BUNKER -> Color.rgb(33, 150, 243)
+        ShelterType.MOBILE -> AppPalette.ShelterMobile.toInt()
+        ShelterType.BASIC -> AppPalette.SafeGreen.toInt()
+        ShelterType.BUNKER -> AppPalette.GpsBlue.toInt()
     }
     val markerColor = if (isSelected) Color.WHITE else typeColor
     val strokeW = 2.6f * density

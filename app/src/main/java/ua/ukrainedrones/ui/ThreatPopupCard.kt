@@ -1,4 +1,5 @@
 package ua.ukrainedrones
+import ua.ukrainedrones.theme.AppPalette
 
 import ua.ukrainedrones.engine.SpeedSource
 import ua.ukrainedrones.engine.ThreatEngine
@@ -44,13 +45,13 @@ import androidx.compose.ui.text.withStyle
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-private val ReliabilityRed = Color(0xFFD9737A)
-private val UncertaintyEmpty = Color(0xFF3A3A3A)
-private val AdvisoryAmber = Color(0xFFFFC107)
-private val DistUserRed = Color(0xFFE57373)
-private val DistUserAmber = Color(0xFFFFD54F)
-private val DistUserGreen = Color(0xFF81C784)
-private val GpsDot = Color(0xFF2196F3)
+private val ReliabilityRed = Color(AppPalette.AlertRed)
+private val UncertaintyEmpty = Color(AppPalette.Border)
+private val AdvisoryAmber = Color(AppPalette.AlertYellow)
+private val DistUserRed = Color(AppPalette.AlertRed)
+private val DistUserAmber = Color(AppPalette.AlertYellow)
+private val DistUserGreen = Color(AppPalette.SafeGreen)
+private val GpsDot = Color(AppPalette.GpsBlue)
 
 /** One stacked metric pill on the small card: number + unit + optional dot/label. */
 private data class PillSpec(
@@ -66,7 +67,7 @@ private data class PillSpec(
 @Composable
 internal fun AlertsOffBell(
     size: Dp = 14.dp,
-    tint: Color = Color(0xFF9E9E9E),
+    tint: Color = Color(AppPalette.TextSecondary),
     contentDescription: String? = null
 ) {
     Icon(
@@ -84,7 +85,7 @@ internal fun AlertsOffChip(s: Strings.StringSet) {
     val isPressed by interactionSource.collectIsPressedAsState()
     Surface(
         shape = RoundedCornerShape(50),
-        color = Color(0xFF2A2A2A).copy(alpha = if (isPressed) 0.9f else 1f),
+        color = Color(AppPalette.Chip).copy(alpha = if (isPressed) 0.9f else 1f),
         modifier = Modifier.pressTick(interactionSource).clickable(
             interactionSource = interactionSource,
             indication = ripple(bounded = true),
@@ -100,7 +101,7 @@ internal fun AlertsOffChip(s: Strings.StringSet) {
             Text(
                 s.alertsOffLabel,
                 style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF9E9E9E)
+                color = Color(AppPalette.TextSecondary)
             )
         }
     }
@@ -207,7 +208,7 @@ fun ThreatPopupCard(
     val bandColor = when (band) {
         ThreatZone.INNER -> DistUserRed
         ThreatZone.OUTER -> DistUserAmber
-        null -> Color(0xFF9E9E9E)
+        null -> Color(AppPalette.TextSecondary)
     }
 
     // Selection-change feedback: the body renders in one frame (tap feels instant); the title
@@ -249,8 +250,8 @@ fun ThreatPopupCard(
         Surface(
             modifier = modifier,
             shape = RoundedCornerShape(16.dp),
-            color = Color(0xFF1E1E1E),
-            border = BorderStroke(2.dp, Color(0xFF3A3A3A)),
+            color = Color(AppPalette.Card),
+            border = BorderStroke(2.dp, Color(AppPalette.Border)),
             tonalElevation = 8.dp
         ) {
             Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
@@ -272,14 +273,14 @@ fun ThreatPopupCard(
                     Text(
                         if (fakeNeutralize) s.fakeNeutralizingLabel else if (neutralizing) s.neutralizingLabel else s.neutralizedLabel,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF9E9E9E)
+                        color = Color(AppPalette.TextSecondary)
                     )
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
                     if (fakeNeutralize) s.fakeNeutralizingNote else if (neutralizing) s.neutralizingNote else s.neutralizedNote,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF9E9E9E)
+                    color = Color(AppPalette.TextSecondary)
                 )
             }
         }
@@ -298,8 +299,8 @@ fun ThreatPopupCard(
                 ) else Modifier
             ),
         shape = RoundedCornerShape(16.dp),
-        color = if (stale) Color(0xFF151515) else Color(0xFF1E1E1E),
-        border = BorderStroke(2.dp, if (stale) Color(0xFF3A3A3A) else bandColor),
+        color = if (stale) Color(AppPalette.Panel) else Color(AppPalette.Card),
+        border = BorderStroke(2.dp, if (stale) Color(AppPalette.Border) else bandColor),
         tonalElevation = 8.dp
     ) {
         when (cardSize) {
@@ -363,7 +364,7 @@ Text(
                                 Text(
                                     elapsedText,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (stale) AdvisoryAmber else Color(0xFF9E9E9E)
+                                    color = if (stale) AdvisoryAmber else Color(AppPalette.TextSecondary)
                                 )
                             }
 
@@ -388,7 +389,7 @@ Text(
                                 Text(
                                     s.gpsOffLabel,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF9E9E9E)
+                                    color = Color(AppPalette.TextSecondary)
                                 )
                             }
 
@@ -404,7 +405,7 @@ Text(
                                         s.reliabilityShort,
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF9E9E9E)
+                                        color = Color(AppPalette.TextSecondary)
                                     )
                                     Spacer(Modifier.width(4.dp))
                                     ReliabilityBar(
@@ -419,7 +420,7 @@ Text(
                                             s.uncertaintyShort,
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF9E9E9E)
+                                            color = Color(AppPalette.TextSecondary)
                                         )
                                         Spacer(Modifier.width(4.dp))
                                         CompactUncertaintyBar(uncertaintyKm = uKm)
@@ -479,7 +480,7 @@ Text(
                                     Spacer(Modifier.weight(1f))
                                     Text(
                                         elapsedText,
-                                        color = if (stale) AdvisoryAmber else Color(0xFF9E9E9E),
+                                        color = if (stale) AdvisoryAmber else Color(AppPalette.TextSecondary),
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
@@ -487,7 +488,7 @@ Text(
                                     Text(
                                         displayRegion,
                                         style = MaterialTheme.typography.bodyLarge,
-                                        color = Color(0xFFB0B0B0),
+                                        color = Color(AppPalette.TextTertiary),
                                         modifier = Modifier.weight(1f, fill = false)
                                     )
                                 }
@@ -499,7 +500,7 @@ Text(
                             ?.let { firstSentence(it) }
                             ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, displayRegion) }
                         course?.let {
-                            Text(it, style = MaterialTheme.typography.bodyLarge, color = Color(0xFFCCCCCC))
+                            Text(it, style = MaterialTheme.typography.bodyLarge, color = Color(AppPalette.TextDetail))
                             Spacer(Modifier.height(4.dp))
                         }
 
@@ -554,7 +555,7 @@ Text(
                             confirmations?.let { n ->
                                 Text(
                                     "$n ${sourcesWord(n, lang)}",
-                                    color = Color(0xFF9E9E9E),
+                                    color = Color(AppPalette.TextSecondary),
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
@@ -570,7 +571,7 @@ Text(
 
 /** Threat-level colour shared by the vertical gauge, horizontal bar and skull icons. */
 private fun levelColor(level: Double): Color = when {
-    level >= 8.0 -> Color(0xFFD32F2F)
+    level >= 8.0 -> Color(AppPalette.AlertRed)
     level >= 6.0 -> DistUserRed
     level >= 3.0 -> DistUserAmber
     else -> DistUserGreen
@@ -618,7 +619,7 @@ private fun ThreatLevelGauge(
 ) {
     val fraction = (level / 10.0).coerceIn(0.0, 1.0)
     val color = levelColor(level)
-    val skullTint = if (level >= 3.0) color else Color(0xFF9E9E9E)
+    val skullTint = if (level >= 3.0) color else Color(AppPalette.TextSecondary)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(
             painter = painterResource(id = R.drawable.ic_skull),
@@ -632,7 +633,7 @@ private fun ThreatLevelGauge(
                 .width(barWidth)
                 .height(height)
                 .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFF3A3A3A))
+                .background(Color(AppPalette.Border))
         ) {
             Box(
                 modifier = Modifier
@@ -661,7 +662,7 @@ private fun SummaryPills(
         Text(
             s.gpsOffLabel,
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF9E9E9E)
+            color = Color(AppPalette.TextSecondary)
         )
         return
     }
@@ -736,7 +737,7 @@ private fun MetricPill(
 ) {
     Surface(
         shape = RoundedCornerShape(50),
-        color = Color(0xFF2A2A2A)
+        color = Color(AppPalette.Chip)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
@@ -776,7 +777,7 @@ private fun MetricPill(
             }
             Text(
                 number,
-                color = Color(0xFFCFCFCF),
+                color = Color(AppPalette.PillNumber),
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
@@ -788,7 +789,7 @@ private fun MetricPill(
             Spacer(Modifier.width(2.dp))
             Text(
                 unit,
-                color = Color(0xFF9E9E9E),
+                color = Color(AppPalette.TextSecondary),
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
                 softWrap = false
@@ -824,7 +825,7 @@ private fun UncertaintyBar(uncertaintyKm: Double?, s: Strings.StringSet) {
     val bars = uncertaintyBars(uncertaintyKm)
     val color = uncertaintyColor(bars)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(s.uncertaintyLabel, style = MaterialTheme.typography.bodySmall, color = Color(0xFF9E9E9E))
+        Text(s.uncertaintyLabel, style = MaterialTheme.typography.bodySmall, color = Color(AppPalette.TextSecondary))
         Spacer(Modifier.width(8.dp))
         repeat(5) { i ->
             Box(
@@ -839,7 +840,7 @@ private fun UncertaintyBar(uncertaintyKm: Double?, s: Strings.StringSet) {
         Text(
             "±${formatKm(uncertaintyKm)} ${s.kmUnit}",
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF9E9E9E)
+            color = Color(AppPalette.TextSecondary)
         )
     }
 }
@@ -880,12 +881,12 @@ private fun ReliabilityBar(
         Reliability.HIGH -> DistUserGreen
         Reliability.MEDIUM -> DistUserAmber
         Reliability.LOW -> ReliabilityRed
-        Reliability.UNKNOWN -> Color(0xFF9E9E9E)
+        Reliability.UNKNOWN -> Color(AppPalette.TextSecondary)
     }
     val segmentWidth = if (compact) fontAware(10.dp) else fontAware(22.dp)
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (!compact) {
-            Text(s.reliabilityLabel, style = MaterialTheme.typography.bodySmall, color = Color(0xFF9E9E9E))
+            Text(s.reliabilityLabel, style = MaterialTheme.typography.bodySmall, color = Color(AppPalette.TextSecondary))
             Spacer(Modifier.width(8.dp))
         }
         repeat(3) { i ->
