@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed red and yellow alert region rendering and eliminated double-tinting on overlapping raions / Fixed red and yellow alert region rendering and eliminated double-tinting on overlapping raions
+- Eliminated map panning lag and overlay jitter by removing redundant recompositions during camera movement / Eliminated map panning lag and overlay jitter by removing redundant recompositions during camera movement
 - Fixed overlapping threats rendering in GRID, SPREAD, and COUNT modes with distance-based clustering and coordinate-relative screen offsets / Fixed overlapping threats rendering in GRID, SPREAD, and COUNT modes with distance-based clustering and coordinate-relative screen offsets
 - Restricted native libraries to 64-bit ARM (arm64-v8a) to reduce APK size to ~6MB / Restricted native libraries to 64-bit ARM (arm64-v8a) to reduce APK size to ~6MB
 - Fixed background notification delay when going offline or entering airplane mode by reacting immediately to connection state changes / Fixed background notification delay when going offline or entering airplane mode by reacting immediately to connection state changes

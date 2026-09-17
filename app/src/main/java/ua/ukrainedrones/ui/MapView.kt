@@ -593,7 +593,6 @@ fun NeptunMapView(
     }
 
     val deathFrame = remember { mutableIntStateOf(0) }
-    val cameraFrame = remember { mutableIntStateOf(0) }
     LaunchedEffect(deathFx) {
         while (true) {
             withFrameNanos {}
@@ -1034,9 +1033,7 @@ LaunchedEffect(selectedId) {
     Box(modifier = modifier.fillMaxSize()) {
         MapLibreHostView(
             modifier = Modifier.fillMaxSize(),
-            onCameraChange = {
-                cameraFrame.intValue++
-            },
+            onCameraChange = {},
             onBridgeReady = { bridge ->
                 bridgeState.value = bridge
                 bridge.onDrawOverlay = { canvas ->
@@ -1136,12 +1133,16 @@ LaunchedEffect(selectedId) {
                         )
                     }
                 }
+                var lastScaleZoom = -1.0
                 bridge.setOnCameraMoveListener {
-                    cameraFrame.intValue++
-                    onScaleChange(bridge.metersPerPixel())
+                    val z = bridge.zoom
+                    if (Math.abs(z - lastScaleZoom) > 0.01) {
+                        lastScaleZoom = z
+                        onScaleChange(bridge.metersPerPixel())
+                    }
                     if (showNearbySheltersState &&
                         System.currentTimeMillis() >= shelterEntryGuardUntil.value &&
-                        bridge.zoom < SHELTER_AUTO_EXIT_ZOOM
+                        z < SHELTER_AUTO_EXIT_ZOOM
                     ) {
                         onExitShelterMode()
                     }

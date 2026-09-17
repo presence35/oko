@@ -76,6 +76,7 @@ object MapLibreGeoJson {
             }
         }
         for ((stem, raion) in raionKeys) {
+            if (stem in oblastTokens) continue
             val poly = CompactRaionBoundaries.forKey(stem, raion) ?: continue
             for (ring in poly.rings) {
                 if (ring.pointCount < 3) continue

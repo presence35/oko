@@ -287,43 +287,8 @@ fun MapLibreHostView(
 
                         mapLibreMap.addOnCameraMoveListener {
                             overlayView.invalidate()
-                            onCameraChange()
                             bridge.dispatchCameraMove()
                         }
-                        mapLibreMap.addOnMoveListener(object : MapLibreMap.OnMoveListener {
-                            override fun onMoveBegin(detector: org.maplibre.android.gestures.MoveGestureDetector) {
-                                overlayView.invalidate()
-                                onCameraChange()
-                                bridge.dispatchCameraMove()
-                            }
-                            override fun onMove(detector: org.maplibre.android.gestures.MoveGestureDetector) {
-                                overlayView.invalidate()
-                                onCameraChange()
-                                bridge.dispatchCameraMove()
-                            }
-                            override fun onMoveEnd(detector: org.maplibre.android.gestures.MoveGestureDetector) {
-                                overlayView.invalidate()
-                                onCameraChange()
-                                bridge.dispatchCameraMove()
-                            }
-                        })
-                        mapLibreMap.addOnScaleListener(object : MapLibreMap.OnScaleListener {
-                            override fun onScaleBegin(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) {
-                                overlayView.invalidate()
-                                onCameraChange()
-                                bridge.dispatchCameraMove()
-                            }
-                            override fun onScale(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) {
-                                overlayView.invalidate()
-                                onCameraChange()
-                                bridge.dispatchCameraMove()
-                            }
-                            override fun onScaleEnd(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) {
-                                overlayView.invalidate()
-                                onCameraChange()
-                                bridge.dispatchCameraMove()
-                            }
-                        })
                         mapLibreMap.addOnCameraIdleListener {
                             overlayView.invalidate()
                             onCameraChange()

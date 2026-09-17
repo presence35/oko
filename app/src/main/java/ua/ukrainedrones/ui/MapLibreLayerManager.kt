@@ -34,7 +34,6 @@ object MapLibreLayerManager {
 
     const val SOURCE_ALERT_RED = "src_alert_red"
     const val LAYER_ALERT_RED_FILL = "lyr_alert_red_fill"
-    const val LAYER_ALERT_RED_LINE = "lyr_alert_red_line"
 
     const val SOURCE_ZONE_RED = "src_zone_red"
     const val LAYER_ZONE_RED = "lyr_zone_red"
@@ -66,14 +65,6 @@ object MapLibreLayerManager {
         style.addLayer(
             FillLayer(LAYER_ALERT_RED_FILL, SOURCE_ALERT_RED).apply {
                 setProperties(fillColor(Color.argb(100, 239, 68, 68)))
-            }
-        )
-        style.addLayer(
-            LineLayer(LAYER_ALERT_RED_LINE, SOURCE_ALERT_RED).apply {
-                setProperties(
-                    lineColor(Color.argb(200, 239, 68, 68)),
-                    lineWidth(2.0f)
-                )
             }
         )
 
@@ -166,8 +157,11 @@ object MapLibreLayerManager {
             return
         }
 
+        val filteredYellowOblasts = yellowOblasts - redOblasts
+        val filteredYellowRaions = yellowRaions.filter { (stem, _) -> stem !in redOblasts }.toSet()
+
         redSrc?.setGeoJson(MapLibreGeoJson.alertRegions(redOblasts, redRaions))
-        yellowSrc?.setGeoJson(MapLibreGeoJson.alertRegions(yellowOblasts, yellowRaions))
+        yellowSrc?.setGeoJson(MapLibreGeoJson.alertRegions(filteredYellowOblasts, filteredYellowRaions))
     }
 
     fun updateZoneCircles(
