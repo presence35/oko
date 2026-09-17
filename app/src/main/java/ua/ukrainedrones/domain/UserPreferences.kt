@@ -75,7 +75,7 @@ data class UserPreferences(
     val calmMessagesEnabled: Boolean = true,
     val hapticsEnabled: Boolean? = null,
     val officialAlertCityScope: Boolean = false,
-    val justFunMasterEnabled: Boolean = false,
+    val moraleMasterEnabled: Boolean = false,
     val bootRestartEnabled: Boolean = true,
     val fillAlertRegions: Boolean = false,
     val showBorders: Boolean = true,
@@ -87,6 +87,7 @@ data class UserPreferences(
     val mapVisibleTypes: Set<ThreatType> = ThreatType.values().toSet(),
     val alertEnabledTypes: Set<ThreatType> = ThreatType.values().toSet()
 ) {
+    val justFunMasterEnabled: Boolean get() = moraleMasterEnabled
     val officialYellowAlertsEnabled: Boolean get() = yellowAlertsEnabled
     val iconSet: ThreatIconSet get() = threatIconSet
     val sheltersWithKids: Boolean get() = sheltersWithKidsEnabled

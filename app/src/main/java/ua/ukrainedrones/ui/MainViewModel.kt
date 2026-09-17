@@ -662,8 +662,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             flourish = live.flourish,
             officialAlertCityScope = prefs.officialAlertCityScope || (nightActive && prefs.nightOfficialAlertCityScope),
             showBorders = prefs.showBorders,
-            showRegionBorders = prefs.showRegionBorders,
-            fillAlertRegions = prefs.fillAlertRegions
+            showRegionBorders = prefs.showRegionBorders
         ).copy(
             update = updateUi.update,
             needsInstallPermission = updateUi.needsInstallPermission,
@@ -885,8 +884,7 @@ showBorders = prefs.showBorders,
         flourish: FlourishShow?,
         officialAlertCityScope: Boolean,
         showBorders: Boolean,
-        showRegionBorders: Boolean,
-        fillAlertRegions: Boolean = false
+        showRegionBorders: Boolean
     ): UiState {
         val params = effectiveParams
         val gpsFresh = LocationTracker.isFresh(now)
@@ -936,14 +934,6 @@ showBorders = prefs.showBorders,
         // delivering. Single derivation lives in the registry; the header just mirrors it.
         val degraded = registry.degraded.value
         val neptunDown = registry.isOffline(nowMono)
-
-        // Audit incoming alert tokens against boundary geometries for dropped/unmapped alerts
-        ua.ukrainedrones.debug.AlertFillDiagnostics.recordEngineAudit(
-            alerts = alerts,
-            fillEnabled = fillAlertRegions,
-            redOblastIds = evaluation.fillOblastTokens,
-            redRaions = evaluation.fillRaionKeys
-        )
 
         return UiState(
             connected = registry.wsHealthy.value,
@@ -1379,14 +1369,16 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setHighQualityExplosions(enabled) }
     }
 
-    /** Master "Just Fun" switch: a global kill-switch for every flourish. Enforced inside the
+    /** Master "Morale" switch: a global kill-switch for every flourish effect. Enforced inside the
      *  flourish engine (DeathFxController / NeutralizedTally / AviationFlyby gates), so this
      *  only persists the pref — the engine reacts live and ejects any running show. */
-    fun setJustFunEnabled(enabled: Boolean) {
+    fun setMoraleEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            prefs.setJustFunMasterEnabled(enabled)
+            prefs.setMoraleMasterEnabled(enabled)
         }
     }
+
+    fun setJustFunEnabled(enabled: Boolean) = setMoraleEnabled(enabled)
 
     fun setFlybyAnimationEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setFlybyAnimationEnabled(enabled) }

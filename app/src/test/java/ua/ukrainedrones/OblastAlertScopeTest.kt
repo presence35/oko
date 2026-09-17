@@ -7,6 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.coversCity
+import ua.ukrainedrones.engine.coversCityRaion
 import ua.ukrainedrones.engine.inOblast
 import ua.ukrainedrones.engine.isOblastWide
 import ua.ukrainedrones.engine.officialAlertActiveFor
@@ -123,5 +124,29 @@ class OblastAlertScopeTest {
     fun `raionName - oblast-wide and city alerts are null`() {
         assertNull(alert("луганська", "Луганська область", "Луганська область").raionName())
         assertNull(alert("dnipro", "Дніпро", "Дніпропетровська область").raionName())
+    }
+
+    @Test
+    fun `coversCityRaion - exact canonical and alias matching`() {
+        // Exact canonical key matching
+        assertTrue(coversCityRaion("Ізмаїл", "odeska", setOf("odeska" to "izmailskyi")))
+
+        // City with Cyrillic registered raion matching canonical English raion key
+        assertTrue(coversCityRaion("Бердянськ", "zaporizka", setOf("zaporizka" to "berdianskyi")))
+
+        // Alert raion key in Cyrillic matching canonical city raion
+        assertTrue(coversCityRaion("Бердянськ", "zaporizka", setOf("zaporizka" to "бердянський")))
+
+        // Raion with distinct city name via CityRaions mapping (Dokuchaievsk in Kalmiuskyi raion)
+        assertTrue(coversCityRaion("Докучаєвськ", "donetska", setOf("donetska" to "kalmiuskyi")))
+
+        // Wrong parent oblast rejected even if raion key matches
+        assertFalse(coversCityRaion("Бердянськ", "odeska", setOf("odeska" to "berdianskyi")))
+
+        // Different raion in same oblast rejected
+        assertFalse(coversCityRaion("Запоріжжя", "zaporizka", setOf("zaporizka" to "berdianskyi")))
+
+        // Empty keys returns false
+        assertFalse(coversCityRaion("Ізмаїл", "odeska", emptySet()))
     }
 }

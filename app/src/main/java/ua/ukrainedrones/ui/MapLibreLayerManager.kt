@@ -173,11 +173,6 @@ object MapLibreLayerManager {
         if (!fillAlertRegions) {
             redSrc?.setGeoJson(MapLibreGeoJson.EMPTY)
             yellowSrc?.setGeoJson(MapLibreGeoJson.EMPTY)
-            // Record disabled state for diagnostics
-            ua.ukrainedrones.debug.AlertFillDiagnostics.recordMapLibreUpdate(
-                style, false, redOblastIds, redRaions,
-                emptySet(), emptySet(), MapLibreGeoJson.EMPTY, MapLibreGeoJson.EMPTY
-            )
             return
         }
 
@@ -197,18 +192,6 @@ object MapLibreLayerManager {
         val yellowGeoJson = MapLibreGeoJson.alertRegions(filteredYellowOblastIds, filteredYellowRaions)
         redSrc?.setGeoJson(redGeoJson)
         yellowSrc?.setGeoJson(yellowGeoJson)
-
-        // Record active GeoJSON payloads and GPU source/layer presence
-        ua.ukrainedrones.debug.AlertFillDiagnostics.recordMapLibreUpdate(
-            style = style,
-            fillAlertRegions = true,
-            redOblastIds = redOblastIds,
-            redRaions = redRaions,
-            filteredYellowOblastIds = filteredYellowOblastIds,
-            filteredYellowRaions = filteredYellowRaions,
-            redGeoJson = redGeoJson,
-            yellowGeoJson = yellowGeoJson
-        )
     }
 
     fun updateZoneCircles(

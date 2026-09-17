@@ -322,6 +322,7 @@ internal fun CollapsibleSectionCard(
     onToggle: () -> Unit,
     subtitle: String? = null,
     emoji: String? = null,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
     cardColor: Color? = null,
     cardBorder: Color? = null,
     trailing: @Composable (() -> Unit)? = null,
@@ -368,7 +369,7 @@ internal fun CollapsibleSectionCard(
                     Icon(
                         painter = icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = iconTint,
                         modifier = Modifier.size(24.dp)
                     )
                 }

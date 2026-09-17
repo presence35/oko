@@ -84,7 +84,8 @@ class UserPrefs(private val context: Context) {
     private val calmMessagesEnabledKey = booleanPreferencesKey("calm_messages_enabled")
     private val hapticsEnabledKey = booleanPreferencesKey("haptics_enabled")
     private val officialAlertCityScopeKey = booleanPreferencesKey("official_alert_city_scope")
-    private val justFunMasterEnabledKey = booleanPreferencesKey("just_fun_master_enabled")
+    private val moraleMasterEnabledKey = booleanPreferencesKey("morale_master_enabled")
+    private val legacyJustFunMasterEnabledKey = booleanPreferencesKey("just_fun_master_enabled")
     private val bootRestartEnabledKey = booleanPreferencesKey("boot_restart_enabled")
     private val fillAlertRegionsKey = booleanPreferencesKey("fill_alert_regions")
     private val showBordersKey = booleanPreferencesKey("show_borders")
@@ -177,7 +178,7 @@ class UserPrefs(private val context: Context) {
             calmMessagesEnabled = this[calmMessagesEnabledKey] ?: true,
             hapticsEnabled = this[hapticsEnabledKey],
             officialAlertCityScope = this[officialAlertCityScopeKey] ?: false,
-            justFunMasterEnabled = this[justFunMasterEnabledKey] ?: false,
+            moraleMasterEnabled = this[moraleMasterEnabledKey] ?: this[legacyJustFunMasterEnabledKey] ?: false,
             bootRestartEnabled = this[bootRestartEnabledKey] ?: true,
             fillAlertRegions = this[fillAlertRegionsKey] ?: false,
             showBorders = this[showBordersKey] ?: true,
@@ -402,9 +403,14 @@ class UserPrefs(private val context: Context) {
         context.dataStore.edit { it[officialAlertCityScopeKey] = enabled }
     }
 
-    suspend fun setJustFunMasterEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[justFunMasterEnabledKey] = enabled }
+    suspend fun setMoraleMasterEnabled(enabled: Boolean) {
+        context.dataStore.edit {
+            it[moraleMasterEnabledKey] = enabled
+            it[legacyJustFunMasterEnabledKey] = enabled
+        }
     }
+
+    suspend fun setJustFunMasterEnabled(enabled: Boolean) = setMoraleMasterEnabled(enabled)
 
     suspend fun setBootRestartEnabled(enabled: Boolean) {
         context.dataStore.edit { it[bootRestartEnabledKey] = enabled }

@@ -293,11 +293,6 @@ fun LogsDropDownSheet(
             )
         }
 
-        // Diagnostic card exposing real-time alert fill pipeline state
-        ua.ukrainedrones.debug.AlertFillDiagnostics.LogsCard(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-        )
-
         // Tabs
         val tabFilters = listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES, LogsFilter.SYSTEM, LogsFilter.CHANNELS)
         val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources, s.logsFilterSystem, s.logsFilterChannels)

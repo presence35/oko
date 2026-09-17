@@ -198,21 +198,27 @@ class ThreatEngine(
         fillRegions: Boolean
     ): Pair<Set<String>, Set<Pair<String, String>>> {
         if (!fillRegions || alerts.isEmpty()) return emptySet<String>() to emptySet<Pair<String, String>>()
-        val stems = Cities.cityOblast.values
         val fillOblastTokens = buildSet {
-            for (token in stems) {
-                if (alerts.any { it.inOblast(token) && it.isOblastWide() }) {
-                    CompactOblastBoundaries.canonicalId(token)?.let { add(it) }
-                }
+            for (alert in alerts) {
+                if (!alert.isOblastWide()) continue
+                val id = CompactOblastBoundaries.canonicalId(alert.key)
+                    ?: CompactOblastBoundaries.canonicalId(alert.name)
+                    ?: CompactOblastBoundaries.canonicalId(alert.oblast)
+                if (id != null) add(id)
             }
         }
         val fillRaionKeys = buildSet {
             for (alert in alerts) {
                 if (alert.isOblastWide()) continue
-                val raion = alert.raionName() ?: continue
-                val stem = stems.firstOrNull { alert.inOblast(it) } ?: continue
-                val id = CompactOblastBoundaries.canonicalId(stem) ?: continue
-                if (CompactRaionBoundaries.forKey(id, raion) != null) add(id to raion)
+                val oblastId = CompactOblastBoundaries.canonicalId(alert.oblast)
+                    ?: CompactOblastBoundaries.canonicalId(alert.name)
+                    ?: continue
+                val raionKey = CompactRaionBoundaries.canonicalKey(alert.key)
+                    ?: CompactRaionBoundaries.canonicalKey(alert.name)
+                    ?: continue
+                if (CompactRaionBoundaries.get(raionKey) != null) {
+                    add(oblastId to raionKey)
+                }
             }
         }
         return fillOblastTokens to fillRaionKeys

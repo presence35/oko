@@ -56,6 +56,7 @@ import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.engine.ThreatProps
 import ua.ukrainedrones.engine.ThreatZone
+import ua.ukrainedrones.engine.coversCityRaion
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.toThreatType
@@ -191,15 +192,12 @@ private fun gpsDotBitmap(context: Context, hasFix: Boolean): Bitmap {
     val canvas = Canvas(bmp)
     val cx = size / 2f
     val cy = size / 2f
-    val (glowA, glowRgb) = if (hasFix) {
-        AppPalette.GpsGlow.toInt() to intArrayOf(33, 150, 243)
-    } else {
-        AppPalette.GpsGlowOff.toInt() to intArrayOf(158, 158, 158)
-    }
+    val glowA = if (hasFix) AppPalette.GpsGlow.toInt() else AppPalette.GpsGlowOff.toInt()
+    val baseColor = if (hasFix) AppPalette.GpsBlue.toInt() else AppPalette.TextSecondary.toInt()
     val glow = Paint().apply {
         shader = RadialGradient(
             cx, cy, glowR,
-            intArrayOf(glowA, Color.argb(0, glowRgb[0], glowRgb[1], glowRgb[2])),
+            intArrayOf(glowA, Color.argb(0, Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor))),
             floatArrayOf(0.45f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -980,7 +978,14 @@ LaunchedEffect(selectedId) {
     }
 
     // City alerts mapping
-    val displayAlerts = remember(uiState.cityAlerts, uiState.fillAlertRegions, uiState.alertOblastIds, uiState.alertYellowOblastIds) {
+    val displayAlerts = remember(
+        uiState.cityAlerts,
+        uiState.fillAlertRegions,
+        uiState.alertOblastIds,
+        uiState.alertYellowOblastIds,
+        uiState.alertRaionKeys,
+        uiState.alertYellowRaionKeys
+    ) {
         if (!uiState.fillAlertRegions) {
             buildMap {
                 putAll(uiState.cityAlerts)
@@ -990,34 +995,31 @@ LaunchedEffect(selectedId) {
                     val id = CompactOblastBoundaries.canonicalId(stem) ?: continue
                     when {
                         id in uiState.alertOblastIds -> put(city.nameUa, AlertLevel.RED)
+                        coversCityRaion(city.nameUa, id, uiState.alertRaionKeys) -> put(city.nameUa, AlertLevel.RED)
                         id in uiState.alertYellowOblastIds -> put(city.nameUa, AlertLevel.YELLOW)
+                        coversCityRaion(city.nameUa, id, uiState.alertYellowRaionKeys) -> put(city.nameUa, AlertLevel.YELLOW)
                     }
                 }
             }
         } else uiState.cityAlerts
     }
 
-    val suppressedCities = remember(uiState.cityAlerts, uiState.fillAlertRegions, uiState.alertOblastIds, uiState.alertYellowOblastIds, uiState.alertRaionKeys, uiState.alertYellowRaionKeys) {
+    val suppressedCities = remember(
+        uiState.cityAlerts,
+        uiState.fillAlertRegions,
+        uiState.alertOblastIds,
+        uiState.alertYellowOblastIds,
+        uiState.alertRaionKeys,
+        uiState.alertYellowRaionKeys
+    ) {
         if (uiState.fillAlertRegions) {
             uiState.cityAlerts.mapNotNull { (cityName, level) ->
                 val stem = Cities.cityOblast[cityName] ?: return@mapNotNull null
                 val id = CompactOblastBoundaries.canonicalId(stem) ?: return@mapNotNull null
-                val cityRaion = CityRaions.cityRaion[cityName]?.lowercase()?.trim()
-                val cityRaionCanon = cityRaion?.let { CompactRaionBoundaries.canonicalKey(it) }
-                fun isRaionCovered(keys: Set<Pair<String, String>>): Boolean {
-                    if (cityRaion == null || keys.isEmpty()) return false
-                    if ((id to cityRaion) in keys) return true
-                    return keys.any { (alertId, alertRaion) ->
-                        alertId == id && (
-                            alertRaion.equals(cityRaion, ignoreCase = true) ||
-                            (cityRaionCanon != null && CompactRaionBoundaries.canonicalKey(alertRaion) == cityRaionCanon)
-                        )
-                    }
-                }
                 val covered = when (level) {
-                    AlertLevel.RED -> id in uiState.alertOblastIds || isRaionCovered(uiState.alertRaionKeys)
-                    AlertLevel.YELLOW -> (id in uiState.alertYellowOblastIds || isRaionCovered(uiState.alertYellowRaionKeys)) ||
-                        id in uiState.alertOblastIds
+                    AlertLevel.RED -> id in uiState.alertOblastIds || coversCityRaion(cityName, id, uiState.alertRaionKeys)
+                    AlertLevel.YELLOW -> id in uiState.alertYellowOblastIds || coversCityRaion(cityName, id, uiState.alertYellowRaionKeys) ||
+                        id in uiState.alertOblastIds || coversCityRaion(cityName, id, uiState.alertRaionKeys)
                     else -> false
                 }
                 if (covered) cityName else null
@@ -1271,11 +1273,6 @@ LaunchedEffect(selectedId) {
                     }
                 }
             }
-        )
-
-        // Real-time HUD overlay diagnosing alert region ingestion, tokens, and GPU state
-        ua.ukrainedrones.debug.AlertFillDiagnostics.Hud(
-            modifier = Modifier.align(Alignment.TopCenter)
         )
     }
 }

@@ -1161,11 +1161,11 @@ fun SettingsScreen(
             if (searching.not() || SettingsSection.FLOURISH in matchedSections) {
             item {
                 CollapsibleSectionCard(
-                    title = s.justFunSectionTitle,
-                    icon = painterResource(R.drawable.ic_explosion),
-                    emoji = "🥳",
+                    title = s.moraleSectionTitle,
+                    icon = painterResource(R.drawable.ic_morale),
+                    iconTint = Color.Unspecified,
                     expanded = collapse.flourish,
-                    subtitle = s.justFunSubtitle(deathAnimationEnabled, neutralizedTallyEnabled),
+                    subtitle = s.moraleSubtitle(deathAnimationEnabled, neutralizedTallyEnabled),
                     onToggle = { onCollapseChange(collapse.copy(flourish = !collapse.flourish)) },
                     trailing = {
                         Switch(
@@ -1248,7 +1248,7 @@ fun SettingsScreen(
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Text(
-                        s.justFunNote,
+                        s.moraleNote,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)

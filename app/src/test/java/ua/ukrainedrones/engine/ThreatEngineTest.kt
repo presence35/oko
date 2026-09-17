@@ -533,11 +533,16 @@ class ThreatEngineTest {
     }
 
     @Test
-    fun `computeFillKeys - raion alert fills the named raion`() {
-        val alert = OblastAlert(key = "бердянський", name = "Бердянський район", oblast = "Запорізька область", since = null)
-        val (oblastTokens, raionKeys) = engine.computeFillKeys(listOf(alert), fillRegions = true)
-        assertTrue(oblastTokens.isEmpty())
-        assertTrue(("zaporizka" to "бердянський") in raionKeys)
+    fun `computeFillKeys - raion alert fills the named raion with canonical keys`() {
+        val alertCyrillic = OblastAlert(key = "бердянський", name = "Бердянський район", oblast = "Запорізька область", since = null)
+        val (oblastTokens1, raionKeys1) = engine.computeFillKeys(listOf(alertCyrillic), fillRegions = true)
+        assertTrue(oblastTokens1.isEmpty())
+        assertTrue(("zaporizka" to "berdianskyi") in raionKeys1)
+
+        val alertCanonical = OblastAlert(key = "izmailskyi", name = "Ізмаїльський район", oblast = "odeska", wide = false, since = null)
+        val (oblastTokens2, raionKeys2) = engine.computeFillKeys(listOf(alertCanonical), fillRegions = true)
+        assertTrue(oblastTokens2.isEmpty())
+        assertTrue(("odeska" to "izmailskyi") in raionKeys2)
     }
 
     @Test
@@ -562,6 +567,11 @@ class ThreatEngineTest {
         val (oblastTokens, raionKeys) = engine.computeFillKeys(listOf(alert), fillRegions = true)
         assertTrue("odeska" in oblastTokens)
         assertTrue(raionKeys.isEmpty())
+
+        val alertCanonical = OblastAlert(key = "kyivska", name = "Київська область", oblast = "kyivska", wide = true, since = null)
+        val (oblastTokens2, raionKeys2) = engine.computeFillKeys(listOf(alertCanonical), fillRegions = true)
+        assertTrue("kyivska" in oblastTokens2)
+        assertTrue(raionKeys2.isEmpty())
     }
 
     @Test

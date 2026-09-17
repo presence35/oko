@@ -77,3 +77,5 @@ When multiple threats overlap at low zoom levels, show a single count badge inst
 stacked icons. Zoom in reveals individual threats. Requires a spatial index or grid-based
 grouping in the map rendering layer (`MapView.kt`). Could piggyback on the osmdroid → MapLibre
 migration or be done standalone with a simple grid-bucket approach.
+
+Timer in footer "how long this alert has been acti"

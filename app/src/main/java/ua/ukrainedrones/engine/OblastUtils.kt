@@ -2,9 +2,12 @@ package ua.ukrainedrones.engine
 
 import ua.ukrainedrones.AppLanguage
 import ua.ukrainedrones.Cities
+import ua.ukrainedrones.CityRaions
 import ua.ukrainedrones.ThreatType
 import ua.ukrainedrones.ThreatTypeCatalog
 import ua.ukrainedrones.Transliteration
+import ua.ukrainedrones.community.CompactOblastBoundaries
+import ua.ukrainedrones.community.CompactRaionBoundaries
 import ua.ukrainedrones.isNationalMig
 import ua.ukrainedrones.nationalMigWhereText
 
@@ -63,3 +66,28 @@ data class OblastMatch(
     val nameUa: String,
     val nameEn: String
 )
+
+/**
+ * True when the city's registered raion matches any entry in [raionKeys].
+ * Scoped by parent oblast so raions with identical names in different oblasts never collide.
+ * Supports exact canonical pair matching and canonical-equivalent alias lookups.
+ */
+fun coversCityRaion(
+    cityUa: String,
+    oblastId: String,
+    raionKeys: Set<Pair<String, String>>
+): Boolean {
+    if (raionKeys.isEmpty()) return false
+    val rawRaion = CityRaions.cityRaion[cityUa] ?: return false
+    val cityStem = Cities.cityOblast[cityUa] ?: return false
+    val cityOblastId = CompactOblastBoundaries.canonicalId(cityStem) ?: return false
+    if (cityOblastId != oblastId) return false
+    val canonicalCityRaion = CompactRaionBoundaries.canonicalKey(rawRaion) ?: return false
+    if ((oblastId to canonicalCityRaion) in raionKeys) return true
+    return raionKeys.any { (alertOblastId, alertRaion) ->
+        alertOblastId == oblastId && (
+            alertRaion.equals(canonicalCityRaion, ignoreCase = true) ||
+            CompactRaionBoundaries.canonicalKey(alertRaion) == canonicalCityRaion
+        )
+    }
+}

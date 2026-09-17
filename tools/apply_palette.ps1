@@ -7,7 +7,6 @@ $src = Join-Path $root 'app\src\main\java\ua\ukrainedrones'
 $skip = @(
     'ThreatPalette.kt',
     'theme\DarkThemePlugin.kt',
-    'debug\AlertFillDiagnostics.kt',
     'flourish\ThreatDeathAnimation.kt',
     'ui\FeatureDiagrams.kt',
     'ui\MapLibreStyle.kt',

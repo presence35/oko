@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Switched alert map fills and city coverage to direct canonical boundary lookup, eliminating stem-heuristic mismatches on Latin and Cyrillic alert keys / Switched alert map fills and city coverage to direct canonical boundary lookup, eliminating stem-heuristic mismatches on Latin and Cyrillic alert keys
+
+- Reframed "Just Fun" into "Morale" with Ukrainian heart emblem, uplifting spirits copy, and expanded search keywords / Reframed "Just Fun" into "Morale" with Ukrainian heart emblem, uplifting spirits copy, and expanded search keywords
+
 - Consolidated every hardcoded color in the app into one theme-owned palette (`AppPalette`), so the widget, map layers, notifications, and screens all share exact-tone token values / Consolidated every hardcoded color in the app into one theme-owned palette (`AppPalette`), so the widget, map layers, notifications, and screens all share exact-tone token values
 
 - Unified map alert fills, city labels, and widget badges onto a single shared alert-color palette, so red/yellow tones match everywhere / Unified map alert fills, city labels, and widget badges onto a single shared alert-color palette, so red/yellow tones match everywhere

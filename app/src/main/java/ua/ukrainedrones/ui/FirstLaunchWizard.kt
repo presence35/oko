@@ -923,9 +923,17 @@ private fun SetupFeaturesStep(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_morale),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier
+                    .padding(end = 12.dp)
+                    .size(24.dp)
+            )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    s.wizardJustFunTitle,
+                    s.wizardMoraleTitle,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -934,11 +942,11 @@ private fun SetupFeaturesStep(
                 val justFunGearId = "justFunGear"
                 Text(
                     buildAnnotatedString {
-                        append(s.wizardJustFunDesc)
+                        append(s.wizardMoraleDesc)
                         append(' ')
                         appendInlineContent(justFunGearId, "[gear]")
                         append(' ')
-                        append(s.wizardJustFunDescGearSuffix)
+                        append(s.wizardMoraleDescGearSuffix)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

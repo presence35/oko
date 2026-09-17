@@ -42,9 +42,9 @@ object Strings {
         val zoneYellowLabel: String,
         val wizardShelterTitle: String,
         val wizardShelterDesc: String,
-        val wizardJustFunTitle: String,
-        val wizardJustFunDesc: String,
-        val wizardJustFunDescGearSuffix: String,
+        val wizardMoraleTitle: String,
+        val wizardMoraleDesc: String,
+        val wizardMoraleDescGearSuffix: String,
         val wizardNeptunStatus: String,
         val settingsSearchHint: String,
         val settingsSearchClear: String,
@@ -113,7 +113,7 @@ val nightSoundLabel: String,
         val exitButton: String,
         val systemSectionTitle: String,
         val locationSectionTitle: String,
-        val justFunSectionTitle: String,
+        val moraleSectionTitle: String,
         val flybyAnimationLabel: String,
         val flybyAnimationDesc: String,
         val cardSizeSmallLabel: String,
@@ -402,7 +402,7 @@ val nightSoundLabel: String,
         val neutralizedTallyDesc: String,
         val neutralizedTallyAllUkraineTitle: String,
         val neutralizedTallyAllUkraineDesc: String,
-        val justFunNote: String,
+        val moraleNote: String,
         val iconSetTitle: String,
         val overlapModeTitle: String,
         val overlapModeDesc: String,
@@ -606,8 +606,8 @@ val tapToCancelLabel: String,
         val alertsSirenOverride: String,
         val onWord: String,
         val offWord: String,
-        val justFunAnimationPrefix: String,
-        val justFunTallyOn: String,
+        val moraleAnimationPrefix: String,
+        val moraleTallyOn: String,
         val sheltersPrefix: String,
         val threatsAllActiveFormat: String,
         val threatsHiddenSilencedFormat: String,
@@ -679,9 +679,12 @@ val tapToCancelLabel: String,
         val wizardEditZonesHint: String get() = onboarding.wizardEditZonesHint
         val wizardShelterTitle: String get() = onboarding.wizardShelterTitle
         val wizardShelterDesc: String get() = onboarding.wizardShelterDesc
-        val wizardJustFunTitle: String get() = onboarding.wizardJustFunTitle
-        val wizardJustFunDesc: String get() = onboarding.wizardJustFunDesc
-        val wizardJustFunDescGearSuffix: String get() = onboarding.wizardJustFunDescGearSuffix
+        val wizardMoraleTitle: String get() = onboarding.wizardMoraleTitle
+        val wizardMoraleDesc: String get() = onboarding.wizardMoraleDesc
+        val wizardMoraleDescGearSuffix: String get() = onboarding.wizardMoraleDescGearSuffix
+        val wizardJustFunTitle: String get() = wizardMoraleTitle
+        val wizardJustFunDesc: String get() = wizardMoraleDesc
+        val wizardJustFunDescGearSuffix: String get() = wizardMoraleDescGearSuffix
         val wizardNeptunStatus: String get() = onboarding.wizardNeptunStatus
         val fitMapLabel: String get() = onboarding.fitMapLabel
         val dayZonesTitle: String get() = settings.dayZonesTitle
@@ -747,7 +750,8 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val bootRestartDisableButton: String get() = settings.bootRestartDisableButton
         val systemSectionTitle: String get() = settings.systemSectionTitle
         val locationSectionTitle: String get() = settings.locationSectionTitle
-        val justFunSectionTitle: String get() = settings.justFunSectionTitle
+        val moraleSectionTitle: String get() = settings.moraleSectionTitle
+        val justFunSectionTitle: String get() = moraleSectionTitle
         val flybyAnimationLabel: String get() = settings.flybyAnimationLabel
         val flybyAnimationDesc: String get() = settings.flybyAnimationDesc
         val cardSizeSmallLabel: String get() = settings.cardSizeSmallLabel
@@ -783,14 +787,16 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
             return parts.joinToString(" · ")
         }
 
-        fun justFunSubtitle(animation: Boolean, tally: Boolean): String {
+        fun moraleSubtitle(animation: Boolean, tally: Boolean): String {
             val parts = mutableListOf<String>()
-            parts.add(subtitles.justFunAnimationPrefix + (if (animation) subtitles.onWord else subtitles.offWord))
+            parts.add(subtitles.moraleAnimationPrefix + (if (animation) subtitles.onWord else subtitles.offWord))
             if (tally) {
-                parts.add(subtitles.justFunTallyOn)
+                parts.add(subtitles.moraleTallyOn)
             }
             return parts.joinToString(" · ")
         }
+
+        fun justFunSubtitle(animation: Boolean, tally: Boolean): String = moraleSubtitle(animation, tally)
 
         fun sheltersSubtitle(enabled: Boolean): String =
             subtitles.sheltersPrefix + (if (enabled) subtitles.onWord else subtitles.offWord)
@@ -1080,7 +1086,8 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val hdExplosionDesc: String get() = misc.hdExplosionDesc
         val neutralizedTallyTitle: String get() = misc.neutralizedTallyTitle
         val neutralizedTallyDesc: String get() = misc.neutralizedTallyDesc
-        val justFunNote: String get() = misc.justFunNote
+        val moraleNote: String get() = misc.moraleNote
+        val justFunNote: String get() = moraleNote
         val neutralizedTallyAllUkraineTitle: String get() = misc.neutralizedTallyAllUkraineTitle
         val neutralizedTallyAllUkraineDesc: String get() = misc.neutralizedTallyAllUkraineDesc
 val iconSetTitle: String get() = misc.iconSetTitle
