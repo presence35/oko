@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Trimmed dead APK weight: dropped the unused coil dependency, scoped release resources to EN/UK, preview tooling to debug builds / Trimmed dead APK weight: dropped the unused coil dependency, scoped release resources to EN/UK, preview tooling to debug builds
 - Removed the dead NeptunDecoder layer superseded by NeptunRawDecoder and MonitorCoreImpl / Removed the dead NeptunDecoder layer superseded by NeptunRawDecoder and MonitorCoreImpl
 - Critical offline alert now fires after 5 minutes offline — or after 1 minute during an active alert — with milestone notifications at 3/6/10/20 minutes / Critical offline alert now fires after 5 minutes offline — or after 1 minute during an active alert — with milestone notifications at 3/6/10/20 minutes
 - Fixed weak-WiFi stalls where the connection sat offline without retrying: reconnects no longer depend on network-validation timing, duplicate disconnects schedule exactly one retry, and a stuck-state watchdog force-retries / Fixed weak-WiFi stalls where the connection sat offline without retrying: reconnects no longer depend on network-validation timing, duplicate disconnects schedule exactly one retry, and a stuck-state watchdog force-retries

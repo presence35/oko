@@ -47,6 +47,7 @@ android {
         ndk {
             abiFilters.addAll(listOf("arm64-v8a"))
         }
+        resourceConfigurations += listOf("en", "uk")
     }
 
     signingConfigs {
@@ -89,7 +90,6 @@ android {
 
     buildFeatures {
         compose = true
-        viewBinding = true
         buildConfig = true
     }
 
@@ -116,35 +116,24 @@ android {
     }
 }
 
-configurations.all {
-    resolutionStrategy {
-        // coil 2.7.0 asks for kotlin-stdlib 2.0.0, but we compile with Kotlin 1.9.24;
-        // force keeps the stdlib on the compiler's own version.
-        force("org.jetbrains.kotlin:kotlin-stdlib:1.9.24")
-    }
-}
-
 dependencies {
     // Compose
     implementation(platform("androidx.compose:compose-bom:2024.09.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-tooling-preview")
 
     // MapLibre GL Native
     implementation("org.maplibre.gl:android-sdk:11.8.0")
 
     // WebSocket client
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
-    // Image loading (Wikimedia Commons photos in the threat popup)
-    implementation("io.coil-kt:coil-compose:2.7.0")
 
     // JSON parsing
     implementation("org.json:json:20240303")
