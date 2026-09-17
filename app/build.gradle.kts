@@ -156,26 +156,28 @@ dependencies {
 
 tasks.register("bumpVersion") {
     group = "versioning"
-    description = "Increments versionCode in app/version.properties and auto-bumps the patch of versionName (e.g. 0.3.8 -> 0.3.9). Optional: -PnewVersion=X.Y.Z overrides the name."
+    description = "Increments versionCode and derives versionName as major.minor.versionCode. Optional: -PnewVersion=X.Y.Z overrides the name."
     doLast {
         val props = Properties()
         if (versionPropsFile.exists()) versionPropsFile.inputStream().use { props.load(it) }
         val currentCode = (props.getProperty("versionCode") ?: "0").toIntOrNull() ?: 0
         val currentName = props.getProperty("versionName") ?: ""
         val requested = project.findProperty("newVersion")?.toString()?.takeIf { it.isNotBlank() }
-        val newName = requested ?: autoBumpPatch(currentName)
-        props.setProperty("versionCode", (currentCode + 1).toString())
+        val newCode = currentCode + 1
+        val newName = requested ?: deriveVersionName(currentName, newCode)
+        props.setProperty("versionCode", newCode.toString())
         props.setProperty("versionName", newName)
         versionPropsFile.outputStream().use { props.store(it, "Bumped via gradlew bumpVersion") }
-        println("versionCode: $currentCode -> ${currentCode + 1}")
+        println("versionCode: $currentCode -> $newCode")
         println("versionName: ${currentName.ifEmpty { "(unset)" }} -> $newName")
     }
 }
 
-private fun autoBumpPatch(name: String): String {
-    val parts = name.split('.').mapNotNull { it.toIntOrNull() }
-    if (parts.size < 3) return name
-    return "${parts[0]}.${parts[1]}.${parts[2] + 1}"
+private fun deriveVersionName(current: String, newCode: Int): String {
+    val parts = current.split('.')
+    val major = parts.getOrNull(0) ?: "0"
+    val minor = parts.getOrNull(1) ?: "6"
+    return "$major.$minor.$newCode"
 }
 
 tasks.register<GradleBuild>("release") {

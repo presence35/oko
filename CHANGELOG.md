@@ -91,4 +91,5 @@
 - Threat zones renamed to "Inner zone" and "Outer zone" so they are not confused with official red/yellow alerts / Threat zones renamed to "Inner zone" and "Outer zone" so they are not confused with official red/yellow alerts
 - The all-clear notification is only sent while at least one official channel (red or yellow) is on, but is always logged so no event is missed / The all-clear notification is only sent while at least one official channel (red or yellow) is on, but is always logged so no event is missed
 - The official-alerts trident is now larger in Settings > Alerts / The official-alerts trident is now larger in Settings > Alerts
+- Version names now derive directly from versionCode, making app and server JSON versions directly comparable / Version names now derive directly from versionCode, making app and server JSON versions directly comparable
 
