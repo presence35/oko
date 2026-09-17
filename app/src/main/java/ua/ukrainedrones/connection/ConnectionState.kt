@@ -13,14 +13,14 @@ data class ConnRetryState(
 
 /** Kind of a line in the current offline episode's transient reconnect log. */
 enum class ConnEventKind {
-    CONNECTION_LOST, RETRY_SCHEDULED, NO_NETWORK, DEGRADED,
+    CONNECTION_LOST, RETRY_SCHEDULED, RETRY_MANUAL, NO_NETWORK, DEGRADED,
     MILESTONE_3, MILESTONE_5, MILESTONE_6, MILESTONE_10, MILESTONE_20,
     GAVE_UP, PAUSED, FALLBACK_ACTIVE, FALLBACK_RESTORED, SOURCE_TOGGLED
 }
 
 /** A reconnect that survives this long counts as a genuine recovery; shorter blips
  *  stitch back onto the previous offline episode (timers, milestones, critical dedup). */
-const val EPISODE_CONTINUITY_GRACE_MS = 60_000L
+const val EPISODE_CONTINUITY_GRACE_MS = 3_000L
 
 /** Offline-episode milestone signal, emitted once per episode on the milestones flow.
  *  The supervisor owns emission timing; consumers (AlertService) own notifications. */
@@ -42,6 +42,7 @@ data class ConnEvent(
     fun label(s: Strings.StringSet): String = when (kind) {
         ConnEventKind.CONNECTION_LOST -> s.connEventLost
         ConnEventKind.RETRY_SCHEDULED -> String.format(s.connEventRetry, ((delayMs ?: 0L) / 1000).coerceAtLeast(1), attempt ?: 0)
+        ConnEventKind.RETRY_MANUAL -> s.connEventManualRetry
         ConnEventKind.NO_NETWORK -> s.connEventNoNetwork
         ConnEventKind.DEGRADED -> s.connEventDegraded
         ConnEventKind.MILESTONE_3 -> s.connEventMin3

@@ -295,11 +295,16 @@ class SourceRegistry {
                 }
             }
             else -> {
+                // A recheck while down/connecting never starts a fresh episode: once stamped,
+                // the episode runs until a genuine healthy recovery (the wsHealthy branch) nulls
+                // it past the flap grace. Manual or auto retries must not reset the timers.
                 val prev = _degradedSince.value
-                val freshEpisode = prev == null ||
-                        (lastDropMono > 0L && nowMono - lastDropMono >= EPISODE_CONTINUITY_GRACE_MS)
-                lastDropMono = nowMono
-                if (freshEpisode) nowMono else prev
+                if (prev != null) {
+                    prev
+                } else {
+                    lastDropMono = nowMono
+                    nowMono
+                }
             }
         }
         _coveredByFallback.value = active.any {
@@ -318,12 +323,14 @@ class SourceRegistry {
         if (enabledSources.isEmpty()) return true
         if (_coveredByFallback.value) return false
 
-        // Immediate offline when the transport is physically down. The 5-minute grace applies
-        // only to DEGRADED (silent socket / server outage) so transient feed stalls don't
-        // immediately alarm the user.
+        // Immediate offline when the transport is physically down (a Connecting attempt is
+        // down for accounting purposes — no data is flowing and retries must keep the timers
+        // running). The 5-minute grace applies only to DEGRADED (silent socket / server outage)
+        // so transient feed stalls don't immediately alarm the user.
         val transportDown = _connectionState.value == SourceState.OFFLINE ||
                             _connectionState.value == SourceState.DISCONNECTED ||
-                            _connectionState.value == SourceState.PAUSED
+                            _connectionState.value == SourceState.PAUSED ||
+                            _connectionState.value == SourceState.CONNECTING
         if (transportDown) return true
 
         if (!_degraded.value) return false

@@ -315,6 +315,47 @@ class ThreatTest {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // National MiG-31K translation
+    // ─────────────────────────────────────────────────────────────
+
+    private val liveMigCourse =
+        "Зафіксовано зліт МіГ-31К — носія аеробалістичних ракет «Кинджал». " +
+            "Загроза для всієї території України: можливий пуск балістики за лічені хвилини. " +
+            "Будьте поблизу укриття."
+
+    @Test
+    fun `mig - EN course renders fixed text, never transliteration`() {
+        val en = translateCourseAssessment(liveMigCourse, AppLanguage.EN)
+        assertEquals(nationalMigCourseText(), en)
+        assertFalse(en!!.contains("Zafiksovano", ignoreCase = true))
+    }
+
+    @Test
+    fun `mig - UA course keeps raw server text`() {
+        assertEquals(liveMigCourse, translateCourseAssessment(liveMigCourse, AppLanguage.UA))
+    }
+
+    @Test
+    fun `mig - survives rewording that keeps the token`() {
+        assertEquals(
+            nationalMigCourseText(),
+            translateCourseAssessment("Зліт МіГ-31К, загроза по всій країні.", AppLanguage.EN)
+        )
+    }
+
+    @Test
+    fun `mig - isNationalMig ignores simulator title and real localities`() {
+        val live = makeThreat(
+            type = ThreatType.AVIATION, region = "Загальнодержавна загроза",
+            district = "Носій «Кинджал»", explanationShort = liveMigCourse
+        )
+        assertTrue(isNationalMig(live))
+        // Simulator title is already English and carries no descriptors — not a national MiG.
+        val sim = makeThreat(type = ThreatType.AVIATION, region = null, explanationShort = null)
+        assertFalse(isNationalMig(sim))
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────
 

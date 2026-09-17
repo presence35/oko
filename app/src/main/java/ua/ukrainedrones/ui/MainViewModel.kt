@@ -661,8 +661,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             reveal = live.reveal,
             flourish = live.flourish,
             officialAlertCityScope = prefs.officialAlertCityScope || (nightActive && prefs.nightOfficialAlertCityScope),
-            fillAlertRegions = prefs.fillAlertRegions,
-showBorders = prefs.showBorders,
+            showBorders = prefs.showBorders,
             showRegionBorders = prefs.showRegionBorders
         ).copy(
             update = updateUi.update,
@@ -884,7 +883,6 @@ showBorders = prefs.showBorders,
         reveal: RevealRequest?,
         flourish: FlourishShow?,
         officialAlertCityScope: Boolean,
-        fillAlertRegions: Boolean,
         showBorders: Boolean,
         showRegionBorders: Boolean
     ): UiState {
@@ -918,7 +916,6 @@ showBorders = prefs.showBorders,
             focusToken = focusToken,
             focusCityUa = attribution.bannerCityUa.takeIf { it.isNotBlank() },
             cityScope = officialAlertCityScope,
-            fillRegions = fillAlertRegions,
             lang = language
         )
         val inInner = evaluation.threatsInner

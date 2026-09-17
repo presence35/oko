@@ -305,6 +305,11 @@ estimateSpeed(id, threat):
   4. Nominal from ThreatProps.nominalSpeedMps → TYPICAL
   5. null (no dead-reckon possible)
 
+  Exception: the national MiG-31K track (`isNationalMig`) always estimates null — its pin
+  is a country centroid, not a position, so no speed/ETA may be derived from it.
+  Null speed hides the card's speed and ETA pills; zone tiering is unaffected
+  (`alwaysInnerWithinReach` still rings INNER).
+
 Thread-safe. Owned by engine. Not a global singleton.
 ```
 
@@ -394,7 +399,7 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 | System | Persisted | Retention | Purpose |
 |---|---|---|---|
 | DebugLog | Yes | 500 / 24h | Alert decision audit trail |
-| ConnectionLog | Yes | 50 episodes | ONLINE/OFFLINE/DEGRADED episodes |
+| ConnectionLog | Yes | 50 episodes | ONLINE/OFFLINE/DEGRADED/PAUSED episodes |
 | ApiMonitor | Yes | 100 / 7d | SDK changes, malformed frames, unknown types |
 | ConnEvent | No | Current episode | Offline milestones, retry scheduling |
 

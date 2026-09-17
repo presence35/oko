@@ -59,7 +59,6 @@ class ThreatEngine(
         focusToken: String? = null,
         focusCityUa: String? = null,
         cityScope: Boolean = false,
-        fillRegions: Boolean = false,
         lang: AppLanguage = AppLanguage.EN
     ): ThreatEvaluationResult {
         val inInner = mutableListOf<NormalizedThreat>()
@@ -125,8 +124,8 @@ class ThreatEngine(
         val focusOblastAlertActive = official.level == AlertLevel.RED
         val focusOblastYellowAlertActive = official.level == AlertLevel.YELLOW
         val cityAlerts = computeCityAlerts(alerts)
-        val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts.filter { it.level != "yellow" }, fillRegions)
-        val (fillYellowOblastTokens, fillYellowRaionKeys) = computeFillKeys(alerts.filter { it.level == "yellow" }, fillRegions)
+        val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts.filter { it.level != "yellow" }, fillRegions = true)
+        val (fillYellowOblastTokens, fillYellowRaionKeys) = computeFillKeys(alerts.filter { it.level == "yellow" }, fillRegions = true)
         val activeAlert = official.alert
         val (officialReason, reasonThreatId) = if (activeAlert != null) {
             deriveOfficialAlertReason(activeAlert, threats, focus, params, lang, now)
@@ -187,10 +186,11 @@ class ThreatEngine(
      *  - a raion-level alert shades the raion it names ([fillRaionKeys], via [raionName]).
      *  Tokens are canonical boundary IDs ([CompactOblastBoundaries.canonicalId], e.g. "odeska"),
      *  so consumers compare with exact set equality — no fuzzy matching downstream.
+     *  Always computed by [evaluate] regardless of the fill toggle — consumers gate the
+     *  actual map fill separately (via [MapLibreLayerManager.updateAlertRegions]).
      *  A red city is always inside one of these filled regions by construction — it only went
      *  red because its oblast/raion was alerted. Raion keys are emitted only when the raion has
-     *  a boundary polygon, so the fill is real. Empty when the fill is off — broad red labels
-     *  stand in for the missing fill. */
+     *  a boundary polygon, so the fill is real. */
     fun computeFillKeys(
         alerts: List<OblastAlert>,
         fillRegions: Boolean

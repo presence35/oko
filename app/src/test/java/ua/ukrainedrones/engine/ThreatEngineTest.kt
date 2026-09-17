@@ -293,6 +293,17 @@ class ThreatEngineTest {
     }
 
     @Test
+    fun `speedCache - national MiG never estimates speed or ETA`() {
+        val threat = makeThreat(id = "national-mig31k", type = "aviation", speedKmh = null).copy(
+            region = "Загальнодержавна загроза",
+            district = "Носій «Кинджал»",
+            explanationShort = "Зафіксовано зліт МіГ-31К — носія аеробалістичних ракет «Кинджал»."
+        )
+        val props = NEPTUN_TYPES["aviation"]!!
+        assertNull(engine.speedCache.estimateWithSource("national-mig31k", threat, props))
+    }
+
+    @Test
     fun `speedCache - thread safety`() {
         val threads = (1..10).map { i ->
             Thread {

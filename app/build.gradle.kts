@@ -180,7 +180,7 @@ private fun autoBumpPatch(name: String): String {
 
 tasks.register<GradleBuild>("release") {
     group = "versioning"
-    description = "Bumps the version, then builds the release APK and uploads it in a fresh Gradle run so the APK and version.json both carry the new version. Release notes come from notes_en.txt / notes_ua.txt."
+    description = "Bumps the version, then builds the release APK and uploads it in a fresh Gradle run so the APK and version.json both carry the new version. Release notes come from the root CHANGELOG.md ## [Unreleased] section."
     dependsOn("bumpVersion")
     dir = rootProject.projectDir
     tasks = listOf(":app:uploadRelease")
@@ -262,7 +262,10 @@ private fun escapeJson(s: String): String = buildString {
 }
 
 private fun buildNotesFromChangelog(): Pair<String, String> {
-    val changelog = file("CHANGELOG.md").takeIf { it.exists() }?.readText(Charsets.UTF_8).orEmpty()
+    // The changelog lives at the repo root; this script runs in the :app project dir,
+    // so a bare file("CHANGELOG.md") would resolve to app/CHANGELOG.md (absent) and
+    // silently fall back to empty notes on every release.
+    val changelog = rootProject.file("CHANGELOG.md").takeIf { it.exists() }?.readText(Charsets.UTF_8).orEmpty()
     val lines = changelog.lines()
     val start = lines.indexOfFirst { it.trim() == "## [Unreleased]" }
     if (start < 0) return fallbackNotes()

@@ -1,5 +1,7 @@
 package ua.ukrainedrones.engine
 
+import ua.ukrainedrones.isNationalMig
+
 enum class SpeedSource { RECORDED, TYPICAL }
 
 class SpeedCache {
@@ -25,6 +27,10 @@ class SpeedCache {
 
     @Synchronized
     fun estimateWithSource(id: String, t: NormalizedThreat, props: ThreatProps): Pair<Double, SpeedSource>? {
+        // The national MiG pin is a country centroid, not a position — no speed or ETA may be
+        // derived from it (a "MiG in N min" from centroid-distance ÷ nominal cruise speed is
+        // fabricated precision; the missile hasn't launched). Null hides the speed/ETA pills.
+        if (isNationalMig(t)) return null
         val serverSpeed = t.speedKmh
         // Trust the server field only inside a sane envelope; anything beyond it is a corrupt
         // value that would fabricate a near-zero ETA, so fall through to trail/nominal speed.

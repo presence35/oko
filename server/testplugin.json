@@ -3,6 +3,9 @@
     { "at": 0, "burst": { "types": ["shahed", "fpv"], "count": 5, "minKm": 30, "maxKm": 80, "aimAtFocus": true } },
     { "at": 4000, "burst": { "types": ["recon"], "count": 2, "minKm": 90, "maxKm": 140, "aimAtFocus": true } },
     { "at": 8000, "aviation": { "minKm": 250, "maxKm": 350 } },
+    { "at": 9000, "threats": [
+      { "type": "mig31k", "title": "Зліт МіГ-31К", "lat": 49.0, "lon": 31.2, "region": "Загальнодержавна загроза", "district": "Носій «Кинджал»", "explanationShort": "Зафіксовано зліт МіГ-31К — носія аеробалістичних ракет «Кинджал». Загроза для всієї території України: можливий пуск балістики за лічені хвилини. Будьте поблизу укриття.", "confirmations": 27, "reliability": "high" }
+    ] },
     { "at": 12000, "burst": { "types": ["cruise"], "count": 3, "minKm": 120, "maxKm": 280, "aimAtFocus": false } },
     { "at": 18000, "threats": [
       { "type": "shahed", "title": "Wave over Kyiv region", "lat": 50.4, "lon": 30.9, "region": "Київська область", "district": "Бориспільський район", "locality": "Бориспіль", "bearing": 265.0, "speedKmh": 180, "count": 3 },

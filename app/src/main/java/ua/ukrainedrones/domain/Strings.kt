@@ -145,6 +145,7 @@ val nightSoundLabel: String,
         val connOffline: String,
         val connOff: String,
         val connDegraded: String,
+        val connPaused: String,
         val connDegradedBody: String,
         val connActiveLabel: String,
         val reliabilityLow: String,
@@ -373,6 +374,7 @@ val nightSoundLabel: String,
         val connEventFallbackRestored: String,
         val connEventSourceToggled: String,
         val connEventPaused: String,
+        val connEventManualRetry: String,
         val cardSizeLabel: String,
         val additionalSettingsTitle: String,
         val showMapScaleTitle: String,
@@ -842,6 +844,7 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val sirenOverrideWarning: String get() = status.sirenOverrideWarning
         val bootRestartPaused: String get() = status.bootRestartPaused
         val connDegraded: String get() = status.connDegraded
+        val connPaused: String get() = status.connPaused
         val connDegradedBody: String get() = status.connDegradedBody
         val connActiveLabel: String get() = status.connActiveLabel
         val reliabilityLow: String get() = status.reliabilityLow
@@ -1053,6 +1056,7 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val connEventFallbackRestored: String get() = misc.connEventFallbackRestored
         val connEventSourceToggled: String get() = misc.connEventSourceToggled
         val connEventPaused: String get() = misc.connEventPaused
+        val connEventManualRetry: String get() = misc.connEventManualRetry
         val cardSizeLabel: String get() = misc.cardSizeLabel
         val additionalSettingsTitle: String get() = misc.additionalSettingsTitle
         val showMapScaleTitle: String get() = misc.showMapScaleTitle

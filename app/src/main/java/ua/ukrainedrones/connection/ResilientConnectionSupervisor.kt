@@ -140,8 +140,11 @@ class ResilientConnectionSupervisor(
             is ConnectionState.Degraded -> {
                 ConnectionLog.observe(ConnStatus.DEGRADED, now, activeSource)
             }
-            is ConnectionState.Offline, ConnectionState.Disconnected, is ConnectionState.Paused -> {
+            is ConnectionState.Offline, ConnectionState.Disconnected -> {
                 ConnectionLog.observe(ConnStatus.OFFLINE, now, activeSource)
+            }
+            is ConnectionState.Paused -> {
+                ConnectionLog.observe(ConnStatus.PAUSED, now, activeSource)
             }
             is ConnectionState.Connecting -> {
                 // Keep previous state until connection resolves
@@ -496,6 +499,7 @@ class ResilientConnectionSupervisor(
         pauseUntilMono = 0L
         reconnectAttempts.set(0)
         _retryState.value = null
+        recordEvent(ConnEventKind.RETRY_MANUAL)
         triggerReconnect("User manual retry")
     }
 

@@ -333,7 +333,7 @@ class TestSource : Source {
                     confirmations = o.optInt("confirmations", 1),
                     reliability = o.optString("reliability", "high"),
                     count = o.optInt("count", 1),
-                    explanationShort = null,
+                    explanationShort = o.optString("explanationShort").takeIf { it.isNotBlank() },
                     speedKmh = if (o.has("speedKmh")) o.getDouble("speedKmh") else speedFor(type),
                     uncertaintyKm = if (o.has("uncertaintyKm")) o.getDouble("uncertaintyKm") else null,
                     positionQuality = o.optString("positionQuality", "confirmed"),

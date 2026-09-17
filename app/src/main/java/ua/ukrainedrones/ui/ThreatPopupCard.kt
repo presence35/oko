@@ -177,8 +177,8 @@ fun ThreatPopupCard(
     val engine = remember(typeCatalog) { ThreatEngine(typeCatalog) }
     val typeInfo = threatTypeInfoByString(threat.type) ?: ThreatTypeCatalog.INFO.getValue(ThreatType.UNKNOWN)
     val typeLabel = if (lang == AppLanguage.UA) typeInfo.labelUa else typeInfo.labelEn
-    // Wave count (group size) prefixes the title when the server reports it.
-    val titleLabel = if (threat.count > 0) "${threat.count}x $typeLabel" else typeLabel
+    // Wave count (group size) prefixes the title when the server reports it (>1 only).
+    val titleLabel = if (threat.count > 1) "${threat.count}x $typeLabel" else typeLabel
 
     val regionText = listOf(threat.locality, threat.district, threat.region)
         .filter { !it.isNullOrBlank() }

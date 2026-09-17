@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 import ua.ukrainedrones.service.ServiceState
 
 /** Connection states shown in the status log — mirrors the header pill's two states. */
-enum class ConnStatus { ONLINE, OFFLINE, DEGRADED }
+enum class ConnStatus { ONLINE, OFFLINE, DEGRADED, PAUSED }
 
 /** One logged status change. [durationSec] is the episode length for OFF, null for ONLINE.
  *  [activeSource] names the source providing alerts during this episode (null = primary/Neptun). */
@@ -162,7 +162,7 @@ internal fun commitLogState(
     activeSource: String? = null
 ): LogTransition? {
     if (prevStatus == null) {
-        return if (status == ConnStatus.OFFLINE) {
+        return if (status == ConnStatus.OFFLINE || status == ConnStatus.PAUSED) {
             LogTransition(
                 entries = entries,
                 nextPending = ConnLogEntry(now, status, null, activeSource),

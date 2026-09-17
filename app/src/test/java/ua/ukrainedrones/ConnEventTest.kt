@@ -14,6 +14,7 @@ class ConnEventTest {
         assertEquals("Retrying in 12s · attempt 3", retry.label(s))
         assertEquals("Connection lost", ConnEvent(0L, ConnEventKind.CONNECTION_LOST).label(s))
         assertEquals("No network — waiting to retry", ConnEvent(0L, ConnEventKind.NO_NETWORK).label(s))
+        assertEquals("Manual retry", ConnEvent(0L, ConnEventKind.RETRY_MANUAL).label(s))
         assertEquals("5 min offline — alarm", ConnEvent(0L, ConnEventKind.MILESTONE_5).label(s))
         assertEquals("Retrying paused for 30 min", ConnEvent(0L, ConnEventKind.PAUSED).label(s))
     }
