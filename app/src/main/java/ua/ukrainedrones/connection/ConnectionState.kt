@@ -18,6 +18,16 @@ enum class ConnEventKind {
     GAVE_UP, PAUSED, FALLBACK_ACTIVE, FALLBACK_RESTORED, SOURCE_TOGGLED
 }
 
+/** Offline-episode milestone signal, emitted once per episode on the milestones flow.
+ *  The supervisor owns emission timing; consumers (AlertService) own notifications. */
+enum class ConnectionMilestone(val minutes: Int) {
+    M3(3),
+    M5_CRITICAL(5),
+    M6(6),
+    M10(10),
+    M20_GAVE_UP(20)
+}
+
 /** One line of the current offline episode's reconnect log (the in-between only). */
 data class ConnEvent(
     val atMillis: Long,

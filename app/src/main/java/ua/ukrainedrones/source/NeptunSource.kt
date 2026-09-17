@@ -76,6 +76,7 @@ class NeptunSource(private val context: Context) : Source, ConnectionLogSource {
 
     override val connEvents: StateFlow<List<ConnEvent>> get() = supervisor.connEvents
     override val retryState: StateFlow<ConnRetryState?> get() = supervisor.retryState
+    override val milestones: SharedFlow<ConnectionMilestone> get() = supervisor.milestones
 
     override fun start(scope: CoroutineScope) {
         scope.launch {

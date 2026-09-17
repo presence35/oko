@@ -13,6 +13,7 @@ import ua.ukrainedrones.ConnectionLog
 import ua.ukrainedrones.connection.ConnEvent
 import ua.ukrainedrones.connection.ConnEventKind
 import ua.ukrainedrones.connection.ConnRetryState
+import ua.ukrainedrones.connection.ConnectionMilestone
 import ua.ukrainedrones.connection.Monotonic
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.OblastAlert
@@ -30,6 +31,8 @@ data class SourceEvent(
 
 private val emptyConnEvents = MutableStateFlow<List<ConnEvent>>(emptyList()).asStateFlow()
 private val emptyRetryState = MutableStateFlow<ConnRetryState?>(null).asStateFlow()
+private val emptyMilestones: SharedFlow<ConnectionMilestone> =
+    MutableSharedFlow<ConnectionMilestone>(extraBufferCapacity = 1).asSharedFlow()
 
 /**
  * Health authority over all threat sources. Owns the merged feeds and the aggregate
@@ -107,6 +110,10 @@ class SourceRegistry {
 
     val retryState: StateFlow<ConnRetryState?>
         get() = logSource?.retryState ?: emptyRetryState
+
+    /** Offline-episode milestone feed for notifications (empty when no log source). */
+    val connectionMilestones: SharedFlow<ConnectionMilestone>
+        get() = logSource?.milestones ?: emptyMilestones
 
     /** Branding link shown in the Logs header (domain of the primary source). */
     val siteUrl: String? get() = _sources.value.firstOrNull()?.siteUrl

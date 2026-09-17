@@ -357,7 +357,7 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 | Zone siren | Threat enters armed zone tier | 20s grace, coalescing |
 | Official siren | `officialAlertActiveFor()` true | Region-latched, persists across restart |
 | All-clear | Raw official episode ends for the latched focus region | One clear per episode: red, yellow, or red-then-yellow; never more than one. Keyed on the raw ending, so a mid-episode scope drop (alert narrowed away from your city) still gets its all-clear |
-| Offline critical | Connection lost >5 min | Forced notification regardless of settings |
+| Offline critical | Offline 5 min, or 1 min while an official alert (red/yellow) is active on the focus oblast | Once per episode, honors the critical-offline toggle; milestone emission (supervisor) vs notification (service) |
 | Offline bypass silent | Sub-toggle of offline critical | Plays sound in silent mode |
 | Night siren overrides | Night window active | Separate zone + official override flags |
 | Resolved tally | Threat removed from stream | Scoped to focus oblast or all-Ukraine |

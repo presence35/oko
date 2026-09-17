@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Critical offline alert now fires after 5 minutes offline — or after 1 minute during an active alert — with milestone notifications at 3/6/10/20 minutes / Critical offline alert now fires after 5 minutes offline — or after 1 minute during an active alert — with milestone notifications at 3/6/10/20 minutes
+- Fixed weak-WiFi stalls where the connection sat offline without retrying: reconnects no longer depend on network-validation timing, duplicate disconnects schedule exactly one retry, and a stuck-state watchdog force-retries / Fixed weak-WiFi stalls where the connection sat offline without retrying: reconnects no longer depend on network-validation timing, duplicate disconnects schedule exactly one retry, and a stuck-state watchdog force-retries
+- Removed the dead WsTransport/ConnectionSupervisor/NetworkMonitor layers; ResilientConnectionSupervisor is now the single connection path / Removed the dead WsTransport/ConnectionSupervisor/NetworkMonitor layers; ResilientConnectionSupervisor is now the single connection path
+
 - Fixed red and yellow alert region rendering and eliminated double-tinting on overlapping raions / Fixed red and yellow alert region rendering and eliminated double-tinting on overlapping raions
 - Eliminated map panning lag and overlay jitter by removing redundant recompositions during camera movement / Eliminated map panning lag and overlay jitter by removing redundant recompositions during camera movement
 - Fixed overlapping threats rendering in GRID, SPREAD, and COUNT modes with distance-based clustering and coordinate-relative screen offsets / Fixed overlapping threats rendering in GRID, SPREAD, and COUNT modes with distance-based clustering and coordinate-relative screen offsets

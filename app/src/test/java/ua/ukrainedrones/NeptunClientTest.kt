@@ -1,45 +1,33 @@
 package ua.ukrainedrones
 
 import ua.ukrainedrones.connection.ConnectionState
-import ua.ukrainedrones.connection.WsTransport
+import ua.ukrainedrones.connection.ResilientConnectionSupervisor
 import ua.ukrainedrones.connection.isDegraded
 import ua.ukrainedrones.connection.isOffline
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NeptunClientTest {
 
     @Test
-    fun `first reconnect attempt is fast`() {
-        repeat(100) {
-            val ms = WsTransport.calculateBackoffMs(1)
-            assertTrue("first attempt must retry within 1-3s, got $ms", ms in 1000..3000)
-        }
+    fun `backoff is exponential with full jitter`() {
+        assertEquals(2000L, ResilientConnectionSupervisor.backoffDelayMs(1, jitter = 1.0))
+        assertEquals(4000L, ResilientConnectionSupervisor.backoffDelayMs(2, jitter = 1.0))
+        assertEquals(8000L, ResilientConnectionSupervisor.backoffDelayMs(3, jitter = 1.0))
+        assertEquals(16000L, ResilientConnectionSupervisor.backoffDelayMs(4, jitter = 1.0))
     }
 
     @Test
-    fun `repeated failures back off exponentially`() {
-        val expected = mapOf(
-            2 to 2000L..2400L,
-            3 to 4000L..4400L,
-            4 to 8000L..8400L
-        )
-        repeat(100) {
-            for ((attempt, range) in expected) {
-val ms = WsTransport.calculateBackoffMs(attempt)
-                assertTrue("attempt $attempt should be ~$range, got $ms", ms in range)
-            }
-        }
-    }
-
-    @Test
-    fun `backoff caps at 15 seconds`() {
+    fun `backoff caps at max`() {
         for (attempt in 5..30) {
-            val ms = WsTransport.calculateBackoffMs(attempt)
-            assertTrue("attempt $attempt should cap at ~15s, got $ms", ms in 15000..15400)
+            val ms = ResilientConnectionSupervisor.backoffDelayMs(attempt, jitter = 1.0)
+            assertEquals(ResilientConnectionSupervisor.MAX_BACKOFF_MS, ms)
+        }
+        repeat(100) {
+            val ms = ResilientConnectionSupervisor.backoffDelayMs(3)
+            assertTrue("attempt 3 must stay within jittered bounds, got $ms", ms in 1000L..30000L)
         }
     }
 
@@ -51,11 +39,11 @@ val ms = WsTransport.calculateBackoffMs(attempt)
 
         // The Degraded state signals a stale link — the client transitions to it
         // when a Connected state has been quiet for >= DEGRADED_STALE_MS.
-        val stale = ConnectionState.Degraded(generation = 1, openedAtMs = now, lastFrameAtMs = now - WsTransport.DEGRADED_STALE_MS, quietDurationMs = WsTransport.DEGRADED_STALE_MS)
+        val stale = ConnectionState.Degraded(generation = 1, openedAtMs = now, lastFrameAtMs = now - ResilientConnectionSupervisor.DEGRADED_STALE_MS, quietDurationMs = ResilientConnectionSupervisor.DEGRADED_STALE_MS)
         assertTrue(stale.isDegraded)
 
         // Offline always wins — never degraded once the socket is actually down.
-        val down = ConnectionState.Offline(since = now - WsTransport.DEGRADED_STALE_MS, reconnectStartMillis = 0L)
+        val down = ConnectionState.Offline(since = now - ResilientConnectionSupervisor.DEGRADED_STALE_MS, reconnectStartMillis = 0L)
         assertFalse(down.isDegraded)
         assertTrue(down.isOffline)
 

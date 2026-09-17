@@ -239,7 +239,7 @@ val nightSoundLabel: String,
         val offlineMilestone20Min: String,
         val offlineCriticalChannelName: String,
         val offlineCriticalChannelDesc: String,
-        val offlineCritical5Min: String,
+        val offlineCriticalFormat: String,
         val offlineCriticalOverrideTitle: String,
         val offlineCriticalOverrideDesc: String,
         val offlineCriticalBypassSilentTitle: String,
@@ -924,7 +924,7 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val offlineMilestone20Min: String get() = threat.offlineMilestone20Min
         val offlineCriticalChannelName: String get() = threat.offlineCriticalChannelName
         val offlineCriticalChannelDesc: String get() = threat.offlineCriticalChannelDesc
-        val offlineCritical5Min: String get() = threat.offlineCritical5Min
+        val offlineCriticalFormat: String get() = threat.offlineCriticalFormat
         val offlineCriticalOverrideTitle: String get() = threat.offlineCriticalOverrideTitle
         val offlineCriticalOverrideDesc: String get() = threat.offlineCriticalOverrideDesc
         val offlineCriticalBypassSilentTitle: String get() = threat.offlineCriticalBypassSilentTitle

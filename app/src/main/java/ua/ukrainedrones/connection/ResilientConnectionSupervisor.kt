@@ -7,7 +7,10 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.util.Log
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -51,8 +54,22 @@ class ResilientConnectionSupervisor(
         const val BASE_BACKOFF_MS = 1_000L
         const val MAX_BACKOFF_MS = 30_000L
         const val WATCHDOG_TICK_MS = 3_000L
+        const val MILESTONE_3_MS = 3 * 60_000L
+        const val MILESTONE_5_MS = 5 * 60_000L
+        const val MILESTONE_6_MS = 6 * 60_000L
+        const val MILESTONE_10_MS = 10 * 60_000L
+        const val MILESTONE_20_MS = 20 * 60_000L
+        /** Offline/Connecting with a live network and no reconnect progress past this → force retry. */
+        const val STUCK_OFFLINE_MS = MAX_BACKOFF_MS + 20_000L
         private const val MAX_CONN_EVENTS = 50
         private const val TAG = "ResilientConnSuper"
+
+        /** Pure full-jitter backoff: exponential base capped at [MAX_BACKOFF_MS], scaled by
+         *  [jitter] (default random 0.75–1.25). Extracted for deterministic unit tests. */
+        fun backoffDelayMs(attempt: Int, jitter: Double = Random.nextDouble(0.75, 1.25)): Long {
+            val expDelay = min(MAX_BACKOFF_MS.toDouble(), BASE_BACKOFF_MS * 2.0.pow(attempt.coerceAtMost(6).toDouble())).toLong()
+            return (expDelay * jitter).toLong().coerceIn(BASE_BACKOFF_MS, MAX_BACKOFF_MS)
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -69,9 +86,16 @@ class ResilientConnectionSupervisor(
     private var activeWebSocket: WebSocket? = null
     private val isNetworkValidated = AtomicBoolean(false)
     private val isRunning = AtomicBoolean(false)
+    /** Only executeConnect mints generations; closeCurrentSocket never bumps it. */
     private val connectionGeneration = AtomicInteger(0)
+    /** One-shot per generation: onFailure and onClosed both fire per socket, only the first
+     *  may schedule a reconnect. */
+    private val disconnectHandledGen = AtomicInteger(-1)
     private val lastIncomingByteMono = AtomicLong(0L)
     private val reconnectAttempts = AtomicInteger(0)
+    /** Last monotonic stamp of reconnect progress (schedule/connect/trigger); drives the
+     *  stuck-offline watchdog. */
+    private val lastReconnectProgressMono = AtomicLong(0L)
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -81,6 +105,19 @@ class ResilientConnectionSupervisor(
 
     private val _retryState = MutableStateFlow<ConnRetryState?>(null)
     val retryState: StateFlow<ConnRetryState?> = _retryState.asStateFlow()
+
+    /** Offline-episode milestones, once per episode. The service collects this for
+     *  notifications; the same marks are also recorded in [connEvents]. */
+    private val _milestones = MutableSharedFlow<ConnectionMilestone>(extraBufferCapacity = 16)
+    val milestones: SharedFlow<ConnectionMilestone> = _milestones.asSharedFlow()
+
+    /** Which milestones already fired for [milestoneEpisodeStart] (a reconnectStartMillis). */
+    private var firedM3 = false
+    private var firedM5 = false
+    private var firedM6 = false
+    private var firedM10 = false
+    private var firedM20 = false
+    private var milestoneEpisodeStart = 0L
 
     val lastSocketFrame = MutableStateFlow(0L)
 
@@ -154,6 +191,7 @@ class ResilientConnectionSupervisor(
         isNetworkValidated.set(valid)
 
         startWatchdogLoop()
+        lastReconnectProgressMono.set(Monotonic.now())
 
         if (isPaused()) {
             updateConnectionState(ConnectionState.Paused(
@@ -164,11 +202,15 @@ class ResilientConnectionSupervisor(
         } else if (valid) {
             triggerReconnect("Initial start")
         } else {
+            val startMs = if (savedReconnectStartMs > 0L) savedReconnectStartMs else System.currentTimeMillis()
             updateConnectionState(ConnectionState.Offline(
                 since = System.currentTimeMillis(),
-                reconnectStartMillis = if (savedReconnectStartMs > 0L) savedReconnectStartMs else System.currentTimeMillis(),
+                reconnectStartMillis = startMs,
                 reason = "No validated internet"
             ))
+            // Resumed mid-episode: past milestones are recorded silently (no flow emission,
+            // so the service sends no retroactive burst); future crossings notify normally.
+            markPastMilestonesSilent(System.currentTimeMillis() - startMs)
             recordEvent(ConnEventKind.NO_NETWORK)
         }
     }
@@ -185,17 +227,21 @@ class ResilientConnectionSupervisor(
     }
 
     private fun handleNetworkLost(reason: String) {
+        val wasDown = _connectionState.value is ConnectionState.Offline ||
+                _connectionState.value is ConnectionState.Connecting
         isNetworkValidated.set(false)
         closeCurrentSocket(reason)
         connectJob?.cancel()
         val now = System.currentTimeMillis()
-        val currentStart = _connectionState.value.reconnectStartMillisOrZero
+        // Episode age is stamped once on the Connected → down edge; flickers never rewrite it.
+        val episodeStart = beginEpisodeIfNeeded(now)
+        val prev = _connectionState.value
         updateConnectionState(ConnectionState.Offline(
-            since = now,
-            reconnectStartMillis = if (currentStart > 0L) currentStart else now,
+            since = prev.offlineSinceOrNull ?: now,
+            reconnectStartMillis = episodeStart,
             reason = reason
         ))
-        recordEvent(ConnEventKind.NO_NETWORK)
+        if (!wasDown) recordEvent(ConnEventKind.NO_NETWORK)
     }
 
     private fun startWatchdogLoop() {
@@ -236,11 +282,31 @@ class ResilientConnectionSupervisor(
                         recordEvent(ConnEventKind.DEGRADED)
                     }
                 }
+
+                val csNow = _connectionState.value
+                if (csNow is ConnectionState.Offline || csNow is ConnectionState.Connecting) {
+                    checkMilestones(System.currentTimeMillis())
+                    checkStuckOffline(nowMono)
+                }
             }
         }
     }
 
-    fun triggerReconnect(reason: String) {
+    /** Stuck-state watchdog: Offline/Connecting with a live network but no reconnect progress
+     *  (no scheduled job running, no recent schedule/connect) gets force-retried. Covers the
+     *  weak-WiFi stall where a backoff job was lost and validation never flapped. */
+    private fun checkStuckOffline(nowMono: Long) {
+        if (!isNetworkValidated.get() || isPaused()) return
+        if (connectJob?.isActive == true) return
+        if (nowMono - lastReconnectProgressMono.get() >= STUCK_OFFLINE_MS) {
+            recordEvent(ConnEventKind.RETRY_SCHEDULED, detail = "Stuck watchdog")
+            triggerReconnect("Stuck offline watchdog")
+        }
+    }
+
+    fun triggerReconnect(@Suppress("UNUSED_PARAMETER") reason: String) {
+        if (!isRunning.get()) return
+        lastReconnectProgressMono.set(Monotonic.now())
         connectJob?.cancel()
         connectJob = scope.launch(Dispatchers.IO) {
             executeConnect()
@@ -248,27 +314,29 @@ class ResilientConnectionSupervisor(
     }
 
     private fun scheduleReconnectWithBackoff(reason: String) {
+        if (isPaused()) return
+        // Schedule the timer regardless of validation; the socket is only created when the
+        // network is validated at fire time, so a genuinely dead network never spins.
         if (!isNetworkValidated.get()) {
             handleNetworkLost("No network available for reconnect")
             return
         }
-        if (isPaused()) return
 
         connectJob?.cancel()
         connectJob = scope.launch(Dispatchers.IO) {
             val attempt = reconnectAttempts.incrementAndGet()
-            val expDelay = min(MAX_BACKOFF_MS.toDouble(), BASE_BACKOFF_MS * 2.0.pow(attempt.coerceAtMost(6).toDouble())).toLong()
-            val jitter = Random.nextDouble(0.75, 1.25)
-            val delayMs = (expDelay * jitter).toLong().coerceIn(BASE_BACKOFF_MS, MAX_BACKOFF_MS)
+            val delayMs = backoffDelayMs(attempt)
+            lastReconnectProgressMono.set(Monotonic.now())
 
             val nextAt = System.currentTimeMillis() + delayMs
             _retryState.value = ConnRetryState(attempt, delayMs, nextAt, isNetworkValidated.get())
             recordEvent(ConnEventKind.RETRY_SCHEDULED, attempt, delayMs)
 
-            val currentStart = _connectionState.value.reconnectStartMillisOrZero
+            val now = System.currentTimeMillis()
+            val prev = _connectionState.value
             updateConnectionState(ConnectionState.Offline(
-                since = System.currentTimeMillis(),
-                reconnectStartMillis = if (currentStart > 0L) currentStart else System.currentTimeMillis(),
+                since = prev.offlineSinceOrNull ?: now,
+                reconnectStartMillis = beginEpisodeIfNeeded(now),
                 reason = reason,
                 attempt = attempt
             ))
@@ -282,6 +350,7 @@ class ResilientConnectionSupervisor(
 
     private fun executeConnect() {
         closeCurrentSocket("Starting fresh connection")
+        lastReconnectProgressMono.set(Monotonic.now())
         val gen = connectionGeneration.incrementAndGet()
         updateConnectionState(ConnectionState.Connecting(
             generation = gen,
@@ -304,6 +373,8 @@ class ResilientConnectionSupervisor(
                 lastIncomingByteMono.set(Monotonic.now())
                 reconnectAttempts.set(0)
                 _retryState.value = null
+                resetMilestoneFlags()
+                milestoneEpisodeStart = 0L
                 val nowWall = System.currentTimeMillis()
                 updateConnectionState(ConnectionState.Connected(gen, nowWall, nowWall))
                 onBaselineRequired()
@@ -318,6 +389,8 @@ class ResilientConnectionSupervisor(
                 val currentCs = _connectionState.value
                 if (currentCs !is ConnectionState.Connected) {
                     val openedAt = if (currentCs is ConnectionState.Degraded) currentCs.openedAtMs else System.currentTimeMillis()
+                    resetMilestoneFlags()
+                    milestoneEpisodeStart = 0L
                     updateConnectionState(ConnectionState.Connected(gen, openedAt, System.currentTimeMillis()))
                 }
                 onFrameReceived(text)
@@ -325,7 +398,9 @@ class ResilientConnectionSupervisor(
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 if (connectionGeneration.get() != gen) return
+                if (disconnectHandledGen.getAndSet(gen) == gen) return
                 activeWebSocket = null
+                beginEpisodeIfNeeded(System.currentTimeMillis())
                 recordEvent(ConnEventKind.CONNECTION_LOST, detail = t.message)
                 scheduleReconnectWithBackoff("Socket failure: ${t.message}")
             }
@@ -336,17 +411,25 @@ class ResilientConnectionSupervisor(
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 if (connectionGeneration.get() != gen) return
+                if (disconnectHandledGen.getAndSet(gen) == gen) return
                 activeWebSocket = null
-                if (isRunning.get() && isNetworkValidated.get()) {
+                // No validated gate: the backoff path itself no-ops into handleNetworkLost
+                // when the network is down, so a validation flap can never strand us.
+                if (isRunning.get() && !isPaused()) {
+                    beginEpisodeIfNeeded(System.currentTimeMillis())
                     scheduleReconnectWithBackoff("Socket closed ($code)")
                 }
             }
         })
     }
 
-    private fun closeCurrentSocket(reason: String) {
+    /** Closes the socket without minting a generation — only executeConnect mints, so an
+     *  in-flight failure can never race a fresh connect into a stranded Offline. The current
+     *  generation's disconnect is claimed here, so the socket's own onFailure/onClosed can
+     *  never double-schedule behind an intentional close. */
+    private fun closeCurrentSocket(@Suppress("UNUSED_PARAMETER") reason: String) {
         try {
-            connectionGeneration.incrementAndGet()
+            disconnectHandledGen.set(connectionGeneration.get())
             activeWebSocket?.cancel()
             activeWebSocket = null
         } catch (_: Exception) {}
@@ -375,18 +458,93 @@ class ResilientConnectionSupervisor(
     }
 
     fun onForeground() {
-        if (_connectionState.value.isOffline && !isPaused() && isNetworkValidated.get()) {
+        if (!isRunning.get() || isPaused() || !isNetworkValidated.get()) return
+        val cs = _connectionState.value
+        if (cs.isOffline || cs is ConnectionState.Connecting) {
             triggerReconnect("App foregrounded")
         }
     }
 
     fun dismissLogCard() {
+        _connEvents.value = emptyList()
         _retryState.value = null
     }
 
     fun setActiveSource(sourceId: String?) {
         activeSource = sourceId
         ConnectionLog.setPendingSource(sourceId)
+    }
+
+    /** Returns the current episode's reconnectStartMillis, starting a new episode (and rotating
+     *  the transient log) when the previous state carried none. Call before recording any
+     *  event for the drop so rotation never wipes the new episode's first line. */
+    private fun beginEpisodeIfNeeded(nowWall: Long): Long {
+        val existing = _connectionState.value.reconnectStartMillisOrZero
+        if (existing > 0L) return existing
+        _connEvents.value = emptyList()
+        return nowWall
+    }
+
+    private fun resetMilestoneFlags() {
+        firedM3 = false
+        firedM5 = false
+        firedM6 = false
+        firedM10 = false
+        firedM20 = false
+    }
+
+    /** Live milestone timer: fires each mark once per episode into the log and the milestones
+     *  flow. Keyed off the persisted reconnectStartMillis, so process restarts don't refire. */
+    private fun checkMilestones(nowWall: Long) {
+        val cs = _connectionState.value
+        if (cs !is ConnectionState.Offline && cs !is ConnectionState.Connecting) return
+        val episodeStart = cs.reconnectStartMillisOrZero
+        if (episodeStart <= 0L) return
+        if (episodeStart != milestoneEpisodeStart) {
+            resetMilestoneFlags()
+            milestoneEpisodeStart = episodeStart
+        }
+        val age = nowWall - episodeStart
+        maybeFireMilestone(age, MILESTONE_3_MS, firedM3, ConnEventKind.MILESTONE_3, ConnectionMilestone.M3) { firedM3 = true }
+        maybeFireMilestone(age, MILESTONE_5_MS, firedM5, ConnEventKind.MILESTONE_5, ConnectionMilestone.M5_CRITICAL) { firedM5 = true }
+        maybeFireMilestone(age, MILESTONE_6_MS, firedM6, ConnEventKind.MILESTONE_6, ConnectionMilestone.M6) { firedM6 = true }
+        maybeFireMilestone(age, MILESTONE_10_MS, firedM10, ConnEventKind.MILESTONE_10, ConnectionMilestone.M10) { firedM10 = true }
+        if (age >= MILESTONE_20_MS && !firedM20) {
+            firedM20 = true
+            recordEvent(ConnEventKind.MILESTONE_20)
+            recordEvent(ConnEventKind.GAVE_UP)
+            _milestones.tryEmit(ConnectionMilestone.M20_GAVE_UP)
+        }
+    }
+
+    private fun maybeFireMilestone(
+        ageMs: Long,
+        thresholdMs: Long,
+        fired: Boolean,
+        kind: ConnEventKind,
+        milestone: ConnectionMilestone,
+        mark: () -> Unit
+    ) {
+        if (ageMs >= thresholdMs && !fired) {
+            mark()
+            recordEvent(kind)
+            _milestones.tryEmit(milestone)
+        }
+    }
+
+    /** Restart catch-up for a persisted episode: past marks are recorded silently (no flow
+     *  emission → no retroactive notification burst); future crossings notify normally. */
+    private fun markPastMilestonesSilent(ageMs: Long) {
+        milestoneEpisodeStart = _connectionState.value.reconnectStartMillisOrZero
+        if (ageMs >= MILESTONE_3_MS && !firedM3) { firedM3 = true; recordEvent(ConnEventKind.MILESTONE_3) }
+        if (ageMs >= MILESTONE_5_MS && !firedM5) { firedM5 = true; recordEvent(ConnEventKind.MILESTONE_5) }
+        if (ageMs >= MILESTONE_6_MS && !firedM6) { firedM6 = true; recordEvent(ConnEventKind.MILESTONE_6) }
+        if (ageMs >= MILESTONE_10_MS && !firedM10) { firedM10 = true; recordEvent(ConnEventKind.MILESTONE_10) }
+        if (ageMs >= MILESTONE_20_MS && !firedM20) {
+            firedM20 = true
+            recordEvent(ConnEventKind.MILESTONE_20)
+            recordEvent(ConnEventKind.GAVE_UP)
+        }
     }
 
     fun recordEvent(

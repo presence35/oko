@@ -32,8 +32,8 @@ re-derive state from the same singletons, never from each other.
 ```
                     ┌──────────────────────────┐
   NEPTUN WS ────────►│      NeptunSource        │
-  NetworkMonitor ───►│ (WsTransport + Decoder + │
-                    │   ConnectionSupervisor) │
+  (OS network gating) ──►│ (ResilientConnectionSupervisor + │
+                     │   NeptunRawDecoder + MonitorCoreImpl) │
                     └──────────┬───────────────┘
                                │ Source SPI
                     ┌──────────▼───────────────┐
@@ -61,7 +61,7 @@ LocationTracker ──┬──► MainViewModel        NightMode.kt / Cities.kt
 | --- | --- | --- |
 | NEPTUN connection | `NeptunSource` (transport + decoder + supervisor) | UI, `AlertService` (via `SourceRegistry`) |
 | Connection state machine | `ConnectionState` sealed interface (transport) + `SourceState` (consumer SPI) | UI, `AlertService`, widget |
-| Network validation | `NetworkMonitor` | `WsTransport` |
+| Network validation | OS `ConnectivityManager` callback inside `ResilientConnectionSupervisor` | supervisor reconnect machine |
 | Official oblast alerts | `SourceRegistry.allAlerts` (priority-ordered sources, takeover merge; primary = `NeptunSource.alerts`; no REST fallback — `UbillingPlugin` removed 2026-09 for 1–2d stale sentinel data); **derivation** (`officialAlertActiveFor`, `redCities`, `raionName`, reason) owned by `engine/` | UI, `AlertService`, widget |
 | Threat prediction | `engine/ThreatEngine.kt` | ViewModel, service, MapView, widget |
 | Zone tier math | `engine/ThreatEngine.kt` | ViewModel, service |
@@ -77,7 +77,7 @@ LocationTracker ──┬──► MainViewModel        NightMode.kt / Cities.kt
 
 ## Data flow
 
-- **Threat ingest.** NEPTUN WS in `NeptunSource` (`WsTransport` socket → `NeptunDecoder` frames) → separate `StateFlow`s: `connectionState`, `threats`, `alerts`; `removedThreats` SharedFlow for map death animations. `SourceRegistry` merges source feeds into `allThreats`/`allAlerts` (takeover semantics); consumers read the registry, never a specific source. Consumers read flows directly — no intermediate `NeptunState`. NEPTUN's alerts carry the whole-oblast/region split: each `OblastAlert` is tagged `wide` from the `raions`/`oblasts` arrays, so map coloring is region-precise (fill = wide only; city labels = `coversCity`) instead of guessing from the name.
+- **Threat ingest.** NEPTUN WS in `NeptunSource` (`ResilientConnectionSupervisor` socket → `NeptunRawDecoder` frames → `MonitorCoreImpl` state) → separate `StateFlow`s: `connectionState`, `threats`, `alerts`; `removedThreats` SharedFlow for map death animations. `SourceRegistry` merges source feeds into `allThreats`/`allAlerts` (takeover semantics); consumers read the registry, never a specific source. Consumers read flows directly — no intermediate `NeptunState`. NEPTUN's alerts carry the whole-oblast/region split: each `OblastAlert` is tagged `wide` from the `raions`/`oblasts` arrays, so map coloring is region-precise (fill = wide only; city labels = `coversCity`) instead of guessing from the name.
 - **Position prediction** (both consumers): the full contract — `SpeedCache` speed priority,
   `predictPosition` dead-reckoning gates (`canDrift` = fresh + `flying`, server-coursed only),
   `motionHeading`/`courseDeg` facing chain, per-type horizon/ghost caps, slow-distance vs
@@ -106,11 +106,8 @@ detail that matters when editing that file.
 
 | File | Responsibility |
 | --- | --- |
-| `connection/ConnectionState.kt` | Sealed interface state machine: `Disconnected` → `Connecting` → `Connected` → `Degraded` → `Offline` → `Paused`; convenience extensions `isConnected`, `isDegraded`, `isOffline`, `isPaused`, `offlineSinceOrNull`, `reconnectStartMillisOrZero`. Transport-internal (not the consumer SPI). |
-| `connection/WsTransport.kt` | Pure NEPTUN WebSocket socket lifecycle: generation-based reconnect machine (`AtomicInteger`) prevents stale socket callbacks; reconnect backoff 1–3 s → capped 15 s (`calculateBackoffMs`, tested); keep-alive pings + 45 s watchdog; [ConnectionState] machine; network-gated retries; pause/ignore. Pushes text frames onto an `internal` `frames` channel for the decoder. **Ephemeral** watchdog gates run on a **monotonic clock** (`Monotonic`) so a wall-clock jump can't stall or trigger a reconnect; the public freshness `StateFlow`s stay wall-clock. `onWatchdogTick` lets the owner flush timer-gated feed state. Owned by `NeptunSource`. |
-| `connection/NeptunDecoder.kt` | Frame decode for the NEPTUN feed: snapshot/upsert/remove, alerts + heartbeat, `removedThreats` SharedFlow. **In-process ephemeral deltas** (user-shot / recent-removed / unknown-type grace, alert-clear debounce, malformed-frame + unknown-type toasts) run on a **monotonic clock**; official-alert clears are **debounced** (`ALERT_CLEAR_CONFIRM_MS` = 30 s) so a momentary feed gap can't flip an active alert off and back on. `markUserShot`/`wasUserShotRecently`, `handleTransportDrop`, `flushPendingAlertClear`. Owned by `NeptunSource`. |
-| `connection/NetworkMonitor.kt` | Validated network observer via `ConnectivityManager.NetworkCallback`. Emits `isValidated` StateFlow. On validation, kicks the transport's fast reconnect. |
-| `connection/ConnectionSupervisor.kt` | Milestone tracker for offline episodes. Observes a `ConnectionState` StateFlow; compares `offlineSinceOrNull` to thresholds (3/5/6/10/20 min) and emits milestone `ConnEventKind` entries into the reconnect log card. Also owns `connEvents`/`retryState`/`dismissLogCard`/`annotateConnectionLog`. |
+| `connection/ConnectionState.kt` | Sealed interface state machine: `Disconnected` → `Connecting` → `Connected` → `Degraded` → `Offline` → `Paused`; `ConnectionMilestone` (M3/M5_CRITICAL/M6/M10/M20_GAVE_UP, once per episode); convenience extensions `isConnected`, `isDegraded`, `isOffline`, `isPaused`, `offlineSinceOrNull`, `reconnectStartMillisOrZero`. Transport-internal (not the consumer SPI). |
+| `connection/ResilientConnectionSupervisor.kt` | The only production connection supervisor. OS network gating (no spin while offline, wake on validation), 42 s byte-silence watchdog, full-jitter backoff (`backoffDelayMs`, tested), single-generation socket lifecycle (only `executeConnect` mints; intentional closes claim the disconnect one-shot), stuck-offline watchdog (force retry past max-backoff + timeout with a live network), and the live milestone timer (3/5/6/10/20 min + GAVE_UP into `connEvents` and the `milestones` SharedFlow). Episode age (`reconnectStartMillis`) is stamped once on the Connected → down edge and never rewritten by flickers. Owned by `NeptunSource`. |
 | `AppSources.kt` | App-wide composition root (`object`): builds and owns the `SourceRegistry` with `NeptunSource` + the peace-time `TestSource`, exposes `registry`, `appForeground`/`setAppForeground`; `init(context)`/`clear()`. Replaces the old `ConnectionHolder`/`AppPluginHolder` singletons. |
 | `Threat.kt` | NEPTUN display metadata + JSON parsing: `ThreatType`/`ThreatTypeCatalog`/`Reliability` (labels, staleness, nominal speeds), `translateCourseAssessment` (EN course text, word-level common-word translation), `normalizedThreatFromJson` — NEPTUN JSON → `NormalizedThreat` directly (the engine currency; no `Threat` display DTO). The alert currency + matching gates moved out to `engine/OblastAlert.kt`. |
 
@@ -132,9 +129,9 @@ private inside each `Source`. Every source reports normalized engine currency
 | --- | --- |
 | `source/Source.kt` | The source SPI interface: `id`/`name`/`sourceType` (WS/REST), `operationalMode` (STREAMING/POLLING/STANDBY), `typeCatalog`, `threats`/`alerts`/`connectionState: StateFlow<SourceState>`/`enabled` + `setEnabled`, `testConnection()` (`SourceTestResult`), `removedThreats` SharedFlow, and default no-ops (`markUserShot`/`wasUserShotRecently`/`retryNow`/`pauseRetries`/`onAppForeground`/`siteUrl`). Source-agnostic: no NEPTUN types in the contract. |
 | `source/SourceState.kt` | `SourceState` enum (DISCONNECTED/CONNECTING/CONNECTED/DEGRADED/OFFLINE/PAUSED) — the consumer-visible connection state, replacing the old `PluginConnectionState`. |
-| `source/SourceRegistry.kt` | Health authority over all sources; **every merge/health derivation reads `enabledSources` (registered sources the user switched on), never the raw registration list** — so a disabled source can't feed, own, or degrade anything. Merges threats/alerts with **takeover** semantics (authoritative source's snapshots are sole truth; stale holders fill only when nothing is authoritative); exposes `perSourceState`, `wsHealthy`, `degraded`, `degradedSince` (monotonic-stamped), `coveredByFallback`, `isOffline(now)`, `lastThreatUpdateAt` + `isThreatDataStale(now)` (**source-agnostic** staleness), `activeAlertSource`, aggregate `connectionState` (worst over enabled sources), merged `allThreats`/`allAlerts` + `typeCatalog`, and a `sourceEvents` SharedFlow (toggles + alert-owner handovers). For alerts only a **CONNECTED** WS socket is authoritative — `DEGRADED` (quiet >30s) is stale data and falls back to the union-hold. Reconnect diagnostics (`connEvents`/`retryState`/`dismissLogCard`/`annotateConnectionLog`/`setActiveAlertSource`) delegate to the registered `ConnectionLogSource`; controls (`retryNow`/`pauseRetries`/`onAppForeground`/`markUserShot`/`wasUserShotRecently`) fan out to enabled sources. `siteUrl` = branding link of the primary source. |
-| `source/ConnectionLogSource.kt` | Optional `Source` capability: reports `connEvents`/`retryState` + reconnect-log card controls, so the registry can forward Logs-tab state from the WS source without knowing it. |
-| `source/NeptunSource.kt` | The only production `Source` for launch. Composition root owning `WsTransport` + `NeptunDecoder` + `ConnectionSupervisor`; owns NEPTUN's per-type `NEPTUN_TYPES` catalog (values as NEPTUN sends them; exposed as `Source.typeCatalog`) — the ONLY file that may reference that map; `start(scope)` launches transport.start (reads persisted `ServiceState` reconnect/ignore stamps) then supervisor.start in the same coroutine (so the supervisor never observes a spurious first-state offline episode), the frame loop, ServiceState reconnect-start persistence, a connectionState collector (`mapConnectionState` + `decoder.handleTransportDrop()` on Offline) and threat/alert mirrors; forwards reconnect controls and user-shot API. |
+| `source/SourceRegistry.kt` | Health authority over all sources; **every merge/health derivation reads `enabledSources` (registered sources the user switched on), never the raw registration list** — so a disabled source can't feed, own, or degrade anything. Merges threats/alerts with **takeover** semantics (authoritative source's snapshots are sole truth; stale holders fill only when nothing is authoritative); exposes `perSourceState`, `wsHealthy`, `degraded`, `degradedSince` (monotonic-stamped), `coveredByFallback`, `isOffline(now)`, `lastThreatUpdateAt` + `isThreatDataStale(now)` (**source-agnostic** staleness), `activeAlertSource`, aggregate `connectionState` (worst over enabled sources), merged `allThreats`/`allAlerts` + `typeCatalog`, a `sourceEvents` SharedFlow (toggles + alert-owner handovers) and a `connectionMilestones` SharedFlow (offline-episode milestones for notifications). For alerts only a **CONNECTED** WS socket is authoritative — `DEGRADED` (quiet >30s) is stale data and falls back to the union-hold. Reconnect diagnostics (`connEvents`/`retryState`/`dismissLogCard`/`annotateConnectionLog`/`setActiveAlertSource`) delegate to the registered `ConnectionLogSource`; controls (`retryNow`/`pauseRetries`/`onAppForeground`/`markUserShot`/`wasUserShotRecently`) fan out to enabled sources. `siteUrl` = branding link of the primary source. |
+| `source/ConnectionLogSource.kt` | Optional `Source` capability: reports `connEvents`/`retryState`/`milestones` + reconnect-log card controls, so the registry can forward Logs-tab state and milestone notifications from the WS source without knowing it. |
+| `source/NeptunSource.kt` | The only production `Source` for launch. Composition root owning `ResilientConnectionSupervisor` + `NeptunRawDecoder` + `MonitorCoreImpl`; owns NEPTUN's per-type `NEPTUN_TYPES` catalog (values as NEPTUN sends them; exposed as `Source.typeCatalog`) — the ONLY file that may reference that map; `start(scope)` launches supervisor.start (reads persisted `ServiceState` reconnect/ignore stamps), ServiceState reconnect-start persistence, a connectionState collector (`mapConnectionState` + `decoder.handleTransportDrop()` on Offline) and threat/alert mirrors; forwards reconnect controls and user-shot API. |
 | `source/TestSource.kt` | Peace-time simulator (`sourceType = WS`, disabled by default). While enabled it fetches `testplugin.json` from the update server and plays a timed script of threat/alert events (movers, resolves, clears). Reports CONNECTED while running; `stop()`/disable clears its output exactly like a real source. |
 | `source/ThreatRemoved.kt` | `ThreatRemoved` (map death animation + resolved tally currency) moved out of `connection/`; hosts `RESOLVED_REPLAY_GRACE_MS` (60 s). |
 
@@ -437,8 +434,8 @@ Treat these as a contract. If you change one, update **every** place that relies
 ### NeptunSource (was NeptunConnectionClient)
 
 Owns:
-- WS socket + reconnect machine (`WsTransport`)
-- frame parsing + feed state (`NeptunDecoder`)
+- WS socket + reconnect machine + milestone timer (`ResilientConnectionSupervisor`)
+- frame parsing + feed state (`NeptunRawDecoder` + `MonitorCoreImpl`)
 - per-source `SourceState` mapping
 - authoritative track lifecycle and source type properties catalog (`NEPTUN_TYPES` owning `staleAfterMs`, `ghostCapMs`, reach, nominal speeds)
 
@@ -573,7 +570,7 @@ JUnit unit tests in `app/src/test/java/ua/ukrainedrones/`. Invariant → test: t
 - `ThreatTest.kt` — JSON parsing, type mapping, course translation.
 - `TransliterationTest.kt` — КМУ №55 romanization, no semantic translation, digraph rules.
 - `UpdateManagerTest.kt` — `versionNameGreater`.
-- `NeptunClientTest.kt` — reconnect backoff (`WsTransport.calculateBackoffMs`), `ConnectionState` degradation.
+- `NeptunClientTest.kt` — reconnect backoff (`ResilientConnectionSupervisor.backoffDelayMs`), `ConnectionState` degradation.
 - `NightModeTest.kt` — night-window resolution + effective params/armed.
 - `ConnectionLogTest.kt` — episode-commit rules (grace window, blips, recovery, ring-buffer cap).
 - `DebugLogTest.kt` — serialize/parse round trip, ring-buffer cap, auto-clear, `computeSweep` verdicts (fired/coalesced/bell-muted, steady-state dedup, tier escalation, exits, stale/type-off region rows).

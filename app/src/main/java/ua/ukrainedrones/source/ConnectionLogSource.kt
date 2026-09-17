@@ -1,9 +1,11 @@
 package ua.ukrainedrones.source
 
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import ua.ukrainedrones.connection.ConnEvent
 import ua.ukrainedrones.connection.ConnEventKind
 import ua.ukrainedrones.connection.ConnRetryState
+import ua.ukrainedrones.connection.ConnectionMilestone
 
 /**
  * Optional capability of a [Source]: rich reconnect diagnostics (offline milestones, retry
@@ -13,6 +15,8 @@ import ua.ukrainedrones.connection.ConnRetryState
 interface ConnectionLogSource {
     val connEvents: StateFlow<List<ConnEvent>>
     val retryState: StateFlow<ConnRetryState?>
+    /** Offline-episode milestones, once per episode (service collects for notifications). */
+    val milestones: SharedFlow<ConnectionMilestone>
     fun dismissLogCard()
     fun annotateConnectionLog(kind: ConnEventKind, attempt: Int? = null, delayMs: Long? = null, detail: String? = null)
     /** Mirrors which source owns the alert feed into the per-episode log entry. */
