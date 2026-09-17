@@ -80,7 +80,7 @@ class NeutralizedTally(
         neutralizedCount++
         perTypeCounts[removed.type] = (perTypeCounts[removed.type] ?: 0) + 1
         resolvedMemory.addLast(ResolvedRecord(removed.lat, removed.lon, removed.type, removed.region))
-        resolvedMemory.removeFirst()
+        
         postNeutralizedTally(lang)
     }
 
