@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import ua.ukrainedrones.connection.Monotonic
+import ua.ukrainedrones.AlertNotificationManager
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
@@ -1070,7 +1071,11 @@ fun setAlertsArmed(armed: Boolean) {
     }
 
     fun setCriticalOfflineBypassSilent(enabled: Boolean) {
-        viewModelScope.launch { prefs.setCriticalOfflineBypassSilent(enabled) }
+        viewModelScope.launch {
+            prefs.setCriticalOfflineBypassSilent(enabled)
+            // Sound attrs freeze at channel creation — re-apply so the flip takes effect now.
+            AlertNotificationManager(getApplication()).createChannels()
+        }
     }
 
     fun setBootRestartEnabled(enabled: Boolean) {

@@ -118,6 +118,10 @@ class ResilientConnectionSupervisor(
     private var firedM10 = false
     private var firedM20 = false
     private var milestoneEpisodeStart = 0L
+    /** Flap-grace continuity: last adopted episode start (wall) + last Connected stamp (mono).
+     *  A sub-grace drop resumes the previous episode instead of restarting timers at zero. */
+    private var lastEpisodeStartMs = 0L
+    private var lastHealthyMono = 0L
 
     val lastSocketFrame = MutableStateFlow(0L)
 
@@ -192,6 +196,8 @@ class ResilientConnectionSupervisor(
 
         startWatchdogLoop()
         lastReconnectProgressMono.set(Monotonic.now())
+        lastEpisodeStartMs = 0L
+        lastHealthyMono = 0L
 
         if (isPaused()) {
             updateConnectionState(ConnectionState.Paused(
@@ -283,6 +289,15 @@ class ResilientConnectionSupervisor(
                         ))
                         recordEvent(ConnEventKind.DEGRADED)
                     }
+                }
+
+                // Genuine recovery: only forget the episode after stable connection past the
+                // flap grace; a quicker drop stitches back onto it (see beginEpisodeIfNeeded).
+                if (cs.isConnected && milestoneEpisodeStart != 0L &&
+                    nowMono - lastHealthyMono >= EPISODE_CONTINUITY_GRACE_MS
+                ) {
+                    resetMilestoneFlags()
+                    milestoneEpisodeStart = 0L
                 }
 
                 val csNow = _connectionState.value
@@ -402,8 +417,7 @@ class ResilientConnectionSupervisor(
                 lastIncomingByteMono.set(Monotonic.now())
                 reconnectAttempts.set(0)
                 _retryState.value = null
-                resetMilestoneFlags()
-                milestoneEpisodeStart = 0L
+                onBecameConnected()
                 val nowWall = System.currentTimeMillis()
                 updateConnectionState(ConnectionState.Connected(gen, nowWall, nowWall))
                 onBaselineRequired()
@@ -418,8 +432,7 @@ class ResilientConnectionSupervisor(
                 val currentCs = _connectionState.value
                 if (currentCs !is ConnectionState.Connected) {
                     val openedAt = if (currentCs is ConnectionState.Degraded) currentCs.openedAtMs else System.currentTimeMillis()
-                    resetMilestoneFlags()
-                    milestoneEpisodeStart = 0L
+                    onBecameConnected()
                     updateConnectionState(ConnectionState.Connected(gen, openedAt, System.currentTimeMillis()))
                 }
                 onFrameReceived(text)
@@ -505,13 +518,24 @@ class ResilientConnectionSupervisor(
     }
 
     /** Returns the current episode's reconnectStartMillis, starting a new episode (and rotating
-     *  the transient log) when the previous state carried none. Call before recording any
+     *  the transient log) when the previous state carried none. A sub-grace drop resumes the
+     *  previous episode with its log and milestone progress intact. Call before recording any
      *  event for the drop so rotation never wipes the new episode's first line. */
     private fun beginEpisodeIfNeeded(nowWall: Long): Long {
         val existing = _connectionState.value.reconnectStartMillisOrZero
         if (existing > 0L) return existing
+        if (lastEpisodeStartMs > 0L && Monotonic.now() - lastHealthyMono < EPISODE_CONTINUITY_GRACE_MS) {
+            return lastEpisodeStartMs
+        }
         _connEvents.value = emptyList()
         return nowWall
+    }
+
+    /** Records a fresh recovery; milestone/episode forgetting happens lazily in the watchdog
+     *  once the connection proves stable past the flap grace. */
+    private fun onBecameConnected() {
+        lastHealthyMono = Monotonic.now()
+        lastEpisodeStartMs = milestoneEpisodeStart
     }
 
     private fun resetMilestoneFlags() {

@@ -18,10 +18,13 @@ enum class ConnEventKind {
     GAVE_UP, PAUSED, FALLBACK_ACTIVE, FALLBACK_RESTORED, SOURCE_TOGGLED
 }
 
+/** A reconnect that survives this long counts as a genuine recovery; shorter blips
+ *  stitch back onto the previous offline episode (timers, milestones, critical dedup). */
+const val EPISODE_CONTINUITY_GRACE_MS = 60_000L
+
 /** Offline-episode milestone signal, emitted once per episode on the milestones flow.
  *  The supervisor owns emission timing; consumers (AlertService) own notifications. */
-enum class ConnectionMilestone(val minutes: Int) {
-    M3(3),
+enum class ConnectionMilestone(val minutes: Int) {    M3(3),
     M5_CRITICAL(5),
     M6(6),
     M10(10),

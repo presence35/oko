@@ -14,6 +14,7 @@ import ua.ukrainedrones.connection.ConnEvent
 import ua.ukrainedrones.connection.ConnEventKind
 import ua.ukrainedrones.connection.ConnRetryState
 import ua.ukrainedrones.connection.ConnectionMilestone
+import ua.ukrainedrones.connection.EPISODE_CONTINUITY_GRACE_MS
 import ua.ukrainedrones.connection.Monotonic
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.OblastAlert
@@ -76,6 +77,10 @@ class SourceRegistry {
     /** When the current degraded episode began (null = healthy). Drives the offline escalation. */
     private val _degradedSince = MutableStateFlow<Long?>(null)
     val degradedSince: StateFlow<Long?> = _degradedSince.asStateFlow()
+
+    /** Last monotonic stamp of an unhealthy reading. A sub-grace flap keeps the previous
+     *  degraded stamp so episode timers don't restart at zero on micro-reconnects. */
+    private var lastDropMono = 0L
 
     /** True when a non-WS fallback source is actually delivering real data (POLLING + CONNECTED). */
     private val _coveredByFallback = MutableStateFlow(false)
@@ -276,10 +281,26 @@ class SourceRegistry {
         val wsDelivering = active.any { it.sourceType == SourceType.WS && map[it.id] == SourceState.CONNECTED }
         _wsHealthy.value = wsDelivering
         _degraded.value = active.isNotEmpty() && !_wsHealthy.value
+        val nowMono = Monotonic.now()
+        // Flap-grace: readings within the grace of the last drop stitch back onto the
+        // previous episode instead of restarting its timers at zero. Genuine recoveries
+        // (or drops after past-grace health) start fresh.
         _degradedSince.value = when {
-            _wsHealthy.value -> null
-            _degradedSince.value == null -> Monotonic.now()
-            else -> _degradedSince.value
+            _wsHealthy.value -> {
+                val prev = _degradedSince.value
+                if (prev != null && lastDropMono > 0L && nowMono - lastDropMono < EPISODE_CONTINUITY_GRACE_MS) {
+                    prev
+                } else {
+                    null
+                }
+            }
+            else -> {
+                val prev = _degradedSince.value
+                val freshEpisode = prev == null ||
+                        (lastDropMono > 0L && nowMono - lastDropMono >= EPISODE_CONTINUITY_GRACE_MS)
+                lastDropMono = nowMono
+                if (freshEpisode) nowMono else prev
+            }
         }
         _coveredByFallback.value = active.any {
             it.sourceType != SourceType.WS &&

@@ -2,7 +2,9 @@ package ua.ukrainedrones.service
 
 import android.content.Context
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -31,6 +33,8 @@ class ServiceState(private val context: Context) {
     private val lastNotifiedUpdateCodeKey = longPreferencesKey("last_notified_update_code")
     private val lastSdkManifestHashKey = stringPreferencesKey("last_sdk_manifest_hash")
     private val systemLogKey = stringPreferencesKey("system_log")
+    private val channelSchemaVersionKey = intPreferencesKey("channel_schema_version")
+    private val criticalChannelBypassAppliedKey = booleanPreferencesKey("critical_channel_bypass_applied")
 
     fun connLog(): Flow<String> =
         context.dataStore.data.map { prefs -> prefs[connLogKey] ?: "" }
@@ -135,5 +139,19 @@ class ServiceState(private val context: Context) {
 
     suspend fun setSystemLog(serialized: String) {
         context.dataStore.edit { it[systemLogKey] = serialized }
+    }
+
+    fun channelSchemaVersion(): Flow<Int> =
+        context.dataStore.data.map { prefs -> prefs[channelSchemaVersionKey] ?: 0 }
+
+    suspend fun setChannelSchemaVersion(version: Int) {
+        context.dataStore.edit { it[channelSchemaVersionKey] = version }
+    }
+
+    fun criticalChannelBypassApplied(): Flow<Boolean?> =
+        context.dataStore.data.map { prefs -> prefs[criticalChannelBypassAppliedKey] }
+
+    suspend fun setCriticalChannelBypassApplied(applied: Boolean) {
+        context.dataStore.edit { it[criticalChannelBypassAppliedKey] = applied }
     }
 }

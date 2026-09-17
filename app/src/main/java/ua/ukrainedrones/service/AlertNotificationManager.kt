@@ -27,6 +27,7 @@ import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.Strings
 import ua.ukrainedrones.UserPrefs
 import ua.ukrainedrones.NeutralizedTally
+import ua.ukrainedrones.service.ServiceState
 
 /**
  * Handles notification channels, notification building, and dispatching for [AlertService].
@@ -62,6 +63,10 @@ class AlertNotificationManager(private val context: Context) {
         const val NOTIF_OFFLINE_CRITICAL = 6
         const val NOTIF_UPDATE = 7
 
+        /** Bump to delete + recreate all managed channels (sound/importance/attrs are
+         *  frozen by Android at creation — this is the only way a change takes effect). */
+        const val CHANNEL_SCHEMA_VERSION = 1
+
         fun areNotificationsEnabled(context: Context): Boolean {
             return NotificationManagerCompat.from(context).areNotificationsEnabled()
         }
@@ -70,10 +75,16 @@ class AlertNotificationManager(private val context: Context) {
     fun createChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        enforceChannelSchema(nm)
         val en = Strings.get(AppLanguage.EN)
         defineChannels(nm, en)
 
-        val keep = setOf(
+        nm.notificationChannels
+            .filter { it.id !in managedChannels }
+            .forEach { nm.deleteNotificationChannel(it.id) }
+    }
+
+    private val managedChannels = setOf(
             CHANNEL_MONITOR,
             CHANNEL_ALERTS,
             CHANNEL_ALERTS_OUTER,
@@ -85,9 +96,27 @@ class AlertNotificationManager(private val context: Context) {
             NeutralizedTally.CHANNEL_NEUTRALIZED,
             CHANNEL_UPDATE
         )
-        nm.notificationChannels
-            .filter { it.id !in keep }
-            .forEach { nm.deleteNotificationChannel(it.id) }
+
+    /** Deletes + recreates managed channels when the schema (or the bypass-silent config
+     *  baked into the critical channel's audio attrs) changed since last applied. */
+    private fun enforceChannelSchema(nm: NotificationManager) {
+        val svc = ServiceState(context.applicationContext)
+        val appliedSchema = runBlocking(Dispatchers.IO) { svc.channelSchemaVersion().first() }
+        val bypassSilent = runBlocking(Dispatchers.IO) {
+            UserPrefs(context).preferences.first().criticalOfflineBypassSilent
+        }
+        val bypassApplied = runBlocking(Dispatchers.IO) { svc.criticalChannelBypassApplied().first() }
+        if (appliedSchema != CHANNEL_SCHEMA_VERSION) {
+            managedChannels.forEach { runCatching { nm.deleteNotificationChannel(it) } }
+        } else if (bypassApplied == null || bypassApplied != bypassSilent) {
+            runCatching { nm.deleteNotificationChannel(CHANNEL_OFFLINE_CRITICAL) }
+        } else {
+            return
+        }
+        runBlocking(Dispatchers.IO) {
+            svc.setChannelSchemaVersion(CHANNEL_SCHEMA_VERSION)
+            svc.setCriticalChannelBypassApplied(bypassSilent)
+        }
     }
 
     fun areNotificationsEnabled(): Boolean =
@@ -109,42 +138,42 @@ class AlertNotificationManager(private val context: Context) {
             NotificationChannel(CHANNEL_ALERTS, s.alertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.alertChannelDesc
                 enableVibration(true)
-                setSound(sirenUri(R.raw.air_raid_siren), notificationAttributes())
+                setSound(sirenUri("air_raid_siren"), notificationAttributes())
             }
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ALERTS_OUTER, s.outerAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.outerAlertChannelDesc
                 enableVibration(true)
-                setSound(sirenUri(R.raw.zone_outer), notificationAttributes())
+                setSound(sirenUri("zone_outer"), notificationAttributes())
             }
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ALLCLEAR, s.allClearChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.allClearChannelDesc
                 enableVibration(true)
-                setSound(sirenUri(R.raw.all_clear), notificationAttributes())
+                setSound(sirenUri("all_clear"), notificationAttributes())
             }
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ALERTS_ALARM, s.alarmAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.alarmAlertChannelDesc
                 enableVibration(true)
-                setSound(sirenUri(R.raw.air_raid_siren), alarmAttributes())
+                setSound(sirenUri("air_raid_siren"), alarmAttributes())
             }
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ALERTS_OUTER_ALARM, s.outerAlarmAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.outerAlarmAlertChannelDesc
                 enableVibration(true)
-                setSound(sirenUri(R.raw.zone_outer), alarmAttributes())
+                setSound(sirenUri("zone_outer"), alarmAttributes())
             }
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_OFFLINE, s.offlineChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.offlineChannelDesc
                 enableVibration(true)
-                setSound(sirenUri(R.raw.critical_offline), notificationAttributes())
+                setSound(sirenUri("critical_offline"), notificationAttributes())
             }
         )
 
@@ -156,7 +185,7 @@ class AlertNotificationManager(private val context: Context) {
             NotificationChannel(CHANNEL_OFFLINE_CRITICAL, s.offlineCriticalChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.offlineCriticalChannelDesc
                 enableVibration(true)
-                setSound(sirenUri(R.raw.critical_offline), criticalAttrs)
+                setSound(sirenUri("critical_offline"), criticalAttrs)
             }
         )
         nm.createNotificationChannel(
@@ -287,7 +316,7 @@ class AlertNotificationManager(private val context: Context) {
         )
     }
 
-    fun postOfflineNotification(title: String, text: String, retryLabel: String) {
+    fun postOfflineNotification(title: String, text: String, retryLabel: String, ignoreLabel: String? = null) {
         val notif = NotificationCompat.Builder(context, CHANNEL_OFFLINE)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
@@ -296,11 +325,13 @@ class AlertNotificationManager(private val context: Context) {
             .setAutoCancel(true)
             .addAction(R.drawable.ic_trident, retryLabel, retryPendingIntent())
             .setContentIntent(openAppIntent())
-            .build()
-        safeNotify(NOTIF_MILESTONE, notif)
+        if (ignoreLabel != null) {
+            notif.addAction(R.drawable.ic_trident, ignoreLabel, ignoreRetryPendingIntent())
+        }
+        safeNotify(NOTIF_MILESTONE, notif.build())
     }
 
-    fun postCriticalOfflineNotification(title: String, text: String, retryLabel: String) {
+    fun postCriticalOfflineNotification(title: String, text: String, retryLabel: String, ignoreLabel: String? = null) {
         val notif = NotificationCompat.Builder(context, CHANNEL_OFFLINE_CRITICAL)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
@@ -309,8 +340,10 @@ class AlertNotificationManager(private val context: Context) {
             .setAutoCancel(true)
             .addAction(R.drawable.ic_trident, retryLabel, retryPendingIntent())
             .setContentIntent(openAppIntent())
-            .build()
-        safeNotify(NOTIF_OFFLINE_CRITICAL, notif)
+        if (ignoreLabel != null) {
+            notif.addAction(R.drawable.ic_trident, ignoreLabel, ignoreRetryPendingIntent())
+        }
+        safeNotify(NOTIF_OFFLINE_CRITICAL, notif.build())
     }
 
     fun postUpdateNotification(title: String, text: String) {
@@ -340,8 +373,8 @@ class AlertNotificationManager(private val context: Context) {
         }
     }
 
-    private fun sirenUri(resId: Int): Uri =
-        Uri.parse("android.resource://${context.packageName}/$resId")
+    private fun sirenUri(resName: String): Uri =
+        Uri.parse("android.resource://${context.packageName}/raw/$resName")
 
     private fun notificationAttributes(): AudioAttributes =
         AudioAttributes.Builder()

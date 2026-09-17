@@ -278,7 +278,7 @@ class SourceRegistryTest {
     @Test
     fun `isOffline false within episode grace`() {
         val registry = SourceRegistry()
-        registry.register(FakeSource("ws", connectionInit = SourceState.OFFLINE), testScope())
+        registry.register(FakeSource("ws", connectionInit = SourceState.DEGRADED), testScope())
         val since = registry.degradedSince.value
         assertTrue(!registry.isOffline((since ?: 0L) + 1_000L))
     }

@@ -563,11 +563,6 @@ fastYellowArmed = p.fastYellowArmed,
             ((nowMono - offlineSince) / 60_000L).toInt()
         } else 0
 
-        val twentyMinMs = 20 * 60 * 1000L
-        val elapsedSinceReconnect = if (isOfflineNow && offlineSince != null) {
-            nowMono - offlineSince
-        } else 0L
-
         // The trident owns the official signal, mirroring the header/widget: official red >
         // official yellow > none. No zone-state influence, no channel-pref gating �?" the monitor
         // always shows the live official level.
@@ -595,7 +590,7 @@ fastYellowArmed = p.fastYellowArmed,
             retryLabel = if (isOfflineNow) s.offlineRetryAction else null,
             progressMax = if (isOfflineNow) 20 else null,
             progressNow = if (isOfflineNow) offlineMinutes else null,
-            ignoreLabel = if (isOfflineNow && elapsedSinceReconnect >= twentyMinMs) s.offlineIgnoreAction else null,
+            ignoreLabel = if (isOfflineNow) s.offlineIgnoreAction else null,
             alertLevel = monitorAlertLevel
         )
 
@@ -615,7 +610,8 @@ fastYellowArmed = p.fastYellowArmed,
                 if (criticalThresholdMin == CRITICAL_OFFLINE_ALARM_MIN) s.offlineCriticalAlarmTitle
                 else s.offlineCriticalTitle,
                 String.format(s.offlineCriticalFormat, criticalThresholdMin),
-                s.offlineRetryAction
+                s.offlineRetryAction,
+                s.offlineIgnoreAction
             )
         }
         // Episode over (registry nulled the stamp on recovery — transient Connecting never
@@ -975,7 +971,8 @@ fastYellowArmed = p.fastYellowArmed,
         when (milestone) {
             ConnectionMilestone.M5_CRITICAL -> postCriticalOffline(s, CRITICAL_OFFLINE_MIN)
             else -> notificationManager.postOfflineNotification(
-                s.offlineStatusTitle, offlineLiveBody(s, ageMin), s.offlineRetryAction
+                s.offlineStatusTitle, offlineLiveBody(s, ageMin), s.offlineRetryAction,
+                s.offlineIgnoreAction
             )
         }
     }
@@ -990,15 +987,16 @@ fastYellowArmed = p.fastYellowArmed,
                 if (minutes == CRITICAL_OFFLINE_ALARM_MIN) s.offlineCriticalAlarmTitle
                 else s.offlineCriticalTitle,
                 String.format(s.offlineCriticalFormat, minutes),
-                s.offlineRetryAction
+                s.offlineRetryAction,
+                s.offlineIgnoreAction
             )
         }
     }
 
-    private fun offlineLiveBody(s: Strings.StringSet, minutes: Int): String {        val registry = AppSources.registry
+    private fun offlineLiveBody(s: Strings.StringSet, minutes: Int): String {
+        val registry = AppSources.registry
         if (registry.connectionState.value == SourceState.PAUSED) return s.offlinePausedBody
-        val attempt = registry.retryState.value?.attempt ?: 1
-        return String.format(s.offlineLiveFormat, minutes, attempt)
+        return String.format(s.offlineLiveFormat, minutes)
     }
 
     private fun postAlert(

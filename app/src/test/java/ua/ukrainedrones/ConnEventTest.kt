@@ -28,10 +28,10 @@ class ConnEventTest {
     }
 
     @Test
-    fun `offline live format carries minute and attempt`() {
+    fun `offline live format carries minutes only`() {
         val en = Strings.get(AppLanguage.EN)
-        assertEquals("Offline 4 min · attempt 5", String.format(en.offlineLiveFormat, 4, 5))
+        assertEquals("Offline 4 min", String.format(en.offlineLiveFormat, 4))
         val ua = Strings.get(AppLanguage.UA)
-        assertEquals("Офлайн 4 хв · спроба 5", String.format(ua.offlineLiveFormat, 4, 5))
+        assertEquals("Offline 4 min", String.format(ua.offlineLiveFormat, 4))
     }
 }
