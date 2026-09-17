@@ -143,9 +143,9 @@ object MapLibreLayerManager {
     fun updateAlertRegions(
         style: Style,
         fillAlertRegions: Boolean,
-        redOblasts: Set<String>,
+        redOblastIds: Set<String>,
         redRaions: Set<Pair<String, String>>,
-        yellowOblasts: Set<String>,
+        yellowOblastIds: Set<String>,
         yellowRaions: Set<Pair<String, String>>
     ) {
         val redSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_RED)
@@ -157,11 +157,11 @@ object MapLibreLayerManager {
             return
         }
 
-        val filteredYellowOblasts = yellowOblasts - redOblasts
-        val filteredYellowRaions = yellowRaions.filter { (stem, _) -> stem !in redOblasts }.toSet()
+        val filteredYellowOblastIds = yellowOblastIds - redOblastIds
+        val filteredYellowRaions = yellowRaions.filter { (id, _) -> id !in redOblastIds }.toSet()
 
-        redSrc?.setGeoJson(MapLibreGeoJson.alertRegions(redOblasts, redRaions))
-        yellowSrc?.setGeoJson(MapLibreGeoJson.alertRegions(filteredYellowOblasts, filteredYellowRaions))
+        redSrc?.setGeoJson(MapLibreGeoJson.alertRegions(redOblastIds, redRaions))
+        yellowSrc?.setGeoJson(MapLibreGeoJson.alertRegions(filteredYellowOblastIds, filteredYellowRaions))
     }
 
     fun updateZoneCircles(

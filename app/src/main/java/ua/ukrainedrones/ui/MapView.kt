@@ -57,6 +57,7 @@ import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.toThreatType
+import ua.ukrainedrones.community.CompactOblastBoundaries
 import ua.ukrainedrones.source.RESOLVED_REPLAY_GRACE_MS
 import ua.ukrainedrones.ui.MapLibreBridge
 import ua.ukrainedrones.ui.MapLibreHostView
@@ -613,9 +614,9 @@ fun NeptunMapView(
         uiState.fillAlertRegions,
         uiState.showBorders,
         uiState.showRegionBorders,
-        uiState.alertOblastTokens,
+        uiState.alertOblastIds,
         uiState.alertRaionKeys,
-        uiState.alertYellowOblastTokens,
+        uiState.alertYellowOblastIds,
         uiState.alertYellowRaionKeys,
         uiState.focusLocation,
         uiState.activeZoneParams.slowYellowKm,
@@ -624,9 +625,9 @@ fun NeptunMapView(
     ) {
         val bridge = bridgeState.value ?: return@LaunchedEffect
         bridge.updateAlerts(
-            oblastStems = uiState.alertOblastTokens,
+            oblastIds = uiState.alertOblastIds,
             raionKeys = uiState.alertRaionKeys,
-            yellowOblastStems = uiState.alertYellowOblastTokens,
+            yellowOblastIds = uiState.alertYellowOblastIds,
             yellowRaionKeys = uiState.alertYellowRaionKeys,
             fillEnabled = uiState.fillAlertRegions
         )
@@ -976,33 +977,35 @@ LaunchedEffect(selectedId) {
     }
 
     // City alerts mapping
-    val displayAlerts = remember(uiState.cityAlerts, uiState.fillAlertRegions, uiState.alertOblastTokens, uiState.alertYellowOblastTokens) {
+    val displayAlerts = remember(uiState.cityAlerts, uiState.fillAlertRegions, uiState.alertOblastIds, uiState.alertYellowOblastIds) {
         if (!uiState.fillAlertRegions) {
             buildMap {
                 putAll(uiState.cityAlerts)
                 for (city in Cities.ALL) {
                     if (city.nameUa in uiState.cityAlerts) continue
                     val stem = Cities.cityOblast[city.nameUa] ?: continue
+                    val id = CompactOblastBoundaries.canonicalId(stem) ?: continue
                     when {
-                        stem in uiState.alertOblastTokens -> put(city.nameUa, AlertLevel.RED)
-                        stem in uiState.alertYellowOblastTokens -> put(city.nameUa, AlertLevel.YELLOW)
+                        id in uiState.alertOblastIds -> put(city.nameUa, AlertLevel.RED)
+                        id in uiState.alertYellowOblastIds -> put(city.nameUa, AlertLevel.YELLOW)
                     }
                 }
             }
         } else uiState.cityAlerts
     }
 
-    val suppressedCities = remember(uiState.cityAlerts, uiState.fillAlertRegions, uiState.alertOblastTokens, uiState.alertYellowOblastTokens, uiState.alertRaionKeys, uiState.alertYellowRaionKeys) {
+    val suppressedCities = remember(uiState.cityAlerts, uiState.fillAlertRegions, uiState.alertOblastIds, uiState.alertYellowOblastIds, uiState.alertRaionKeys, uiState.alertYellowRaionKeys) {
         if (uiState.fillAlertRegions) {
             uiState.cityAlerts.mapNotNull { (cityName, level) ->
                 val stem = Cities.cityOblast[cityName] ?: return@mapNotNull null
+                val id = CompactOblastBoundaries.canonicalId(stem) ?: return@mapNotNull null
                 val raion = CityRaions.cityRaion[cityName]?.lowercase()?.trim()
                 val covered = when (level) {
-                    AlertLevel.RED -> stem in uiState.alertOblastTokens ||
-                        (raion != null && (stem to raion) in uiState.alertRaionKeys)
-                    AlertLevel.YELLOW -> (stem in uiState.alertYellowOblastTokens ||
-                        (raion != null && (stem to raion) in uiState.alertYellowRaionKeys)) ||
-                        stem in uiState.alertOblastTokens
+                    AlertLevel.RED -> id in uiState.alertOblastIds ||
+                        (raion != null && (id to raion) in uiState.alertRaionKeys)
+                    AlertLevel.YELLOW -> (id in uiState.alertYellowOblastIds ||
+                        (raion != null && (id to raion) in uiState.alertYellowRaionKeys)) ||
+                        id in uiState.alertOblastIds
                     else -> false
                 }
                 if (covered) cityName else null

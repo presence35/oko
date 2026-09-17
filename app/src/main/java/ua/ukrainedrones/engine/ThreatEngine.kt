@@ -3,6 +3,7 @@ package ua.ukrainedrones.engine
 import ua.ukrainedrones.AppLanguage
 import ua.ukrainedrones.Cities
 import ua.ukrainedrones.CityRaions
+import ua.ukrainedrones.community.CompactOblastBoundaries
 import ua.ukrainedrones.community.CompactRaionBoundaries
 import kotlin.math.*
 
@@ -184,6 +185,8 @@ class ThreatEngine(
      *  exactly the regions NEPTUN names — no city-list dependency:
      *  - a whole-oblast alert shades the whole oblast ([fillOblastTokens]);
      *  - a raion-level alert shades the raion it names ([fillRaionKeys], via [raionName]).
+     *  Tokens are canonical boundary IDs ([CompactOblastBoundaries.canonicalId], e.g. "odeska"),
+     *  so consumers compare with exact set equality — no fuzzy matching downstream.
      *  A red city is always inside one of these filled regions by construction — it only went
      *  red because its oblast/raion was alerted. Raion keys are emitted only when the raion has
      *  a boundary polygon, so the fill is real. Empty when the fill is off — broad red labels
@@ -196,7 +199,9 @@ class ThreatEngine(
         val stems = Cities.cityOblast.values
         val fillOblastTokens = buildSet {
             for (token in stems) {
-                if (alerts.any { it.inOblast(token) && it.isOblastWide() }) add(token)
+                if (alerts.any { it.inOblast(token) && it.isOblastWide() }) {
+                    CompactOblastBoundaries.canonicalId(token)?.let { add(it) }
+                }
             }
         }
         val fillRaionKeys = buildSet {
@@ -204,7 +209,8 @@ class ThreatEngine(
                 if (alert.isOblastWide()) continue
                 val raion = alert.raionName() ?: continue
                 val stem = stems.firstOrNull { alert.inOblast(it) } ?: continue
-                if (CompactRaionBoundaries.forKey(stem, raion) != null) add(stem to raion)
+                val id = CompactOblastBoundaries.canonicalId(stem) ?: continue
+                if (CompactRaionBoundaries.forKey(id, raion) != null) add(id to raion)
             }
         }
         return fillOblastTokens to fillRaionKeys

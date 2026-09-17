@@ -218,35 +218,43 @@ object CompactOblastBoundaries {
     val allStems: Set<String> get() = BY_ID.keys
 
     /**
-     * Resolves the compact boundary polygon for any region query:
+     * Canonical boundary ID for any region query (canonical ID, Ubilling/full name/Cyrillic stem):
      * 1. Direct match against canonical ID (e.g. "odeska", "м. київ").
      * 2. Alias match (Ubilling, full Ukrainian name, Cyrillic stem).
      * 3. Fallback stem substring match (respecting Kyiv City vs Oblast distinction).
+     * Null when the query names no known region. Single owner of the token→ID mapping.
      */
-    fun get(idOrStem: String): CompactPolygon? {
+    fun canonicalId(idOrStem: String): String? {
         val needle = idOrStem.trim().lowercase()
         if (needle.isEmpty()) return null
 
         // 1. Direct match against canonical ID
-        val direct = BY_ID[needle]
-        if (direct != null) return direct()
+        if (BY_ID.containsKey(needle)) return needle
 
         // 2. Exact alias match
         val mappedId = ALIAS_TO_ID[needle]
-        if (mappedId != null) return BY_ID[mappedId]?.invoke()
+        if (mappedId != null) return mappedId
 
         // Special guard for Kyiv: "м. київ" or city references must NOT match "київська" oblast
         if (needle == "м. київ" || needle == "м.київ" || needle == "київ" || needle == "kyiv") {
-            return BY_ID["kyivska"]?.invoke()
+            return "kyivska"
         }
 
         // 3. Fallback stem matching
         for ((stem, id) in STEM_TO_ID) {
             if (needle.contains(stem)) {
-                return BY_ID[id]?.invoke()
+                return id
             }
         }
         return null
+    }
+
+    /**
+     * Resolves the compact boundary polygon for any region query via [canonicalId].
+     */
+    fun get(idOrStem: String): CompactPolygon? {
+        val id = canonicalId(idOrStem) ?: return null
+        return BY_ID[id]?.invoke()
     }
 
     private fun _poly_krym(): CompactPolygon = CompactPolygon(listOf(

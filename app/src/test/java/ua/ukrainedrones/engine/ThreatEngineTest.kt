@@ -3,6 +3,9 @@ package ua.ukrainedrones.engine
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import ua.ukrainedrones.Cities
+import ua.ukrainedrones.community.CompactOblastBoundaries
+import ua.ukrainedrones.community.CompactRaionBoundaries
 import ua.ukrainedrones.source.NeptunSource.Companion.NEPTUN_TYPES
 
 class ThreatEngineTest {
@@ -523,7 +526,7 @@ class ThreatEngineTest {
         val alert = OblastAlert(key = "бердянський", name = "Бердянський район", oblast = "Запорізька область", since = null)
         val (oblastTokens, raionKeys) = engine.computeFillKeys(listOf(alert), fillRegions = true)
         assertTrue(oblastTokens.isEmpty())
-        assertTrue(("Запорізьк" to "бердянський") in raionKeys)
+        assertTrue(("zaporizka" to "бердянський") in raionKeys)
     }
 
     @Test
@@ -546,7 +549,32 @@ class ThreatEngineTest {
     fun `computeFillKeys - wide alert fills the whole oblast`() {
         val alert = OblastAlert(key = "odesa", name = "Одеська область", oblast = "Одеська", since = "x")
         val (oblastTokens, raionKeys) = engine.computeFillKeys(listOf(alert), fillRegions = true)
-        assertTrue("Одеськ" in oblastTokens)
+        assertTrue("odeska" in oblastTokens)
+        assertTrue(raionKeys.isEmpty())
+    }
+
+    @Test
+    fun `canonicalId - every city stem resolves to a canonical boundary ID`() {
+        for (stem in Cities.cityOblast.values.toSet()) {
+            assertNotNull("stem $stem", CompactOblastBoundaries.canonicalId(stem))
+        }
+        assertEquals("odeska", CompactOblastBoundaries.canonicalId("Одеськ"))
+        assertEquals("kharkivska", CompactOblastBoundaries.canonicalId("Харківська область"))
+        assertEquals("kyivska", CompactOblastBoundaries.canonicalId("м. київ"))
+        assertEquals("krym", CompactOblastBoundaries.canonicalId("Крим"))
+        assertNull(CompactOblastBoundaries.canonicalId("Atlantis"))
+    }
+
+    @Test
+    fun `forKey - unknown raion returns null instead of the parent oblast`() {
+        assertNull(CompactRaionBoundaries.forKey("odeska", "неіснуючий"))
+    }
+
+    @Test
+    fun `computeFillKeys - unknown raion produces no keys`() {
+        val alert = OblastAlert(key = "неіснуючий", name = "Неіснуючий", oblast = "Одеська область", since = null)
+        val (oblastTokens, raionKeys) = engine.computeFillKeys(listOf(alert), fillRegions = true)
+        assertTrue(oblastTokens.isEmpty())
         assertTrue(raionKeys.isEmpty())
     }
 

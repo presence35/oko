@@ -995,10 +995,14 @@ object CompactRaionBoundaries {
     }
 
     /**
-     * Backwards-compatible lookup by parent oblast stem and raion name.
+     * Lookup by parent oblast stem and raion name. Returns the raion polygon, or null when
+     * the raion name is unknown — never the parent oblast as a stand-in.
      */
-    fun forKey(oblastStem: String, raionName: String): CompactPolygon? {
-        return get(raionName) ?: get(oblastStem)
+    fun forKey(
+        @Suppress("UNUSED_PARAMETER") oblastStem: String,
+        raionName: String
+    ): CompactPolygon? {
+        return get(raionName)
     }
 
     private fun _r_kremenchutskyi(): CompactPolygon = CompactPolygon(

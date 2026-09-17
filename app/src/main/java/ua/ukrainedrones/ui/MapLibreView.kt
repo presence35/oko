@@ -1,6 +1,7 @@
 package ua.ukrainedrones.ui
 
 import android.graphics.PointF
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -139,25 +140,25 @@ class MapLibreBridge(
 
     fun updateAlerts(
         fillAlertRegions: Boolean,
-        redOblasts: Set<String>,
+        redOblastIds: Set<String>,
         redRaions: Set<Pair<String, String>>,
-        yellowOblasts: Set<String>,
+        yellowOblastIds: Set<String>,
         yellowRaions: Set<Pair<String, String>>
     ) {
         val s = style ?: return
         MapLibreLayerManager.updateAlertRegions(
-            s, fillAlertRegions, redOblasts, redRaions, yellowOblasts, yellowRaions
+            s, fillAlertRegions, redOblastIds, redRaions, yellowOblastIds, yellowRaions
         )
     }
 
     fun updateAlerts(
-        oblastStems: Set<String>,
+        oblastIds: Set<String>,
         raionKeys: Set<Pair<String, String>>,
-        yellowOblastStems: Set<String>,
+        yellowOblastIds: Set<String>,
         yellowRaionKeys: Set<Pair<String, String>>,
         fillEnabled: Boolean
     ) {
-        updateAlerts(fillEnabled, oblastStems, raionKeys, yellowOblastStems, yellowRaionKeys)
+        updateAlerts(fillEnabled, oblastIds, raionKeys, yellowOblastIds, yellowRaionKeys)
     }
 
     fun updateZones(
@@ -190,24 +191,6 @@ fun MapLibreHostView(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val bridge = remember { MapLibreBridge() }
 
-    val container = remember {
-        FrameLayout(context).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        }
-    }
-    val mapView = remember {
-        val opts = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
-        MapView(context, opts).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-            onCreate(null)
-        }
-    }
     val overlayView = remember {
         object : View(context) {
             init {
@@ -224,6 +207,34 @@ fun MapLibreHostView(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
+        }
+    }
+    val container = remember {
+        object : FrameLayout(context) {
+            override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+                val handled = super.dispatchTouchEvent(ev)
+                if (ev.actionMasked == MotionEvent.ACTION_MOVE ||
+                    ev.actionMasked == MotionEvent.ACTION_DOWN
+                ) {
+                    overlayView.postInvalidateOnAnimation()
+                }
+                return handled
+            }
+        }.apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+    }
+    val mapView = remember {
+        val opts = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
+        MapView(context, opts).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            onCreate(null)
         }
     }
 
@@ -286,11 +297,11 @@ fun MapLibreHostView(
                         bridge.project = projLambda
 
                         mapLibreMap.addOnCameraMoveListener {
-                            overlayView.invalidate()
+                            overlayView.postInvalidateOnAnimation()
                             bridge.dispatchCameraMove()
                         }
                         mapLibreMap.addOnCameraIdleListener {
-                            overlayView.invalidate()
+                            overlayView.postInvalidateOnAnimation()
                             onCameraChange()
                             bridge.dispatchCameraMove()
                         }
@@ -307,7 +318,7 @@ fun MapLibreHostView(
                             true
                         }
                         onBridgeReady(bridge)
-                        overlayView.invalidate()
+                        overlayView.postInvalidateOnAnimation()
                     }
                 }
             }

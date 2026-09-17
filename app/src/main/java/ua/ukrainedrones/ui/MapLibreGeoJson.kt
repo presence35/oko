@@ -59,25 +59,26 @@ object MapLibreGeoJson {
 
     /**
      * Alerting region polygons (oblast-wide and individual raions) for fill/stroke overlays.
+     * Oblast IDs and raion-key parents are canonical boundary IDs — exact set equality applies.
      */
     fun alertRegions(
-        oblastTokens: Set<String>,
+        oblastIds: Set<String>,
         raionKeys: Set<Pair<String, String>> = emptySet()
     ): String {
-        if (oblastTokens.isEmpty() && raionKeys.isEmpty()) return EMPTY
+        if (oblastIds.isEmpty() && raionKeys.isEmpty()) return EMPTY
 
         val features = mutableListOf<String>()
-        for (stem in oblastTokens) {
-            val poly = CompactOblastBoundaries.get(stem) ?: continue
+        for (id in oblastIds) {
+            val poly = CompactOblastBoundaries.get(id) ?: continue
             for (ring in poly.rings) {
                 if (ring.pointCount < 3) continue
                 val pts = ring.toPoints().joinToString(",") { "[${it.lon},${it.lat}]" }
                 features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$pts]]}}""")
             }
         }
-        for ((stem, raion) in raionKeys) {
-            if (stem in oblastTokens) continue
-            val poly = CompactRaionBoundaries.forKey(stem, raion) ?: continue
+        for ((id, raion) in raionKeys) {
+            if (id in oblastIds) continue
+            val poly = CompactRaionBoundaries.forKey(id, raion) ?: continue
             for (ring in poly.rings) {
                 if (ring.pointCount < 3) continue
                 val pts = ring.toPoints().joinToString(",") { "[${it.lon},${it.lat}]" }
