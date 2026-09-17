@@ -36,6 +36,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -348,11 +349,19 @@ fun ThreatPopupCard(
                                         contentDescription = typeLabel
                                     )
                                 }
-Text(
+                                    Text(
                                         titleLabel,
                                         fontWeight = FontWeight.SemiBold,
                                         style = MaterialTheme.typography.titleLarge,
                                         color = Color.White
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "#${threat.id}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF757575),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 if (alertsOff) {
                                     AlertsOffChip(s)
@@ -468,6 +477,14 @@ Text(
                                         fontWeight = FontWeight.SemiBold,
                                         style = MaterialTheme.typography.titleLarge,
                                         color = Color.White
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "#${threat.id}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF757575),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     if (alertsOff) {
                                         Spacer(Modifier.width(6.dp))

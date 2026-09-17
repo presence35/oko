@@ -56,7 +56,7 @@ class NeutralizedTally(
     }
 
     // Running memory of resolved threats (position + type) so tapping the tally notification can
-    // replay a shot-down show. Capped at 21; flourish survives alerts and background.
+    // replay a shot-down show. flourish survives alerts and background.
     private data class ResolvedRecord(
         val lat: Double,
         val lon: Double,
@@ -71,8 +71,7 @@ class NeutralizedTally(
     private val seenRemovalIds = ArrayDeque<String>()
 
     /** A server-driven resolution just arrived: count it into the tally and remember it for the
-     *  replay. Keeps the last 21 (the tally count itself can run much higher after a long
-     *  absence — the replay only needs enough to be fun, not exhaustive). */
+     *  replay.  */
     fun onResolved(removed: ThreatRemoved, lang: AppLanguage) {
         if (!justFunEnabled.value) return
         if (seenRemovalIds.contains(removed.id)) return
@@ -81,7 +80,7 @@ class NeutralizedTally(
         neutralizedCount++
         perTypeCounts[removed.type] = (perTypeCounts[removed.type] ?: 0) + 1
         resolvedMemory.addLast(ResolvedRecord(removed.lat, removed.lon, removed.type, removed.region))
-        while (resolvedMemory.size > 21) resolvedMemory.removeFirst()
+        resolvedMemory.removeFirst()
         postNeutralizedTally(lang)
     }
 

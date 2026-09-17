@@ -124,7 +124,7 @@ class ThreatEngine(
         val focusOblastAlertActive = official.level == AlertLevel.RED
         val focusOblastYellowAlertActive = official.level == AlertLevel.YELLOW
         val cityAlerts = computeCityAlerts(alerts)
-        val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts.filter { it.level != "yellow" }, fillRegions = true)
+        val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts.filter { it.level == "red" }, fillRegions = true)
         val (fillYellowOblastTokens, fillYellowRaionKeys) = computeFillKeys(alerts.filter { it.level == "yellow" }, fillRegions = true)
         android.util.Log.w("ThreatEngine", "RED fill: ${alerts.count{it.level!="yellow"}} alerts → ${fillOblastTokens.size} oblasts ${fillRaionKeys.size} raions | $fillOblastTokens $fillRaionKeys")
         android.util.Log.w("ThreatEngine", "YEL fill: ${alerts.count{it.level=="yellow"}} alerts → ${fillYellowOblastTokens.size} oblasts ${fillYellowRaionKeys.size} raions | $fillYellowOblastTokens $fillYellowRaionKeys")
@@ -422,6 +422,7 @@ class ThreatEngine(
             "high" -> 1.0
             "medium" -> 0.8
             "low" -> 0.5
+	    "unknown" -> 0.5
             else -> 0.7
         }
 

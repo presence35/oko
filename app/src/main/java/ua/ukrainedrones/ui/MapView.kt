@@ -54,10 +54,8 @@ import ua.ukrainedrones.engine.AlertLevel
 import ua.ukrainedrones.engine.LatLng
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.ThreatEngine
-import ua.ukrainedrones.engine.ThreatProps
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.coversCityRaion
-import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.community.CompactOblastBoundaries
@@ -65,10 +63,7 @@ import ua.ukrainedrones.community.CompactRaionBoundaries
 import ua.ukrainedrones.source.RESOLVED_REPLAY_GRACE_MS
 import ua.ukrainedrones.ui.MapLibreBridge
 import ua.ukrainedrones.ui.MapLibreHostView
-import kotlin.math.atan2
-import kotlin.math.cos
 import kotlin.math.roundToInt
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 /** Odesa city centre — fallback camera target before the first GPS fix. */
@@ -112,25 +107,6 @@ private val threatIconCache = object : LruCache<String, Bitmap>(48) {}
 private fun threatIconSizeDp(zoom: Double): Int {
     val scale = ((zoom - 11.5) / 3.0 * 2.0 + 1.0).coerceIn(1.0, 3.0)
     return (32.0 * scale / 8.0).roundToInt() * 8
-}
-
-/** Position for the "approaching, precision unknown" orbit: a point on the yellow ring around [center]. */
-private fun orbitPosition(center: LatLng, radiusMeters: Double, angleRad: Double): LatLng {
-    val bearing = (Math.toDegrees(angleRad) + 360.0) % 360.0
-    return ua.ukrainedrones.engine.destinationPoint(center.lat, center.lon, radiusMeters, bearing)
-}
-
-/** The destination city an approximate-position threat is heading toward. */
-private fun orbitCenter(nt: NormalizedThreat): LatLng? {
-    if (nt.areaOnly || nt.positionQuality != "approx") return null
-    val place = courseTargetPlace(nt.explanationShort) ?: return null
-    return Cities.findCity(place)?.let { LatLng(it.lat, it.lon) }
-}
-
-/** An approximate-position threat heading toward a known city circles that city's yellow ring. */
-private fun shouldOrbitDestination(nt: NormalizedThreat, destination: LatLng, redKm: Int): Boolean {
-    if (nt.areaOnly || nt.positionQuality != "approx") return false
-    return distanceFlat(destination.lat, destination.lon, nt.lat, nt.lon) / 1000.0 > redKm
 }
 
 /** Marker rotation that points a threat icon's nose along compass bearing. */
@@ -260,59 +236,6 @@ private data class NewRingState(val id: String?, val activeUntilMs: Long)
 
 private const val NEW_RING_MS = 8_000L
 private const val ZONE_REFIT_DEBOUNCE_MS = 350L
-private const val ORBIT_PERIOD_MS = 15_000L
-
-private fun orbitPhase(id: String): Double {
-    val deg = Math.floorMod(id.hashCode(), 360)
-    return Math.toRadians(deg.toDouble())
-}
-
-internal fun orbitAngle(now: Long, id: String): Double =
-    (now / ORBIT_PERIOD_MS.toDouble()) * 2.0 * Math.PI + orbitPhase(id)
-
-internal fun orbitTangentBearing(angleRad: Double): Double {
-    val deg = Math.toDegrees(atan2(cos(angleRad), -sin(angleRad)))
-    return (deg + 360.0) % 360.0
-}
-
-internal enum class ThreatPoseMode { PARKED, ORBIT, DRIFT }
-
-internal data class MarkerPose(
-    val lat: Double,
-    val lon: Double,
-    val headingDeg: Float,
-    val mode: ThreatPoseMode
-)
-
-internal fun resolveThreatPose(
-    engine: ThreatEngine,
-    t: NormalizedThreat,
-    props: ThreatProps,
-    redKm: Int,
-    yellowKm: Int,
-    now: Long
-): MarkerPose {
-    val drift = engine.canDrift(t, props, now)
-    val destination = orbitCenter(t)
-    if (destination != null) {
-        if (!shouldOrbitDestination(t, destination, redKm)) {
-            return MarkerPose(t.lat, t.lon, engine.courseDeg(t).toFloat(), ThreatPoseMode.PARKED)
-        }
-        if (drift) {
-            val angle = orbitAngle(now, t.id)
-            val pos = orbitPosition(destination, yellowKm * 1000.0, angle)
-            return MarkerPose(pos.lat, pos.lon, orbitTangentBearing(angle).toFloat(), ThreatPoseMode.ORBIT)
-        }
-    }
-    if (drift) {
-        val predicted = engine.speedCache.estimate(t.id, t, props)
-            ?.let { engine.predictPosition(t, it, props, now) }
-        if (predicted != null) {
-            return MarkerPose(predicted.lat, predicted.lon, engine.courseDeg(t).toFloat(), ThreatPoseMode.DRIFT)
-        }
-    }
-    return MarkerPose(t.lat, t.lon, engine.courseDeg(t).toFloat(), ThreatPoseMode.PARKED)
-}
 
 internal data class ThreatScreenPlacement(
     val offsetDx: Float = 0f,
@@ -324,24 +247,25 @@ internal data class ThreatScreenPlacement(
 private fun chipLabel(t: NormalizedThreat, chip: String?): String? {
     val sim = if (t.simulated) "SIM" else null
     return when {
-        sim != null && chip != null -> "$sim · $chip"
-        sim != null -> sim
-        else -> chip
+        sim != null && chip != null -> "#${t.id} · $sim · $chip"
+        sim != null -> "#${t.id} · $sim"
+        chip != null -> "#${t.id} · $chip"
+        else -> "#${t.id}"
     }
 }
 
 /** Deterministic screen-space de-overlap for threats sharing a coordinate or screen area. */
 private fun deOverlapThreats(
-    poses: List<Triple<String, LatLng, String>>, // id, pose, type
+    items: List<Triple<String, LatLng, String>>, // id, outcome, type
     project: (Double, Double) -> PointF?,
     mode: OverlapMode,
     stepPx: Int,
     viewWidth: Int,
     viewHeight: Int
 ): Map<String, ThreatScreenPlacement> {
-    val out = HashMap<String, ThreatScreenPlacement>(poses.size)
+    val out = HashMap<String, ThreatScreenPlacement>(items.size)
     if (mode == OverlapMode.DEFAULT || viewWidth <= 0 || viewHeight <= 0) {
-        for ((id, _, _) in poses) {
+        for ((id, _, _) in items) {
             out[id] = ThreatScreenPlacement()
         }
         return out
@@ -349,7 +273,7 @@ private fun deOverlapThreats(
 
     val clusters = mutableListOf<MutableList<Triple<String, LatLng, String>>>()
     val thresholdSq = (stepPx * stepPx).toFloat()
-    for (item in poses) {
+    for (item in items) {
         val pt = project(item.second.lat, item.second.lon) ?: continue
         var placed = false
         for (cluster in clusters) {
@@ -574,7 +498,7 @@ fun NeptunMapView(
     val followBulletState by rememberUpdatedState(uiState.followBullet)
     val hapticsOnState by rememberUpdatedState(LocalHapticsEnabled.current)
 
-    val threatPoses = remember { mutableStateMapOf<String, MarkerPose>() }
+    val threatOutcomes = remember { mutableStateMapOf<String, BehaviorOutcome>() }
     val threatPlacements = remember { mutableStateMapOf<String, ThreatScreenPlacement>() }
     val zoneRefitJob = remember { mutableStateOf<Job?>(null) }
 
@@ -826,16 +750,16 @@ LaunchedEffect(selectedId) {
                 }
                 if (r.type in hiddenTypesState) return@collect
                 val bridge = bridgeState.value
-                val pose = threatPoses[r.id]
-                val anchorLat = pose?.lat ?: r.lat
-                val anchorLon = pose?.lon ?: r.lon
+                val outcome = threatOutcomes[r.id]
+                val anchorLat = outcome?.lat ?: r.lat
+                val anchorLon = outcome?.lon ?: r.lon
 
                 if (deathFx.isActiveFor(r.id)) {
                     deathFx.strikeDud(r.id, anchorLat, anchorLon)
                 } else {
                     val threatType = r.type
                     val base = IconCatalog.baseDeg(threatType, iconSetState)
-                    val rotation = pose?.headingDeg ?: ((r.courseDeg.toFloat() - base + 360f) % 360f)
+                    val rotation = outcome?.headingDeg ?: ((r.courseDeg.toFloat() - base + 360f) % 360f)
                     val icon = threatIconFor(context, threatType, iconSetState)
                     val followBullet = followBulletState
                     val pressedId = r.id
@@ -926,7 +850,7 @@ LaunchedEffect(selectedId) {
         deathFx.replayProgress.collect { onReplayProgressChange(it) }
     }
 
-    // Pose update ticker
+    // Behavior update ticker
     LaunchedEffect(Unit) {
         while (true) {
             if (pausedState || !mapVisibleState) {
@@ -939,24 +863,31 @@ LaunchedEffect(selectedId) {
                 continue
             }
             val now = System.currentTimeMillis()
+            val behaviors = listOf<ThreatBehavior>(
+                OrbitBehavior(slowRedKmState, slowYellowKmState),
+                StaleDriftBehavior
+            )
             var moving = false
+            val currentIds = mapThreatsState.map { it.id }.toSet()
+            for (id in threatOutcomes.keys.toList()) {
+                if (id !in currentIds) threatOutcomes.remove(id)
+            }
             for (t in mapThreatsState) {
-                val props = engine.propsFor(t.type)
                 engine.speedCache.record(t.id, t.updatedAtMillis ?: now, t.lat, t.lon)
-                val pose = resolveThreatPose(engine, t, props, slowRedKmState, slowYellowKmState, now)
-                threatPoses[t.id] = pose
-                if (pose.mode != ThreatPoseMode.PARKED) moving = true
+                val outcome = resolveThreatBehavior(engine, t, behaviors, now)
+                threatOutcomes[t.id] = outcome
+                if (outcome.moving) moving = true
             }
 
             // De-overlap in screen space
             val stepPx = ((if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32) *
                 context.resources.displayMetrics.density).toInt().coerceAtLeast(24)
-            val posesList = mapThreatsState.map { t ->
-                val p = threatPoses[t.id] ?: MarkerPose(t.lat, t.lon, 0f, ThreatPoseMode.PARKED)
-                Triple(t.id, LatLng(p.lat, p.lon), t.type)
+            val outcomesList = mapThreatsState.map { t ->
+                val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)
+                Triple(t.id, LatLng(outcome.lat, outcome.lon), t.type)
             }
             val placements = deOverlapThreats(
-                posesList,
+                outcomesList,
                 { lat, lon -> bridge.project(lat, lon) },
                 uiState.overlapMode,
                 stepPx,
@@ -1104,8 +1035,8 @@ LaunchedEffect(selectedId) {
                         if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
                         val placement = threatPlacements[t.id]
                         if (placement != null && !placement.visible) continue
-                        val pose = threatPoses[t.id] ?: MarkerPose(t.lat, t.lon, 0f, ThreatPoseMode.PARKED)
-                        val pt = bridge.project(pose.lat, pose.lon) ?: continue
+                        val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)
+                        val pt = bridge.project(outcome.lat, outcome.lon) ?: continue
                         val sx = pt.x + (placement?.offsetDx ?: 0f)
                         val sy = pt.y + (placement?.offsetDy ?: 0f)
                         val props = engine.propsFor(t.type)
@@ -1118,7 +1049,7 @@ LaunchedEffect(selectedId) {
                         )
                         val bmp = (iconDrawable as? BitmapDrawable)?.bitmap ?: continue
                         val base = IconCatalog.baseDeg(t.type.toThreatType(), iconSetState)
-                        val rot = if (t.areaOnly) 0f else threatMarkerRotation(pose.headingDeg, base)
+                        val rot = if (t.areaOnly) 0f else threatMarkerRotation(outcome.headingDeg, base)
                         val scale = restoringScales[t.id] ?: 1f
 
                         paint.alpha = ((if (stale) 0.45f else 1.0f) * scale * 255).toInt().coerceIn(0, 255)
@@ -1196,8 +1127,8 @@ LaunchedEffect(selectedId) {
                     for (t in mapThreatsState) {
                         val placement = threatPlacements[t.id]
                         if (placement != null && !placement.visible) continue
-                        val pose = threatPoses[t.id] ?: MarkerPose(t.lat, t.lon, 0f, ThreatPoseMode.PARKED)
-                        val sp = bridge.project(pose.lat, pose.lon) ?: continue
+                        val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)
+                        val sp = bridge.project(outcome.lat, outcome.lon) ?: continue
                         val sx = sp.x + (placement?.offsetDx ?: 0f)
                         val sy = sp.y + (placement?.offsetDy ?: 0f)
                         val dx = sx - screenPt.x
@@ -1225,8 +1156,8 @@ LaunchedEffect(selectedId) {
                     for (t in mapThreatsState) {
                         val placement = threatPlacements[t.id]
                         if (placement != null && !placement.visible) continue
-                        val pose = threatPoses[t.id] ?: MarkerPose(t.lat, t.lon, 0f, ThreatPoseMode.PARKED)
-                        val sp = bridge.project(pose.lat, pose.lon) ?: continue
+                        val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)
+                        val sp = bridge.project(outcome.lat, outcome.lon) ?: continue
                         val sx = sp.x + (placement?.offsetDx ?: 0f)
                         val sy = sp.y + (placement?.offsetDy ?: 0f)
                         val dx = sx - screenPt.x
@@ -1240,16 +1171,16 @@ LaunchedEffect(selectedId) {
                     val targetThreat = bestThreat
                     if (targetThreat != null && deathAnimationEnabledState) {
                         val threatId = targetThreat.id
-                        val pose = threatPoses[threatId]
-                        val strikeLat = pose?.lat ?: geoPt.latitude
-                        val strikeLon = pose?.lon ?: geoPt.longitude
+                        val outcome = threatOutcomes[threatId]
+                        val strikeLat = outcome?.lat ?: geoPt.latitude
+                        val strikeLon = outcome?.lon ?: geoPt.longitude
                         val threatType = targetThreat.type.toThreatType()
                         val icon = threatIconFor(
                             context, threatType, iconSetState,
                             sizeDp = if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32
                         )
                         val base = IconCatalog.baseDeg(threatType, iconSetState)
-                        val rotation = if (targetThreat.areaOnly) 0f else threatMarkerRotation(pose?.headingDeg ?: engine.courseDeg(targetThreat).toFloat(), base)
+                        val rotation = if (targetThreat.areaOnly) 0f else threatMarkerRotation(outcome?.headingDeg ?: engine.courseDeg(targetThreat).toFloat(), base)
                         val played = if (deathFx.isActiveFor(threatId)) {
                             deathFx.strikeDud(threatId, strikeLat, strikeLon)
                         } else {
