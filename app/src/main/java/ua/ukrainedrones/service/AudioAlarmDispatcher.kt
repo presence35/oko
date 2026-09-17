@@ -83,25 +83,20 @@ class AudioAlarmDispatcher(
      * delegating notification sounds/vibration to standard Android notification channels.
      */
     fun dispatchDangerAlarm(isRed: Boolean, overrideSilence: Boolean = true, loop: Boolean = false) {
-        if (overrideSilence) {
-            enforceAlarmStreamVolume()
-            val soundId = if (isRed) soundRedAlertId else soundYellowAlertId
-            if (soundId != 0 && loadedSampleIds.contains(soundId)) {
-                stopActiveAlert()
-                val loopCount = if (loop) -1 else 0
-                activeLoopStreamId = soundPool?.play(soundId, 1.0f, 1.0f, 10, loopCount, 1.0f) ?: 0
-            }
-        }
+        if (!overrideSilence) return
+        enforceAlarmStreamVolume()
+        playSound(
+            if (isRed) soundRedAlertId else soundYellowAlertId,
+            priority = 10,
+            loopCount = if (loop) -1 else 0
+        )
     }
 
     /**
      * Plays the authoritative All-Clear chime.
      */
     fun dispatchAllClearChime() {
-        stopActiveAlert()
-        if (soundAllClearId != 0 && loadedSampleIds.contains(soundAllClearId)) {
-            soundPool?.play(soundAllClearId, 0.9f, 0.9f, 5, 0, 1.0f)
-        }
+        playSound(soundAllClearId, 0.9f, 0.9f, 5)
         vibrator.cancel()
     }
 
@@ -125,13 +120,23 @@ class AudioAlarmDispatcher(
      * Plays critical offline warning chime.
      */
     fun dispatchCriticalOffline(overrideSilence: Boolean = true) {
-        if (overrideSilence) {
-            enforceAlarmStreamVolume()
-            stopActiveAlert()
-            if (soundCriticalOfflineId != 0 && loadedSampleIds.contains(soundCriticalOfflineId)) {
-                soundPool?.play(soundCriticalOfflineId, 1.0f, 1.0f, 8, 0, 1.0f)
-            }
-        }
+        if (!overrideSilence) return
+        enforceAlarmStreamVolume()
+        playSound(soundCriticalOfflineId, priority = 8)
+    }
+
+    private fun playSound(
+        sampleId: Int,
+        leftVol: Float = 1.0f,
+        rightVol: Float = 1.0f,
+        priority: Int = 10,
+        loopCount: Int = 0,
+        rate: Float = 1.0f
+    ): Boolean {
+        if (sampleId == 0 || !loadedSampleIds.contains(sampleId)) return false
+        stopActiveAlert()
+        activeLoopStreamId = soundPool?.play(sampleId, leftVol, rightVol, priority, loopCount, rate) ?: 0
+        return true
     }
 
     fun stopActiveAlert() {

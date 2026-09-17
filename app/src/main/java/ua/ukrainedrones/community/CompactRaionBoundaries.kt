@@ -970,6 +970,69 @@ object CompactRaionBoundaries {
         "ізюмськ" to "iziumskyi",
         "ізюмський" to "iziumskyi",
         "ізюмський район" to "iziumskyi",
+        // Renamed raions (2022-2024 de-russification / decommunization)
+        "звягельськ" to "novohrad-volynskyi",
+        "звягельський" to "novohrad-volynskyi",
+        "звягельський район" to "novohrad-volynskyi",
+        "zviahelskyi" to "novohrad-volynskyi",
+        "zvyahelskyi" to "novohrad-volynskyi",
+        "володимирськ" to "volodymyr-volynskyi",
+        "володимирський" to "volodymyr-volynskyi",
+        "володимирський район" to "volodymyr-volynskyi",
+        "volodymyrskyi" to "volodymyr-volynskyi",
+        "шептицьк" to "chervonohradskyi",
+        "шептицький" to "chervonohradskyi",
+        "шептицький район" to "chervonohradskyi",
+        "sheptytskyi" to "chervonohradskyi",
+        "самарівськ" to "novomoskovskyi",
+        "самарівський" to "novomoskovskyi",
+        "самарівський район" to "novomoskovskyi",
+        "samarivskyi" to "novomoskovskyi",
+        "берестинськ" to "krasnohradskyi",
+        "берестинський" to "krasnohradskyi",
+        "берестинський район" to "krasnohradskyi",
+        "berestynskyi" to "krasnohradskyi",
+        "сіверськодонецьк" to "sievierodonetskyi",
+        "сіверськодонецький" to "sievierodonetskyi",
+        "сіверськодонецький район" to "sievierodonetskyi",
+        "siverskodonetskyi" to "sievierodonetskyi",
+
+        // Crimea district and legacy raion aliases (post-2020 alignments)
+        "міський округ євпаторія" to "yevpatoriiskyi",
+        "міський округ саки" to "yevpatoriiskyi",
+        "сакськ" to "yevpatoriiskyi",
+        "сакський" to "yevpatoriiskyi",
+        "сакський район" to "yevpatoriiskyi",
+        "чорноморськ" to "yevpatoriiskyi",
+        "чорноморський" to "yevpatoriiskyi",
+        "чорноморський район" to "yevpatoriiskyi",
+        "міський округ ялта" to "yaltynskyi",
+        "міський округ алушта" to "yaltynskyi",
+        "алуштинськ" to "yaltynskyi",
+        "алуштинський" to "yaltynskyi",
+        "алуштинський район" to "yaltynskyi",
+        "міський округ керч" to "kerchenskyi",
+        "ленінськ" to "kerchenskyi",
+        "ленінський" to "kerchenskyi",
+        "ленінський район" to "kerchenskyi",
+        "міський округ феодосія" to "feodosiiskyi",
+        "міський округ судак" to "feodosiiskyi",
+        "судацьк" to "feodosiiskyi",
+        "судацький" to "feodosiiskyi",
+        "судацький район" to "feodosiiskyi",
+        "міський округ армянськ" to "perekopskyi",
+        "красноперекопськ" to "perekopskyi",
+        "красноперекопський" to "perekopskyi",
+        "красноперекопський район" to "perekopskyi",
+        "красногвардійськ" to "kurmanskyi",
+        "красногвардійський" to "kurmanskyi",
+        "красногвардійський район" to "kurmanskyi",
+        "совєтськ" to "bilohirskyi",
+        "совєтський" to "bilohirskyi",
+        "совєтський район" to "bilohirskyi",
+        "ічкінськ" to "bilohirskyi",
+        "ічкінський" to "bilohirskyi",
+        "ічкінський район" to "bilohirskyi",
     )
 
     /** Cached catalog of all raion polygons indexed by canonical key. */
@@ -977,21 +1040,32 @@ object CompactRaionBoundaries {
         BY_KEY.mapValues { it.value() }
     }
 
+    private fun normalize(query: String): String =
+        query.trim().lowercase()
+            .replace('’', '\'')
+            .replace('ʼ', '\'')
+            .replace('`', '\'')
+
+    /**
+     * Canonical boundary key for any raion query (canonical key, Ubilling, Cyrillic name/adjectival,
+     * renamed district variant). Handles apostrophe variations across Unicode forms ('’ʼ`).
+     */
+    fun canonicalKey(query: String): String? {
+        val needle = normalize(query)
+        if (needle.isEmpty()) return null
+        if (BY_KEY.containsKey(needle)) return needle
+        val mapped = ALIAS_TO_KEY[needle]
+        if (mapped != null) return mapped
+        val clean = needle.substringBefore(" район").substringBefore(" р-н").trim()
+        return ALIAS_TO_KEY[clean]
+    }
+
     /**
      * Primary lookup: resolves a raion boundary by its key (e.g. "izmailskyi", "ізмаїльський").
      */
     fun get(key: String): CompactPolygon? {
-        val needle = key.trim().lowercase()
-        if (needle.isEmpty()) return null
-        val direct = BY_KEY[needle]
-        if (direct != null) return direct()
-        val mapped = ALIAS_TO_KEY[needle]
-        if (mapped != null) return BY_KEY[mapped]?.invoke()
-        // Suffix/prefix fallback
-        val clean = needle.substringBefore(" район").substringBefore(" р-н").trim()
-        val mappedClean = ALIAS_TO_KEY[clean]
-        if (mappedClean != null) return BY_KEY[mappedClean]?.invoke()
-        return null
+        val canonical = canonicalKey(key) ?: return null
+        return BY_KEY[canonical]?.invoke()
     }
 
     /**

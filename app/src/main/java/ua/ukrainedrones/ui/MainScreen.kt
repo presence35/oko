@@ -855,11 +855,13 @@ private fun MapScreen(
                         )
                     }
                 }
-                val gearButtonInteraction = remember { MutableInteractionSource() }
+                val hapticsEnabled = LocalHapticsEnabled.current
                 IconButton(
-                    onClick = openSettings,
-                    modifier = Modifier.size(48.dp).pressTick(gearButtonInteraction),
-                    interactionSource = gearButtonInteraction
+                    onClick = {
+                        if (hapticsEnabled) hapticTick(context)
+                        openSettings()
+                    },
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_settings_ua),

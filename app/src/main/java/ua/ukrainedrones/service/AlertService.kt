@@ -83,10 +83,10 @@ class AlertService : Service() {
         const val EXTRA_SHOW_MAP = AlertNotificationManager.EXTRA_SHOW_MAP
 
         const val CHANNEL_MONITOR = AlertNotificationManager.CHANNEL_MONITOR
-        const val CHANNEL_ALERTS = AlertNotificationManager.CHANNEL_ALERTS
+        const val CHANNEL_ALERTS_INNER = AlertNotificationManager.CHANNEL_ALERTS_INNER
         const val CHANNEL_ALERTS_OUTER = AlertNotificationManager.CHANNEL_ALERTS_OUTER
-        const val CHANNEL_ALLCLEAR = AlertNotificationManager.CHANNEL_ALLCLEAR
-        const val CHANNEL_ALERTS_ALARM = AlertNotificationManager.CHANNEL_ALERTS_ALARM
+        const val CHANNEL_ALL_CLEAR = AlertNotificationManager.CHANNEL_ALL_CLEAR
+        const val CHANNEL_ALERTS_INNER_ALARM = AlertNotificationManager.CHANNEL_ALERTS_INNER_ALARM
         const val CHANNEL_ALERTS_OUTER_ALARM = AlertNotificationManager.CHANNEL_ALERTS_OUTER_ALARM
         const val CHANNEL_OFFLINE = AlertNotificationManager.CHANNEL_OFFLINE
         const val CHANNEL_OFFLINE_CRITICAL = AlertNotificationManager.CHANNEL_OFFLINE_CRITICAL
@@ -980,9 +980,11 @@ fastYellowArmed = p.fastYellowArmed,
     private fun postCriticalOffline(s: Strings.StringSet, minutes: Int) {
         val episode = AppSources.registry.degradedSince.value ?: return
         if (criticalFiredForEpisode == episode) return
-        criticalFiredForEpisode = episode
         scope.launch {
-            if (!UserPrefs(applicationContext).preferences.first().criticalOfflineOverride) return@launch
+            val prefs = UserPrefs(applicationContext).preferences.first()
+            if (!prefs.criticalOfflineOverride) return@launch
+            criticalFiredForEpisode = episode
+            if (prefs.criticalOfflineBypassSilent) audioAlarmDispatcher.dispatchCriticalOffline(true)
             notificationManager.postCriticalOfflineNotification(
                 if (minutes == CRITICAL_OFFLINE_ALARM_MIN) s.offlineCriticalAlarmTitle
                 else s.offlineCriticalTitle,

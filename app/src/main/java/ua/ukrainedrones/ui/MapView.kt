@@ -34,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -58,6 +59,7 @@ import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.community.CompactOblastBoundaries
+import ua.ukrainedrones.community.CompactRaionBoundaries
 import ua.ukrainedrones.source.RESOLVED_REPLAY_GRACE_MS
 import ua.ukrainedrones.ui.MapLibreBridge
 import ua.ukrainedrones.ui.MapLibreHostView
@@ -999,12 +1001,21 @@ LaunchedEffect(selectedId) {
             uiState.cityAlerts.mapNotNull { (cityName, level) ->
                 val stem = Cities.cityOblast[cityName] ?: return@mapNotNull null
                 val id = CompactOblastBoundaries.canonicalId(stem) ?: return@mapNotNull null
-                val raion = CityRaions.cityRaion[cityName]?.lowercase()?.trim()
+                val cityRaion = CityRaions.cityRaion[cityName]?.lowercase()?.trim()
+                val cityRaionCanon = cityRaion?.let { CompactRaionBoundaries.canonicalKey(it) }
+                fun isRaionCovered(keys: Set<Pair<String, String>>): Boolean {
+                    if (cityRaion == null || keys.isEmpty()) return false
+                    if ((id to cityRaion) in keys) return true
+                    return keys.any { (alertId, alertRaion) ->
+                        alertId == id && (
+                            alertRaion.equals(cityRaion, ignoreCase = true) ||
+                            (cityRaionCanon != null && CompactRaionBoundaries.canonicalKey(alertRaion) == cityRaionCanon)
+                        )
+                    }
+                }
                 val covered = when (level) {
-                    AlertLevel.RED -> id in uiState.alertOblastIds ||
-                        (raion != null && (id to raion) in uiState.alertRaionKeys)
-                    AlertLevel.YELLOW -> (id in uiState.alertYellowOblastIds ||
-                        (raion != null && (id to raion) in uiState.alertYellowRaionKeys)) ||
+                    AlertLevel.RED -> id in uiState.alertOblastIds || isRaionCovered(uiState.alertRaionKeys)
+                    AlertLevel.YELLOW -> (id in uiState.alertYellowOblastIds || isRaionCovered(uiState.alertYellowRaionKeys)) ||
                         id in uiState.alertOblastIds
                     else -> false
                 }
@@ -1259,6 +1270,11 @@ LaunchedEffect(selectedId) {
                     }
                 }
             }
+        )
+
+        // Real-time HUD overlay diagnosing alert region ingestion, tokens, and GPU state
+        ua.ukrainedrones.debug.AlertFillDiagnostics.Hud(
+            modifier = Modifier.align(Alignment.TopCenter)
         )
     }
 }

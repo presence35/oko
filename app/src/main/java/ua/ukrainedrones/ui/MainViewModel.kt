@@ -662,7 +662,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             flourish = live.flourish,
             officialAlertCityScope = prefs.officialAlertCityScope || (nightActive && prefs.nightOfficialAlertCityScope),
             showBorders = prefs.showBorders,
-            showRegionBorders = prefs.showRegionBorders
+            showRegionBorders = prefs.showRegionBorders,
+            fillAlertRegions = prefs.fillAlertRegions
         ).copy(
             update = updateUi.update,
             needsInstallPermission = updateUi.needsInstallPermission,
@@ -884,7 +885,8 @@ showBorders = prefs.showBorders,
         flourish: FlourishShow?,
         officialAlertCityScope: Boolean,
         showBorders: Boolean,
-        showRegionBorders: Boolean
+        showRegionBorders: Boolean,
+        fillAlertRegions: Boolean = false
     ): UiState {
         val params = effectiveParams
         val gpsFresh = LocationTracker.isFresh(now)
@@ -934,6 +936,14 @@ showBorders = prefs.showBorders,
         // delivering. Single derivation lives in the registry; the header just mirrors it.
         val degraded = registry.degraded.value
         val neptunDown = registry.isOffline(nowMono)
+
+        // Audit incoming alert tokens against boundary geometries for dropped/unmapped alerts
+        ua.ukrainedrones.debug.AlertFillDiagnostics.recordEngineAudit(
+            alerts = alerts,
+            fillEnabled = fillAlertRegions,
+            redOblastIds = evaluation.fillOblastTokens,
+            redRaions = evaluation.fillRaionKeys
+        )
 
         return UiState(
             connected = registry.wsHealthy.value,

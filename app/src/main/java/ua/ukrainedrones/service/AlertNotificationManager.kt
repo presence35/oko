@@ -47,11 +47,11 @@ class AlertNotificationManager(private val context: Context) {
         const val EXTRA_SHOW_MAP = "show_map"
 
         const val CHANNEL_MONITOR = "monitor"
-        const val CHANNEL_ALERTS = "alerts_siren2"
-        const val CHANNEL_ALERTS_OUTER = "alerts_siren_outer2"
-        const val CHANNEL_ALLCLEAR = "alerts_all_clear2"
-        const val CHANNEL_ALERTS_ALARM = "alerts_siren_alarm"
-        const val CHANNEL_ALERTS_OUTER_ALARM = "alerts_siren_outer_alarm"
+        const val CHANNEL_ALERTS_INNER = "alerts_inner"
+        const val CHANNEL_ALERTS_OUTER = "alerts_outer"
+        const val CHANNEL_ALL_CLEAR = "all_clear"
+        const val CHANNEL_ALERTS_INNER_ALARM = "alerts_inner_alarm"
+        const val CHANNEL_ALERTS_OUTER_ALARM = "alerts_outer_alarm"
         const val CHANNEL_OFFLINE = "offline"
         const val CHANNEL_OFFLINE_CRITICAL = "offline_critical"
         const val CHANNEL_UPDATE = "updates"
@@ -65,7 +65,7 @@ class AlertNotificationManager(private val context: Context) {
 
         /** Bump to delete + recreate all managed channels (sound/importance/attrs are
          *  frozen by Android at creation — this is the only way a change takes effect). */
-        const val CHANNEL_SCHEMA_VERSION = 1
+        const val CHANNEL_SCHEMA_VERSION = 2
 
         fun areNotificationsEnabled(context: Context): Boolean {
             return NotificationManagerCompat.from(context).areNotificationsEnabled()
@@ -86,10 +86,10 @@ class AlertNotificationManager(private val context: Context) {
 
     private val managedChannels = setOf(
             CHANNEL_MONITOR,
-            CHANNEL_ALERTS,
+            CHANNEL_ALERTS_INNER,
             CHANNEL_ALERTS_OUTER,
-            CHANNEL_ALLCLEAR,
-            CHANNEL_ALERTS_ALARM,
+            CHANNEL_ALL_CLEAR,
+            CHANNEL_ALERTS_INNER_ALARM,
             CHANNEL_ALERTS_OUTER_ALARM,
             CHANNEL_OFFLINE,
             CHANNEL_OFFLINE_CRITICAL,
@@ -135,7 +135,7 @@ class AlertNotificationManager(private val context: Context) {
             }
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ALERTS, s.alertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
+            NotificationChannel(CHANNEL_ALERTS_INNER, s.alertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.alertChannelDesc
                 enableVibration(true)
                 setSound(sirenUri("air_raid_siren"), notificationAttributes())
@@ -149,14 +149,14 @@ class AlertNotificationManager(private val context: Context) {
             }
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ALLCLEAR, s.allClearChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
+            NotificationChannel(CHANNEL_ALL_CLEAR, s.allClearChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.allClearChannelDesc
                 enableVibration(true)
                 setSound(sirenUri("all_clear"), notificationAttributes())
             }
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ALERTS_ALARM, s.alarmAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
+            NotificationChannel(CHANNEL_ALERTS_INNER_ALARM, s.alarmAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.alarmAlertChannelDesc
                 enableVibration(true)
                 setSound(sirenUri("air_raid_siren"), alarmAttributes())
@@ -263,8 +263,8 @@ class AlertNotificationManager(private val context: Context) {
         silent: Boolean = false
     ) {
         val channel = when {
-            zone == ThreatZone.INNER && sirenOverride -> CHANNEL_ALERTS_ALARM
-            zone == ThreatZone.INNER -> CHANNEL_ALERTS
+            zone == ThreatZone.INNER && sirenOverride -> CHANNEL_ALERTS_INNER_ALARM
+            zone == ThreatZone.INNER -> CHANNEL_ALERTS_INNER
             sirenOverride -> CHANNEL_ALERTS_OUTER_ALARM
             else -> CHANNEL_ALERTS_OUTER
         }
@@ -282,7 +282,7 @@ class AlertNotificationManager(private val context: Context) {
     }
 
     fun postAllClearNotification(title: String, body: String, silent: Boolean = false) {
-        val notif = NotificationCompat.Builder(context, CHANNEL_ALLCLEAR)
+        val notif = NotificationCompat.Builder(context, CHANNEL_ALL_CLEAR)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
             .setContentText(body)
@@ -386,6 +386,7 @@ class AlertNotificationManager(private val context: Context) {
         AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
             .build()
 
     private fun openAppIntent(revealThreat: NormalizedThreat? = null): PendingIntent {

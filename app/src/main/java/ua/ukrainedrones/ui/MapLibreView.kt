@@ -136,6 +136,8 @@ class MapLibreBridge(
     fun updateBorders(showBorders: Boolean, showRegionBorders: Boolean) {
         val s = style ?: return
         MapLibreLayerManager.updateBordersVisibility(s, showBorders, showRegionBorders)
+        mapView?.postInvalidateOnAnimation()
+        overlayView?.postInvalidateOnAnimation()
     }
 
     fun updateAlerts(
@@ -149,6 +151,8 @@ class MapLibreBridge(
         MapLibreLayerManager.updateAlertRegions(
             s, fillAlertRegions, redOblastIds, redRaions, yellowOblastIds, yellowRaions
         )
+        mapView?.postInvalidateOnAnimation()
+        overlayView?.postInvalidateOnAnimation()
     }
 
     fun updateAlerts(
@@ -169,6 +173,8 @@ class MapLibreBridge(
     ) {
         val s = style ?: return
         MapLibreLayerManager.updateZoneCircles(s, centerLat, centerLon, slowRedKm, slowYellowKm)
+        mapView?.postInvalidateOnAnimation()
+        overlayView?.postInvalidateOnAnimation()
     }
 }
 

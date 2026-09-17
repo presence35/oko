@@ -1,5 +1,6 @@
 package ua.ukrainedrones.ui
 
+import ua.ukrainedrones.community.CompactRaionBoundaries
 import android.graphics.Color
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.FillLayer
@@ -31,9 +32,11 @@ object MapLibreLayerManager {
 
     const val SOURCE_ALERT_YELLOW = "src_alert_yellow"
     const val LAYER_ALERT_YELLOW = "lyr_alert_yellow"
+    const val LAYER_ALERT_YELLOW_LINE = "lyr_alert_yellow_line"
 
     const val SOURCE_ALERT_RED = "src_alert_red"
     const val LAYER_ALERT_RED_FILL = "lyr_alert_red_fill"
+    const val LAYER_ALERT_RED_LINE = "lyr_alert_red_line"
 
     const val SOURCE_ZONE_RED = "src_zone_red"
     const val LAYER_ZONE_RED = "lyr_zone_red"
@@ -51,12 +54,20 @@ object MapLibreLayerManager {
             }
         )
 
-        // 1. Alert fills (underneath outlines)
+        // 1. Alert fills and outlines
         val srcAlertYellow = GeoJsonSource(SOURCE_ALERT_YELLOW, MapLibreGeoJson.EMPTY)
         style.addSource(srcAlertYellow)
         style.addLayer(
             FillLayer(LAYER_ALERT_YELLOW, SOURCE_ALERT_YELLOW).apply {
-                setProperties(fillColor(Color.argb(85, 245, 158, 11)))
+                setProperties(fillColor(Color.argb(90, 245, 158, 11)))
+            }
+        )
+        style.addLayer(
+            LineLayer(LAYER_ALERT_YELLOW_LINE, SOURCE_ALERT_YELLOW).apply {
+                setProperties(
+                    lineColor(Color.argb(190, 245, 158, 11)),
+                    lineWidth(1.2f)
+                )
             }
         )
 
@@ -64,7 +75,15 @@ object MapLibreLayerManager {
         style.addSource(srcAlertRed)
         style.addLayer(
             FillLayer(LAYER_ALERT_RED_FILL, SOURCE_ALERT_RED).apply {
-                setProperties(fillColor(Color.argb(100, 239, 68, 68)))
+                setProperties(fillColor(Color.argb(115, 239, 68, 68)))
+            }
+        )
+        style.addLayer(
+            LineLayer(LAYER_ALERT_RED_LINE, SOURCE_ALERT_RED).apply {
+                setProperties(
+                    lineColor(Color.argb(225, 239, 68, 68)),
+                    lineWidth(1.5f)
+                )
             }
         )
 
@@ -154,14 +173,42 @@ object MapLibreLayerManager {
         if (!fillAlertRegions) {
             redSrc?.setGeoJson(MapLibreGeoJson.EMPTY)
             yellowSrc?.setGeoJson(MapLibreGeoJson.EMPTY)
+            // Record disabled state for diagnostics
+            ua.ukrainedrones.debug.AlertFillDiagnostics.recordMapLibreUpdate(
+                style, false, redOblastIds, redRaions,
+                emptySet(), emptySet(), MapLibreGeoJson.EMPTY, MapLibreGeoJson.EMPTY
+            )
             return
         }
 
         val filteredYellowOblastIds = yellowOblastIds - redOblastIds
-        val filteredYellowRaions = yellowRaions.filter { (id, _) -> id !in redOblastIds }.toSet()
+        // Red alerts supersede yellow alerts. Filter out any yellow raion whose parent oblast
+        // is already red, or which itself is covered by an active red raion alert.
+        val redCanonicalRaions = redRaions.mapNotNull { (id, raion) ->
+            CompactRaionBoundaries.canonicalKey(raion)?.let { id to it }
+        }.toSet()
+        val filteredYellowRaions = yellowRaions.filter { (id, raion) ->
+            if (id in redOblastIds || (id to raion) in redRaions) return@filter false
+            val canonical = CompactRaionBoundaries.canonicalKey(raion) ?: raion
+            (id to canonical) !in redCanonicalRaions
+        }.toSet()
 
-        redSrc?.setGeoJson(MapLibreGeoJson.alertRegions(redOblastIds, redRaions))
-        yellowSrc?.setGeoJson(MapLibreGeoJson.alertRegions(filteredYellowOblastIds, filteredYellowRaions))
+        val redGeoJson = MapLibreGeoJson.alertRegions(redOblastIds, redRaions)
+        val yellowGeoJson = MapLibreGeoJson.alertRegions(filteredYellowOblastIds, filteredYellowRaions)
+        redSrc?.setGeoJson(redGeoJson)
+        yellowSrc?.setGeoJson(yellowGeoJson)
+
+        // Record active GeoJSON payloads and GPU source/layer presence
+        ua.ukrainedrones.debug.AlertFillDiagnostics.recordMapLibreUpdate(
+            style = style,
+            fillAlertRegions = true,
+            redOblastIds = redOblastIds,
+            redRaions = redRaions,
+            filteredYellowOblastIds = filteredYellowOblastIds,
+            filteredYellowRaions = filteredYellowRaions,
+            redGeoJson = redGeoJson,
+            yellowGeoJson = yellowGeoJson
+        )
     }
 
     fun updateZoneCircles(

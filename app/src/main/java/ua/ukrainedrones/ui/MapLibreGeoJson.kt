@@ -19,7 +19,13 @@ object MapLibreGeoJson {
      * dimming/blacking out unnecessary foreign detail.
      */
     fun outsideUkraineMask(): String {
-        val ukraineRing = ua.ukrainedrones.UKRAINE_BORDER.joinToString(",") { "[${it.lon},${it.lat}]" }
+        val border = ua.ukrainedrones.UKRAINE_BORDER
+        val closedRing = if (border.isNotEmpty() && (border.first().lat != border.last().lat || border.first().lon != border.last().lon)) {
+            border + border.first()
+        } else {
+            border
+        }
+        val ukraineRing = closedRing.joinToString(",") { "[${it.lon},${it.lat}]" }
         val worldOuter = "[-180.0,-85.0],[180.0,-85.0],[180.0,85.0],[-180.0,85.0],[-180.0,-85.0]"
         return """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$worldOuter],[$ukraineRing]]}}]}"""
     }

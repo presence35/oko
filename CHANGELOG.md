@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Critical offline alerts now actually ring: with "Override silent mode" on, the alert chime plays through the alarm stream just like the sirens, so it cuts through vibrate/silent; notification channels were renamed to Inner/Outer zone alerts and the always-sound channels get enforced alarm attributes / Critical offline alerts now actually ring: with "Override silent mode" on, the alert chime plays through the alarm stream just like the sirens, so it cuts through vibrate/silent; notification channels were renamed to Inner/Outer zone alerts and the always-sound channels get enforced alarm attributes
+
 - MiG-31K takeoff alerts now read in proper English ("Kinzhal carrier · Country-wide threat") instead of transliterated Ukrainian, in the card and notifications / MiG-31K takeoff alerts now read in proper English ("Kinzhal carrier · Country-wide threat") instead of transliterated Ukrainian, in the card and notifications
 - Removed the fake "MiG in N min" ETA: the takeoff pin is a country centroid, not a position, so no speed or arrival time is shown for it / Removed the fake "MiG in N min" ETA: the takeoff pin is a country centroid, not a position, so no speed or arrival time is shown for it
 
