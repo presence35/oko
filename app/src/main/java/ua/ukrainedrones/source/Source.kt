@@ -74,8 +74,6 @@ interface Source {
     fun wasUserShotRecently(id: String): Boolean = false
     /** User pressed Retry while offline. */
     fun retryNow() {}
-    /** User pressed Ignore — pause reconnect for [minutes]. */
-    fun pauseRetries(minutes: Int) {}
     /** The app came to the foreground — retry if offline. */
     fun onAppForeground() {}
     /** Optional branding link shown in the Logs header (null = hide). */

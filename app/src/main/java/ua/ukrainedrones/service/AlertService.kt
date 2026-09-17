@@ -30,8 +30,8 @@ import org.json.JSONObject
 import ua.ukrainedrones.AppLanguage
 import ua.ukrainedrones.resolveFocus
 import ua.ukrainedrones.connection.ConnectionMilestone
+import ua.ukrainedrones.connection.ConnEventKind
 import ua.ukrainedrones.connection.Monotonic
-import ua.ukrainedrones.source.SourceState
 import ua.ukrainedrones.engine.isFastType
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.LatLng
@@ -98,6 +98,9 @@ class AlertService : Service() {
         const val NOTIF_MILESTONE = AlertNotificationManager.NOTIF_MILESTONE
         const val NOTIF_OFFLINE_CRITICAL = AlertNotificationManager.NOTIF_OFFLINE_CRITICAL
         const val NOTIF_UPDATE = AlertNotificationManager.NOTIF_UPDATE
+
+        /** "Ignore 30 min": how long offline milestone/critical notifications stay muted. */
+        private const val IGNORE_RETRY_MUTE_MS = 30 * 60_000L
 
         const val CRITICAL_OFFLINE_MIN = 5
         const val CRITICAL_OFFLINE_ALARM_MIN = 1
@@ -186,6 +189,10 @@ class AlertService : Service() {
      *  (null = not fired this episode). Keyed off the episode, not a boolean, so transient
      *  Connecting states can neither refire nor resurrect a swiped-away notification. */
     private var criticalFiredForEpisode: Long? = null
+
+    /** "Ignore 30 min" mute deadline (session-only, wall clock). Offline milestone/critical
+     *  notifications are suppressed until this instant; the connection keeps reconnecting. */
+    @Volatile private var notifMuteUntilMs = 0L
 
     private val tally by lazy { NeutralizedTally(applicationContext, scope) }
     @Volatile private var currentToken: String? = null
@@ -298,9 +305,13 @@ class AlertService : Service() {
                 }
             }
             ACTION_IGNORE_RETRY -> {
-                scope.launch {
-                    AppSources.registry.pauseRetries(30)
-                }
+                notifMuteUntilMs = System.currentTimeMillis() + IGNORE_RETRY_MUTE_MS
+                notificationManager.cancelNotification(NOTIF_MILESTONE)
+                notificationManager.cancelNotification(NOTIF_OFFLINE_CRITICAL)
+                AppSources.registry.annotateConnectionLog(
+                    ConnEventKind.IGNORE_MUTED,
+                    detail = "${IGNORE_RETRY_MUTE_MS / 60_000} min"
+                )
             }
             NeutralizedTally.ACTION_NEUTRALIZED_DISMISS -> tally.reset()
         }
@@ -605,6 +616,7 @@ fastYellowArmed = p.fastYellowArmed,
             else CRITICAL_OFFLINE_MIN
         val episode = offlineSince
         if (isOfflineNow && episode != null && state.criticalOfflineOverride &&
+            System.currentTimeMillis() >= notifMuteUntilMs &&
             offlineMinutes >= criticalThresholdMin && criticalFiredForEpisode != episode
         ) {
             criticalFiredForEpisode = episode
@@ -964,6 +976,7 @@ fastYellowArmed = p.fastYellowArmed,
     /** Maps supervisor milestone events to one-shot notifications. Stateless: the flow is
      *  already once-per-episode by supervisor guarantee, so there is nothing to reset. */
     private fun onConnectionMilestone(milestone: ConnectionMilestone) {
+        if (System.currentTimeMillis() < notifMuteUntilMs) return
         val registry = AppSources.registry
         val nowMono = Monotonic.now()
         if (!registry.isOffline(nowMono)) return
@@ -981,8 +994,6 @@ fastYellowArmed = p.fastYellowArmed,
     }
 
     private fun offlineLiveBody(s: Strings.StringSet, minutes: Int): String {
-        val registry = AppSources.registry
-        if (registry.connectionState.value == SourceState.PAUSED) return s.offlinePausedBody
         return String.format(s.offlineLiveFormat, minutes)
     }
 

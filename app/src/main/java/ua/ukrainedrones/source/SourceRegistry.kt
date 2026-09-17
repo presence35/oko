@@ -116,6 +116,11 @@ class SourceRegistry {
     val retryState: StateFlow<ConnRetryState?>
         get() = logSource?.retryState ?: emptyRetryState
 
+    /** One-shot line in the reconnect log (the connection-log source owns persistence/rendering). */
+    fun annotateConnectionLog(kind: ConnEventKind, attempt: Int? = null, delayMs: Long? = null, detail: String? = null) {
+        logSource?.annotateConnectionLog(kind, attempt, delayMs, detail)
+    }
+
     /** Offline-episode milestone feed for notifications (empty when no log source). */
     val connectionMilestones: SharedFlow<ConnectionMilestone>
         get() = logSource?.milestones ?: emptyMilestones
@@ -315,7 +320,7 @@ class SourceRegistry {
     }
 
     /** Offline escalation (red + offline notification): immediate when the transport is physically
-     *  down (no network, paused, or disconnected), and degraded past the episode grace with no
+     *  down (no network or disconnected), and degraded past the episode grace with no
      *  fallback covering for the silent-socket case. Consumers pass a monotonic `now` (mirror
      *  rule: derivation lives here) — [degradedSince] is stamped on the monotonic clock so a
      *  wall-clock jump can't trigger or stall the escalation. */
@@ -329,7 +334,6 @@ class SourceRegistry {
         // so transient feed stalls don't immediately alarm the user.
         val transportDown = _connectionState.value == SourceState.OFFLINE ||
                             _connectionState.value == SourceState.DISCONNECTED ||
-                            _connectionState.value == SourceState.PAUSED ||
                             _connectionState.value == SourceState.CONNECTING
         if (transportDown) return true
 
@@ -352,10 +356,6 @@ class SourceRegistry {
 
     fun retryNow() {
         for (source in enabledSources) source.retryNow()
-    }
-
-    fun pauseRetries(minutes: Int) {
-        for (source in enabledSources) source.pauseRetries(minutes)
     }
 
     fun onAppForeground() {

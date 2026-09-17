@@ -145,7 +145,6 @@ val nightSoundLabel: String,
         val connOffline: String,
         val connOff: String,
         val connDegraded: String,
-        val connPaused: String,
         val connDegradedBody: String,
         val connActiveLabel: String,
         val reliabilityLow: String,
@@ -248,7 +247,6 @@ val nightSoundLabel: String,
         val offlineCriticalBypassSilentTitle: String,
         val offlineCriticalBypassSilentDesc: String,
         val offlineIgnoreAction: String,
-        val offlinePausedBody: String,
         val offlineLiveFormat: String,
         val alertChannelName: String,
         val alertChannelDesc: String,
@@ -373,7 +371,7 @@ val nightSoundLabel: String,
         val connEventFallbackActive: String,
         val connEventFallbackRestored: String,
         val connEventSourceToggled: String,
-        val connEventPaused: String,
+        val connEventIgnored: String,
         val connEventManualRetry: String,
         val cardSizeLabel: String,
         val additionalSettingsTitle: String,
@@ -844,7 +842,6 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val sirenOverrideWarning: String get() = status.sirenOverrideWarning
         val bootRestartPaused: String get() = status.bootRestartPaused
         val connDegraded: String get() = status.connDegraded
-        val connPaused: String get() = status.connPaused
         val connDegradedBody: String get() = status.connDegradedBody
         val connActiveLabel: String get() = status.connActiveLabel
         val reliabilityLow: String get() = status.reliabilityLow
@@ -937,7 +934,6 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val offlineCriticalBypassSilentTitle: String get() = threat.offlineCriticalBypassSilentTitle
         val offlineCriticalBypassSilentDesc: String get() = threat.offlineCriticalBypassSilentDesc
         val offlineIgnoreAction: String get() = threat.offlineIgnoreAction
-        val offlinePausedBody: String get() = threat.offlinePausedBody
         val offlineLiveFormat: String get() = threat.offlineLiveFormat
         val alertChannelName: String get() = threat.alertChannelName
         val alertChannelDesc: String get() = threat.alertChannelDesc
@@ -1055,7 +1051,7 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val connEventFallbackActive: String get() = misc.connEventFallbackActive
         val connEventFallbackRestored: String get() = misc.connEventFallbackRestored
         val connEventSourceToggled: String get() = misc.connEventSourceToggled
-        val connEventPaused: String get() = misc.connEventPaused
+        val connEventIgnored: String get() = misc.connEventIgnored
         val connEventManualRetry: String get() = misc.connEventManualRetry
         val cardSizeLabel: String get() = misc.cardSizeLabel
         val additionalSettingsTitle: String get() = misc.additionalSettingsTitle

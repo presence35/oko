@@ -14,7 +14,6 @@ class ConnectionStateTest {
         assertTrue(cs.isConnected)
         assertFalse(cs.isDegraded)
         assertFalse(cs.isOffline)
-        assertFalse(cs.isPaused)
     }
 
     @Test
@@ -33,15 +32,6 @@ class ConnectionStateTest {
         assertFalse(cs.isConnected)
         assertFalse(cs.isDegraded)
         assertTrue(cs.isOffline)
-        assertFalse(cs.isPaused)
-    }
-
-    @Test
-    fun `Paused is offline and paused`() {
-        val cs = ConnectionState.Paused(untilMs = now + 30_000, since = now, reconnectStartMillis = now)
-        assertFalse(cs.isConnected)
-        assertTrue(cs.isOffline)
-        assertTrue(cs.isPaused)
     }
 
     @Test
@@ -54,12 +44,6 @@ class ConnectionStateTest {
     fun `offlineSinceOrNull returns since for Offline`() {
         val cs = ConnectionState.Offline(since = 12345L, reconnectStartMillis = 12345L)
         assertTrue(cs.offlineSinceOrNull == 12345L)
-    }
-
-    @Test
-    fun `offlineSinceOrNull returns since for Paused`() {
-        val cs = ConnectionState.Paused(untilMs = now, since = 67890L, reconnectStartMillis = 67890L)
-        assertTrue(cs.offlineSinceOrNull == 67890L)
     }
 
     @Test

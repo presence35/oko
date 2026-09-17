@@ -82,8 +82,7 @@ class NeptunSource(private val context: Context) : Source, ConnectionLogSource {
         scope.launch {
             val svc = ServiceState(context.applicationContext)
             supervisor.start(
-                savedReconnectStartMs = svc.reconnectStartMillis().first(),
-                savedIgnoreUntilMs = svc.ignoreRetryUntil().first()
+                savedReconnectStartMs = svc.reconnectStartMillis().first()
             )
         }
         scope.launch { persistReconnectStart() }
@@ -150,7 +149,6 @@ class NeptunSource(private val context: Context) : Source, ConnectionLogSource {
     override fun markUserShot(id: String) = core.markUserShot(id)
     override fun wasUserShotRecently(id: String): Boolean = core.wasUserShotRecently(id)
     override fun retryNow() = supervisor.retryNow()
-    override fun pauseRetries(minutes: Int) = supervisor.pauseFor(minutes)
     override fun onAppForeground() = supervisor.onForeground()
     override fun dismissLogCard() = supervisor.dismissLogCard()
 
@@ -162,8 +160,7 @@ class NeptunSource(private val context: Context) : Source, ConnectionLogSource {
         ConnectionLog.setPendingSource(sourceId)
     }
 
-    private fun mapConnectionState(state: ConnectionState): SourceState = when {
-        state.isPaused -> SourceState.PAUSED
+private fun mapConnectionState(state: ConnectionState): SourceState = when {
         state.isDegraded -> SourceState.DEGRADED
         state.isConnected -> SourceState.CONNECTED
         state is ConnectionState.Connecting -> SourceState.CONNECTING

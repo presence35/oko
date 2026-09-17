@@ -16,7 +16,7 @@ class ConnEventTest {
         assertEquals("No network — waiting to retry", ConnEvent(0L, ConnEventKind.NO_NETWORK).label(s))
         assertEquals("Manual retry", ConnEvent(0L, ConnEventKind.RETRY_MANUAL).label(s))
         assertEquals("5 min offline — alarm", ConnEvent(0L, ConnEventKind.MILESTONE_5).label(s))
-        assertEquals("Retrying paused for 30 min", ConnEvent(0L, ConnEventKind.PAUSED).label(s))
+        assertEquals("Notifications muted for 30 min", ConnEvent(0L, ConnEventKind.IGNORE_MUTED, detail = "30 min").label(s))
     }
 
     @Test
@@ -25,7 +25,7 @@ class ConnEventTest {
         val retry = ConnEvent(0L, ConnEventKind.RETRY_SCHEDULED, attempt = 2, delayMs = 8_000L)
         assertEquals("Повтор через 8s · спроба 2", retry.label(s))
         assertEquals("З'єднання втрачено", ConnEvent(0L, ConnEventKind.CONNECTION_LOST).label(s))
-        assertEquals("Повтор призупинено на 30 хв", ConnEvent(0L, ConnEventKind.PAUSED).label(s))
+        assertEquals("Notifications muted for 30 min", ConnEvent(0L, ConnEventKind.IGNORE_MUTED, detail = "30 min").label(s))
     }
 
     @Test

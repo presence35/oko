@@ -15,7 +15,7 @@ data class ConnRetryState(
 enum class ConnEventKind {
     CONNECTION_LOST, RETRY_SCHEDULED, RETRY_MANUAL, NO_NETWORK, DEGRADED,
     MILESTONE_3, MILESTONE_5, MILESTONE_6, MILESTONE_10, MILESTONE_20,
-    GAVE_UP, PAUSED, FALLBACK_ACTIVE, FALLBACK_RESTORED, SOURCE_TOGGLED
+    GAVE_UP, IGNORE_MUTED, FALLBACK_ACTIVE, FALLBACK_RESTORED, SOURCE_TOGGLED
 }
 
 /** A reconnect that survives this long counts as a genuine recovery; shorter blips
@@ -51,7 +51,7 @@ data class ConnEvent(
         ConnEventKind.MILESTONE_10 -> s.connEventMin10
         ConnEventKind.MILESTONE_20 -> s.connEventMin20
         ConnEventKind.GAVE_UP -> s.connEventGaveUp
-        ConnEventKind.PAUSED -> s.connEventPaused
+        ConnEventKind.IGNORE_MUTED -> String.format(s.connEventIgnored, detail ?: "")
         ConnEventKind.FALLBACK_ACTIVE -> String.format(s.connEventFallbackActive, detail ?: "")
         ConnEventKind.FALLBACK_RESTORED -> s.connEventFallbackRestored
         ConnEventKind.SOURCE_TOGGLED -> String.format(s.connEventSourceToggled, detail ?: "")
@@ -111,16 +111,6 @@ sealed interface ConnectionState {
         val reason: String? = null,
         val attempt: Int = 0
     ) : ConnectionState
-
-    /**
-     * User instructed the app to pause retries (e.g., "Ignore for 30 min").
-     * Survives process death and only resumes when the timestamp expires or on manual retry.
-     */
-    data class Paused(
-        val untilMs: Long,
-        val since: Long,
-        val reconnectStartMillis: Long
-    ) : ConnectionState
 }
 
 /** Convenience extensions to simplify UI and service queries. */
@@ -131,15 +121,11 @@ val ConnectionState.isDegraded: Boolean
     get() = this is ConnectionState.Degraded
 
 val ConnectionState.isOffline: Boolean
-    get() = this is ConnectionState.Offline || this is ConnectionState.Paused || this is ConnectionState.Disconnected
-
-val ConnectionState.isPaused: Boolean
-    get() = this is ConnectionState.Paused
+    get() = this is ConnectionState.Offline || this is ConnectionState.Disconnected
 
 val ConnectionState.offlineSinceOrNull: Long?
     get() = when (this) {
         is ConnectionState.Offline -> since
-        is ConnectionState.Paused -> since
         else -> null
     }
 
@@ -147,6 +133,5 @@ val ConnectionState.reconnectStartMillisOrZero: Long
     get() = when (this) {
         is ConnectionState.Offline -> reconnectStartMillis
         is ConnectionState.Connecting -> reconnectStartMillis
-        is ConnectionState.Paused -> reconnectStartMillis
         else -> 0L
     }

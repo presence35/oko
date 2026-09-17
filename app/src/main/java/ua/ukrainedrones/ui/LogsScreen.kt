@@ -62,7 +62,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.HourglassBottom
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
@@ -1197,23 +1196,20 @@ private fun OemSimButton(context: android.content.Context, s: Strings.StringSet)
 
 @Composable
 private fun ConnectionCard(entry: ConnLogEntry, s: Strings.StringSet, lang: AppLanguage, now: Long) {
-    val accent = when (entry.status) {
+val accent = when (entry.status) {
         ConnStatus.ONLINE -> DebugGreen
         ConnStatus.OFFLINE -> DebugRed
         ConnStatus.DEGRADED -> DebugAmber
-        ConnStatus.PAUSED -> DebugAmber
     }
     val icon = when (entry.status) {
         ConnStatus.ONLINE -> Icons.Filled.CheckCircle
         ConnStatus.OFFLINE -> Icons.Filled.Close
         ConnStatus.DEGRADED -> Icons.Filled.Warning
-        ConnStatus.PAUSED -> Icons.Filled.Pause
     }
     val label = when (entry.status) {
         ConnStatus.ONLINE -> s.connOnline
         ConnStatus.OFFLINE -> s.connOffline
         ConnStatus.DEGRADED -> s.connDegraded
-        ConnStatus.PAUSED -> s.connPaused
     }
     Row(
         modifier = Modifier

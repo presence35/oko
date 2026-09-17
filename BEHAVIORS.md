@@ -399,7 +399,7 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 | System | Persisted | Retention | Purpose |
 |---|---|---|---|
 | DebugLog | Yes | 500 / 24h | Alert decision audit trail |
-| ConnectionLog | Yes | 50 episodes | ONLINE/OFFLINE/DEGRADED/PAUSED episodes |
+| ConnectionLog | Yes | 50 episodes | ONLINE/OFFLINE/DEGRADED episodes |
 | ApiMonitor | Yes | 100 / 7d | SDK changes, malformed frames, unknown types |
 | ConnEvent | No | Current episode | Offline milestones, retry scheduling |
 

@@ -127,7 +127,6 @@ class ResilientConnectionSupervisor(
 
     private var connectJob: Job? = null
     private var watchdogJob: Job? = null
-    private var pauseUntilMono = 0L
     @Volatile private var activeSource: String? = null
 
     private fun updateConnectionState(newState: ConnectionState) {
@@ -143,9 +142,6 @@ class ResilientConnectionSupervisor(
             is ConnectionState.Offline, ConnectionState.Disconnected -> {
                 ConnectionLog.observe(ConnStatus.OFFLINE, now, activeSource)
             }
-            is ConnectionState.Paused -> {
-                ConnectionLog.observe(ConnStatus.PAUSED, now, activeSource)
-            }
             is ConnectionState.Connecting -> {
                 // Keep previous state until connection resolves
             }
@@ -159,7 +155,7 @@ class ResilientConnectionSupervisor(
             if (valid) {
                 if (isNetworkValidated.compareAndSet(false, true)) {
                     recordEvent(ConnEventKind.FALLBACK_RESTORED, detail = "Network validated")
-                    if (isRunning.get() && !isPaused()) {
+                    if (isRunning.get()) {
                         reconnectAttempts.set(0)
                         triggerReconnect("Network restored")
                     }
@@ -174,13 +170,8 @@ class ResilientConnectionSupervisor(
         }
     }
 
-    fun start(savedReconnectStartMs: Long = 0L, savedIgnoreUntilMs: Long = 0L) {
+    fun start(savedReconnectStartMs: Long = 0L) {
         if (!isRunning.compareAndSet(false, true)) return
-
-        if (savedIgnoreUntilMs > System.currentTimeMillis()) {
-            val remainMs = savedIgnoreUntilMs - System.currentTimeMillis()
-            pauseUntilMono = Monotonic.now() + remainMs
-        }
 
         val request = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -202,13 +193,7 @@ class ResilientConnectionSupervisor(
         lastEpisodeStartMs = 0L
         lastHealthyMono = 0L
 
-        if (isPaused()) {
-            updateConnectionState(ConnectionState.Paused(
-                untilMs = System.currentTimeMillis() + (pauseUntilMono - Monotonic.now()),
-                since = System.currentTimeMillis(),
-                reconnectStartMillis = savedReconnectStartMs
-            ))
-        } else if (valid) {
+        if (valid) {
             triggerReconnect("Initial start")
         } else {
             val startMs = if (savedReconnectStartMs > 0L) savedReconnectStartMs else System.currentTimeMillis()
@@ -263,14 +248,6 @@ class ResilientConnectionSupervisor(
                 val nowMono = Monotonic.now()
                 onWatchdogTick?.invoke(nowMono)
 
-                // Check pause expiration
-                if (isPaused() && nowMono >= pauseUntilMono) {
-                    pauseUntilMono = 0L
-                    recordEvent(ConnEventKind.RETRY_SCHEDULED, detail = "Pause elapsed")
-                    triggerReconnect("Pause expired")
-                    continue
-                }
-
                 val cs = _connectionState.value
                 val lastByte = lastIncomingByteMono.get()
 
@@ -320,7 +297,7 @@ class ResilientConnectionSupervisor(
      *  (no scheduled job running, no recent schedule/connect) gets force-retried. Covers the
      *  weak-WiFi stall where a backoff job was lost and validation never flapped. */
     private fun checkStuckOffline(nowMono: Long) {
-        if (!isNetworkValidated.get() || isPaused()) return
+        if (!isNetworkValidated.get()) return
         if (connectJob?.isActive == true) return
         if (nowMono - lastReconnectProgressMono.get() >= STUCK_OFFLINE_MS) {
             recordEvent(ConnEventKind.RETRY_SCHEDULED, detail = "Stuck watchdog")
@@ -334,7 +311,6 @@ class ResilientConnectionSupervisor(
      *  restore path the moment they validate. One cheap binder call per tick — no sockets,
      *  no attempts, no log spam while still down. */
     private fun pollNetworkValidation() {
-        if (isPaused()) return
         val caps = runCatching {
             connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
         }.getOrNull() ?: return
@@ -343,7 +319,7 @@ class ResilientConnectionSupervisor(
         if (!valid) return
         if (isNetworkValidated.compareAndSet(false, true)) {
             recordEvent(ConnEventKind.FALLBACK_RESTORED, detail = "Network validated (poll)")
-            if (isRunning.get() && !isPaused()) {
+            if (isRunning.get()) {
                 reconnectAttempts.set(0)
                 triggerReconnect("Network restored (poll)")
             }
@@ -360,7 +336,6 @@ class ResilientConnectionSupervisor(
     }
 
     private fun scheduleReconnectWithBackoff(reason: String) {
-        if (isPaused()) return
         // Schedule the timer regardless of validation; the socket is only created when the
         // network is validated at fire time, so a genuinely dead network never spins.
         if (!isNetworkValidated.get()) {
@@ -388,7 +363,7 @@ class ResilientConnectionSupervisor(
             ))
 
             delay(delayMs)
-            if (isRunning.get() && isNetworkValidated.get() && !isPaused()) {
+            if (isRunning.get() && isNetworkValidated.get()) {
                 executeConnect()
             }
         }
@@ -460,7 +435,7 @@ class ResilientConnectionSupervisor(
                 activeWebSocket = null
                 // No validated gate: the backoff path itself no-ops into handleNetworkLost
                 // when the network is down, so a validation flap can never strand us.
-                if (isRunning.get() && !isPaused()) {
+                if (isRunning.get()) {
                     beginEpisodeIfNeeded(System.currentTimeMillis())
                     scheduleReconnectWithBackoff("Socket closed ($code)")
                 }
@@ -480,23 +455,7 @@ class ResilientConnectionSupervisor(
         } catch (_: Exception) {}
     }
 
-    fun isPaused(): Boolean = Monotonic.now() < pauseUntilMono
-
-    fun pauseFor(minutes: Int) {
-        pauseUntilMono = Monotonic.now() + (minutes * 60_000L)
-        closeCurrentSocket("User paused retries")
-        val now = System.currentTimeMillis()
-        val currentStart = _connectionState.value.reconnectStartMillisOrZero
-        updateConnectionState(ConnectionState.Paused(
-            untilMs = now + (minutes * 60_000L),
-            since = now,
-            reconnectStartMillis = if (currentStart > 0L) currentStart else now
-        ))
-        recordEvent(ConnEventKind.PAUSED, detail = "$minutes min")
-    }
-
     fun retryNow() {
-        pauseUntilMono = 0L
         reconnectAttempts.set(0)
         _retryState.value = null
         recordEvent(ConnEventKind.RETRY_MANUAL)
@@ -504,7 +463,7 @@ class ResilientConnectionSupervisor(
     }
 
     fun onForeground() {
-        if (!isRunning.get() || isPaused() || !isNetworkValidated.get()) return
+        if (!isRunning.get() || !isNetworkValidated.get()) return
         val cs = _connectionState.value
         if (cs.isOffline || cs is ConnectionState.Connecting) {
             triggerReconnect("App foregrounded")
