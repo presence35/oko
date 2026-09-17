@@ -246,11 +246,12 @@ internal data class ThreatScreenPlacement(
 
 private fun chipLabel(t: NormalizedThreat, chip: String?): String? {
     val sim = if (t.simulated) "SIM" else null
+    val shortId = t.id.takeLast(4)
     return when {
-        sim != null && chip != null -> "#${t.id} · $sim · $chip"
-        sim != null -> "#${t.id} · $sim"
-        chip != null -> "#${t.id} · $chip"
-        else -> "#${t.id}"
+        sim != null && chip != null -> "#$shortId · $sim · $chip"
+        sim != null -> "#$shortId · $sim"
+        chip != null -> "#$shortId · $chip"
+        else -> "#$shortId"
     }
 }
 
@@ -644,7 +645,7 @@ fun NeptunMapView(
         val center = uiState.centerRequest
         if (center != null && center.tick != lastCenterTick.value) {
             lastCenterTick.value = center.tick
-            camera.fitZone(bridge, center.lat, center.lon, 12.0)
+            camera.animateTo(bridge, center.lat, center.lon, NORMAL_MAX_ZOOM)
         }
     }
 

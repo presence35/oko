@@ -18,6 +18,18 @@ import org.maplibre.android.style.sources.GeoJsonSource
  */
 object MapLibreLayerManager {
 
+    private var lastStyle: Style? = null
+    private var lastFillAlertRegions: Boolean? = null
+    private var lastRedOblastIds: Set<String>? = null
+    private var lastRedRaions: Set<Pair<String, String>>? = null
+    private var lastYellowOblastIds: Set<String>? = null
+    private var lastYellowRaions: Set<Pair<String, String>>? = null
+
+    private var lastCenterLat: Double? = null
+    private var lastCenterLon: Double? = null
+    private var lastSlowRedKm: Double? = null
+    private var lastSlowYellowKm: Double? = null
+
     const val SOURCE_OUTSIDE_MASK = "src_outside_mask"
     const val LAYER_OUTSIDE_MASK = "lyr_outside_mask"
 
@@ -167,18 +179,43 @@ object MapLibreLayerManager {
         yellowOblastIds: Set<String>,
         yellowRaions: Set<Pair<String, String>>
     ) {
-        val redSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_RED)
-        val yellowSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_YELLOW)
+        if (lastStyle !== style) {
+            lastStyle = style
+            lastFillAlertRegions = null
+            lastRedOblastIds = null
+            lastRedRaions = null
+            lastYellowOblastIds = null
+            lastYellowRaions = null
+            lastCenterLat = null
+            lastCenterLon = null
+            lastSlowRedKm = null
+            lastSlowYellowKm = null
+        }
 
         if (!fillAlertRegions) {
+            if (lastFillAlertRegions == false) return
+            val redSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_RED)
+            val yellowSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_YELLOW)
             redSrc?.setGeoJson(MapLibreGeoJson.EMPTY)
             yellowSrc?.setGeoJson(MapLibreGeoJson.EMPTY)
+            lastFillAlertRegions = false
+            lastRedOblastIds = null
+            lastRedRaions = null
+            lastYellowOblastIds = null
+            lastYellowRaions = null
+            return
+        }
+
+        if (fillAlertRegions == lastFillAlertRegions &&
+            redOblastIds == lastRedOblastIds &&
+            redRaions == lastRedRaions &&
+            yellowOblastIds == lastYellowOblastIds &&
+            yellowRaions == lastYellowRaions
+        ) {
             return
         }
 
         val filteredYellowOblastIds = yellowOblastIds - redOblastIds
-        // Red alerts supersede yellow alerts. Filter out any yellow raion whose parent oblast
-        // is already red, or which itself is covered by an active red raion alert.
         val redCanonicalRaions = redRaions.mapNotNull { (id, raion) ->
             CompactRaionBoundaries.canonicalKey(raion)?.let { id to it }
         }.toSet()
@@ -188,10 +225,15 @@ object MapLibreLayerManager {
             (id to canonical) !in redCanonicalRaions
         }.toSet()
 
-        val redGeoJson = MapLibreGeoJson.alertRegions(redOblastIds, redRaions)
-        val yellowGeoJson = MapLibreGeoJson.alertRegions(filteredYellowOblastIds, filteredYellowRaions)
-        redSrc?.setGeoJson(redGeoJson)
-        yellowSrc?.setGeoJson(yellowGeoJson)
+        val redSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_RED)
+        val yellowSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_YELLOW)
+        redSrc?.setGeoJson(MapLibreGeoJson.alertRegions(redOblastIds, redRaions))
+        yellowSrc?.setGeoJson(MapLibreGeoJson.alertRegions(filteredYellowOblastIds, filteredYellowRaions))
+        lastFillAlertRegions = true
+        lastRedOblastIds = redOblastIds
+        lastRedRaions = redRaions
+        lastYellowOblastIds = yellowOblastIds
+        lastYellowRaions = yellowRaions
     }
 
     fun updateZoneCircles(
@@ -201,6 +243,31 @@ object MapLibreLayerManager {
         slowRedKm: Double,
         slowYellowKm: Double
     ) {
+        if (lastStyle !== style) {
+            lastStyle = style
+            lastFillAlertRegions = null
+            lastRedOblastIds = null
+            lastRedRaions = null
+            lastYellowOblastIds = null
+            lastYellowRaions = null
+            lastCenterLat = null
+            lastCenterLon = null
+            lastSlowRedKm = null
+            lastSlowYellowKm = null
+        }
+
+        if (centerLat == lastCenterLat &&
+            centerLon == lastCenterLon &&
+            slowRedKm == lastSlowRedKm &&
+            slowYellowKm == lastSlowYellowKm
+        ) {
+            return
+        }
+        lastCenterLat = centerLat
+        lastCenterLon = centerLon
+        lastSlowRedKm = slowRedKm
+        lastSlowYellowKm = slowYellowKm
+
         val redSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ZONE_RED)
         val yellowSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ZONE_YELLOW)
         redSrc?.setGeoJson(MapLibreGeoJson.singleCircle(centerLat, centerLon, slowRedKm))

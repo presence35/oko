@@ -14,6 +14,7 @@ Only when the user says **"release it"**, perform a full release:
 
 ## While working
 
+- Never look at more files than you need to, esp if I tell you specifically what to touch.
 - Always find elegant solutions, not the easy code!
 - Append user-visible changes to `CHANGELOG.md` under `## [Unreleased]` as you go, so any session can release them. Be highly brief.
 - Changelog entries are short one-liners: `- EN text / UA text`. Each line is split on the first ` / ` to produce the release notes for `version.json`. No multi-paragraph essays.
@@ -39,8 +40,6 @@ evaluation contract. Read `ARCHITECTURE.md` for module map and data-flow context
   Engine defaults exist for unknown types. Never hardcode type names in engine logic.
 - **Explicit `now` parameter.** All time-dependent functions take a timestamp.
   Enables deterministic testing.
-- **Haversine for distance.**
-- **Speed cache is engine-internal.** Not a global singleton. Consumers never touch it.
 - **Dark-only theme.** Theme is a plugin interface; only dark ships for now.
   Never hardcode theme assumptions in the engine.
 
@@ -60,7 +59,7 @@ evaluation contract. Read `ARCHITECTURE.md` for module map and data-flow context
 
 ### Always build/verify before finishing
 
-After a meaningful code change, verify before declaring the task done:
+Only after a meaningful code change, verify before declaring the task done:
 
 - `.\gradlew.bat :app:assembleDebug`
 - `.\gradlew.bat :app:testDebugUnitTest` — when touching engine logic
@@ -79,13 +78,6 @@ Fix any failures before finishing.
 When you add a source file or change a documented invariant, update the module map /
 key-invariants section of `ARCHITECTURE.md` in the same change, so the docs never rot.
 
-### Repository state
-
-Single squashed history on `main` containing only the refactored app — the
-pre-refactor project and the `refactor/` scaffold are gone. The refactor is complete;
-`BEHAVIORS.md` is now the living engine behavioral contract (not a plan).
-
-
 
 ### OpenCode Zen Agent Routing Profiles
 
@@ -102,21 +94,3 @@ This profile manages task distribution.
 | **API & Data Structurer**   | `Nemotron 3.5 Lightning Free` | Retrofit schemas, Room DB entities, JSON parsing, API routing structures | `room db, retrofit, api schema, json` |
 
 ---
-
-## 🛠️ Dynamic Routing System Rules
-
-### 1. Hard Engineering & Architecture (`Big Pickle`)
-- **Intent**: Heavy logic parsing.
-- **Directives**: Use for debugging asynchronous Kotlin Coroutines, StateFlow leaks, or deep Android Lifecycle management (ViewModel, Hilt/Dagger injection).
-
-### 2. Full-Context Analysis (`Ling 3.0 Flash Fin Free`)
-- **Intent**: Parsing massive files or the entire repository layout.
-- **Directives**: Route to this model when pasting an entire `Logcat` crash log or when analyzing deep nested multi-module `build.gradle.kts` dependency graphs.
-
-### 3. Frontend / User Interface (`Muse Spark 1.3 Free`)
-- **Intent**: Visual and Layout generation.
-- **Directives**: Route all Jetpack Compose functions, Material Design 3 configurations, and XML UI file modifications to this profile.
-
-### 4. Utilities & JSON Data (`Nemotron 3.5 Lightning Free`)
-- **Intent**: High-speed schema parsing and API interface declarations.
-- **Directives**: Trigger for data serialization classes, Retrofit interface declarations, and local SQLite/Room schema entities.

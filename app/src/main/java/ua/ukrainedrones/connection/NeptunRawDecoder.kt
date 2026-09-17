@@ -4,6 +4,7 @@ import android.util.Log
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import org.json.JSONArray
 import org.json.JSONObject
 import ua.ukrainedrones.ThreatType
 import ua.ukrainedrones.engine.MonitorCore
@@ -31,7 +32,7 @@ class NeptunRawDecoder(
     val removedThreats: SharedFlow<ThreatRemoved> = _removedThreats.asSharedFlow()
 
     @Volatile private var alertsPendingClear: List<OblastAlert>? = null
-    @Volatile private var alertsPendingClearSinceMono = 0L
+    @Volatile private var alertsPendingClearSinceMono: Long? = null
 
     private val knownTypeKeys = ThreatType.entries.map { it.apiKey }.toSet() +
             setOf("uav", "drone", "lancet", "molniya", "loitering", "missile", "cruise_missile", "mig31", "mig31k", "kinzhal")
@@ -95,35 +96,72 @@ class NeptunRawDecoder(
                     }
                 }
                 "alerts" -> {
-                    val data = env.optJSONObject("data") ?: return
+                    val dataObj = env.optJSONObject("data")
+                    val dataArr = env.optJSONArray("data")
+                        ?: env.optJSONArray("alerts")
+                        ?: dataObj?.optJSONArray("alerts")
+                    val hasAlertPayload = dataArr != null ||
+                        dataObj?.let {
+                            it.optJSONArray("raions") != null ||
+                                it.optJSONArray("oblasts") != null ||
+                                it.optJSONArray("alerts") != null
+                        } == true
+                    if (!hasAlertPayload) return
+
                     val list = mutableListOf<OblastAlert>()
-                    val wideByArray = mapOf("raions" to false, "oblasts" to true)
-                    for ((arrName, wide) in wideByArray) {
-                        val arr = data.optJSONArray(arrName) ?: continue
-                        for (i in 0 until arr.length()) {
+
+                    if (dataArr != null) {
+                        for (i in 0 until dataArr.length()) {
                             try {
-                                val o = arr.getJSONObject(i)
+                                val o = dataArr.getJSONObject(i)
                                 val key = o.optString("key", o.optString("name", "")).trim()
                                 if (key.isEmpty()) continue
                                 val name = o.optString("name", key).trim()
                                 val oblast = o.optString("oblast", name).trim()
                                 val since = if (o.has("since") && !o.isNull("since")) o.optString("since") else null
                                 val level = o.optString("level", "red").trim().lowercase().ifEmpty { "red" }
+                                val wide = when {
+                                    o.has("wide") -> o.optBoolean("wide", false)
+                                    o.has("isOblastWide") -> o.optBoolean("isOblastWide", false)
+                                    else -> null
+                                }
                                 list.add(OblastAlert(key = key, name = name, oblast = oblast, since = since, wide = wide, level = level))
                             } catch (e: Exception) {
                                 Log.w(TAG, "Malformed alert at index $i", e)
                             }
                         }
+                    } else if (dataObj != null) {
+                        val wideByArray = mapOf("raions" to false, "oblasts" to true)
+                        for ((arrName, wide) in wideByArray) {
+                            val arr = dataObj.optJSONArray(arrName) ?: continue
+                            for (i in 0 until arr.length()) {
+                                try {
+                                    val o = arr.getJSONObject(i)
+                                    val key = o.optString("key", o.optString("name", "")).trim()
+                                    if (key.isEmpty()) continue
+                                    val name = o.optString("name", key).trim()
+                                    val oblast = o.optString("oblast", name).trim()
+                                    val since = if (o.has("since") && !o.isNull("since")) o.optString("since") else null
+                                    val level = o.optString("level", "red").trim().lowercase().ifEmpty { "red" }
+                                    list.add(OblastAlert(key = key, name = name, oblast = oblast, since = since, wide = wide, level = level))
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Malformed alert at index $i", e)
+                                }
+                            }
+                        }
+                    } else {
+                        return
                     }
 
                     if (list.isEmpty()) {
-                        // Debounce clear: don't clear immediately on single empty frame
-                        if (alertsPendingClear == null) {
+                        if (alertsPendingClear == null && core.alerts.value.isNotEmpty()) {
                             alertsPendingClear = core.alerts.value
                             alertsPendingClearSinceMono = nowMono
                         }
+                        flushPendingAlertClear(nowMono)
                     } else {
                         alertsPendingClear = null
+                        alertsPendingClearSinceMono = null
                         core.updateAlerts(list)
                     }
                 }
@@ -138,8 +176,10 @@ class NeptunRawDecoder(
 
     fun flushPendingAlertClear(nowMono: Long = Monotonic.now()) {
         val pending = alertsPendingClear ?: return
-        if (nowMono - alertsPendingClearSinceMono >= ALERT_CLEAR_CONFIRM_MS) {
+        val since = alertsPendingClearSinceMono ?: return
+        if (nowMono - since >= ALERT_CLEAR_CONFIRM_MS) {
             alertsPendingClear = null
+            alertsPendingClearSinceMono = null
             core.updateAlerts(emptyList())
         }
     }
@@ -147,5 +187,6 @@ class NeptunRawDecoder(
     fun handleTransportDrop() {
         // Drop pending clear on transport disconnection to avoid stale clearing
         alertsPendingClear = null
+        alertsPendingClearSinceMono = null
     }
 }

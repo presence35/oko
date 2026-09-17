@@ -4,6 +4,8 @@
 
 - Switched alert map fills and city coverage to direct canonical boundary lookup, eliminating stem-heuristic mismatches on Latin and Cyrillic alert keys / Switched alert map fills and city coverage to direct canonical boundary lookup, eliminating stem-heuristic mismatches on Latin and Cyrillic alert keys
 
+- Threat markers now show only the last four ID digits, threat cards no longer expose IDs, and Locate zooms directly to the maximum normal map zoom / Threat markers now show only the last four ID digits, threat cards no longer expose IDs, and Locate zooms directly to the maximum normal map zoom
+
 - Reframed "Just Fun" into "Morale" with Ukrainian heart emblem, uplifting spirits copy, and expanded search keywords / Reframed "Just Fun" into "Morale" with Ukrainian heart emblem, uplifting spirits copy, and expanded search keywords
 
 - Consolidated every hardcoded color in the app into one theme-owned palette (`AppPalette`), so the widget, map layers, notifications, and screens all share exact-tone token values / Consolidated every hardcoded color in the app into one theme-owned palette (`AppPalette`), so the widget, map layers, notifications, and screens all share exact-tone token values

@@ -5,6 +5,9 @@ import ua.ukrainedrones.Cities
 import ua.ukrainedrones.CityRaions
 import ua.ukrainedrones.community.CompactOblastBoundaries
 import ua.ukrainedrones.community.CompactRaionBoundaries
+import ua.ukrainedrones.data.ApiMonitor
+import ua.ukrainedrones.data.SystemEntry
+import ua.ukrainedrones.data.SystemEntryKind
 import kotlin.math.*
 
 enum class ThreatZone { INNER, OUTER }
@@ -124,10 +127,19 @@ class ThreatEngine(
         val focusOblastAlertActive = official.level == AlertLevel.RED
         val focusOblastYellowAlertActive = official.level == AlertLevel.YELLOW
         val cityAlerts = computeCityAlerts(alerts)
-        val (fillOblastTokens, fillRaionKeys) = computeFillKeys(alerts.filter { it.level == "red" }, fillRegions = true)
-        val (fillYellowOblastTokens, fillYellowRaionKeys) = computeFillKeys(alerts.filter { it.level == "yellow" }, fillRegions = true)
-        android.util.Log.w("ThreatEngine", "RED fill: ${alerts.count{it.level!="yellow"}} alerts → ${fillOblastTokens.size} oblasts ${fillRaionKeys.size} raions | $fillOblastTokens $fillRaionKeys")
-        android.util.Log.w("ThreatEngine", "YEL fill: ${alerts.count{it.level=="yellow"}} alerts → ${fillYellowOblastTokens.size} oblasts ${fillYellowRaionKeys.size} raions | $fillYellowOblastTokens $fillYellowRaionKeys")
+        val (fillOblastTokens, fillRaionKeys) =
+            computeFillKeys(alerts.filter { it.level != "yellow" }, fillRegions = true)
+        val (fillYellowOblastTokens, fillYellowRaionKeys) =
+            computeFillKeys(alerts.filter { it.level == "yellow" }, fillRegions = true)
+        probeFillDebug(
+            alerts,
+            fillOblastTokens,
+            fillRaionKeys,
+            fillYellowOblastTokens,
+            fillYellowRaionKeys,
+            cityAlerts,
+            now,
+        )
         val activeAlert = official.alert
         val (officialReason, reasonThreatId) = if (activeAlert != null) {
             deriveOfficialAlertReason(activeAlert, threats, focus, params, lang, now)
@@ -222,6 +234,73 @@ class ThreatEngine(
             }
         }
         return fillOblastTokens to fillRaionKeys
+    }
+
+    // --- TEMP: red-fill probe → Logs → System (remove when fixed) ---
+    private fun probeFillDebug(
+        alerts: List<OblastAlert>,
+        redObl: Set<String>,
+        redRaion: Set<Pair<String, String>>,
+        yelObl: Set<String>,
+        yelRaion: Set<Pair<String, String>>,
+        cityAlerts: Map<String, AlertLevel>,
+        now: Long,
+    ) {
+        val lines = mutableListOf<String>()
+        for (a in alerts) {
+            val wide = a.isOblastWide()
+            val lvl = a.level
+            val oId = CompactOblastBoundaries.canonicalId(a.oblast)
+                ?: CompactOblastBoundaries.canonicalId(a.name)
+                ?: CompactOblastBoundaries.canonicalId(a.key)
+            val rKey = if (!wide) {
+                CompactRaionBoundaries.canonicalKey(a.key)
+                    ?: CompactRaionBoundaries.canonicalKey(a.name)
+            } else null
+            val poly = rKey?.let { CompactRaionBoundaries.get(it) != null }
+            val branch = when {
+                wide && oId != null -> "OBLAST→$oId"
+                wide -> "OBLAST_MISS key=${a.key}"
+                rKey != null && poly == true && oId != null -> "RAION→$oId/$rKey"
+                rKey != null && poly != true -> "RAION_NO_POLY key=${a.key} rk=$rKey"
+                oId == null -> "OBLAST_ID_NULL oblast=${a.oblast}"
+                else -> "RAION_KEY_NULL key=${a.key} name=${a.name}"
+            }
+            lines += "lvl=$lvl wide=$wide(${a.wide}) $branch | key=${a.key}"
+        }
+        val redCities = cityAlerts.count { it.value == AlertLevel.RED }
+        val yelCities = cityAlerts.count { it.value == AlertLevel.YELLOW }
+        val summary =
+            "RED obl=${redObl.size} raion=${redRaion.size} cities=$redCities | " +
+            "YEL obl=${yelObl.size} raion=${yelRaion.size} cities=$yelCities | " +
+            "alerts=${alerts.size}\n" +
+            "redRaion=$redRaion\nyelRaion=$yelRaion\n" +
+            lines.joinToString("\n")
+        val signature = buildString {
+            append("RED obl=${redObl.sorted()} raion=${redRaion.sortedBy { "${it.first}/${it.second}" }} cities=$redCities | ")
+            append("YEL obl=${yelObl.sorted()} raion=${yelRaion.sortedBy { "${it.first}/${it.second}" }} cities=$yelCities | ")
+            append("alerts=${alerts.size}\n")
+            append(lines.sorted().joinToString("\n"))
+        }
+
+        val shouldRecord = synchronized(fillProbeLock) {
+            if (lastFillProbeSig == signature) {
+                false
+            } else {
+                lastFillProbeSig = signature
+                true
+            }
+        }
+        if (!shouldRecord) return
+
+        android.util.Log.w("ThreatEngine", "FILL probe\n$summary")
+        ApiMonitor.record(
+            SystemEntry(
+                atMillis = now,
+                kind = SystemEntryKind.FILL_DEBUG,
+                detail = summary.take(1800),
+            )
+        )
     }
 
     /** Human-readable attribution for an active official alert: the highest-scoring live threat
@@ -402,6 +481,9 @@ class ThreatEngine(
     }
 
     companion object {
+        private val fillProbeLock = Any()
+        private var lastFillProbeSig: String? = null
+
         /** Hard cap on dead-reckoning distance: a marker may never sit farther than this from its
          *  last confirmed fix — a "relevant distance" at the app's map scale, so drift never looks
          *  like the threat crossed the country. */
