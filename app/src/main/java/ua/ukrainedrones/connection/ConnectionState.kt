@@ -65,12 +65,14 @@ sealed interface ConnectionState {
     /** Default initial state before client is started or after explicitly stopped. */
     object Disconnected : ConnectionState
 
-    /** Active WebSocket connection attempt in flight. */
+    /** Active WebSocket connection attempt in flight. Carries the episode start so the
+     *  offline episode survives Offline ↔ Connecting transitions without derived-state gaps. */
     data class Connecting(
         val generation: Int,
         val attempt: Int,
         val nextRetryAtMs: Long,
-        val networkValidated: Boolean
+        val networkValidated: Boolean,
+        val reconnectStartMillis: Long
     ) : ConnectionState
 
     /** Connected and receiving live telemetry frames normally. */
@@ -140,6 +142,7 @@ val ConnectionState.offlineSinceOrNull: Long?
 val ConnectionState.reconnectStartMillisOrZero: Long
     get() = when (this) {
         is ConnectionState.Offline -> reconnectStartMillis
+        is ConnectionState.Connecting -> reconnectStartMillis
         is ConnectionState.Paused -> reconnectStartMillis
         else -> 0L
     }

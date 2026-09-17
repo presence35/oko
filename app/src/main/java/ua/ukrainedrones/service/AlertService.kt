@@ -182,11 +182,10 @@ class AlertService : Service() {
     private var isOutage = false
     private var lastSweepAtMs = 0L
 
-    private var notif3minShown = false
-    private var notif6minShown = false
-    private var notif10minShown = false
-    private var notif20minShown = false
-    private var notifCriticalShown = false
+    /** The registry degraded-since stamp the critical offline notif already fired for
+     *  (null = not fired this episode). Keyed off the episode, not a boolean, so transient
+     *  Connecting states can neither refire nor resurrect a swiped-away notification. */
+    private var criticalFiredForEpisode: Long? = null
 
     private val tally by lazy { NeutralizedTally(applicationContext, scope) }
     @Volatile private var currentToken: String? = null
@@ -601,27 +600,28 @@ fastYellowArmed = p.fastYellowArmed,
         )
 
         // Critical offline escalation, once per episode: 5 min normally, 1 min while an
-        // official alert (red or yellow) is active on the focus oblast. The milestone flow
-        // covers the fixed 5-min mark; this tick covers the alarm-shortened case (and any
-        // restart where the mark already passed). Reconnect resets all one-shots below.
+        // official alert (red or yellow) is active on the focus oblast. Dedup is keyed off
+        // the episode's degraded-since stamp (nulled by the registry on recovery), so there
+        // is no reset branch to misfire on transient Connecting states.
         val criticalThresholdMin =
             if (state.focusOblastLevel != AlertLevel.NONE) CRITICAL_OFFLINE_ALARM_MIN
             else CRITICAL_OFFLINE_MIN
-        if (isOfflineNow) {
-            if (!notifCriticalShown && state.criticalOfflineOverride && offlineMinutes >= criticalThresholdMin) {
-                notifCriticalShown = true
-                notificationManager.postCriticalOfflineNotification(
-                    s.offlineStatusTitle,
-                    String.format(s.offlineCriticalFormat, criticalThresholdMin),
-                    s.offlineRetryAction
-                )
-            }
-        } else if (notif3minShown || notif6minShown || notif10minShown || notif20minShown || notifCriticalShown) {
-            notif3minShown = false
-            notif6minShown = false
-            notif10minShown = false
-            notif20minShown = false
-            notifCriticalShown = false
+        val episode = offlineSince
+        if (isOfflineNow && episode != null && state.criticalOfflineOverride &&
+            offlineMinutes >= criticalThresholdMin && criticalFiredForEpisode != episode
+        ) {
+            criticalFiredForEpisode = episode
+            notificationManager.postCriticalOfflineNotification(
+                if (criticalThresholdMin == CRITICAL_OFFLINE_ALARM_MIN) s.offlineCriticalAlarmTitle
+                else s.offlineCriticalTitle,
+                String.format(s.offlineCriticalFormat, criticalThresholdMin),
+                s.offlineRetryAction
+            )
+        }
+        // Episode over (registry nulled the stamp on recovery — transient Connecting never
+        // does): clear the one-shot and any lingering milestone/critical notifications.
+        if (offlineSince == null && criticalFiredForEpisode != null) {
+            criticalFiredForEpisode = null
             notificationManager.cancelNotification(NOTIF_MILESTONE)
             notificationManager.cancelNotification(NOTIF_OFFLINE_CRITICAL)
         }
@@ -962,9 +962,8 @@ fastYellowArmed = p.fastYellowArmed,
         )
     }
 
-    /** Maps supervisor milestone events to one-shot notifications. The service never times
-     *  milestones itself — the supervisor owns emission; this only orchestrates. The critical
-     *  flag is shared with the per-tick alarm rule, so M5 never double-fires. */
+    /** Maps supervisor milestone events to one-shot notifications. Stateless: the flow is
+     *  already once-per-episode by supervisor guarantee, so there is nothing to reset. */
     private fun onConnectionMilestone(milestone: ConnectionMilestone) {
         val registry = AppSources.registry
         val nowMono = Monotonic.now()
@@ -974,41 +973,22 @@ fastYellowArmed = p.fastYellowArmed,
             ?.let { ((nowMono - it) / 60_000L).toInt().coerceAtLeast(0) }
             ?: milestone.minutes
         when (milestone) {
-            ConnectionMilestone.M3 -> if (!notif3minShown) {
-                notif3minShown = true
-                notificationManager.postOfflineNotification(
-                    s.offlineStatusTitle, offlineLiveBody(s, ageMin), s.offlineRetryAction
-                )
-            }
             ConnectionMilestone.M5_CRITICAL -> postCriticalOffline(s, CRITICAL_OFFLINE_MIN)
-            ConnectionMilestone.M6 -> if (!notif6minShown) {
-                notif6minShown = true
-                notificationManager.postOfflineNotification(
-                    s.offlineStatusTitle, offlineLiveBody(s, ageMin), s.offlineRetryAction
-                )
-            }
-            ConnectionMilestone.M10 -> if (!notif10minShown) {
-                notif10minShown = true
-                notificationManager.postOfflineNotification(
-                    s.offlineStatusTitle, offlineLiveBody(s, ageMin), s.offlineRetryAction
-                )
-            }
-            ConnectionMilestone.M20_GAVE_UP -> if (!notif20minShown) {
-                notif20minShown = true
-                notificationManager.postOfflineNotification(
-                    s.offlineStatusTitle, offlineLiveBody(s, ageMin), s.offlineRetryAction
-                )
-            }
+            else -> notificationManager.postOfflineNotification(
+                s.offlineStatusTitle, offlineLiveBody(s, ageMin), s.offlineRetryAction
+            )
         }
     }
 
     private fun postCriticalOffline(s: Strings.StringSet, minutes: Int) {
-        if (notifCriticalShown) return
-        notifCriticalShown = true
+        val episode = AppSources.registry.degradedSince.value ?: return
+        if (criticalFiredForEpisode == episode) return
+        criticalFiredForEpisode = episode
         scope.launch {
             if (!UserPrefs(applicationContext).preferences.first().criticalOfflineOverride) return@launch
             notificationManager.postCriticalOfflineNotification(
-                s.offlineStatusTitle,
+                if (minutes == CRITICAL_OFFLINE_ALARM_MIN) s.offlineCriticalAlarmTitle
+                else s.offlineCriticalTitle,
                 String.format(s.offlineCriticalFormat, minutes),
                 s.offlineRetryAction
             )
@@ -1018,7 +998,7 @@ fastYellowArmed = p.fastYellowArmed,
     private fun offlineLiveBody(s: Strings.StringSet, minutes: Int): String {        val registry = AppSources.registry
         if (registry.connectionState.value == SourceState.PAUSED) return s.offlinePausedBody
         val attempt = registry.retryState.value?.attempt ?: 0
-        return String.format(s.offlineLiveFormat, minutes, 20, attempt + 1)
+        return String.format(s.offlineLiveFormat, minutes, attempt + 1)
     }
 
     private fun postAlert(

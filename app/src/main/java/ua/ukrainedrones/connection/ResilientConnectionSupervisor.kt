@@ -356,7 +356,8 @@ class ResilientConnectionSupervisor(
             generation = gen,
             attempt = reconnectAttempts.get(),
             nextRetryAtMs = 0L,
-            networkValidated = isNetworkValidated.get()
+            networkValidated = isNetworkValidated.get(),
+            reconnectStartMillis = beginEpisodeIfNeeded(System.currentTimeMillis())
         ))
 
         val request = Request.Builder()
