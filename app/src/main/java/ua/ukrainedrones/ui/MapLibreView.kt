@@ -4,6 +4,7 @@ import ua.ukrainedrones.AlertRegionMode
 import android.graphics.PointF
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.runtime.Composable
@@ -77,6 +78,7 @@ class MapLibreBridge(
     }
 
     private var onCameraMoveCallback: (() -> Unit)? = null
+    private var onDirectTapCallback: ((PointF) -> Boolean)? = null
     private var onMapClickCallback: ((PointF, LatLng) -> Unit)? = null
     private var onMapLongClickCallback: ((PointF, LatLng) -> Unit)? = null
 
@@ -92,6 +94,10 @@ class MapLibreBridge(
         onCameraMoveCallback = listener
     }
 
+    fun setOnDirectTapListener(listener: (PointF) -> Boolean) {
+        onDirectTapCallback = listener
+    }
+
     fun setOnMapClickListener(listener: (PointF, LatLng) -> Unit) {
         onMapClickCallback = listener
     }
@@ -102,6 +108,10 @@ class MapLibreBridge(
 
     internal fun dispatchCameraMove() {
         onCameraMoveCallback?.invoke()
+    }
+
+    internal fun dispatchDirectTap(screenPt: PointF): Boolean {
+        return onDirectTapCallback?.invoke(screenPt) ?: false
     }
 
     internal fun dispatchMapClick(screenPt: PointF, geoPt: LatLng) {
@@ -248,10 +258,46 @@ fun MapLibreHostView(
             )
         }
     }
+    val touchSlop = remember { ViewConfiguration.get(context).scaledTouchSlop }
     val container = remember {
-        // Redundant overlay invalidation removed from dispatchTouchEvent: MapLibre's camera
-        // move callbacks already invalidate the overlay in sync with the display refresh rate.
-        FrameLayout(context).apply {
+        object : FrameLayout(context) {
+            private var downX = 0f
+            private var downY = 0f
+            private var downTime = 0L
+            private var isSingleTouch = false
+
+            override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+                when (ev.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = ev.x
+                        downY = ev.y
+                        downTime = System.currentTimeMillis()
+                        isSingleTouch = true
+                    }
+                    MotionEvent.ACTION_POINTER_DOWN -> {
+                        isSingleTouch = false
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        if (isSingleTouch) {
+                            val dx = ev.x - downX
+                            val dy = ev.y - downY
+                            val dist = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                            val duration = System.currentTimeMillis() - downTime
+                            if (dist <= touchSlop && duration <= 400) {
+                                val pt = PointF(ev.x, ev.y)
+                                if (bridge.dispatchDirectTap(pt)) {
+                                    val cancelEv = MotionEvent.obtain(ev).apply { action = MotionEvent.ACTION_CANCEL }
+                                    super.dispatchTouchEvent(cancelEv)
+                                    cancelEv.recycle()
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                }
+                return super.dispatchTouchEvent(ev)
+            }
+        }.apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT

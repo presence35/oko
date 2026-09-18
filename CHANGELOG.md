@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Instant threat card open with pointer-first selection and decoupled presentation layer / Instant threat card open with pointer-first selection and decoupled presentation layer
+- Instant 0ms threat tap haptic and card launch via direct touch interception / Instant 0ms threat tap haptic and card launch via direct touch interception
 
 - Fixed ghost offline episode counter on Wi-Fi by making in-progress episodes purely runtime state / Fixed ghost offline episode counter on Wi-Fi by making in-progress episodes purely runtime state
 

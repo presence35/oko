@@ -1264,37 +1264,26 @@ private fun ThreatCardHost(
 
     var lastReportedHeight by remember { mutableIntStateOf(0) }
     val smallCard = cardSize == ThreatCardSize.SMALL
-    AnimatedContent(
-        targetState = when {
-            sel.selected != null -> 1
-            sel.neutralized != null -> 2
-            else -> 0
-        },
-        // Card appears/disappears in one frame — tap must feel instant. Selection
-        // motion is the map's bullet + the card's icon pop; the slower fade below is
-        // reserved for the neutralized state's death-window exit.
-        transitionSpec = {
-            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
-        },
-        label = "threatCardSwap",
-        modifier = Modifier
-            .padding(top = 12.dp, start = 16.dp, end = 16.dp)
-            .onGloballyPositioned { coords ->
-                val h = coords.size.height
-                if (h != lastReportedHeight) {
-                    lastReportedHeight = h
-                    onHeightChanged(h)
+
+    if (sel.selected == null && sel.neutralized == null) {
+        if (lastReportedHeight != 0) {
+            lastReportedHeight = 0
+            onHeightChanged(0)
+        }
+    } else {
+        Box(
+            modifier = Modifier
+                .padding(top = 12.dp, start = 16.dp, end = 16.dp)
+                .onGloballyPositioned { coords ->
+                    val h = coords.size.height
+                    if (h != lastReportedHeight) {
+                        lastReportedHeight = h
+                        onHeightChanged(h)
+                    }
                 }
-            }
-    ) { state ->
-        when (state) {
-            0 -> {
-                if (lastReportedHeight != 0) {
-                    lastReportedHeight = 0
-                    onHeightChanged(0)
-                }
-            }
-            1 -> sel.selected?.let { threat ->
+        ) {
+            if (sel.selected != null) {
+                val threat = sel.selected
                 Column(
                     modifier = if (smallCard) Modifier.wrapContentSize() else Modifier.fillMaxWidth()
                 ) {
@@ -1328,8 +1317,8 @@ private fun ThreatCardHost(
                         )
                     }
                 }
-            }
-            2 -> sel.neutralized?.let { threat ->
+            } else if (sel.neutralized != null) {
+                val threat = sel.neutralized
                 val fade = remember { Animatable(1f) }
                 var neutralizing by remember { mutableStateOf(true) }
                 LaunchedEffect(Unit) {

@@ -1081,7 +1081,8 @@ LaunchedEffect(selectedId) {
                         onExitShelterMode()
                     }
                 }
-                bridge.setOnMapClickListener { screenPt, _ ->
+                val hitTestShelterOrThreat: (PointF) -> Boolean = { screenPt ->
+                    var handled = false
                     // 1. Check shelter hit
                     if (showNearbySheltersState && focusLocationState != null && shelterIndex != null) {
                         val density = context.resources.displayMetrics.density
@@ -1101,40 +1102,50 @@ LaunchedEffect(selectedId) {
                         }
                         if (bestShelter != null) {
                             onShelterTapped(bestShelter)
-                            return@setOnMapClickListener
+                            handled = true
                         }
                     }
 
-                    // 2. Check threat hit
-                    val density = context.resources.displayMetrics.density
-                    val iconSizeDp = if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32
-                    val threshold = (iconSizeDp / 2f + 4f) * density
-                    var bestThreat: NormalizedThreat? = null
-                    var bestDist = threshold
-                    for (t in mapThreatsState) {
-                        if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
-                        val placement = threatPlacements[t.id]
-                        if (placement != null && !placement.visible) continue
-                        val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)
-                        val sp = bridge.project(outcome.lat, outcome.lon) ?: continue
-                        val sx = sp.x + (placement?.offsetDx ?: 0f)
-                        val sy = sp.y + (placement?.offsetDy ?: 0f)
-                        val dx = sx - screenPt.x
-                        val dy = sy - screenPt.y
-                        val d = sqrt(dx * dx + dy * dy)
-                        if (d <= bestDist) {
-                            bestThreat = t
-                            bestDist = d
+                    // 2. Check threat hit if not hit shelter
+                    if (!handled) {
+                        val density = context.resources.displayMetrics.density
+                        val iconSizeDp = if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32
+                        val threshold = (iconSizeDp / 2f + 4f) * density
+                        var bestThreat: NormalizedThreat? = null
+                        var bestDist = threshold
+                        for (t in mapThreatsState) {
+                            if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
+                            val placement = threatPlacements[t.id]
+                            if (placement != null && !placement.visible) continue
+                            val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)
+                            val sp = bridge.project(outcome.lat, outcome.lon) ?: continue
+                            val sx = sp.x + (placement?.offsetDx ?: 0f)
+                            val sy = sp.y + (placement?.offsetDy ?: 0f)
+                            val dx = sx - screenPt.x
+                            val dy = sy - screenPt.y
+                            val d = sqrt(dx * dx + dy * dy)
+                            if (d <= bestDist) {
+                                bestThreat = t
+                                bestDist = d
+                            }
+                        }
+                        if (bestThreat != null) {
+                            if (hapticsOnState) hapticTick(context)
+                            onThreatTapped(bestThreat)
+                            handled = true
                         }
                     }
-                    if (bestThreat != null) {
-                        if (hapticsOnState) hapticTick(context)
-                        onThreatTapped(bestThreat)
-                        return@setOnMapClickListener
-                    }
+                    handled
+                }
 
-                    // 3. Map tap
-                    onMapTapped()
+                bridge.setOnDirectTapListener { screenPt ->
+                    hitTestShelterOrThreat(screenPt)
+                }
+
+                bridge.setOnMapClickListener { screenPt, _ ->
+                    if (!hitTestShelterOrThreat(screenPt)) {
+                        onMapTapped()
+                    }
                 }
                 bridge.setOnMapLongClickListener { screenPt, geoPt ->
                     val density = context.resources.displayMetrics.density

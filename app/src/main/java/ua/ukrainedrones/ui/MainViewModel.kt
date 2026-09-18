@@ -860,63 +860,65 @@ showBorders = prefs.showBorders,
      * with proximity/zoneTier as background updates arrive.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val selectionUi: StateFlow<SelectionUi> = selectionInput.transformLatest { sel ->
-        val initialThreat = sel.selected?.let { s -> threatsFlow.value[s.id] ?: s }
-        if (initialThreat != null) {
-            emit(
+    val selectionUi: StateFlow<SelectionUi> = selectionInput.flatMapLatest { sel ->
+        flow {
+            val initialThreat = sel.selected?.let { s -> threatsFlow.value[s.id] ?: s }
+            if (initialThreat != null) {
+                emit(
+                    SelectionUi(
+                        selected = initialThreat,
+                        proximity = null,
+                        zoneTier = null,
+                        neutralized = null,
+                        fakeNeutralize = sel.fakeNeutralize
+                    )
+                )
+            } else if (sel.neutralizedId == null) {
+                emit(SelectionUi())
+            }
+
+            combine(threatsFlow, uiState) { threats, ui ->
+                val animOn = ui.deathAnimationEnabled
+                val refreshed = sel.selected?.let { s -> threats[s.id] }
+                val nowMs = System.currentTimeMillis()
+                val selectedGone = sel.selected != null && (
+                    (refreshed?.let { t ->
+                        t.status == "resolved" || engine.isGhost(t, engine.propsFor(t.type), nowMs)
+                    } ?: true) ||
+                        sel.selected.id == sel.neutralizedId
+                    )
+                val neutralizedThreat =
+                    if (FlourishPolicy.showNeutralizedCard(selectedGone, animOn, sel.mapVisible, sel.shelterOverlayUp)) sel.selected else null
+                val proximity = refreshed?.let { t ->
+                    engine.computeProximity(
+                        t,
+                        ui.focusLocation?.let { loc -> LatLng(loc.lat, loc.lon) },
+                        nowMs
+                    )
+                }?.let { ep ->
+                    ThreatProximity(
+                        predicted = ep.predicted,
+                        distToUserKm = ep.distToUserKm,
+                        etaToUserMin = ep.etaToUserMin,
+                        params = ui.activeZoneParams,
+                        speedSource = ep.speedSource,
+                        speedKmh = ep.speedKmh
+                    )
+                }
+                val zoneTier = if (refreshed != null && proximity?.distToUserKm != null) {
+                    val props = engine.propsFor(refreshed.type)
+                    engine.zoneTier(props, proximity.distToUserKm, proximity.speedKmh, proximity.params)
+                } else null
                 SelectionUi(
-                    selected = initialThreat,
-                    proximity = null,
-                    zoneTier = null,
-                    neutralized = null,
+                    selected = if (FlourishPolicy.dropSelection(selectedGone, animOn)) null else refreshed,
+                    proximity = proximity,
+                    zoneTier = zoneTier,
+                    neutralized = neutralizedThreat,
                     fakeNeutralize = sel.fakeNeutralize
                 )
-            )
-        } else if (sel.neutralizedId == null) {
-            emit(SelectionUi())
-        }
-
-        combine(threatsFlow, uiState) { threats, ui ->
-            val animOn = ui.deathAnimationEnabled
-            val refreshed = sel.selected?.let { s -> threats[s.id] }
-            val nowMs = System.currentTimeMillis()
-            val selectedGone = sel.selected != null && (
-                (refreshed?.let { t ->
-                    t.status == "resolved" || engine.isGhost(t, engine.propsFor(t.type), nowMs)
-                } ?: true) ||
-                    sel.selected.id == sel.neutralizedId
-                )
-            val neutralizedThreat =
-                if (FlourishPolicy.showNeutralizedCard(selectedGone, animOn, sel.mapVisible, sel.shelterOverlayUp)) sel.selected else null
-            val proximity = refreshed?.let { t ->
-                engine.computeProximity(
-                    t,
-                    ui.focusLocation?.let { loc -> LatLng(loc.lat, loc.lon) },
-                    nowMs
-                )
-            }?.let { ep ->
-                ThreatProximity(
-                    predicted = ep.predicted,
-                    distToUserKm = ep.distToUserKm,
-                    etaToUserMin = ep.etaToUserMin,
-                    params = ui.activeZoneParams,
-                    speedSource = ep.speedSource,
-                    speedKmh = ep.speedKmh
-                )
+            }.distinctUntilChanged(::areSelectionUiVisuallyEqual).collect { enriched ->
+                emit(enriched)
             }
-            val zoneTier = if (refreshed != null && proximity?.distToUserKm != null) {
-                val props = engine.propsFor(refreshed.type)
-                engine.zoneTier(props, proximity.distToUserKm, proximity.speedKmh, proximity.params)
-            } else null
-            SelectionUi(
-                selected = if (FlourishPolicy.dropSelection(selectedGone, animOn)) null else refreshed,
-                proximity = proximity,
-                zoneTier = zoneTier,
-                neutralized = neutralizedThreat,
-                fakeNeutralize = sel.fakeNeutralize
-            )
-        }.distinctUntilChanged(::areSelectionUiVisuallyEqual).collect { enriched ->
-            emit(enriched)
         }
     }.distinctUntilChanged(::areSelectionUiVisuallyEqual)
     .stateIn(
