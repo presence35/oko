@@ -463,7 +463,9 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 iconSet = uiState.iconSet,
                 neptunDown = uiState.neptunDown,
                 degraded = uiState.degraded,
-                onBack = { screen = Screen.MAP }
+                onBack = { screen = Screen.MAP },
+                showThreatIdsOnMap = uiState.showThreatIdsOnMap,
+                onShowThreatIdsOnMapChange = { viewModel.setShowThreatIdsOnMap(it) }
             )
         }
         SwipeableSnackbarHost(

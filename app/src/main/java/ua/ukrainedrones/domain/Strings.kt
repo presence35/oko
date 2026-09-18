@@ -279,6 +279,8 @@ val nightSoundLabel: String,
         val batteryGranted: String,
         val batteryOemTitle: String,
         val batteryOemBody: String,
+        val showThreatIdsOnMapTitle: String,
+        val showThreatIdsOnMapDesc: String,
         val batteryGenericBody: String,
         val resetTipsTitle: String,
         val resetTipsDesc: String,
@@ -965,6 +967,8 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val batteryGranted: String get() = misc.batteryGranted
         val batteryOemTitle: String get() = misc.batteryOemTitle
         val batteryOemBody: String get() = misc.batteryOemBody
+        val showThreatIdsOnMapTitle: String get() = misc.showThreatIdsOnMapTitle
+        val showThreatIdsOnMapDesc: String get() = misc.showThreatIdsOnMapDesc
         val batteryGenericBody: String get() = misc.batteryGenericBody
         val resetTipsTitle: String get() = misc.resetTipsTitle
         val resetTipsDesc: String get() = misc.resetTipsDesc

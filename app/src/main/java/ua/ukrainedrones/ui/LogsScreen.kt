@@ -192,7 +192,9 @@ fun LogsDropDownSheet(
     neptunDown: Boolean,
     degraded: Boolean,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showThreatIdsOnMap: Boolean = false,
+    onShowThreatIdsOnMapChange: (Boolean) -> Unit = {}
 ) {
     val entries by DebugLog.entries.collectAsState()
     val connEntries by ConnectionLog.entries.collectAsState()
@@ -370,6 +372,9 @@ fun LogsDropDownSheet(
                 }
             }
             if (filter == LogsFilter.SYSTEM) {
+                item(key = "threatids") {
+                    ThreatIdMapToggle(showThreatIdsOnMap, onShowThreatIdsOnMapChange, s)
+                }
                 item(key = "oemsim") {
                     OemSimButton(context, s)
                 }
@@ -500,7 +505,9 @@ fun LogsScreen(
     iconSet: ThreatIconSet,
     neptunDown: Boolean,
     degraded: Boolean,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    showThreatIdsOnMap: Boolean = false,
+    onShowThreatIdsOnMapChange: (Boolean) -> Unit = {}
 ) {
     LogsDropDownSheet(
         s = s,
@@ -509,7 +516,9 @@ fun LogsScreen(
         neptunDown = neptunDown,
         degraded = degraded,
         onClose = onBack,
-        modifier = Modifier.fillMaxHeight(1f)
+        modifier = Modifier.fillMaxHeight(1f),
+        showThreatIdsOnMap = showThreatIdsOnMap,
+        onShowThreatIdsOnMapChange = onShowThreatIdsOnMapChange
     )
 }
 
@@ -1145,6 +1154,35 @@ private fun RetryLogCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ThreatIdMapToggle(checked: Boolean, onCheckedChange: (Boolean) -> Unit, s: Strings.StringSet) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(AppPalette.CardAlt))
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                s.showThreatIdsOnMapTitle,
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White
+            )
+            Text(
+                s.showThreatIdsOnMapDesc,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

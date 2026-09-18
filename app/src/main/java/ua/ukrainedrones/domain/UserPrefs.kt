@@ -91,6 +91,7 @@ class UserPrefs(private val context: Context) {
     private val showBordersKey = booleanPreferencesKey("show_borders")
     private val showRegionBordersKey = booleanPreferencesKey("show_region_borders")
     private val showLargeCitiesKey = booleanPreferencesKey("show_large_cities")
+    private val showThreatIdsOnMapKey = booleanPreferencesKey("show_threat_ids_on_map")
 
     val preferences: Flow<UserPreferences> = context.dataStore.data.map { it.toUserPreferences() }.distinctUntilChanged()
 
@@ -145,6 +146,7 @@ class UserPrefs(private val context: Context) {
             showMediumCities = this[showMediumCitiesKey] ?: true,
             showSmallCities = this[showSmallCitiesKey] ?: true,
             showLargeCities = this[showLargeCitiesKey] ?: true,
+            showThreatIdsOnMap = this[showThreatIdsOnMapKey] ?: false,
             highQualityExplosions = this[highQualityExplosionsKey] ?: true,
             deathAnimationEnabled = this[deathAnimationEnabledKey] ?: true,
             followBullet = this[followBulletKey] ?: true,
@@ -430,6 +432,10 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setShowLargeCities(show: Boolean) {
         context.dataStore.edit { it[showLargeCitiesKey] = show }
+    }
+
+    suspend fun setShowThreatIdsOnMap(show: Boolean) {
+        context.dataStore.edit { it[showThreatIdsOnMapKey] = show }
     }
 
     suspend fun setHighQualityExplosions(enabled: Boolean) {

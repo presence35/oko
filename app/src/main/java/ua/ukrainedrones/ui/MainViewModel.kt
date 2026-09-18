@@ -133,6 +133,7 @@ data class UiState(
     val showMediumCities: Boolean = true,
     val showSmallCities: Boolean = true,
     val showLargeCities: Boolean = true,
+    val showThreatIdsOnMap: Boolean = false,
     val fillAlertRegions: Boolean = false,
     val showBorders: Boolean = true,
     val showRegionBorders: Boolean = false,
@@ -437,6 +438,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val showMediumCities: Boolean,
         val showSmallCities: Boolean,
         val showLargeCities: Boolean,
+        val showThreatIdsOnMap: Boolean,
         val fillAlertRegions: Boolean,
         val showBorders: Boolean,
         val showRegionBorders: Boolean,
@@ -536,6 +538,7 @@ val fastGroupCollapsed: Boolean,
             showMediumCities = showMediumCities,
             showSmallCities = showSmallCities,
             showLargeCities = showLargeCities,
+            showThreatIdsOnMap = showThreatIdsOnMap,
             fillAlertRegions = fillAlertRegions,
             showBorders = showBorders,
             showRegionBorders = showRegionBorders,
@@ -712,6 +715,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             showMediumCities = prefs.showMediumCities,
             showSmallCities = prefs.showSmallCities,
             showLargeCities = prefs.showLargeCities,
+            showThreatIdsOnMap = prefs.showThreatIdsOnMap,
             fillAlertRegions = prefs.fillAlertRegions,
 showBorders = prefs.showBorders,
             showRegionBorders = prefs.showRegionBorders,
@@ -1335,6 +1339,10 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setShowLargeCities(show: Boolean) {
         viewModelScope.launch { prefs.setShowLargeCities(show) }
+    }
+
+    fun setShowThreatIdsOnMap(show: Boolean) {
+        viewModelScope.launch { prefs.setShowThreatIdsOnMap(show) }
     }
 
     fun setFillAlertRegions(enabled: Boolean) {

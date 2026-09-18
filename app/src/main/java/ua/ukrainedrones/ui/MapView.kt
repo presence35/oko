@@ -244,14 +244,19 @@ internal data class ThreatScreenPlacement(
     val visible: Boolean = true
 )
 
-private fun chipLabel(t: NormalizedThreat, chip: String?): String? {
+private fun chipLabel(t: NormalizedThreat, chip: String?, showThreatIds: Boolean): String? {
     val sim = if (t.simulated) "SIM" else null
-    val shortId = t.id.takeLast(4)
+    if (!showThreatIds && sim == null && chip == null) return null
+    val shortId = if (showThreatIds) t.id.takeLast(4) else null
     return when {
-        sim != null && chip != null -> "#$shortId · $sim · $chip"
-        sim != null -> "#$shortId · $sim"
-        chip != null -> "#$shortId · $chip"
-        else -> "#$shortId"
+        sim != null && shortId != null && chip != null -> "#$shortId · $sim · $chip"
+        sim != null && shortId != null -> "#$shortId · $sim"
+        sim != null && chip != null -> "$sim · $chip"
+        sim != null -> sim
+        shortId != null && chip != null -> "#$shortId · $chip"
+        shortId != null -> "#$shortId"
+        chip != null -> chip
+        else -> null
     }
 }
 
@@ -497,6 +502,7 @@ fun NeptunMapView(
     val focusLocationState by rememberUpdatedState(uiState.focusLocation)
     val deathAnimationEnabledState by rememberUpdatedState(uiState.deathAnimationEnabled)
     val followBulletState by rememberUpdatedState(uiState.followBullet)
+    val showThreatIdsOnMapState by rememberUpdatedState(uiState.showThreatIdsOnMap)
     val hapticsOnState by rememberUpdatedState(LocalHapticsEnabled.current)
 
     val threatOutcomes = remember { mutableStateMapOf<String, BehaviorOutcome>() }
@@ -1063,7 +1069,7 @@ LaunchedEffect(selectedId) {
                         canvas.drawBitmap(bmp, matrix, paint)
 
                         // Sub-description / count chip
-                        val chip = chipLabel(t, placement?.chip)
+                        val chip = chipLabel(t, placement?.chip, showThreatIdsOnMapState)
                         if (chip != null) {
                             canvas.drawText(chip, sx, sy + bmp.height / 2f + 14f * context.resources.displayMetrics.density, chipPaint)
                         }

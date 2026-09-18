@@ -2,6 +2,9 @@ package ua.ukrainedrones.ui
 
 import ua.ukrainedrones.theme.AppPalette
 import ua.ukrainedrones.community.CompactRaionBoundaries
+import ua.ukrainedrones.data.ApiMonitor
+import ua.ukrainedrones.data.SystemEntry
+import ua.ukrainedrones.data.SystemEntryKind
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
@@ -24,6 +27,21 @@ object MapLibreLayerManager {
     private var lastRedRaions: Set<Pair<String, String>>? = null
     private var lastYellowOblastIds: Set<String>? = null
     private var lastYellowRaions: Set<Pair<String, String>>? = null
+
+    /**
+     * Logs a fill-rendering problem both to Logcat and into the in-app Logs screen
+     * (Settings → Logs, amber "Fill debug" entries) so it's visible without adb/logcat.
+     */
+    private fun fillDebugLog(message: String) {
+        android.util.Log.w("MapLibreLayerManager", message)
+        ApiMonitor.record(
+            SystemEntry(
+                atMillis = System.currentTimeMillis(),
+                kind = SystemEntryKind.FILL_DEBUG,
+                detail = "[MapLibreLayerManager] $message"
+            )
+        )
+    }
 
     private var lastCenterLat: Double? = null
     private var lastCenterLon: Double? = null
@@ -196,8 +214,15 @@ object MapLibreLayerManager {
             if (lastFillAlertRegions == false) return
             val redSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_RED)
             val yellowSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_YELLOW)
-            redSrc?.setGeoJson(MapLibreGeoJson.EMPTY)
-            yellowSrc?.setGeoJson(MapLibreGeoJson.EMPTY)
+            if (redSrc == null || yellowSrc == null) {
+                // Same reasoning as below: don't cache the clear as done if we couldn't
+                // actually clear it, or a stale fill can stay on-screen forever after the
+                // user turns the toggle off.
+                fillDebugLog("updateAlertRegions: alert source(s) missing on style while clearing (red=$redSrc yellow=$yellowSrc) — not caching this as applied")
+                return
+            }
+            redSrc.setGeoJson(MapLibreGeoJson.EMPTY)
+            yellowSrc.setGeoJson(MapLibreGeoJson.EMPTY)
             lastFillAlertRegions = false
             lastRedOblastIds = null
             lastRedRaions = null
@@ -227,8 +252,32 @@ object MapLibreLayerManager {
 
         val redSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_RED)
         val yellowSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_YELLOW)
-        redSrc?.setGeoJson(MapLibreGeoJson.alertRegions(redOblastIds, redRaions))
-        yellowSrc?.setGeoJson(MapLibreGeoJson.alertRegions(filteredYellowOblastIds, filteredYellowRaions))
+        if (redSrc == null || yellowSrc == null) {
+            // Never cache "applied" for a write we couldn't actually make. If the sources
+            // aren't on the style yet/anymore (style swap, GL surface torn down and recreated,
+            // any timing gap between setupLayers() and this call), the setGeoJson below would
+            // silently no-op — but the old code still recorded lastRedOblastIds/lastRedRaions/etc.
+            // as if it had succeeded. The next call with the SAME alert data would then hit the
+            // no-op guard above and return early forever, even after the sources become valid
+            // again, because nothing ever changed lastRedOblastIds. Bailing without touching the
+            // last* fields means the very next call (same data or not) will retry for real.
+            fillDebugLog("updateAlertRegions: alert source(s) missing on style (red=$redSrc yellow=$yellowSrc) — not caching this as applied")
+            return
+        }
+        val redGeoJson = MapLibreGeoJson.alertRegions(redOblastIds, redRaions)
+        val yellowGeoJson = MapLibreGeoJson.alertRegions(filteredYellowOblastIds, filteredYellowRaions)
+        redSrc.setGeoJson(redGeoJson)
+        yellowSrc.setGeoJson(yellowGeoJson)
+        // Confirms the write actually reached the sources — the alertRegions() calls above
+        // already log per-region failures (missing polygon, degenerate ring), so this line is
+        // what tells you at a glance whether a red/yellow region you expected made it onto the
+        // map at all, without needing adb logcat.
+        fun featureCount(geoJson: String) = Regex("\"type\":\"Feature\"").findAll(geoJson).count()
+        fillDebugLog(
+            "updateAlertRegions: applied redObl=${redOblastIds.size} redRaion=${redRaions.size} " +
+                "yellowObl=${filteredYellowOblastIds.size} yellowRaion=${filteredYellowRaions.size} " +
+                "redFeatures=${featureCount(redGeoJson)} yellowFeatures=${featureCount(yellowGeoJson)}"
+        )
         lastFillAlertRegions = true
         lastRedOblastIds = redOblastIds
         lastRedRaions = redRaions

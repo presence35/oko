@@ -3,6 +3,9 @@ package ua.ukrainedrones.ui
 import ua.ukrainedrones.UKRAINE_LAND_BORDER
 import ua.ukrainedrones.community.CompactOblastBoundaries
 import ua.ukrainedrones.community.CompactRaionBoundaries
+import ua.ukrainedrones.data.ApiMonitor
+import ua.ukrainedrones.data.SystemEntry
+import ua.ukrainedrones.data.SystemEntryKind
 import ua.ukrainedrones.engine.destinationPoint
 
 /**
@@ -10,6 +13,21 @@ import ua.ukrainedrones.engine.destinationPoint
  * active threat alert regions, and focus-centered range circles for MapLibre Native.
  */
 object MapLibreGeoJson {
+
+    /**
+     * Logs a fill-rendering problem both to Logcat and into the in-app Logs screen
+     * (Settings → Logs, amber "Fill debug" entries) so it's visible without adb/logcat.
+     */
+    private fun fillDebugLog(message: String) {
+        android.util.Log.w("MapLibreGeoJson", message)
+        ApiMonitor.record(
+            SystemEntry(
+                atMillis = System.currentTimeMillis(),
+                kind = SystemEntryKind.FILL_DEBUG,
+                detail = "[MapLibreGeoJson] $message"
+            )
+        )
+    }
 
     /** Empty FeatureCollection sentinel. */
     const val EMPTY = """{"type":"FeatureCollection","features":[]}"""
@@ -74,23 +92,54 @@ object MapLibreGeoJson {
         if (oblastIds.isEmpty() && raionKeys.isEmpty()) return EMPTY
 
         val features = mutableListOf<String>()
+
+        // Track which oblast IDs actually produced a drawable fill — never trust set
+        // membership alone. An oblast ID can be present (it resolved a canonical ID fine
+        // upstream in ThreatEngine) yet still draw zero features here if its polygon has no
+        // ring with >=3 points. Raions below must only be skipped when the parent oblast
+        // *really* rendered, or a boundary/ring failure on the oblast silently blacks out
+        // every raion inside it — which is exactly what happened to Donetsk: 8 correctly
+        // resolved raion polygons were dropped because "donetska" was also in oblastIds,
+        // with no fallback when the oblast polygon didn't actually draw.
+        val renderedOblastIds = mutableSetOf<String>()
         for (id in oblastIds) {
-            val poly = CompactOblastBoundaries.get(id) ?: continue
+            val poly = CompactOblastBoundaries.get(id)
+            if (poly == null) {
+                fillDebugLog("alertRegions: no boundary polygon for oblast id=$id")
+                continue
+            }
+            var addedAny = false
             for (ring in poly.rings) {
                 if (ring.pointCount < 3) continue
                 val pts = ring.toPoints().joinToString(",") { "[${it.lon},${it.lat}]" }
                 features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$pts]]}}""")
+                addedAny = true
+            }
+            if (addedAny) {
+                renderedOblastIds.add(id)
+            } else {
+                fillDebugLog("alertRegions: oblast id=$id resolved but every ring had <3 points")
             }
         }
+
         for ((id, raion) in raionKeys) {
-            if (id in oblastIds) continue
-            val poly = CompactRaionBoundaries.forKey(id, raion) ?: continue
+            if (id in renderedOblastIds) continue
+            val poly = CompactRaionBoundaries.forKey(id, raion)
+            if (poly == null) {
+                fillDebugLog("alertRegions: no boundary polygon for raion id=$id/$raion")
+                continue
+            }
             for (ring in poly.rings) {
                 if (ring.pointCount < 3) continue
                 val pts = ring.toPoints().joinToString(",") { "[${it.lon},${it.lat}]" }
                 features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$pts]]}}""")
             }
         }
+
+        if (features.isEmpty() && (oblastIds.isNotEmpty() || raionKeys.isNotEmpty())) {
+            fillDebugLog("alertRegions: produced 0 features from oblastIds=$oblastIds raionKeys=$raionKeys — fill will be invisible")
+        }
+
         return """{"type":"FeatureCollection","features":[${features.joinToString(",")}]}"""
     }
 
