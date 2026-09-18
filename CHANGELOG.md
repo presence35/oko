@@ -28,6 +28,8 @@
 
 - Threat markers now show only the last four ID digits, threat cards no longer expose IDs, and Locate zooms directly to the maximum normal map zoom / Threat markers now show only the last four ID digits, threat cards no longer expose IDs, and Locate zooms directly to the maximum normal map zoom
 
+- Fixed aviation alerts expiring minutes after takeoff by exempting always-inner threats from age-based expiry / Fixed aviation alerts expiring minutes after takeoff by exempting always-inner threats from age-based expiry
+
 - Threat-ID labels on the map are now opt-in: a Logs → System toggle shows the last four ID digits on markers, off by default / Threat-ID labels on the map are now opt-in: a Logs → System toggle shows the last four ID digits on markers, off by default
 
 - Reframed "Just Fun" into "Morale" with Ukrainian heart emblem, uplifting spirits copy, and expanded search keywords / Reframed "Just Fun" into "Morale" with Ukrainian heart emblem, uplifting spirits copy, and expanded search keywords

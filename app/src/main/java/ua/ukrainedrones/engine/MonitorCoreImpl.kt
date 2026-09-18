@@ -15,8 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Enforces core safety invariants:
  * 1. "Disconnected != All Clear": Network loss flags isInformationStale without wiping active alarms.
- * 2. Ingestion Dead Reckoning: Continuously computes velocity projections across active tracks.
- * 3. Reboot Resurrection Persistence: Writes active threat / alert states to disk asynchronously so
+ * 2. Reboot Resurrection Persistence: Writes active threat / alert states to disk asynchronously so
  *    EmergencyResurrectionWorker and BootReceiver can resurrect alarm state after phone reboot.
  */
 class MonitorCoreImpl(

@@ -225,6 +225,14 @@ class ThreatEngineTest {
     }
 
     @Test
+    fun `isStale - aviation never locally expires past stale window`() {
+        val now = System.currentTimeMillis()
+        val threat = makeThreat(type = "aviation", updatedAtMillis = now - 600_000)
+        val props = NEPTUN_TYPES["aviation"]!!
+        assertFalse(engine.isStale(threat, props, now))
+    }
+
+    @Test
     fun `isGhost - within ghost cap returns false`() {
         val now = System.currentTimeMillis()
         val threat = makeThreat(updatedAtMillis = now - 400_000)
