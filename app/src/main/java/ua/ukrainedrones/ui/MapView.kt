@@ -464,8 +464,6 @@ fun NeptunMapView(
             scope = mapScope
         )
     }
-
-    val struckRemovalAt = remember { HashMap<String, Long>() }
     val lastFitUkraineTick = remember { mutableStateOf(fitUkraineTick) }
     val lastFollow = remember { mutableStateOf<LatLng?>(null) }
     val lastZoomTick = remember { mutableStateOf(-1) }
@@ -501,7 +499,6 @@ fun NeptunMapView(
     val selectedThreatIdState by rememberUpdatedState(selectedId)
     val focusLocationState by rememberUpdatedState(uiState.focusLocation)
     val deathAnimationEnabledState by rememberUpdatedState(uiState.deathAnimationEnabled)
-    val followBulletState by rememberUpdatedState(uiState.followBullet)
     val showThreatIdsOnMapState by rememberUpdatedState(uiState.showThreatIdsOnMap)
     val hapticsOnState by rememberUpdatedState(LocalHapticsEnabled.current)
 
@@ -739,51 +736,21 @@ LaunchedEffect(selectedId) {
         }
     }
 
-    // Death animations for removed threats
-    LaunchedEffect(Unit) {
-        snapshotFlow { uiState.deathAnimationEnabled }
-            .distinctUntilChanged()
-            .flatMapLatest { enabled ->
-                if (!enabled) emptyFlow() else AppSources.registry.removedThreats
-            }
-            .collect { r ->
-                val nowMs = System.currentTimeMillis()
-                struckRemovalAt.entries.removeIf { nowMs - it.value > RESOLVED_REPLAY_GRACE_MS }
-                if (struckRemovalAt.containsKey(r.id)) return@collect
-                struckRemovalAt[r.id] = nowMs
-
-                if (!mapIsUserFocus(pausedState, mapVisibleState, showNearbySheltersState, lifecycle.currentState)) {
-                    return@collect
-                }
-                if (r.type in hiddenTypesState) return@collect
-                val bridge = bridgeState.value
+    LaunchedEffect(deathFx) {
+        deathFx.bindAutoStrike(
+            outerScope = this,
+            removedThreats = AppSources.registry.removedThreats,
+            deathAnimationEnabled = snapshotFlow { uiState.deathAnimationEnabled },
+            isMapInFocus = { mapIsUserFocus(pausedState, mapVisibleState, showNearbySheltersState, lifecycle.currentState) },
+            hiddenTypes = { hiddenTypesState },
+            resolveOutcome = { id -> threatOutcomes[id] },
+            resolveIcon = { type -> threatIconFor(context, type, iconSetState) },
+            resolveRotation = { r ->
                 val outcome = threatOutcomes[r.id]
-                val anchorLat = outcome?.lat ?: r.lat
-                val anchorLon = outcome?.lon ?: r.lon
-
-                if (deathFx.isActiveFor(r.id)) {
-                    deathFx.strikeDud(r.id, anchorLat, anchorLon)
-                } else {
-                    val threatType = r.type
-                    val base = IconCatalog.baseDeg(threatType, iconSetState)
-                    val rotation = outcome?.headingDeg ?: ((r.courseDeg.toFloat() - base + 360f) % 360f)
-                    val icon = threatIconFor(context, threatType, iconSetState)
-                    val followBullet = followBulletState
-                    val pressedId = r.id
-                    deathFx.startAutoCountdown(threatType) {
-                        deathFx.followStrike(anchorLat, anchorLon, followBullet)
-                        deathFx.strike(
-                            id = pressedId,
-                            lat = anchorLat,
-                            lon = anchorLon,
-                            icon = icon,
-                            rotationDeg = rotation,
-                            alpha = 1f
-                        )
-                        deathFx.strikeHaptics()
-                    }
-                }
+                val base = IconCatalog.baseDeg(r.type, iconSetState)
+                outcome?.headingDeg ?: ((r.courseDeg.toFloat() - base + 360f) % 360f)
             }
+        )
     }
 
     // Tally-tap replay flourish

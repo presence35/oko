@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Auto shoot-down now respects follow-bullet: off-screen strikes skip the countdown and animation when the setting is off, and the collector lives in the flourish / Auto shoot-down now respects follow-bullet: off-screen strikes skip the countdown and animation when the setting is off, and the collector lives in the flourish
+
 - Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers / Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers
 
 - Fixed battery drain during outages by throttling background monitor ticks to 30s when the screen is off — active threats or degraded connectivity no longer force 1s wakeups / Fixed battery drain during outages by throttling background monitor ticks to 30s when the screen is off — active threats or degraded connectivity no longer force 1s wakeups

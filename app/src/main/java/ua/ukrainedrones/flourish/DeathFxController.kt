@@ -7,18 +7,25 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ua.ukrainedrones.BehaviorOutcome
 import ua.ukrainedrones.engine.LatLng
+import ua.ukrainedrones.source.RESOLVED_REPLAY_GRACE_MS
+import ua.ukrainedrones.source.ThreatRemoved
 import ua.ukrainedrones.ui.MapLibreBridge
 import ua.ukrainedrones.UA_TIGHT_MIN_LAT
 import ua.ukrainedrones.UA_TIGHT_MAX_LAT
@@ -60,6 +67,7 @@ class DeathFxController(
     /** Master "Just Fun" gate: live mirror of the master pref. All flourish entry points
      *  no-op while it's off, and flipping it off ejects anything in flight ([clear]). */
     private val justFunEnabled = MutableStateFlow(false)
+    private val followBulletEnabled = MutableStateFlow(true)
 
     init {
         scope.launch {
@@ -73,10 +81,24 @@ class DeathFxController(
         }
         scope.launch {
             UserPrefs(context).preferences
+                .map { it.followBullet }
+                .distinctUntilChanged()
+                .collect { followBulletEnabled.value = it }
+        }
+        scope.launch {
+            UserPrefs(context).preferences
                 .map { it.highQualityExplosions }
                 .distinctUntilChanged()
                 .collect { hq -> overlay.highQuality = hq }
         }
+    }
+
+    private fun isOnScreen(lat: Double, lon: Double): Boolean {
+        val b = bridge() ?: return false
+        if (b.width <= 0 || b.height <= 0) return false
+        val pt = b.project(lat, lon) ?: return false
+        val inset = 16f
+        return pt.x in inset..(b.width - inset) && pt.y in inset..(b.height - inset)
     }
 
     private val vibrator = context.getSystemService(Vibrator::class.java)
@@ -196,9 +218,11 @@ class DeathFxController(
      * Start a 3-second countdown before an auto-strike fires. [onFire] executes when the
      * countdown reaches zero. A new countdown replaces any in-flight one (latest wins).
      * Tap-to-cancel: call [cancelAutoCountdown].
+     * If follow-bullet is off and the anchor is off-screen, the strike is skipped entirely.
      */
-    fun startAutoCountdown(type: ThreatType?, onFire: () -> Unit) {
+    fun startAutoCountdown(anchor: LatLng, type: ThreatType?, onFire: () -> Unit) {
         if (!justFunEnabled.value) return
+        if (!followBulletEnabled.value && !isOnScreen(anchor.lat, anchor.lon)) return
         countdownJob?.cancel()
         pendingAutoStrike = onFire
         _strikeType.value = type
@@ -227,6 +251,76 @@ class DeathFxController(
                 _pendingStrikeCount.update { (it - 1).coerceAtLeast(0) }
             }
         }
+    }
+
+    @Deprecated("Use anchor overload")
+    fun startAutoCountdown(type: ThreatType?, onFire: () -> Unit) {
+        if (!justFunEnabled.value) return
+        countdownJob?.cancel()
+        pendingAutoStrike = onFire
+        _strikeType.value = type
+        _pendingStrikeCount.update { it + 1 }
+        countdownJob = scope.launch {
+            try {
+                for (n in 3 downTo 1) {
+                    if (overlay.isActive) overlay.active.first { !it }
+                    _countdown.value = n
+                    delay(1000L)
+                }
+                if (overlay.isActive) overlay.active.first { !it }
+                _countdown.value = null
+                _strikeType.value = null
+                _autoStrikeActive.value = true
+                pendingAutoStrike?.invoke()
+                pendingAutoStrike = null
+                overlay.active.first { !it }
+                _autoStrikeActive.value = false
+            } finally {
+                _pendingStrikeCount.update { (it - 1).coerceAtLeast(0) }
+            }
+        }
+    }
+
+    private val struckRemovalAt = HashMap<String, Long>()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun bindAutoStrike(
+        outerScope: CoroutineScope,
+        removedThreats: Flow<ThreatRemoved>,
+        deathAnimationEnabled: Flow<Boolean>,
+        isMapInFocus: () -> Boolean,
+        hiddenTypes: () -> Set<ThreatType>,
+        resolveOutcome: (String) -> BehaviorOutcome?,
+        resolveIcon: (ThreatType) -> android.graphics.drawable.Drawable,
+        resolveRotation: (ThreatRemoved) -> Float,
+    ): Job = outerScope.launch {
+        deathAnimationEnabled
+            .distinctUntilChanged()
+            .flatMapLatest { enabled -> if (!enabled) emptyFlow() else removedThreats }
+            .collect { r ->
+                val nowMs = System.currentTimeMillis()
+                struckRemovalAt.entries.removeIf { nowMs - it.value > RESOLVED_REPLAY_GRACE_MS }
+                if (struckRemovalAt.containsKey(r.id)) return@collect
+                struckRemovalAt[r.id] = nowMs
+                if (!isMapInFocus()) return@collect
+                if (r.type in hiddenTypes()) return@collect
+                val outcome = resolveOutcome(r.id)
+                val anchorLat = outcome?.lat ?: r.lat
+                val anchorLon = outcome?.lon ?: r.lon
+                if (isActiveFor(r.id)) {
+                    strikeDud(r.id, anchorLat, anchorLon)
+                } else {
+                    val type = r.type
+                    val icon = resolveIcon(type)
+                    val rotation = resolveRotation(r)
+                    val id = r.id
+                    startAutoCountdown(LatLng(anchorLat, anchorLon), type) {
+                        followStrike(anchorLat, anchorLon)
+                        strike(id = id, lat = anchorLat, lon = anchorLon, icon = icon, rotationDeg = rotation, alpha = 1f)
+                        strikeHaptics()
+                    }
+                }
+            }
     }
 
     /** Cancel a running auto-countdown — the pending strike is dropped. */
@@ -272,9 +366,11 @@ class DeathFxController(
     ): Boolean = strike(id, LatLng(lat, lon), icon, rotationDeg, alpha, type)
 
     /** Follow-up projectile for an already-destroyed threat: no icon, never explodes. Returns
-     *  true only when a dud actually launched (master gate + a valid edge origin). */
+     *  true only when a dud actually launched (master gate + a valid edge origin).
+     *  Skipped when follow-bullet is off and the target is off-screen. */
     fun strikeDud(id: String?, geo: LatLng): Boolean {
         if (!justFunEnabled.value) return false
+        if (!followBulletEnabled.value && !isOnScreen(geo.lat, geo.lon)) return false
         val origin = randomEdgeOrigin() ?: return false
         overlay.spawnDud(id, geo, origin)
         return true
@@ -303,6 +399,10 @@ class DeathFxController(
             geo.lon.coerceIn(UA_MIN_LON, UA_MAX_LON)
         )
     }
+
+    fun followStrike(target: LatLng) = followStrike(target, followBulletEnabled.value)
+
+    fun followStrike(lat: Double, lon: Double) = followStrike(LatLng(lat, lon))
 
     /** Follow-the-bullet: with the setting on, the camera glides onto the strike, then pans
      *  back to where the user was once the explosion has finished. It never scrolls to the

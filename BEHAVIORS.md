@@ -386,13 +386,14 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 
 | Behavior | Trigger | Gate |
 |---|---|---|
-| Death animation (live) | Selected threat removed | `deathAnimationEnabled`, `FlourishPolicy` |
+| Death animation (live) | Selected threat removed | `deathAnimationEnabled`, `FlourishPolicy`, on-screen or `followBullet` |
 | Death animation (replay) | Tally notification tap | `deathAnimationEnabled`, map visible |
 | Aviation flyby (auto) | INNER-tier AVIATION takeoff | `flybyAnimationEnabled`, map visible, app foreground |
 | Aviation flyby (manual) | Notification tap on AVIATION | `flybyAnimationEnabled` |
 | Strike camera follow | Each live strike | `followBullet`, replay not active |
 | Strike haptics | Each bullet | Vibrator available |
 | Tally notification | `removedThreats` in service | `neutralizedTallyEnabled`, oblast filter |
+| Auto shoot-down skip | Threat removed off-screen while `followBullet` off | Skipped — no countdown, no strike |
 
 ### Logging (Observational Only)
 
