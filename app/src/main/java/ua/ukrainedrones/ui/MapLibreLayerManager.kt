@@ -164,8 +164,8 @@ object MapLibreLayerManager {
         style.addLayer(
             LineLayer(LAYER_ZONE_YELLOW, SOURCE_ZONE_YELLOW).apply {
                 setProperties(
-                    lineColor(AppPalette.ZoneYellow.toInt()),
-                    lineWidth(2.2f)
+                    lineColor(AppPalette.AlertYellow.toInt()),
+                    lineWidth(1.5f)
                 )
             }
         )
@@ -175,8 +175,8 @@ object MapLibreLayerManager {
         style.addLayer(
             LineLayer(LAYER_ZONE_RED, SOURCE_ZONE_RED).apply {
                 setProperties(
-                    lineColor(AppPalette.ZoneRed.toInt()),
-                    lineWidth(2.5f)
+                    lineColor(AppPalette.AlertRed.toInt()),
+                    lineWidth(1.5f)
                 )
             }
         )

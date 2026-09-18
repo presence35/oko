@@ -141,3 +141,5 @@
 
 - Shelter view now zooms to street level (16.0 max instead of 19.0) so buildings and streets are visible without excessive detail / Режим укриття тепер масштабується вулицю (макс 16.0 замість 19.0)
 
+- Zone circles now match zone slider colors (red/amber instead of neon), circle widths slimmed to 1.5dp / Колови зон тепер кольором зонних слайдерів (червоний/бурштиновий), ширина зменшена до 1.5dp
+

@@ -10,6 +10,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -60,6 +62,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ua.ukrainedrones.City
 import ua.ukrainedrones.ThreatType
+import ua.ukrainedrones.theme.AppPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
