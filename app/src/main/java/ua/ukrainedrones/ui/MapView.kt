@@ -74,7 +74,7 @@ private const val DEFAULT_CENTER_LON = ODESA_LON
 private const val NORMAL_MAX_ZOOM = 14.5
 
 /** Deep zoom, unlocked only while the shelter overlay is up (street-level shelter detail). */
-private const val SHELTER_MAX_ZOOM = 19.0
+private const val SHELTER_MAX_ZOOM = 16.0
 
 /** Zooming below this level makes shelter pins clutter — auto-exit shelter mode. */
 private const val SHELTER_AUTO_EXIT_ZOOM = 13.0
@@ -759,7 +759,7 @@ LaunchedEffect(selectedId) {
         } else {
             val centerLat = focusLocationState?.lat ?: bridge.latitude
             val centerLon = focusLocationState?.lon ?: bridge.longitude
-            camera.animateTo(bridge, centerLat, centerLon, 18.0, 400L)
+            camera.animateTo(bridge, centerLat, centerLon, 16.0, 400L)
         }
     }
 

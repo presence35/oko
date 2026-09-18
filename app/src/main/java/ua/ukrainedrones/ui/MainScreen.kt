@@ -425,7 +425,9 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                         guideFeatureId = null
                         screen = Screen.GUIDE
                     }
-                }
+                },
+                showThreatIdsOnMap = settingsState.showThreatIdsOnMap,
+                onShowThreatIdsOnMapChange = remember { { viewModel.setShowThreatIdsOnMap(it) } }
             )
         }
         if (screen == Screen.GUIDE) {
@@ -464,8 +466,6 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 neptunDown = uiState.neptunDown,
                 degraded = uiState.degraded,
                 onBack = { screen = Screen.MAP },
-                showThreatIdsOnMap = uiState.showThreatIdsOnMap,
-                onShowThreatIdsOnMapChange = { viewModel.setShowThreatIdsOnMap(it) }
             )
         }
         SwipeableSnackbarHost(

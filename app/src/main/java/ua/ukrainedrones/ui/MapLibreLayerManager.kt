@@ -205,9 +205,9 @@ object MapLibreLayerManager {
         oblastBorderLayer?.setProperties(
             visibility(oblastVis),
             lineColor(
-                if (alertRegionMode == AlertRegionMode.FILL) 0xCCFFFFFF.toInt() else AppPalette.OblastBorder.toInt()
+                if (alertRegionMode == AlertRegionMode.FILL) 0x66FFFFFF.toInt() else AppPalette.OblastBorder.toInt()
             ),
-            lineWidth(1.5f)
+            lineWidth(1.2f)
         )
         val raionBorderLayer = style.getLayer(LAYER_RAION_BORDERS)
         raionBorderLayer?.setProperties(

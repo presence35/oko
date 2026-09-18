@@ -135,3 +135,9 @@
 - The official-alerts trident is now larger in Settings > Alerts / The official-alerts trident is now larger in Settings > Alerts
 - Version names now derive directly from versionCode, making app and server JSON versions directly comparable / Version names now derive directly from versionCode, making app and server JSON versions directly comparable
 
+- Alert region borders in FILL mode now translucent (40% white) and thinner (1.2dp) so land details show through and borders don't blow out the map / Межі регіонів у режимі заливки тепер напівпрозорі (40% білий) та тонші (1.2dp)
+
+- Alert fill polygons now round coordinates to 4 decimal places, close rings, and deduplicate adjacent points — eliminating fill leaks and mismatched boundaries / Заливки тривог тепер округлюють координати до 4 знаків, замикають кільця та видаляють дублю — усунення просвітів та нестикування меж
+
+- Shelter view now zooms to street level (16.0 max instead of 19.0) so buildings and streets are visible without excessive detail / Режим укриття тепер масштабується вулицю (макс 16.0 замість 19.0)
+

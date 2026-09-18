@@ -240,6 +240,7 @@ data class SettingsState(
     val neutralizedTallyEnabled: Boolean get() = prefs.neutralizedTallyEnabled
     val neutralizedTallyAllUkraine: Boolean get() = prefs.neutralizedTallyAllUkraine
     val threatIconZoom: Boolean get() = prefs.threatIconZoom
+    val showThreatIdsOnMap: Boolean get() = prefs.showThreatIdsOnMap
     val fastGroupCollapsed: Boolean get() = prefs.fastGroupCollapsed
     val slowGroupCollapsed: Boolean get() = prefs.slowGroupCollapsed
 }

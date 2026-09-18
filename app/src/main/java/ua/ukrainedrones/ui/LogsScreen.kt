@@ -1,22 +1,12 @@
 package ua.ukrainedrones
 import ua.ukrainedrones.theme.AppPalette
 
-import android.os.Build
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.media.AudioAttributes
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import android.content.Intent
 import android.net.Uri
 import ua.ukrainedrones.connection.ConnEvent
 import ua.ukrainedrones.connection.ConnRetryState
-import ua.ukrainedrones.data.ApiMonitor
-import ua.ukrainedrones.data.SystemEntry
-import ua.ukrainedrones.data.SystemEntryKind
-import ua.ukrainedrones.BatteryOptimization
 import androidx.compose.ui.platform.LocalContext
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -135,7 +125,7 @@ private const val VISIBLE_INITIAL = 25
 private const val VISIBLE_STEP = 50
 
 /** Which data source to show. */
-private enum class LogsFilter { DECISIONS, CONNECTIONS, SOURCES, SYSTEM, CHANNELS }
+private enum class LogsFilter { DECISIONS, CONNECTIONS, SOURCES }
 
 /** How to group decision rows. */
 private enum class GroupBy { TIMELINE, PROXIMITY, TYPE }
@@ -176,10 +166,6 @@ private data class ConnectionRow(val entry: ConnLogEntry) : LogRow {
     override val atMillis: Long get() = entry.atMillis
 }
 
-private data class SystemRow(val entry: SystemEntry) : LogRow {
-    override val atMillis: Long get() = entry.atMillis
-}
-
 /**
  * Logs drop-down sheet: a top sheet that slides DOWN from the top bar (mirroring
  * how the alert zones sheet slides UP from the bottom).
@@ -193,12 +179,9 @@ fun LogsDropDownSheet(
     degraded: Boolean,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    showThreatIdsOnMap: Boolean = false,
-    onShowThreatIdsOnMapChange: (Boolean) -> Unit = {}
 ) {
     val entries by DebugLog.entries.collectAsState()
     val connEntries by ConnectionLog.entries.collectAsState()
-    val systemEntries by ApiMonitor.entries.collectAsState()
     val context = LocalContext.current
     val registry = AppSources.registry
     val connRetry by registry.retryState.collectAsState()
@@ -223,10 +206,9 @@ fun LogsDropDownSheet(
 
     val window = entries.filter { now - it.atMillis < DebugLog.AUTO_CLEAR_AGE_MS }
     val isDecisions = filter == LogsFilter.DECISIONS
-    val isSystem = filter == LogsFilter.SYSTEM
     val isSources = filter == LogsFilter.SOURCES
     val rows: List<LogRow> = if (isSources) emptyList() else
-        buildRows(window, connEntries, systemEntries, now, isDecisions, isSystem, newestFirst, shownOnly, showFlourish)
+        buildRows(window, connEntries, now, isDecisions, newestFirst, shownOnly, showFlourish)
     val visible = rows.take(visibleCount)
     val hasMore = visibleCount < rows.size
     val groups = if (isDecisions) buildGroups(visible.filterIsInstance<DecisionRow>().map { it.entry }, groupBy, showFlourish, proximitySort, newestFirst) else emptyList()
@@ -296,8 +278,8 @@ fun LogsDropDownSheet(
         }
 
         // Tabs
-        val tabFilters = listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES, LogsFilter.SYSTEM, LogsFilter.CHANNELS)
-        val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources, s.logsFilterSystem, s.logsFilterChannels)
+        val tabFilters = listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES)
+        val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources)
         ScrollableTabRow(
             selectedTabIndex = tabFilters.indexOf(filter),
             containerColor = Color(AppPalette.CardAlt),
@@ -371,22 +353,9 @@ fun LogsDropDownSheet(
                     }
                 }
             }
-            if (filter == LogsFilter.SYSTEM) {
-                item(key = "threatids") {
-                    ThreatIdMapToggle(showThreatIdsOnMap, onShowThreatIdsOnMapChange, s)
-                }
-                item(key = "oemsim") {
-                    OemSimButton(context, s)
-                }
-            }
             if (filter == LogsFilter.SOURCES) {
                 item(key = "sources") {
                     SourcesList(s, now, lang, iconSet)
-                }
-            }
-            if (filter == LogsFilter.CHANNELS) {
-                item(key = "channels") {
-                    ChannelTestContent(context)
                 }
             }
             if (filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty()) {
@@ -394,13 +363,12 @@ fun LogsDropDownSheet(
                     RetryLogCard(connEvents, connRetry, s, now) { AppSources.registry.dismissLogCard() }
                 }
             }
-            if (visible.isEmpty() && filter != LogsFilter.SOURCES && filter != LogsFilter.CHANNELS
+            if (visible.isEmpty() && filter != LogsFilter.SOURCES
                 && !(filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty())) {
                 item {
                     Text(
                         when (filter) {
                             LogsFilter.CONNECTIONS -> s.logsEmptyConnections
-                            LogsFilter.SYSTEM -> s.apiSystemEmpty
                             else -> s.debugLogEmpty
                         },
                         style = MaterialTheme.typography.bodyLarge,
@@ -449,10 +417,10 @@ fun LogsDropDownSheet(
                         }
                     }
                 }
-                if (isDecisions || isSystem) {
+                if (isDecisions) {
                     item(key = "clear") {
                         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            TextButton(onClick = { scope.launch(Dispatchers.IO) { if (isSystem) ApiMonitor.clear() else DebugLog.clear() } }) {
+                            TextButton(onClick = { scope.launch(Dispatchers.IO) { DebugLog.clear() } }) {
                                 Text(s.debugLogClear)
                             }
                         }
@@ -506,8 +474,6 @@ fun LogsScreen(
     neptunDown: Boolean,
     degraded: Boolean,
     onBack: () -> Unit,
-    showThreatIdsOnMap: Boolean = false,
-    onShowThreatIdsOnMapChange: (Boolean) -> Unit = {}
 ) {
     LogsDropDownSheet(
         s = s,
@@ -517,8 +483,6 @@ fun LogsScreen(
         degraded = degraded,
         onClose = onBack,
         modifier = Modifier.fillMaxHeight(1f),
-        showThreatIdsOnMap = showThreatIdsOnMap,
-        onShowThreatIdsOnMapChange = onShowThreatIdsOnMapChange
     )
 }
 
@@ -530,18 +494,12 @@ fun LogsScreen(
 private fun buildRows(
     decisions: List<DebugLogEntry>,
     connEntries: List<ConnLogEntry>,
-    systemEntries: List<SystemEntry>,
     now: Long,
     isDecisions: Boolean,
-    isSystem: Boolean,
     newestFirst: Boolean,
     shownOnly: Boolean,
     showFlourish: Boolean
 ): List<LogRow> {
-    if (isSystem) {
-        val sysRows = systemEntries.map { SystemRow(it) }
-        return if (newestFirst) sysRows.sortedByDescending { it.atMillis } else sysRows.sortedBy { it.atMillis }
-    }
     if (!isDecisions) {
         val connRows = (ConnectionLog.currentEpisode(now)?.let { listOf(ConnectionRow(it)) }
             ?: emptyList()) + connEntries.map { ConnectionRow(it) }
@@ -871,7 +829,6 @@ private fun LogRowCard(
     when (row) {
         is DecisionRow -> DecisionCard(row.entry, s, lang, now, iconSet)
         is ConnectionRow -> ConnectionCard(row.entry, s, lang, now)
-        is SystemRow -> SystemCard(row.entry, s, lang, now)
     }
 }
 
@@ -1157,75 +1114,9 @@ private fun RetryLogCard(
     }
 }
 
-@Composable
-private fun ThreatIdMapToggle(checked: Boolean, onCheckedChange: (Boolean) -> Unit, s: Strings.StringSet) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(AppPalette.CardAlt))
-            .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                s.showThreatIdsOnMapTitle,
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White
-            )
-            Text(
-                s.showThreatIdsOnMapDesc,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-        }
-        Spacer(Modifier.width(10.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
 
-@Composable
-private fun OemSimButton(context: android.content.Context, s: Strings.StringSet) {
-    val realManufacturer = remember { Build.MANUFACTURER.lowercase() }
-    var selectedOem by remember { mutableStateOf(BatteryOptimization.getSimulatedOem(context)) }
-    val oemOptions = listOf(null to "Auto", "xiaomi" to "Xiaomi", "samsung" to "Samsung", "huawei" to "Huawei", "oppo" to "Oppo", "realme" to "Realme", "vivo" to "Vivo", "oneplus" to "OnePlus")
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            s.batteryOemTitle,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        val displayOem = selectedOem ?: realManufacturer
-        Text(
-            "Simulating: $displayOem",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-        ) {
-            oemOptions.forEach { (oem, label) ->
-                FilterChip(
-                    selected = selectedOem == oem,
-                    onClick = {
-                        selectedOem = oem
-                        BatteryOptimization.setSimulatedOem(context, oem)
-                        val msg = if (oem != null) "OEM simulation: $label" else "OEM simulation cleared"
-                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                    },
-                    label = { Text(label, style = MaterialTheme.typography.labelSmall) }
-                )
-            }
-        }
-    }
-}
+
+
 
 @Composable
 private fun ConnectionCard(entry: ConnLogEntry, s: Strings.StringSet, lang: AppLanguage, now: Long) {
@@ -1599,197 +1490,6 @@ private fun SourceDataCard(
                     maxLines = 2
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun SystemCard(entry: SystemEntry, s: Strings.StringSet, lang: AppLanguage, now: Long) {
-    val accent = when (entry.kind) {
-        SystemEntryKind.SDK_CHANGED -> DebugAmber
-        SystemEntryKind.SDK_CHECK_FAILED -> DebugRed
-        SystemEntryKind.MALFORMED_FRAME -> DebugRed
-        SystemEntryKind.UNKNOWN_TYPE_DETECTED -> DebugAmber
-    }
-    val icon = when (entry.kind) {
-        SystemEntryKind.SDK_CHANGED -> Icons.Filled.Warning
-        SystemEntryKind.SDK_CHECK_FAILED -> Icons.Filled.Close
-        SystemEntryKind.MALFORMED_FRAME -> Icons.Filled.Warning
-        SystemEntryKind.UNKNOWN_TYPE_DETECTED -> Icons.Filled.Warning
-    }
-    val label = when (entry.kind) {
-        SystemEntryKind.SDK_CHANGED -> s.apiSdkChanged
-        SystemEntryKind.SDK_CHECK_FAILED -> s.apiSdkCheckFailed
-        SystemEntryKind.MALFORMED_FRAME -> s.apiMalformedFrame
-        SystemEntryKind.UNKNOWN_TYPE_DETECTED -> s.apiUnknownType
-    }
-    val context = LocalContext.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(accent.copy(alpha = 0.10f))
-            .padding(12.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = accent,
-            modifier = Modifier.size(22.dp)
-        )
-        Spacer(Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = accent,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    formatAlertAge(now, entry.atMillis, s),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Spacer(Modifier.height(3.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    entry.detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    formatDateTime(lang, entry.atMillis),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (entry.kind == SystemEntryKind.SDK_CHANGED) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    s.apiSdkViewManifest,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = accent,
-                    modifier = Modifier.clickable {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse("https://neptun.in.ua/sdk/build-manifest.json"))
-                        )
-                    }
-                )
-            }
-        }
-    }
-}
-
-// ── Channel Test (temporary diagnostic — easy to remove) ─────────────────────
-
-private val testChannelIds = listOf(
-    "test_alarm_vtrue", "test_alarm_vfalse",
-    "test_notif_vfalse", "test_fresh_alarm"
-)
-
-@Composable
-private fun ChannelTestContent(context: android.content.Context) {
-    var refreshKey by remember { mutableIntStateOf(0) }
-    val nm = remember { context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as NotificationManager }
-
-    @Suppress("DEPRECATION")
-    val allChannels = remember(refreshKey) {
-        nm.notificationChannels.map { ch ->
-            ch.id to buildString {
-                append("imp=${ch.importance}")
-                if (ch.sound != null) append(" sound=yes")
-                if (ch.shouldVibrate()) append(" vibrate=yes")
-                ch.audioAttributes?.usage?.let { append(" usage=$it") }
-            }
-        }.sortedBy { it.first }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text("Current channels", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        allChannels.forEach { (id, info) ->
-            Text("$id  —  $info", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-
-        Spacer(Modifier.height(1.dp).fillMaxWidth().background(MaterialTheme.colorScheme.outlineVariant))
-
-        Text("Actions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-
-        Button(onClick = {
-            nm.notificationChannels.forEach { nm.deleteNotificationChannel(it.id) }
-            refreshKey++
-        }, modifier = Modifier.fillMaxWidth()) { Text("Delete all channels") }
-
-        Button(onClick = {
-            AlertNotificationManager(context).createChannels()
-            refreshKey++
-        }, modifier = Modifier.fillMaxWidth()) { Text("Recreate production channels") }
-
-        Button(onClick = {
-            testChannelIds.forEach { nm.deleteNotificationChannel(it) }
-            refreshKey++
-        }, modifier = Modifier.fillMaxWidth()) { Text("Delete test channels") }
-
-        Spacer(Modifier.height(1.dp).fillMaxWidth().background(MaterialTheme.colorScheme.outlineVariant))
-
-        Text("Sound tests (vibrate mode)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        Text("Post each in vibrate mode — note which produce sound.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-        TestChannelButton(nm, "A: Alarm + vibrate", "test_alarm_vtrue", true, AudioAttributes.USAGE_ALARM)
-        TestChannelButton(nm, "B: Alarm, no vibrate", "test_alarm_vfalse", false, AudioAttributes.USAGE_ALARM)
-        TestChannelButton(nm, "C: Notification, no vibrate", "test_notif_vfalse", false, AudioAttributes.USAGE_NOTIFICATION)
-        TestChannelButton(nm, "D: Fresh ID, alarm + vibrate", "test_fresh_alarm", true, AudioAttributes.USAGE_ALARM)
-    }
-}
-
-@Composable
-private fun TestChannelButton(
-    nm: NotificationManager,
-    label: String,
-    channelId: String,
-    vibrate: Boolean,
-    usage: Int
-) {
-    val context = LocalContext.current
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Button(onClick = {
-            @Suppress("DEPRECATION")
-            val ch = NotificationChannel(channelId, label, NotificationManager.IMPORTANCE_HIGH).apply {
-                enableVibration(vibrate)
-                setSound(
-                    Uri.parse("android.resource://${context.packageName}/${R.raw.air_raid_siren}"),
-                    AudioAttributes.Builder().setUsage(usage).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
-                )
-            }
-            nm.createNotificationChannel(ch)
-            val notif = NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(R.drawable.ic_trident)
-                .setContentTitle(label)
-                .setContentText("Does this make sound?")
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setAutoCancel(true)
-                .build()
-            @Suppress("MissingPermission")
-            NotificationManagerCompat.from(context).notify(9000 + channelId.hashCode() % 1000, notif)
-        }, modifier = Modifier.weight(1f)) {
-            Text("Post: $label", maxLines = 1)
-        }
-        IconButton(onClick = { nm.deleteNotificationChannel(channelId) }) {
-            Icon(Icons.Filled.Close, contentDescription = "Delete test channel", modifier = Modifier.size(18.dp))
         }
     }
 }

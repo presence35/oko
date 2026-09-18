@@ -34,6 +34,18 @@ object MapLibreGeoJson {
         return sum / 2.0
     }
 
+    /** Round to 4dp, dedup consecutive, close ring if needed → coordinate string. */
+    private fun formatPoints(pts: List<LatLon>): String {
+        val rounded = pts.map { Pair("%.4f".format(it.lon), "%.4f".format(it.lat)) }
+        val deduped = rounded.filterIndexed { i, p ->
+            i == 0 || p != rounded[i - 1]
+        }
+        val closed = if (deduped.size >= 3 && deduped.first() != deduped.last()) {
+            deduped + deduped.first()
+        } else deduped
+        return closed.joinToString(",") { "[${it.first},${it.second}]" }
+    }
+
     /**
      * Returns ring points normalized for emission as a single-ring GeoJSON Polygon,
      * or null when the ring is degenerate and must not be emitted.
@@ -79,8 +91,8 @@ object MapLibreGeoJson {
         for (stem in CompactOblastBoundaries.allStems) {
             val poly = CompactOblastBoundaries.get(stem) ?: continue
             for (ring in poly.rings) {
-                if (ring.pointCount < 3) continue
-                val coords = ring.toPoints().joinToString(",") { "[${it.lon},${it.lat}]" }
+                val pts = normalizedRingPoints(ring) ?: continue
+                val coords = formatPoints(pts)
                 features.add("""{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}""")
             }
         }
@@ -92,8 +104,8 @@ object MapLibreGeoJson {
         val features = mutableListOf<String>()
         for ((_, poly) in CompactRaionBoundaries.all) {
             for (ring in poly.rings) {
-                if (ring.pointCount < 3) continue
-                val coords = ring.toPoints().joinToString(",") { "[${it.lon},${it.lat}]" }
+                val pts = normalizedRingPoints(ring) ?: continue
+                val coords = formatPoints(pts)
                 features.add("""{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}""")
             }
         }
@@ -129,7 +141,7 @@ object MapLibreGeoJson {
             var addedAny = false
             for (ring in poly.rings) {
                 val pts = normalizedRingPoints(ring) ?: continue
-                val coords = pts.joinToString(",") { "[${it.lon},${it.lat}]" }
+                val coords = formatPoints(pts)
                 features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$coords]]}}""")
                 addedAny = true
             }
@@ -146,7 +158,7 @@ object MapLibreGeoJson {
             }
             for (ring in poly.rings) {
                 val pts = normalizedRingPoints(ring) ?: continue
-                val coords = pts.joinToString(",") { "[${it.lon},${it.lat}]" }
+                val coords = formatPoints(pts)
                 features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$coords]]}}""")
             }
         }
@@ -170,7 +182,7 @@ object MapLibreGeoJson {
         val coords = (0..segments).map { i ->
             val bearing = 360.0 * (i % segments) / segments
             val pt = destinationPoint(centerLat, centerLon, radiusM, bearing)
-            "[${pt.lon},${pt.lat}]"
+            "[%.4f,%.4f]".format(pt.lon, pt.lat)
         }.joinToString(",")
         return """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
     }

@@ -132,6 +132,8 @@ fun SettingsScreen(
     onThreatIconZoomChange: (Boolean) -> Unit,
     onFastGroupCollapse: (Boolean) -> Unit,
     onSlowGroupCollapse: (Boolean) -> Unit,
+    showThreatIdsOnMap: Boolean,
+    onShowThreatIdsOnMapChange: (Boolean) -> Unit,
     onExit: () -> Unit,
     onCheckUpdate: () -> Unit,
     onOpenGuide: () -> Unit,
@@ -193,6 +195,7 @@ fun SettingsScreen(
     val threatIconZoom = state.threatIconZoom
     val fastGroupCollapsed = state.fastGroupCollapsed
     val slowGroupCollapsed = state.slowGroupCollapsed
+    val showThreatIdsOnMap = state.showThreatIdsOnMap
     val overlapMode = state.overlapMode
     val justFunMasterEnabled = state.justFunMasterEnabled
     val bootRestartEnabled = state.bootRestartEnabled
@@ -576,8 +579,8 @@ fun SettingsScreen(
                                     )
                                 }
                             }
-                        }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
 
                     AlertToggleRow(
@@ -973,6 +976,32 @@ fun SettingsScreen(
                             onClick = { onLanguageChange(AppLanguage.EN) },
                             modifier = Modifier.weight(1f)
                         )
+                    }
+                    // Show threat IDs on map
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(AppPalette.CardAlt))
+                            .clickable { onShowThreatIdsOnMapChange(!showThreatIdsOnMap) }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                s.showThreatIdsOnMapTitle,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Color.White
+                            )
+                            Text(
+                                s.showThreatIdsOnMapDesc,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Switch(checked = showThreatIdsOnMap, onCheckedChange = onShowThreatIdsOnMapChange)
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Card Size & Detail

@@ -456,11 +456,8 @@ val nightSoundLabel: String,
         val shelterTypeBasic: String,
         val shelterTypeMobile: String,
         val shelterTypeBunker: String,
-        val logsFilterSystem: String,
-        val logsFilterChannels: String,
         val apiSdkChanged: String,
         val apiSdkCheckFailed: String,
-        val apiSystemEmpty: String,
         val apiMalformedFrame: String,
         val apiSdkViewManifest: String,
         val apiUnknownType: String,
@@ -1148,11 +1145,8 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val shelterTypeBasic: String get() = misc.shelterTypeBasic
         val shelterTypeMobile: String get() = misc.shelterTypeMobile
         val shelterTypeBunker: String get() = misc.shelterTypeBunker
-        val logsFilterSystem: String get() = misc.logsFilterSystem
-        val logsFilterChannels: String get() = misc.logsFilterChannels
         val apiSdkChanged: String get() = misc.apiSdkChanged
         val apiSdkCheckFailed: String get() = misc.apiSdkCheckFailed
-        val apiSystemEmpty: String get() = misc.apiSystemEmpty
         val apiMalformedFrame: String get() = misc.apiMalformedFrame
         val apiSdkViewManifest: String get() = misc.apiSdkViewManifest
         val apiUnknownType: String get() = misc.apiUnknownType
