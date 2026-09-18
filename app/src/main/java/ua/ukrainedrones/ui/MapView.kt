@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -536,22 +537,27 @@ fun NeptunMapView(
         bridgeState.value?.invalidateOverlay()
     }
 
-    // Sync GPU layers with UI state
+    // Sync GPU layers with UI state. Split three ways so a change in one group
+    // never re-runs the others (a mode toggle must not redo borders/zones).
+    // The first alerts apply waits one frame: the dark style frame composites
+    // before the ~400ms fill upload blocks Main on cold start, so cold start
+    // shows a dark map with fills popping in instead of a white stall.
+    var firstAlertsApplied by remember { mutableStateOf(false) }
     LaunchedEffect(
         bridgeState.value,
+        bridgeState.value?.layersReady?.value,
         uiState.alertRegionMode,
-        uiState.showBorders,
-        uiState.showRegionBorders,
         uiState.alertOblastIds,
         uiState.alertRaionKeys,
         uiState.alertYellowOblastIds,
-        uiState.alertYellowRaionKeys,
-        uiState.focusLocation,
-        uiState.activeZoneParams.slowYellowKm,
-        uiState.activeZoneParams.slowRedKm,
-        uiState.activeZone
+        uiState.alertYellowRaionKeys
     ) {
         val bridge = bridgeState.value ?: return@LaunchedEffect
+        if (!bridge.layersReady.value) return@LaunchedEffect
+        if (!firstAlertsApplied) {
+            withFrameNanos { }
+            firstAlertsApplied = true
+        }
         bridge.updateAlerts(
             oblastIds = uiState.alertOblastIds,
             raionKeys = uiState.alertRaionKeys,
@@ -559,10 +565,30 @@ fun NeptunMapView(
             yellowRaionKeys = uiState.alertYellowRaionKeys,
             alertRegionMode = uiState.alertRegionMode
         )
+    }
+    LaunchedEffect(
+        bridgeState.value,
+        bridgeState.value?.layersReady?.value,
+        uiState.showBorders,
+        uiState.showRegionBorders
+    ) {
+        val bridge = bridgeState.value ?: return@LaunchedEffect
+        if (!bridge.layersReady.value) return@LaunchedEffect
         bridge.updateBorders(
             showBorders = uiState.showBorders,
             showRegionBorders = uiState.showRegionBorders
         )
+    }
+    LaunchedEffect(
+        bridgeState.value,
+        bridgeState.value?.layersReady?.value,
+        uiState.focusLocation,
+        uiState.activeZoneParams.slowYellowKm,
+        uiState.activeZoneParams.slowRedKm,
+        uiState.activeZone
+    ) {
+        val bridge = bridgeState.value ?: return@LaunchedEffect
+        if (!bridge.layersReady.value) return@LaunchedEffect
         bridge.updateZones(
             centerLat = uiState.focusLocation?.lat,
             centerLon = uiState.focusLocation?.lon,

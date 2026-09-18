@@ -702,11 +702,19 @@ fun resolveFocus(
     )
 }
 
+private const val ZOOM_MAJOR_OVERVIEW = 3.5
+private const val ZOOM_MAJOR_MID = 6.0
+private const val ZOOM_MAJOR_LATE = 7.5
+private const val ZOOM_MEDIUM = 7.0
+private const val ZOOM_MINOR = 8.5
+private const val ALERT_ZOOM_FACTOR = 0.9
+
 /** Draws city names in the current language, sized to zoom level. MAJOR labels reveal
  *  progressively by [MajorReveal]: the top-5 overview set shows from the country view, MID
  *  majors from mid-zoom, the rest up close. MAJOR/MEDIUM/MINOR respect the Settings toggles
  *  ([showLargeCities] / [showMediumCities] / [showSmallCities], all on by default). Cities
  *  in [cityAlertLevels] are colored by alert severity (RED → red, YELLOW → amber).
+ *  Alerted (RED/YELLOW) cities appear 10% earlier than their tier.
  *  Cities in [suppressedAlertCities] show off-white (the fill already communicates the alert). */
 class CityLabelOverlay(
     context: Context,
@@ -735,17 +743,19 @@ class CityLabelOverlay(
     ) {
         val forceAll = forceShowAllProvider()
         for (c in Cities.ALL) {
-            val minZoom = when (c.tier) {
+            val baseZoom = when (c.tier) {
                 CityTier.MAJOR -> if (forceAll || !showLargeCities) {
-                    if (forceAll) 3.5 else Double.MAX_VALUE
+                    if (forceAll) ZOOM_MAJOR_OVERVIEW else Double.MAX_VALUE
                 } else when (c.reveal) {
-                    MajorReveal.OVERVIEW -> 3.5
-                    MajorReveal.MID -> 6.0
-                    MajorReveal.LATE -> 7.5
+                    MajorReveal.OVERVIEW -> ZOOM_MAJOR_OVERVIEW
+                    MajorReveal.MID -> ZOOM_MAJOR_MID
+                    MajorReveal.LATE -> ZOOM_MAJOR_LATE
                 }
-                CityTier.MEDIUM -> if (forceAll || showMediumCities) 7.0 else Double.MAX_VALUE
-                CityTier.MINOR -> if (forceAll || showSmallCities) 8.5 else Double.MAX_VALUE
+                CityTier.MEDIUM -> if (forceAll || showMediumCities) ZOOM_MEDIUM else Double.MAX_VALUE
+                CityTier.MINOR -> if (forceAll || showSmallCities) ZOOM_MINOR else Double.MAX_VALUE
             }
+            val isAlerted = cityAlertLevels[c.nameUa]?.let { it == AlertLevel.RED || it == AlertLevel.YELLOW } == true
+            val minZoom = if (isAlerted && baseZoom != Double.MAX_VALUE) baseZoom * ALERT_ZOOM_FACTOR else baseZoom
             if (zoom < minZoom) continue
             val pt = project(c.lat, c.lon) ?: continue
             if (pt.x < -240f || pt.x > canvas.width + 240f ||

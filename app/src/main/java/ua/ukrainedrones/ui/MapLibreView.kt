@@ -9,12 +9,14 @@ import android.widget.FrameLayout
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.launch
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -41,6 +43,8 @@ class MapLibreBridge(
     var project: ((Double, Double) -> PointF?)? = null,
     var onDrawOverlay: ((android.graphics.Canvas) -> Unit)? = null
 ) {
+    /** True once layer sources exist; MapView effects wait on this before touching the style. */
+    val layersReady = androidx.compose.runtime.mutableStateOf(false)
     val width: Int get() = mapView?.width ?: 0
     val height: Int get() = mapView?.height ?: 0
     val zoom: Double get() = map?.cameraPosition?.zoom ?: 0.0
@@ -197,6 +201,7 @@ fun MapLibreHostView(
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val bridge = remember { MapLibreBridge() }
+    val scope = rememberCoroutineScope()
 
     val overlayView = remember {
         object : View(context) {
@@ -298,7 +303,14 @@ fun MapLibreHostView(
 
                     mapLibreMap.setStyle(Style.Builder().fromJson(MapLibreStyle.cartoDarkJson())) { loadedStyle ->
                         bridge.style = loadedStyle
-                        MapLibreLayerManager.setupLayers(loadedStyle)
+                        // Layer sources attach asynchronously so the dark first frame
+                        // isn't starved by border-GeoJSON string building on Main.
+                        bridge.layersReady.value = false
+                        scope.launch {
+                            if (MapLibreLayerManager.setupLayersAsync(loadedStyle)) {
+                                bridge.layersReady.value = true
+                            }
+                        }
 
                         val projLambda: (Double, Double) -> PointF? = { lat, lon ->
                             val pt = mapLibreMap.projection.toScreenLocation(LatLng(lat, lon))

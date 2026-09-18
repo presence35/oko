@@ -15,6 +15,8 @@ import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
 import org.maplibre.android.style.layers.PropertyFactory.visibility
 import org.maplibre.android.style.sources.GeoJsonSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Manages MapLibre GeoJSON sources and GPU layers for borders, alert polygons,
@@ -76,17 +78,81 @@ object MapLibreLayerManager {
     const val SOURCE_ZONE_YELLOW = "src_zone_yellow"
     const val LAYER_ZONE_YELLOW = "lyr_zone_yellow"
 
-    fun setupLayers(style: Style) {
-        // 0. Outside Ukraine mask (dim international geography outside Ukraine's border)
-        val srcMask = GeoJsonSource(SOURCE_OUTSIDE_MASK, MapLibreGeoJson.outsideUkraineMask())
-        style.addSource(srcMask)
+    /** Prebuilt static border geometry: immutable runtime constants, safe to build off-main. */
+    data class StaticLayersData(
+        val outsideMask: String,
+        val landBorder: String,
+        val oblastBorders: String,
+        val raionBorders: String
+    )
+
+    @Volatile
+    private var staticCache: StaticLayersData? = null
+
+    /**
+     * Builds the static border GeoJSON off the main thread. Pure CPU work —
+     * tens of thousands of coordinate strings — that used to run synchronously
+     * inside the setStyle callback and starve first-frame rendering (white cold start).
+     */
+    fun buildStaticGeoJson(): StaticLayersData {
+        staticCache?.let { return it }
+        return StaticLayersData(
+            outsideMask = MapLibreGeoJson.outsideUkraineMask(),
+            landBorder = MapLibreGeoJson.landBorder(),
+            oblastBorders = MapLibreGeoJson.oblastBorders(),
+            raionBorders = MapLibreGeoJson.raionBorders()
+        ).also { staticCache = it }
+    }
+
+    /**
+     * Attaches all sources/layers to the style. Main-thread only (native map calls).
+     * Alert and zone sources start empty; content arrives via updateAlertRegions/updateZoneCircles.
+     */
+    fun addStaticLayers(style: Style, data: StaticLayersData) {
+        // 0. Outside Ukraine mask — disabled: void outside Ukraine is now pure background (no border polygon needed)
+        //         val srcMask = GeoJsonSource(SOURCE_OUTSIDE_MASK, data.outsideMask)
+        // style.addSource(srcMask)
+        // style.addLayer(FillLayer(LAYER_OUTSIDE_MASK, SOURCE_OUTSIDE_MASK).apply { setProperties(fillColor(AppPalette.Mask.toInt())) })
+
+        // 1. Static land border (hugs coastline/rivers) — below alert fills so r/y overrides
+        val srcLandBorder = GeoJsonSource(SOURCE_LAND_BORDER, data.landBorder)
+        style.addSource(srcLandBorder)
         style.addLayer(
-            FillLayer(LAYER_OUTSIDE_MASK, SOURCE_OUTSIDE_MASK).apply {
-                setProperties(fillColor(AppPalette.Mask.toInt()))
+            LineLayer(LAYER_LAND_BORDER, SOURCE_LAND_BORDER).apply {
+                setProperties(
+                    lineColor(AppPalette.LandBorder.toInt()),
+                    lineWidth(2f)
+                )
             }
         )
 
-        // 1. Alert fills and outlines
+        // 2. Oblast borders — below alert fills
+        val srcOblast = GeoJsonSource(SOURCE_OBLAST_BORDERS, data.oblastBorders)
+        style.addSource(srcOblast)
+        style.addLayer(
+            LineLayer(LAYER_OBLAST_BORDERS, SOURCE_OBLAST_BORDERS).apply {
+                setProperties(
+                    lineColor(AppPalette.OblastBorder.toInt()),
+                    lineWidth(1.5f),
+                    visibility(Property.NONE)
+                )
+            }
+        )
+
+        // 3. Raion borders — below alert fills
+        val srcRaion = GeoJsonSource(SOURCE_RAION_BORDERS, data.raionBorders)
+        style.addSource(srcRaion)
+        style.addLayer(
+            LineLayer(LAYER_RAION_BORDERS, SOURCE_RAION_BORDERS).apply {
+                setProperties(
+                    lineColor(AppPalette.RaionBorder.toInt()),
+                    lineWidth(1f),
+                    visibility(Property.NONE)
+                )
+            }
+        )
+
+        // 4. Alert fills and outlines — on top so opaque r/y hides borders underneath
         val srcAlertYellow = GeoJsonSource(SOURCE_ALERT_YELLOW, MapLibreGeoJson.EMPTY)
         style.addSource(srcAlertYellow)
         style.addLayer(
@@ -119,44 +185,6 @@ object MapLibreLayerManager {
             }
         )
 
-        // 2. Static land border (hugs coastline/rivers)
-        val srcLandBorder = GeoJsonSource(SOURCE_LAND_BORDER, MapLibreGeoJson.landBorder())
-        style.addSource(srcLandBorder)
-        style.addLayer(
-            LineLayer(LAYER_LAND_BORDER, SOURCE_LAND_BORDER).apply {
-                setProperties(
-                    lineColor(AppPalette.LandBorder.toInt()),
-                    lineWidth(2f)
-                )
-            }
-        )
-
-        // 3. Oblast borders
-        val srcOblast = GeoJsonSource(SOURCE_OBLAST_BORDERS, MapLibreGeoJson.oblastBorders())
-        style.addSource(srcOblast)
-        style.addLayer(
-            LineLayer(LAYER_OBLAST_BORDERS, SOURCE_OBLAST_BORDERS).apply {
-                setProperties(
-                    lineColor(AppPalette.OblastBorder.toInt()),
-                    lineWidth(1.5f),
-                    visibility(Property.NONE)
-                )
-            }
-        )
-
-        // 4. Raion borders
-        val srcRaion = GeoJsonSource(SOURCE_RAION_BORDERS, MapLibreGeoJson.raionBorders())
-        style.addSource(srcRaion)
-        style.addLayer(
-            LineLayer(LAYER_RAION_BORDERS, SOURCE_RAION_BORDERS).apply {
-                setProperties(
-                    lineColor(AppPalette.RaionBorder.toInt()),
-                    lineWidth(1f),
-                    visibility(Property.NONE)
-                )
-            }
-        )
-
         // 5. Zone warning circles (Yellow outer, Red inner)
         val srcZoneYellow = GeoJsonSource(SOURCE_ZONE_YELLOW, MapLibreGeoJson.EMPTY)
         style.addSource(srcZoneYellow)
@@ -179,6 +207,22 @@ object MapLibreLayerManager {
                 )
             }
         )
+    }
+
+    /**
+     * Full layer setup safe to call from the setStyle callback: geometry builds on
+     * Default so first-frame rendering isn't starved, native attach stays on Main.
+     * Returns false when the style died mid-build (caller retries on next style load).
+     */
+    suspend fun setupLayersAsync(style: Style): Boolean {
+        val data = withContext(Dispatchers.Default) { buildStaticGeoJson() }
+        return try {
+            addStaticLayers(style, data)
+            true
+        } catch (e: Exception) {
+            android.util.Log.w("MapLibreLayerManager", "addStaticLayers failed, will retry on next style", e)
+            false
+        }
     }
 
     fun updateBordersVisibility(style: Style, showBorders: Boolean, showRegionBorders: Boolean) {

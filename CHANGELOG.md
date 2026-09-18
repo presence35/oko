@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed white map on cold start by building border geometry off the main thread / Fixed white map on cold start by building border geometry off the main thread
+
 - City labels now stay red/yellow in city-labels and border modes, and turn white only when region fill is on / City labels now stay red/yellow in city-labels and border modes, and turn white only when region fill is on
 
 - Fill/border mode switches apply instantly without rebuilding unchanged region geometry / Fill/border mode switches apply instantly without rebuilding unchanged region geometry
@@ -11,6 +13,12 @@
 - Fixed red alert regions not rendering by dropping degenerate boundary slivers and normalizing polygon winding in alert fills / Fixed red alert regions not rendering by dropping degenerate boundary slivers and normalizing polygon winding in alert fills
 
 - Auto shoot-down now respects follow-bullet: off-screen strikes skip the countdown and animation when the setting is off, and the collector lives in the flourish / Auto shoot-down now respects follow-bullet: off-screen strikes skip the countdown and animation when the setting is off, and the collector lives in the flourish
+
+- Alert fills now fully override borders without blending: land/oblast/raion borders render below opaque red/yellow fills so no pink appears when both are enabled / Заливки тривог тепер повністю перекривають межі без змішування: межі рендеряться під непрозорими червоними/жовтими заливками, тому рожевого не з'являється коли обидва увімкнені
+
+- Outside-Ukraine mask disabled — no border polygon compute or draw, pure background void outside Ukraine / Маску поза Україною вимкнено — жодних обчислень чи промальовування полігону межі, за межами — чистий фон
+
+- Alerted cities now surface 10% earlier than their tier (RED/YELLOW only), so a red region shows a label even from the full-map view / Міста під тривогою з'являються на 10% раніше свого рівня (лише RED/YELLOW), тож червоний регіон показує підпис навіть з повного огляду карти
 
 - Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers / Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers
 
