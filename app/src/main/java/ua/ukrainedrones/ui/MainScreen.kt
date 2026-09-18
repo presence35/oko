@@ -1262,6 +1262,7 @@ private fun ThreatCardHost(
     // Back closes the popup first, then exits — fixes "back stuck on home page".
     BackHandler(enabled = sel.selected != null || sel.neutralized != null) { onDismiss() }
 
+    var lastReportedHeight by remember { mutableIntStateOf(0) }
     val smallCard = cardSize == ThreatCardSize.SMALL
     AnimatedContent(
         targetState = when {
@@ -1278,9 +1279,21 @@ private fun ThreatCardHost(
         label = "threatCardSwap",
         modifier = Modifier
             .padding(top = 12.dp, start = 16.dp, end = 16.dp)
-            .onGloballyPositioned { onHeightChanged(it.size.height) }
+            .onGloballyPositioned { coords ->
+                val h = coords.size.height
+                if (h != lastReportedHeight) {
+                    lastReportedHeight = h
+                    onHeightChanged(h)
+                }
+            }
     ) { state ->
         when (state) {
+            0 -> {
+                if (lastReportedHeight != 0) {
+                    lastReportedHeight = 0
+                    onHeightChanged(0)
+                }
+            }
             1 -> sel.selected?.let { threat ->
                 Column(
                     modifier = if (smallCard) Modifier.wrapContentSize() else Modifier.fillMaxWidth()
@@ -1290,6 +1303,7 @@ private fun ThreatCardHost(
                         lang = language,
                         iconSet = iconSet,
                         proximity = sel.proximity,
+                        zoneTier = sel.zoneTier,
                         pinnedCity = if (followMe) null else pinnedCity,
                         threatLevel = threatLevel,
                         cardSize = cardSize,

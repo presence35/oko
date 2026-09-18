@@ -132,14 +132,14 @@ private fun fontScale(): Float = min(LocalDensity.current.fontScale, 1.5f)
 @Composable
 private fun fontAware(dp: Dp): Dp = dp * fontScale()
 
-/** Leaf composable that runs its own 1s clock and returns the formatted elapsed time
- *  and stale flag for a threat. Isolated here so the parent card doesn't recompose every second. */
+/** Leaf composable that runs its own 1s clock and updates only this text.
+ *  Isolated so 1s timer ticks never invalidate or recompose the parent card shell. */
 @Composable
-private fun ThreatElapsedText(
-    threat: NormalizedThreat,
-    engine: ThreatEngine,
-    strings: Strings.StringSet
-): Pair<String, Boolean> {
+private fun ThreatElapsedBadge(
+    updatedAtMillis: Long?,
+    strings: Strings.StringSet,
+    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodySmall
+) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -147,11 +147,12 @@ private fun ThreatElapsedText(
             now = System.currentTimeMillis()
         }
     }
-    val nt = threat
-    val stale = engine.isStale(nt, engine.propsFor(nt.type), now)
-    val elapsedText = if (stale) strings.lastSeenAgoFormat.format(formatElapsedMss(threat.updatedAtMillis, now))
-        else formatElapsedMss(threat.updatedAtMillis, now)
-    return elapsedText to stale
+    val elapsedText = formatElapsedMss(updatedAtMillis, now)
+    Text(
+        elapsedText,
+        style = style,
+        color = Color(AppPalette.TextSecondary)
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -161,6 +162,7 @@ fun ThreatPopupCard(
     lang: AppLanguage,
     iconSet: ThreatIconSet = ThreatIconSet.PHOTO,
     proximity: ThreatProximity?,
+    zoneTier: ThreatZone? = null,
     pinnedCity: City?,
     threatLevel: Double,
     onDismiss: () -> Unit,
@@ -173,8 +175,6 @@ fun ThreatPopupCard(
     fakeNeutralize: Boolean = false
 ) {
     val s = Strings.get(lang)
-    val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
-    val engine = remember(typeCatalog) { ThreatEngine(typeCatalog) }
     val typeInfo = threatTypeInfoByString(threat.type) ?: ThreatTypeCatalog.INFO.getValue(ThreatType.UNKNOWN)
     val typeLabel = if (lang == AppLanguage.UA) typeInfo.labelUa else typeInfo.labelEn
     // Wave count (group size) prefixes the title when the server reports it (>1 only).
@@ -200,18 +200,9 @@ fun ThreatPopupCard(
         }
     }
 
-    // Elapsed time + stale flag from leaf composable (runs its own 1s clock, doesn't invalidate parent).
-    val (elapsedText, stale) = ThreatElapsedText(threat, engine, s)
-
     val confirmations = threat.confirmations.takeIf { it > 0 }
 
-    val band = remember(proximity?.distToUserKm, proximity?.speedKmh, proximity?.params, threat.type) {
-        proximity?.let { p ->
-            val props = typeCatalog[threat.type] ?: return@let null
-            engine.zoneTier(props, p.distToUserKm ?: return@let null, p.speedKmh, p.params)
-        }
-    }
-    val bandColor = when (band) {
+    val bandColor = when (zoneTier) {
         ThreatZone.INNER -> DistUserRed
         ThreatZone.OUTER -> DistUserAmber
         null -> Color(AppPalette.TextSecondary)
@@ -293,10 +284,16 @@ fun ThreatPopupCard(
         return
     }
 
-            val cardInteraction = remember { MutableInteractionSource() }
+    val course = remember(threat.id, threat.explanationShort, lang, typeLabel, displayRegion) {
+        translateCourseAssessment(threat.explanationShort, lang)
+            ?.let { firstSentence(it) }
+            ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, displayRegion) }
+    }
+
+    val cardInteraction = remember { MutableInteractionSource() }
     Surface(
         modifier = modifier
-            .then(if (interactive) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+            .widthIn(max = 480.dp)
             .then(
                 if (interactive) Modifier.pressTick(cardInteraction).clickable(
                     interactionSource = cardInteraction,
@@ -305,8 +302,8 @@ fun ThreatPopupCard(
                 ) else Modifier
             ),
         shape = RoundedCornerShape(16.dp),
-        color = if (stale) Color(AppPalette.Panel) else Color(AppPalette.Card),
-        border = BorderStroke(2.dp, if (stale) Color(AppPalette.Border) else bandColor),
+        color = Color(AppPalette.Card),
+        border = BorderStroke(2.dp, bandColor),
         tonalElevation = 8.dp
     ) {
         when (cardSize) {
@@ -367,10 +364,9 @@ fun ThreatPopupCard(
                                     SimulationChip(s)
                                 }
                                 Spacer(Modifier.weight(1f, fill = false))
-                                Text(
-                                    elapsedText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (stale) AdvisoryAmber else Color(AppPalette.TextSecondary)
+                                ThreatElapsedBadge(
+                                    updatedAtMillis = threat.updatedAtMillis,
+                                    strings = s
                                 )
                             }
 
@@ -484,10 +480,9 @@ fun ThreatPopupCard(
                                         SimulationChip(s)
                                     }
                                     Spacer(Modifier.weight(1f))
-                                    Text(
-                                        elapsedText,
-                                        color = if (stale) AdvisoryAmber else Color(AppPalette.TextSecondary),
-                                        style = MaterialTheme.typography.bodySmall
+                                    ThreatElapsedBadge(
+                                        updatedAtMillis = threat.updatedAtMillis,
+                                        strings = s
                                     )
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -502,9 +497,6 @@ fun ThreatPopupCard(
                         }
 
                         // NEPTUN's course assessment, e.g. "Drone heading toward Chornomorsk"
-                        val course = translateCourseAssessment(threat.explanationShort, lang)
-                            ?.let { firstSentence(it) }
-                            ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, displayRegion) }
                         course?.let {
                             Text(it, style = MaterialTheme.typography.bodyLarge, color = Color(AppPalette.TextDetail))
                             Spacer(Modifier.height(4.dp))
