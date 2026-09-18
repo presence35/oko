@@ -3,10 +3,13 @@ package ua.ukrainedrones.ui
 import ua.ukrainedrones.UKRAINE_LAND_BORDER
 import ua.ukrainedrones.community.CompactOblastBoundaries
 import ua.ukrainedrones.community.CompactRaionBoundaries
+import ua.ukrainedrones.community.LatLon
+import ua.ukrainedrones.community.ScaledRing
 import ua.ukrainedrones.data.ApiMonitor
 import ua.ukrainedrones.data.SystemEntry
 import ua.ukrainedrones.data.SystemEntryKind
 import ua.ukrainedrones.engine.destinationPoint
+import kotlin.math.abs
 
 /**
  * Builds GeoJSON representations of static outlines, administrative boundaries,
@@ -19,7 +22,9 @@ object MapLibreGeoJson {
      * (Settings → Logs, amber "Fill debug" entries) so it's visible without adb/logcat.
      */
     private fun fillDebugLog(message: String) {
-        android.util.Log.w("MapLibreGeoJson", message)
+        // Logcat write is best-effort: android.util.Log throws in plain JVM unit tests,
+        // where only the in-app ApiMonitor record matters.
+        runCatching { android.util.Log.w("MapLibreGeoJson", message) }
         ApiMonitor.record(
             SystemEntry(
                 atMillis = System.currentTimeMillis(),
@@ -31,6 +36,45 @@ object MapLibreGeoJson {
 
     /** Empty FeatureCollection sentinel. */
     const val EMPTY = """{"type":"FeatureCollection","features":[]}"""
+
+    /**
+     * Minimum ring area (square degrees) for a ring to be emitted as a fill polygon.
+     * 1e-4 sq deg is ~0.8 km² (under a kilometer across) — far below any visible
+     * administrative polygon, so only sub-pixel quantization slivers are dropped.
+     */
+    private const val MIN_RING_AREA_SQ_DEG = 1e-4
+
+    /** Signed ring area via the shoelace formula. Positive = counter-clockwise. */
+    private fun signedArea(points: List<LatLon>): Double {
+        var sum = 0.0
+        for (i in points.indices) {
+            val j = (i + 1) % points.size
+            sum += points[i].lon * points[j].lat - points[j].lon * points[i].lat
+        }
+        return sum / 2.0
+    }
+
+    /**
+     * Returns ring points normalized for emission as a single-ring GeoJSON Polygon,
+     * or null when the ring is degenerate and must not be emitted.
+     *
+     * Per RFC 7946 a Polygon exterior ring must wind counter-clockwise. The compact
+     * boundary data stores multi-ring oblasts (islands, coastline fragments, slivers)
+     * with arbitrary winding, and some rings are near-zero-area quantization slivers.
+     * Emitting those verbatim poisons MapLibre's native tile builder for the whole
+     * source — blanking both fill and line layers — so they are dropped here and
+     * every surviving ring is forced to CCW.
+     */
+    private fun normalizedRingPoints(ring: ScaledRing, label: String): List<LatLon>? {
+        if (ring.pointCount < 3) return null
+        val pts = ring.toPoints()
+        val area = signedArea(pts)
+        if (abs(area) < MIN_RING_AREA_SQ_DEG) {
+            fillDebugLog("alertRegions: dropping degenerate ring (area=$area, points=${ring.pointCount}) for $label")
+            return null
+        }
+        return if (area < 0) pts.asReversed() else pts
+    }
 
     /**
      * Inverted mask covering everything outside Ukraine's boundary,
@@ -109,16 +153,16 @@ object MapLibreGeoJson {
                 continue
             }
             var addedAny = false
-            for (ring in poly.rings) {
-                if (ring.pointCount < 3) continue
-                val pts = ring.toPoints().joinToString(",") { "[${it.lon},${it.lat}]" }
-                features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$pts]]}}""")
+            for ((index, ring) in poly.rings.withIndex()) {
+                val pts = normalizedRingPoints(ring, "oblast id=$id ring=$index") ?: continue
+                val coords = pts.joinToString(",") { "[${it.lon},${it.lat}]" }
+                features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$coords]]}}""")
                 addedAny = true
             }
             if (addedAny) {
                 renderedOblastIds.add(id)
             } else {
-                fillDebugLog("alertRegions: oblast id=$id resolved but every ring had <3 points")
+                fillDebugLog("alertRegions: oblast id=$id resolved but every ring degenerate or <3 points")
             }
         }
 
@@ -129,10 +173,10 @@ object MapLibreGeoJson {
                 fillDebugLog("alertRegions: no boundary polygon for raion id=$id/$raion")
                 continue
             }
-            for (ring in poly.rings) {
-                if (ring.pointCount < 3) continue
-                val pts = ring.toPoints().joinToString(",") { "[${it.lon},${it.lat}]" }
-                features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$pts]]}}""")
+            for ((index, ring) in poly.rings.withIndex()) {
+                val pts = normalizedRingPoints(ring, "raion id=$id/$raion ring=$index") ?: continue
+                val coords = pts.joinToString(",") { "[${it.lon},${it.lat}]" }
+                features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$coords]]}}""")
             }
         }
 

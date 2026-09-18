@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- City labels now stay red/yellow in city-labels and border modes, and turn white only when region fill is on / City labels now stay red/yellow in city-labels and border modes, and turn white only when region fill is on
+
+- Fill/border mode switches apply instantly without rebuilding unchanged region geometry / Fill/border mode switches apply instantly without rebuilding unchanged region geometry
+
+- Fixed white flash on cold start by painting the map surface and system splash black until the dark style loads / Fixed white flash on cold start by painting the map surface and system splash black until the dark style loads
+
+- Fixed red alert regions not rendering by dropping degenerate boundary slivers and normalizing polygon winding in alert fills / Fixed red alert regions not rendering by dropping degenerate boundary slivers and normalizing polygon winding in alert fills
+
 - Auto shoot-down now respects follow-bullet: off-screen strikes skip the countdown and animation when the setting is off, and the collector lives in the flourish / Auto shoot-down now respects follow-bullet: off-screen strikes skip the countdown and animation when the setting is off, and the collector lives in the flourish
 
 - Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers / Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers

@@ -249,6 +249,24 @@ object MapLibreLayerManager {
         }
         lastSkipLogged = false
 
+        val dataUnchanged = redOblastIds == lastRedOblastIds &&
+            redRaions == lastRedRaions &&
+            yellowOblastIds == lastYellowOblastIds &&
+            yellowRaions == lastYellowRaions
+        if (dataUnchanged && alertRegionMode != AlertRegionMode.CITY_LABELS &&
+            lastAlertRegionMode != AlertRegionMode.CITY_LABELS && lastAlertRegionMode != null
+        ) {
+            // Same data, FILL<->BORDER switch: the sources already hold the right GeoJSON
+            // (cached sets are only updated on successful writes), so flip fill-layer
+            // visibility only — no string rebuild, no regex, no re-upload.
+            val fillVisible = alertRegionMode == AlertRegionMode.FILL
+            style.getLayer(LAYER_ALERT_YELLOW)?.setProperties(visibility(if (fillVisible) Property.VISIBLE else Property.NONE))
+            style.getLayer(LAYER_ALERT_RED_FILL)?.setProperties(visibility(if (fillVisible) Property.VISIBLE else Property.NONE))
+            fillDebugLog("updateAlertRegions: mode flip ${lastAlertRegionMode}->$alertRegionMode, data unchanged — visibility only")
+            lastAlertRegionMode = alertRegionMode
+            return
+        }
+
         val filteredYellowOblastIds = yellowOblastIds - redOblastIds
         val redCanonicalRaions = redRaions.mapNotNull { (id, raion) ->
             CompactRaionBoundaries.canonicalKey(raion)?.let { id to it }

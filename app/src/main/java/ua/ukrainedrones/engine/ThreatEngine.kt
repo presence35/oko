@@ -293,7 +293,8 @@ class ThreatEngine(
         }
         if (!shouldRecord) return
 
-        android.util.Log.w("ThreatEngine", "FILL probe\n$summary")
+        // Logcat write is best-effort: android.util.Log throws in plain JVM unit tests.
+        runCatching { android.util.Log.w("ThreatEngine", "FILL probe\n$summary") }
         ApiMonitor.record(
             SystemEntry(
                 atMillis = now,

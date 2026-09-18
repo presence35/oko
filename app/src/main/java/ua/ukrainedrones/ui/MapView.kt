@@ -60,7 +60,6 @@ import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.community.CompactOblastBoundaries
 import ua.ukrainedrones.community.CompactRaionBoundaries
-import ua.ukrainedrones.source.RESOLVED_REPLAY_GRACE_MS
 import ua.ukrainedrones.ui.MapLibreBridge
 import ua.ukrainedrones.ui.MapLibreHostView
 import kotlin.math.roundToInt
@@ -891,7 +890,7 @@ LaunchedEffect(selectedId) {
         uiState.alertRaionKeys,
         uiState.alertYellowRaionKeys
     ) {
-        if (uiState.alertRegionMode == AlertRegionMode.CITY_LABELS) {
+        if (uiState.alertRegionMode != AlertRegionMode.FILL) {
             buildMap {
                 putAll(uiState.cityAlerts)
                 for (city in Cities.ALL) {
@@ -917,7 +916,7 @@ LaunchedEffect(selectedId) {
         uiState.alertRaionKeys,
         uiState.alertYellowRaionKeys
     ) {
-        if (uiState.alertRegionMode != AlertRegionMode.CITY_LABELS) {
+        if (uiState.alertRegionMode == AlertRegionMode.FILL) {
             uiState.cityAlerts.mapNotNull { (cityName, level) ->
                 val stem = Cities.cityOblast[cityName] ?: return@mapNotNull null
                 val id = CompactOblastBoundaries.canonicalId(stem) ?: return@mapNotNull null

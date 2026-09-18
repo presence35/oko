@@ -241,6 +241,9 @@ fun MapLibreHostView(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
+            // Black until the dark style paints its first frame — the GL surface
+            // defaults to white and style load takes ~1s on cold start.
+            setBackgroundColor(android.graphics.Color.BLACK)
             onCreate(null)
         }
     }

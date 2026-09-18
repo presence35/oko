@@ -737,6 +737,85 @@ class ThreatEngineTest {
         assertNull(engine.computeProximity(threat, LatLng(userLat, userLng), System.currentTimeMillis()))
     }
 
+    @Test
+    fun `computeCityAlerts - oblast-wide red tints every city of that oblast`() {
+        // Live NEPTUN shape: Latin key, Cyrillic name, explicit wide flag.
+        val alert = OblastAlert(
+            key = "donetska", name = "Донецька область", oblast = "Донецька область",
+            since = null, wide = true, level = "red"
+        )
+        val result = engine.computeCityAlerts(listOf(alert))
+        val donetskaCities = Cities.ALL
+            .filter { CompactOblastBoundaries.canonicalId(Cities.cityOblast[it.nameUa] ?: "") == "donetska" }
+        assertTrue("expected donetska cities, got ${donetskaCities.size}", donetskaCities.isNotEmpty())
+        for (city in donetskaCities) {
+            assertEquals("city ${city.nameUa}", AlertLevel.RED, result[city.nameUa])
+        }
+        val lvivCities = Cities.ALL
+            .filter { CompactOblastBoundaries.canonicalId(Cities.cityOblast[it.nameUa] ?: "") == "lvivska" }
+        for (city in lvivCities) {
+            assertNull("city ${city.nameUa} must stay untinted", result[city.nameUa])
+        }
+    }
+
+    @Test
+    fun `computeCityAlerts - untagged oblast-wide red tints via name heuristic`() {
+        // Live flat shape without explicit wide flag: heuristic must kick in.
+        val alert = OblastAlert(
+            key = "zaporizka", name = "Запорізька область", oblast = "Запорізька область",
+            since = null, wide = null, level = "red"
+        )
+        val result = engine.computeCityAlerts(listOf(alert))
+        val zaporizkaCities = Cities.ALL
+            .filter { CompactOblastBoundaries.canonicalId(Cities.cityOblast[it.nameUa] ?: "") == "zaporizka" }
+        assertTrue(zaporizkaCities.isNotEmpty())
+        for (city in zaporizkaCities) {
+            assertEquals("city ${city.nameUa}", AlertLevel.RED, result[city.nameUa])
+        }
+    }
+
+    @Test
+    fun `computeCityAlerts - oblast-wide yellow tints yellow and red wins on overlap`() {
+        val yellow = OblastAlert(
+            key = "odeska", name = "Одеська область", oblast = "Одеська область",
+            since = null, wide = true, level = "yellow"
+        )
+        val result = engine.computeCityAlerts(listOf(yellow))
+        val odeskaCities = Cities.ALL
+            .filter { CompactOblastBoundaries.canonicalId(Cities.cityOblast[it.nameUa] ?: "") == "odeska" }
+        assertTrue(odeskaCities.isNotEmpty())
+        for (city in odeskaCities) {
+            assertEquals("city ${city.nameUa}", AlertLevel.YELLOW, result[city.nameUa])
+        }
+
+        val red = OblastAlert(
+            key = "odeska", name = "Одеська область", oblast = "Одеська область",
+            since = null, wide = true, level = "red"
+        )
+        val mixed = engine.computeCityAlerts(listOf(yellow, red))
+        for (city in odeskaCities) {
+            assertEquals("city ${city.nameUa}", AlertLevel.RED, mixed[city.nameUa])
+        }
+    }
+
+    @Test
+    fun `computeCityAlerts - raion alert tints only its own oblast cities`() {
+        val alert = OblastAlert(
+            key = "bakhmutskyi", name = "Бахмутський район", oblast = "Донецька область",
+            since = null, wide = false, level = "red"
+        )
+        val result = engine.computeCityAlerts(listOf(alert))
+        assertTrue("expected at least one tinted city", result.isNotEmpty())
+        for ((cityName, level) in result) {
+            assertEquals(AlertLevel.RED, level)
+            assertEquals(
+                "city $cityName outside donetska",
+                "donetska",
+                CompactOblastBoundaries.canonicalId(Cities.cityOblast[cityName] ?: "")
+            )
+        }
+    }
+
     private fun makeThreat(
         id: String = "test-${System.nanoTime()}",
         type: String = "shahed",
