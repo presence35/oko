@@ -664,8 +664,8 @@ private fun MapScreen(
     var selectedShelter by remember { mutableStateOf<NearestShelter?>(null) }
     // Measured overlay heights feeding the map's camera framing: the popup card covers the top
     // of the viewport, the zones sheet the bottom — the map fits/reveals inside the visible band.
-    var popupCoverPx by remember { mutableStateOf(0) }
-    var zonesSheetCoverPx by remember { mutableStateOf(0) }
+    val popupCoverPxState = remember { mutableIntStateOf(0) }
+    val zonesSheetCoverPxState = remember { mutableIntStateOf(0) }
     var deathActive by remember { mutableStateOf(false) }
     var replayProgress by remember { mutableStateOf<ReplayProgress?>(null) }
     var countdown by remember { mutableStateOf<Int?>(null) }
@@ -740,7 +740,7 @@ private fun MapScreen(
 
     // Drop the measured sheet height when it closes so a stale cover never shrinks the framing.
     LaunchedEffect(showZonesSheet) {
-        if (!showZonesSheet) zonesSheetCoverPx = 0
+        if (!showZonesSheet) zonesSheetCoverPxState.intValue = 0
     }
 
     val openSettings: () -> Unit = {
@@ -910,8 +910,8 @@ private fun MapScreen(
                         zoomTick = zoomTick,
                         fitZonesTick = fitZonesTick,
                         zonesSheetOpen = showZonesSheet,
-                        popupCoverPx = popupCoverPx,
-                        zonesSheetCoverPx = zonesSheetCoverPx,
+                        popupCoverPxState = popupCoverPxState,
+                        zonesSheetCoverPxState = zonesSheetCoverPxState,
                         revealRequest = uiState.revealRequest,
                         paused = settingsOpen,
                         mapVisible = mapVisible,
@@ -1126,7 +1126,7 @@ private fun MapScreen(
                 onDismiss = onDismissPopup,
                 onThreatCardSizeChange = onThreatCardSizeChange,
                 onLocateThreat = onLocateThreat,
-                onHeightChanged = { popupCoverPx = it }
+                onHeightChanged = { popupCoverPxState.intValue = it }
             )
 
             // Shelter info card: tapping a shelter marker on the map opens it here (the same
@@ -1159,7 +1159,7 @@ private fun MapScreen(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .onSizeChanged { zonesSheetCoverPx = it.height },
+                        .onSizeChanged { zonesSheetCoverPxState.intValue = it.height },
                     color = if (editingNight) NightSectionBg else Color(AppPalette.Card),
                     shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                     border = BorderStroke(

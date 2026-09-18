@@ -6,9 +6,6 @@ import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.threatTypeInfoByString
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -207,39 +204,6 @@ fun ThreatPopupCard(
         null -> Color(AppPalette.TextSecondary)
     }
 
-    // Selection-change feedback: the body renders in one frame (tap feels instant); the title
-    // icon pops 0.4 → 1 with a quick spring as the only motion — whenever a different threat
-    // is selected (first open included). Stream refreshes keep the threat id, so they never
-    // re-trigger.
-    // Hoisted here so card-size toggles don't reset the pop. The tap haptic lives at the
-    // marker-click site (immediate); with system animations off there is no pop at all.
-    val animsOff = animationsOff()
-    val iconScale = remember { Animatable(1f) }
-    var lastSelectedId by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(threat.id, interactive) {
-        when {
-            !interactive -> {
-                iconScale.snapTo(1f)
-                lastSelectedId = threat.id
-            }
-            threat.id == lastSelectedId -> {}
-            else -> {
-                lastSelectedId = threat.id
-                // Tap-site haptic (MapView) already ticked on touch; no second buzz here.
-                if (!animsOff) {
-                    iconScale.snapTo(0.4f)
-                    iconScale.animateTo(
-                        1f,
-                        spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = 800f
-                        )
-                    )
-                }
-            }
-        }
-    }
-
     // Neutralized state: a compact, non-interactive card that just announces the resolved
     // threat by its type — no pills, skull, region or close.
     if (neutralized) {
@@ -342,14 +306,12 @@ fun ThreatPopupCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Box(modifier = Modifier.graphicsLayer { val sc = iconScale.value; scaleX = sc; scaleY = sc }) {
-                                    ThreatIcon(
-                                        type = threat.type.toThreatType(),
-                                        set = iconSet,
-                                        size = fontAware(34.dp),
-                                        contentDescription = typeLabel
-                                    )
-                                }
+                                ThreatIcon(
+                                    type = threat.type.toThreatType(),
+                                    set = iconSet,
+                                    size = fontAware(34.dp),
+                                    contentDescription = typeLabel
+                                )
                                     Text(
                                         titleLabel,
                                         fontWeight = FontWeight.SemiBold,
@@ -450,14 +412,12 @@ fun ThreatPopupCard(
                     Column(modifier = Modifier.weight(1f)) {
                         // Header: icon, type, status chips, region, and elapsed time on top-right
                         Row(verticalAlignment = Alignment.Top) {
-                            Box(modifier = Modifier.graphicsLayer { val sc = iconScale.value; scaleX = sc; scaleY = sc }) {
-                                ThreatIcon(
-                                    type = threat.type.toThreatType(),
-                                    set = iconSet,
-                                    size = fontAware(40.dp),
-                                    contentDescription = typeLabel
-                                )
-                            }
+                            ThreatIcon(
+                                type = threat.type.toThreatType(),
+                                set = iconSet,
+                                size = fontAware(40.dp),
+                                contentDescription = typeLabel
+                            )
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(

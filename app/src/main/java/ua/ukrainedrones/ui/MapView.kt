@@ -24,7 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -423,8 +423,8 @@ fun NeptunMapView(
     zoomTick: Int = 0,
     fitZonesTick: Int = 0,
     zonesSheetOpen: Boolean = false,
-    popupCoverPx: Int = 0,
-    zonesSheetCoverPx: Int = 0,
+    popupCoverPxState: State<Int> = remember { mutableIntStateOf(0) },
+    zonesSheetCoverPxState: State<Int> = remember { mutableIntStateOf(0) },
     revealRequest: RevealRequest? = null,
     paused: Boolean = false,
     mapVisible: Boolean = true,
@@ -520,17 +520,6 @@ fun NeptunMapView(
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
-    }
-
-    val deathFrame = remember { mutableIntStateOf(0) }
-    LaunchedEffect(deathFx) {
-        while (true) {
-            withFrameNanos {}
-            if (deathFx.isActive) {
-                deathFrame.intValue++
-                bridgeState.value?.invalidateOverlay()
-            }
-        }
     }
 
     // Sync GPU layers with UI state. Split three ways so a change in one group
@@ -663,7 +652,7 @@ fun NeptunMapView(
             camera.fitZoneToPanel(
                 bridge, centerLat, centerLon,
                 uiState.activeZoneParams.slowYellowKm.toDouble(),
-                zonesSheetCoverPx
+                zonesSheetCoverPxState.value
             )
         }
 
@@ -688,7 +677,7 @@ fun NeptunMapView(
                 camera.fitZoneToPanel(
                     bridge, focus.lat, focus.lon,
                     uiState.activeZoneParams.slowYellowKm.toDouble(),
-                    zonesSheetCoverPx
+                    zonesSheetCoverPxState.value
                 )
             }
         }
@@ -718,27 +707,29 @@ LaunchedEffect(selectedId) {
 }
 
     // Refine pending camera fit once popup card is measured
-    LaunchedEffect(lastArmTick.value, popupCoverPx) {
-        if (popupCoverPx <= 0) return@LaunchedEffect
+    LaunchedEffect(lastArmTick.value, popupCoverPxState.value) {
+        val cover = popupCoverPxState.value
+        if (cover <= 0) return@LaunchedEffect
         val bridge = bridgeState.value ?: return@LaunchedEffect
-        camera.refinePendingFit(bridge, selectedThreatIdState, bridge.height, popupCoverPx, zonesSheetCoverPx)
+        camera.refinePendingFit(bridge, selectedThreatIdState, bridge.height, cover, zonesSheetCoverPxState.value)
     }
 
     // Refine zone sheet fit
-    LaunchedEffect(zonesSheetCoverPx) {
-        if (zonesSheetCoverPx <= 0) {
+    LaunchedEffect(zonesSheetCoverPxState.value) {
+        val cover = zonesSheetCoverPxState.value
+        if (cover <= 0) {
             lastZonesCoverPx.value = 0
             return@LaunchedEffect
         }
         val prev = lastZonesCoverPx.value
-        lastZonesCoverPx.value = zonesSheetCoverPx
+        lastZonesCoverPx.value = cover
         if (prev != 0 || !zonesSheetOpen) return@LaunchedEffect
         val bridge = bridgeState.value ?: return@LaunchedEffect
         val focus = focusLocationState ?: return@LaunchedEffect
         camera.fitZoneToPanel(
             bridge, focus.lat, focus.lon,
             uiState.activeZoneParams.slowYellowKm.toDouble(),
-            zonesSheetCoverPx
+            cover
         )
     }
 
@@ -820,6 +811,9 @@ LaunchedEffect(selectedId) {
     LaunchedEffect(Unit) {
         var wasActive = false
         deathFx.active.collect { active ->
+            if (active) {
+                bridgeState.value?.invalidateOverlay()
+            }
             if (wasActive && !active) {
                 delay(2100)
                 val ids = hiddenByDeath.value.toList()
@@ -1065,6 +1059,7 @@ LaunchedEffect(selectedId) {
                             zoom = currentZoom,
                             project = projLambda
                         )
+                        bridge.invalidateOverlayNextFrame()
                     }
                 }
                 var lastScaleZoom = -1.0
