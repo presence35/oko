@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed ghost offline episode counter on Wi-Fi by making in-progress episodes purely runtime state / Fixed ghost offline episode counter on Wi-Fi by making in-progress episodes purely runtime state
+
 - Cleaned up alert region style buttons, moved show threat IDs below haptics, defaulted haptics to ON and small cities to OFF / Cleaned up alert region style buttons, moved show threat IDs below haptics, defaulted haptics to ON and small cities to OFF
 
 - Eliminated ghost hits by tightening hit-test radius to icon bounds, filtering animating/dead threats, and decoupling overlay invalidations from card recompositions / Eliminated ghost hits by tightening hit-test radius to icon bounds, filtering animating/dead threats, and decoupling overlay invalidations from card recompositions

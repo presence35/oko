@@ -47,30 +47,22 @@ object ConnectionLog {
     private val attachDone = CompletableDeferred<Unit>()
 
     /**
-     * Restore persisted entries + any in-progress episode from DataStore. Call once (from
+     * Restore persisted completed entries from DataStore. Call once (from
      * AlertService/MainActivity) before NeptunClient starts its watchdog. Idempotent.
      */
     fun attach(context: Context) {
         if (attached) return
         attached = true
         appContext = context.applicationContext
-        // The DataStore reads are dispatched off the calling thread: attach() is invoked from
-        // the main thread at app/service startup, and the attachScope runs on IO.
         attachScope.launch {
             val prefs = ServiceState(context.applicationContext)
             val loaded = parse(prefs.connLog().first())
-            val since = prefs.connLogPendingSince().first()
-            val name = prefs.connLogPendingStatus().first()
-            val restored = if (since > 0) {
-                ConnLogEntry(since, ConnStatus.entries.firstOrNull { it.name == name } ?: ConnStatus.OFFLINE, null)
-            } else null
-            pending = restored
             _entries.value = loaded
             attachDone.complete(Unit)
         }
     }
 
-    /** Wait for [attach]'s async restore to finish (before the watchdog's writes race it). */
+    /** Wait for [attach]'s async restore to finish. */
     suspend fun awaitAttached() = attachDone.await()
 
     /**
@@ -84,9 +76,6 @@ object ConnectionLog {
         val t = commitLogState(prev, status, now, pending, _entries.value, MAX_ENTRIES, 0L, activeSource) ?: return
         _entries.value = t.entries
         pending = t.nextPending
-        if (t.persistPendingSince >= 0) {
-            persistPending(t.persistPendingSince, t.persistPendingStatus)
-        }
         if (t.persistLog) persist()
     }
 
@@ -106,14 +95,6 @@ object ConnectionLog {
     private fun persist() {
         val context = appContext ?: return
         attachScope.launch { ServiceState(context).setConnLog(serialize(_entries.value)) }
-    }
-
-    private fun persistPending(since: Long, status: String) {
-        val context = appContext ?: return
-        attachScope.launch {
-            ServiceState(context).setConnLogPendingSince(since)
-            ServiceState(context).setConnLogPendingStatus(status)
-        }
     }
 
     private fun serialize(entries: List<ConnLogEntry>): String =
@@ -137,9 +118,6 @@ object ConnectionLog {
 internal data class LogTransition(
     val entries: List<ConnLogEntry>,
     val nextPending: ConnLogEntry?,
-    /** Pending-episode state to persist; -1 = leave the persisted value untouched. */
-    val persistPendingSince: Long,
-    val persistPendingStatus: String,
     val persistLog: Boolean
 )
 
@@ -166,8 +144,6 @@ internal fun commitLogState(
             LogTransition(
                 entries = entries,
                 nextPending = ConnLogEntry(now, status, null, activeSource),
-                persistPendingSince = now,
-                persistPendingStatus = status.name,
                 persistLog = false
             )
         } else null
@@ -175,7 +151,6 @@ internal fun commitLogState(
     if (status == prevStatus) return null
     var newEntries = entries
     var dirty = false
-    var clearPending = false
     val episode = pending
     if (episode != null && episode.status != ConnStatus.ONLINE) {
         val durSec = (now - episode.atMillis) / 1000
@@ -183,7 +158,6 @@ internal fun commitLogState(
             newEntries = (newEntries + episode.copy(durationSec = durSec)).takeLast(maxEntries)
             dirty = true
         }
-        clearPending = true
     }
     val nextPending = if (status == ConnStatus.ONLINE) null else ConnLogEntry(now, status, null, activeSource)
     if (status == ConnStatus.ONLINE && dirty) {
@@ -192,12 +166,6 @@ internal fun commitLogState(
     return LogTransition(
         entries = newEntries,
         nextPending = nextPending,
-        persistPendingSince = when {
-            nextPending != null -> now
-            clearPending -> 0L
-            else -> -1L
-        },
-        persistPendingStatus = nextPending?.status?.name ?: "",
         persistLog = dirty
     )
 }

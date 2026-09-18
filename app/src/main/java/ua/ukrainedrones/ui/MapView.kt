@@ -533,10 +533,6 @@ fun NeptunMapView(
         }
     }
 
-    LaunchedEffect(cityLabelOverlay) {
-        bridgeState.value?.invalidateOverlay()
-    }
-
     // Sync GPU layers with UI state. Split three ways so a change in one group
     // never re-runs the others (a mode toggle must not redo borders/zones).
     // The first alerts apply waits one frame: the dark style frame composites
@@ -944,6 +940,10 @@ LaunchedEffect(selectedId) {
             uiState.showLargeCities, uiState.showMediumCities, uiState.showSmallCities,
             forceShowAllProvider = { deathFx.forceShowAllCities.value }
         )
+    }
+
+    LaunchedEffect(cityLabelOverlay) {
+        bridgeState.value?.invalidateOverlay()
     }
 
     val chipPaint = remember {

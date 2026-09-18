@@ -18,8 +18,6 @@ class ServiceState(private val context: Context) {
     private val keyCache = mutableMapOf<String, Preferences.Key<*>>()
 
     private val connLogKey = stringPreferencesKey("conn_log")
-    private val connLogPendingSinceKey = longPreferencesKey("conn_log_pending_since")
-    private val connLogPendingStatusKey = stringPreferencesKey("conn_log_pending_status")
     private val offlinePendingSinceKey = longPreferencesKey("offline_pending_since")
     private val ignoreRetryUntilKey = longPreferencesKey("ignore_retry_until")
     private val reconnectStartMillisKey = longPreferencesKey("reconnect_start_millis")
@@ -41,20 +39,6 @@ class ServiceState(private val context: Context) {
 
     suspend fun setConnLog(serialized: String) {
         context.dataStore.edit { it[connLogKey] = serialized }
-    }
-
-    fun connLogPendingSince(): Flow<Long> =
-        context.dataStore.data.map { prefs -> prefs[connLogPendingSinceKey] ?: 0L }
-
-    suspend fun setConnLogPendingSince(ts: Long) {
-        context.dataStore.edit { it[connLogPendingSinceKey] = ts }
-    }
-
-    fun connLogPendingStatus(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[connLogPendingStatusKey] ?: "" }
-
-    suspend fun setConnLogPendingStatus(status: String) {
-        context.dataStore.edit { it[connLogPendingStatusKey] = status }
     }
 
     fun offlinePendingSince(): Flow<Long> =

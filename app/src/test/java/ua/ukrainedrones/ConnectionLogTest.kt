@@ -34,8 +34,6 @@ class ConnectionLogTest {
         assertTrue(t.entries.isEmpty())
         assertTrue(!t.persistLog)
         assertEquals(ConnStatus.OFFLINE, t.nextPending?.status)
-        assertEquals(1_000, t.persistPendingSince)
-        assertEquals("OFFLINE", t.persistPendingStatus)
     }
 
     @Test
@@ -50,7 +48,6 @@ class ConnectionLogTest {
         assertEquals(35L, t.entries[0].durationSec)
         assertEquals(ConnStatus.ONLINE, t.entries[1].status)
         assertNull(t.nextPending)
-        assertEquals(0L, t.persistPendingSince)
         assertTrue(t.persistLog)
     }
 
