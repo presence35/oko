@@ -3,9 +3,6 @@ package ua.ukrainedrones.ui
 import ua.ukrainedrones.theme.AppPalette
 import ua.ukrainedrones.community.CompactRaionBoundaries
 import ua.ukrainedrones.AlertRegionMode
-import ua.ukrainedrones.data.ApiMonitor
-import ua.ukrainedrones.data.SystemEntry
-import ua.ukrainedrones.data.SystemEntryKind
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
@@ -30,22 +27,6 @@ object MapLibreLayerManager {
     private var lastRedRaions: Set<Pair<String, String>>? = null
     private var lastYellowOblastIds: Set<String>? = null
     private var lastYellowRaions: Set<Pair<String, String>>? = null
-    private var lastSkipLogged: Boolean = false
-
-    /**
-     * Logs a fill-rendering problem both to Logcat and into the in-app Logs screen
-     * (Settings → Logs, amber "Fill debug" entries) so it's visible without adb/logcat.
-     */
-    private fun fillDebugLog(message: String) {
-        android.util.Log.w("MapLibreLayerManager", message)
-        ApiMonitor.record(
-            SystemEntry(
-                atMillis = System.currentTimeMillis(),
-                kind = SystemEntryKind.FILL_DEBUG,
-                detail = "[MapLibreLayerManager] $message"
-            )
-        )
-    }
 
     private var lastCenterLat: Double? = null
     private var lastCenterLon: Double? = null
@@ -117,7 +98,23 @@ object MapLibreLayerManager {
         // 1. Ukraine country border — not drawn (we keep the border knowledge for masking only, no line)
         // land border intentionally not added as a layer
 
-        // 2. Oblast borders — below alert fills
+        // 2. Alert fills — opaque, below white borders so white shows on top in FILL
+        val srcAlertYellow = GeoJsonSource(SOURCE_ALERT_YELLOW, MapLibreGeoJson.EMPTY)
+        style.addSource(srcAlertYellow)
+        style.addLayer(
+            FillLayer(LAYER_ALERT_YELLOW, SOURCE_ALERT_YELLOW).apply {
+                setProperties(fillColor(AppPalette.YellowFill.toInt()))
+            }
+        )
+        val srcAlertRed = GeoJsonSource(SOURCE_ALERT_RED, MapLibreGeoJson.EMPTY)
+        style.addSource(srcAlertRed)
+        style.addLayer(
+            FillLayer(LAYER_ALERT_RED_FILL, SOURCE_ALERT_RED).apply {
+                setProperties(fillColor(AppPalette.RedFill.toInt()))
+            }
+        )
+
+        // 3. Oblast borders — white, above fills so FILL shows white subdivision
         val srcOblast = GeoJsonSource(SOURCE_OBLAST_BORDERS, data.oblastBorders)
         style.addSource(srcOblast)
         style.addLayer(
@@ -130,7 +127,7 @@ object MapLibreLayerManager {
             }
         )
 
-        // 3. Raion borders — below alert fills
+        // 4. Raion borders — white, above fills
         val srcRaion = GeoJsonSource(SOURCE_RAION_BORDERS, data.raionBorders)
         style.addSource(srcRaion)
         style.addLayer(
@@ -143,35 +140,22 @@ object MapLibreLayerManager {
             }
         )
 
-        // 4. Alert fills and outlines — on top so opaque r/y hides borders underneath
-        val srcAlertYellow = GeoJsonSource(SOURCE_ALERT_YELLOW, MapLibreGeoJson.EMPTY)
-        style.addSource(srcAlertYellow)
-        style.addLayer(
-            FillLayer(LAYER_ALERT_YELLOW, SOURCE_ALERT_YELLOW).apply {
-                setProperties(fillColor(AppPalette.YellowFill.toInt()))
-            }
-        )
+        // 5. Alert outlines — colored, above white so BORDER overrides white with r/y
         style.addLayer(
             LineLayer(LAYER_ALERT_YELLOW_LINE, SOURCE_ALERT_YELLOW).apply {
                 setProperties(
                     lineColor(AppPalette.YellowLine.toInt()),
-                    lineWidth(1.2f)
+                    lineWidth(1.2f),
+                    visibility(Property.NONE)
                 )
-            }
-        )
-
-        val srcAlertRed = GeoJsonSource(SOURCE_ALERT_RED, MapLibreGeoJson.EMPTY)
-        style.addSource(srcAlertRed)
-        style.addLayer(
-            FillLayer(LAYER_ALERT_RED_FILL, SOURCE_ALERT_RED).apply {
-                setProperties(fillColor(AppPalette.RedFill.toInt()))
             }
         )
         style.addLayer(
             LineLayer(LAYER_ALERT_RED_LINE, SOURCE_ALERT_RED).apply {
                 setProperties(
                     lineColor(AppPalette.RedLine.toInt()),
-                    lineWidth(1.5f)
+                    lineWidth(1.5f),
+                    visibility(Property.NONE)
                 )
             }
         )
@@ -238,7 +222,6 @@ object MapLibreLayerManager {
             lastRedRaions = null
             lastYellowOblastIds = null
             lastYellowRaions = null
-            lastSkipLogged = false
             lastCenterLat = null
             lastCenterLon = null
             lastSlowRedKm = null
@@ -250,7 +233,6 @@ object MapLibreLayerManager {
             val redSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_RED)
             val yellowSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_YELLOW)
             if (redSrc == null || yellowSrc == null) {
-                fillDebugLog("updateAlertRegions: alert source(s) missing on style while clearing (red=$redSrc yellow=$yellowSrc) — not caching this as applied")
                 return
             }
             redSrc.setGeoJson(MapLibreGeoJson.EMPTY)
@@ -269,17 +251,8 @@ object MapLibreLayerManager {
             yellowOblastIds == lastYellowOblastIds &&
             yellowRaions == lastYellowRaions
         ) {
-            if (!lastSkipLogged) {
-                lastSkipLogged = true
-                fillDebugLog(
-                    "updateAlertRegions: skipped, no change since last apply " +
-                        "(mode=$alertRegionMode redObl=${redOblastIds.size} redRaion=${redRaions.size} " +
-                        "yellowObl=${yellowOblastIds.size} yellowRaion=${yellowRaions.size})"
-                )
-            }
             return
         }
-        lastSkipLogged = false
 
         val dataUnchanged = redOblastIds == lastRedOblastIds &&
             redRaions == lastRedRaions &&
@@ -288,13 +261,13 @@ object MapLibreLayerManager {
         if (dataUnchanged && alertRegionMode != AlertRegionMode.CITY_LABELS &&
             lastAlertRegionMode != AlertRegionMode.CITY_LABELS && lastAlertRegionMode != null
         ) {
-            // Same data, FILL<->BORDER switch: the sources already hold the right GeoJSON
-            // (cached sets are only updated on successful writes), so flip fill-layer
-            // visibility only — no string rebuild, no regex, no re-upload.
+            // Same data, FILL<->BORDER switch: flip fill vs line visibility — FILL white, BORDER colored.
             val fillVisible = alertRegionMode == AlertRegionMode.FILL
+            val lineVisible = alertRegionMode == AlertRegionMode.BORDER
             style.getLayer(LAYER_ALERT_YELLOW)?.setProperties(visibility(if (fillVisible) Property.VISIBLE else Property.NONE))
             style.getLayer(LAYER_ALERT_RED_FILL)?.setProperties(visibility(if (fillVisible) Property.VISIBLE else Property.NONE))
-            fillDebugLog("updateAlertRegions: mode flip ${lastAlertRegionMode}->$alertRegionMode, data unchanged — visibility only")
+            style.getLayer(LAYER_ALERT_YELLOW_LINE)?.setProperties(visibility(if (lineVisible) Property.VISIBLE else Property.NONE))
+            style.getLayer(LAYER_ALERT_RED_LINE)?.setProperties(visibility(if (lineVisible) Property.VISIBLE else Property.NONE))
             lastAlertRegionMode = alertRegionMode
             return
         }
@@ -312,7 +285,6 @@ object MapLibreLayerManager {
         val redSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_RED)
         val yellowSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_YELLOW)
         if (redSrc == null || yellowSrc == null) {
-            fillDebugLog("updateAlertRegions: alert source(s) missing on style (red=$redSrc yellow=$yellowSrc) — not caching this as applied")
             return
         }
         val redGeoJson = MapLibreGeoJson.alertRegions(redOblastIds, redRaions)
@@ -321,35 +293,12 @@ object MapLibreLayerManager {
         yellowSrc.setGeoJson(yellowGeoJson)
 
         val fillVisible = alertRegionMode == AlertRegionMode.FILL
+        val lineVisible = alertRegionMode == AlertRegionMode.BORDER
         style.getLayer(LAYER_ALERT_YELLOW)?.setProperties(visibility(if (fillVisible) Property.VISIBLE else Property.NONE))
         style.getLayer(LAYER_ALERT_RED_FILL)?.setProperties(visibility(if (fillVisible) Property.VISIBLE else Property.NONE))
+        style.getLayer(LAYER_ALERT_YELLOW_LINE)?.setProperties(visibility(if (lineVisible) Property.VISIBLE else Property.NONE))
+        style.getLayer(LAYER_ALERT_RED_LINE)?.setProperties(visibility(if (lineVisible) Property.VISIBLE else Property.NONE))
 
-        fun featureCount(geoJson: String) = Regex("\"type\":\"Feature\"").findAll(geoJson).count()
-        fun bounds(geoJson: String): String {
-            val coordPairRegex = Regex("""\[(-?\d+\.?\d*),(-?\d+\.?\d*)\]""")
-            var minLon = Double.MAX_VALUE
-            var maxLon = -Double.MAX_VALUE
-            var minLat = Double.MAX_VALUE
-            var maxLat = -Double.MAX_VALUE
-            var n = 0
-            for (m in coordPairRegex.findAll(geoJson)) {
-                val lon = m.groupValues[1].toDoubleOrNull() ?: continue
-                val lat = m.groupValues[2].toDoubleOrNull() ?: continue
-                if (lon < minLon) minLon = lon
-                if (lon > maxLon) maxLon = lon
-                if (lat < minLat) minLat = lat
-                if (lat > maxLat) maxLat = lat
-                n++
-            }
-            return if (n == 0) "no coordinates found"
-            else "lat[$minLat..$maxLat] lon[$minLon..$maxLon] (n=$n points)"
-        }
-        fillDebugLog(
-            "updateAlertRegions: applied mode=$alertRegionMode redObl=${redOblastIds.size} redRaion=${redRaions.size} " +
-                "yellowObl=${filteredYellowOblastIds.size} yellowRaion=${filteredYellowRaions.size} " +
-                "redFeatures=${featureCount(redGeoJson)} yellowFeatures=${featureCount(yellowGeoJson)}"
-        )
-        fillDebugLog("updateAlertRegions: redBounds=${bounds(redGeoJson)} yellowBounds=${bounds(yellowGeoJson)}")
         lastAlertRegionMode = alertRegionMode
         lastRedOblastIds = redOblastIds
         lastRedRaions = redRaions

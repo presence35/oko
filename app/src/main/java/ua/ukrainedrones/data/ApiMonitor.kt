@@ -18,7 +18,7 @@ import ua.ukrainedrones.service.ServiceState
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
-enum class SystemEntryKind { SDK_CHANGED, SDK_CHECK_FAILED, MALFORMED_FRAME, UNKNOWN_TYPE_DETECTED, FILL_DEBUG }
+enum class SystemEntryKind { SDK_CHANGED, SDK_CHECK_FAILED, MALFORMED_FRAME, UNKNOWN_TYPE_DETECTED }
 
 data class SystemEntry(
     val atMillis: Long,

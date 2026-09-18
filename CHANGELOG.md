@@ -20,6 +20,8 @@
 
 - Alerted cities now surface 25% earlier than their tier (RED/YELLOW only) and stay colored on fills, so a red region shows at country view / Міста під тривогою з'являються на 25% раніше свого рівня (лише RED/YELLOW) і лишаються кольоровими на заливках, тож червоний регіон видно з огляду країни
 
+- Fill mode keeps borders white above opaque fills; border mode overrides white with red/yellow outlines, and zone circles use distinct gold/red so they don't merge with fills / У режимі заливки межі лишаються білими над непрозорими заливками; у режимі меж білий перекривається червоним/жовтим контуром, а кола зон — окремим золотом/червоним щоб не зливатися
+
 - Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers / Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers
 
 - Fixed battery drain during outages by throttling background monitor ticks to 30s when the screen is off — active threats or degraded connectivity no longer force 1s wakeups / Fixed battery drain during outages by throttling background monitor ticks to 30s when the screen is off — active threats or degraded connectivity no longer force 1s wakeups

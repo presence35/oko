@@ -12,8 +12,8 @@ object AppPalette {
     const val RedLine: Long = 0xE1EF4444
     const val YellowFill: Long = 0xFFF59E0B
     const val YellowLine: Long = 0xBEF59E0B
-    const val ZoneRed: Long = 0xE6EF4444
-    const val ZoneYellow: Long = 0xC8F59E0B
+    const val ZoneRed: Long = 0xE6FF5252
+    const val ZoneYellow: Long = 0xC8FFD500
 
     const val SafeGreen: Long = 0xFF4CAF50
     const val DegradedOrange: Long = 0xFFFB8C00

@@ -5,9 +5,6 @@ import ua.ukrainedrones.community.CompactOblastBoundaries
 import ua.ukrainedrones.community.CompactRaionBoundaries
 import ua.ukrainedrones.community.LatLon
 import ua.ukrainedrones.community.ScaledRing
-import ua.ukrainedrones.data.ApiMonitor
-import ua.ukrainedrones.data.SystemEntry
-import ua.ukrainedrones.data.SystemEntryKind
 import ua.ukrainedrones.engine.destinationPoint
 import kotlin.math.abs
 
@@ -16,23 +13,6 @@ import kotlin.math.abs
  * active threat alert regions, and focus-centered range circles for MapLibre Native.
  */
 object MapLibreGeoJson {
-
-    /**
-     * Logs a fill-rendering problem both to Logcat and into the in-app Logs screen
-     * (Settings → Logs, amber "Fill debug" entries) so it's visible without adb/logcat.
-     */
-    private fun fillDebugLog(message: String) {
-        // Logcat write is best-effort: android.util.Log throws in plain JVM unit tests,
-        // where only the in-app ApiMonitor record matters.
-        runCatching { android.util.Log.w("MapLibreGeoJson", message) }
-        ApiMonitor.record(
-            SystemEntry(
-                atMillis = System.currentTimeMillis(),
-                kind = SystemEntryKind.FILL_DEBUG,
-                detail = "[MapLibreGeoJson] $message"
-            )
-        )
-    }
 
     /** Empty FeatureCollection sentinel. */
     const val EMPTY = """{"type":"FeatureCollection","features":[]}"""
@@ -65,12 +45,11 @@ object MapLibreGeoJson {
      * source — blanking both fill and line layers — so they are dropped here and
      * every surviving ring is forced to CCW.
      */
-    private fun normalizedRingPoints(ring: ScaledRing, label: String): List<LatLon>? {
+    private fun normalizedRingPoints(ring: ScaledRing): List<LatLon>? {
         if (ring.pointCount < 3) return null
         val pts = ring.toPoints()
         val area = signedArea(pts)
         if (abs(area) < MIN_RING_AREA_SQ_DEG) {
-            fillDebugLog("alertRegions: dropping degenerate ring (area=$area, points=${ring.pointCount}) for $label")
             return null
         }
         return if (area < 0) pts.asReversed() else pts
@@ -145,20 +124,17 @@ object MapLibreGeoJson {
         for (id in oblastIds) {
             val poly = CompactOblastBoundaries.get(id)
             if (poly == null) {
-                fillDebugLog("alertRegions: no boundary polygon for oblast id=$id")
                 continue
             }
             var addedAny = false
-            for ((index, ring) in poly.rings.withIndex()) {
-                val pts = normalizedRingPoints(ring, "oblast id=$id ring=$index") ?: continue
+            for (ring in poly.rings) {
+                val pts = normalizedRingPoints(ring) ?: continue
                 val coords = pts.joinToString(",") { "[${it.lon},${it.lat}]" }
                 features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$coords]]}}""")
                 addedAny = true
             }
             if (addedAny) {
                 renderedOblastIds.add(id)
-            } else {
-                fillDebugLog("alertRegions: oblast id=$id resolved but every ring degenerate or <3 points")
             }
         }
 
@@ -166,18 +142,13 @@ object MapLibreGeoJson {
             if (id in renderedOblastIds) continue
             val poly = CompactRaionBoundaries.forKey(id, raion)
             if (poly == null) {
-                fillDebugLog("alertRegions: no boundary polygon for raion id=$id/$raion")
                 continue
             }
-            for ((index, ring) in poly.rings.withIndex()) {
-                val pts = normalizedRingPoints(ring, "raion id=$id/$raion ring=$index") ?: continue
+            for (ring in poly.rings) {
+                val pts = normalizedRingPoints(ring) ?: continue
                 val coords = pts.joinToString(",") { "[${it.lon},${it.lat}]" }
                 features.add("""{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$coords]]}}""")
             }
-        }
-
-        if (features.isEmpty() && (oblastIds.isNotEmpty() || raionKeys.isNotEmpty())) {
-            fillDebugLog("alertRegions: produced 0 features from oblastIds=$oblastIds raionKeys=$raionKeys — fill will be invisible")
         }
 
         return """{"type":"FeatureCollection","features":[${features.joinToString(",")}]}"""
