@@ -533,7 +533,7 @@ fun NeptunMapView(
         }
     }
 
-    SideEffect {
+    LaunchedEffect(cityLabelOverlay) {
         bridgeState.value?.invalidateOverlay()
     }
 
@@ -1107,10 +1107,12 @@ LaunchedEffect(selectedId) {
 
                     // 2. Check threat hit
                     val density = context.resources.displayMetrics.density
-                    val threshold = 36f * density
+                    val iconSizeDp = if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32
+                    val threshold = (iconSizeDp / 2f + 4f) * density
                     var bestThreat: NormalizedThreat? = null
                     var bestDist = threshold
                     for (t in mapThreatsState) {
+                        if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
                         val placement = threatPlacements[t.id]
                         if (placement != null && !placement.visible) continue
                         val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)
@@ -1136,10 +1138,12 @@ LaunchedEffect(selectedId) {
                 }
                 bridge.setOnMapLongClickListener { screenPt, geoPt ->
                     val density = context.resources.displayMetrics.density
-                    val threshold = 48f * density
+                    val iconSizeDp = if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32
+                    val threshold = (iconSizeDp / 2f + 8f) * density
                     var bestThreat: NormalizedThreat? = null
                     var bestDist = threshold
                     for (t in mapThreatsState) {
+                        if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
                         val placement = threatPlacements[t.id]
                         if (placement != null && !placement.visible) continue
                         val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)

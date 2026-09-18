@@ -980,32 +980,6 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    // Show threat IDs on map
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(AppPalette.CardAlt))
-                            .clickable { onShowThreatIdsOnMapChange(!showThreatIdsOnMap) }
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                s.showThreatIdsOnMapTitle,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = Color.White
-                            )
-                            Text(
-                                s.showThreatIdsOnMapDesc,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Switch(checked = showThreatIdsOnMap, onCheckedChange = onShowThreatIdsOnMapChange)
-                    }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Card Size & Detail
                     Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp).explainerFlash(flashId == "cardSize")) {
@@ -1163,6 +1137,14 @@ fun SettingsScreen(
                         description = s.hapticsDesc,
                         checked = hapticsEnabled,
                         onCheckedChange = onHapticsEnabledChange
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // Show threat IDs on map
+                    AlertToggleRow(
+                        title = s.showThreatIdsOnMapTitle,
+                        description = s.showThreatIdsOnMapDesc,
+                        checked = showThreatIdsOnMap,
+                        onCheckedChange = onShowThreatIdsOnMapChange
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Reset tip counters

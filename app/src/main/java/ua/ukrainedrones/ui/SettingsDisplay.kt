@@ -442,92 +442,89 @@ internal fun AlertRegionModeRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            FilterChip(
-                selected = selected == AlertRegionMode.CITY_LABELS,
-                onClick = { onModeChange(AlertRegionMode.CITY_LABELS) },
-                label = {
-                    Text(
-                        text = buildAnnotatedString {
-                            val words = cityLabelsLabel.split(" ")
-                            words.forEachIndexed { i, word ->
-                                withStyle(SpanStyle(color = if (i == 0) Color(AppPalette.AlertRed) else Color(AppPalette.AlertYellow))) {
-                                    append(word)
-                                }
-                                if (i < words.size - 1) append(" ")
-                            }
-                        },
-                        style = MaterialTheme.typography.labelLarge
-                   )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = Color(AppPalette.Card),
-                    labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                    selectedLabelColor = Color(AppPalette.MapBackground),
-                ),
-                border = FilterChipDefaults.filterChipBorder(
-                    enabled = true,
-                    selected = selected == AlertRegionMode.CITY_LABELS,
-                    borderColor = MaterialTheme.colorScheme.outlineVariant,
-                    selectedBorderColor = Color(AppPalette.AlertRed),
-                    borderWidth = 1.dp,
-                    selectedBorderWidth = 1.5.dp
-                ),
-                modifier = Modifier.weight(1f)
-            )
-            FilterChip(
-                selected = selected == AlertRegionMode.FILL,
-                onClick = { onModeChange(AlertRegionMode.FILL) },
-                label = { Text(fillLabel, color = Color.White) },
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = Color.Transparent,
-                    labelColor = Color.White,
-                    selectedContainerColor = Color.Transparent,
-                    selectedLabelColor = Color.White,
-                ),
-                border = null,
+            // 1. City labels: dark card, clean white font, centered text
+            val isCityLabels = selected == AlertRegionMode.CITY_LABELS
+            Box(
                 modifier = Modifier
                     .weight(1f)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(AppPalette.RedFill),
-                                Color(AppPalette.RedFill),
-                                Color(AppPalette.YellowFill),
-                                Color(AppPalette.YellowFill)
-                            )
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                    .let { if (selected == AlertRegionMode.FILL) it.padding(1.5.dp).border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)) else it }
-            )
-            FilterChip(
-                selected = selected == AlertRegionMode.BORDER,
-                onClick = { onModeChange(AlertRegionMode.BORDER) },
-                label = { Text(borderLabel, style = MaterialTheme.typography.labelLarge) },
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = Color(AppPalette.Card),
-                    labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                    selectedContainerColor = Color(AppPalette.Card),
-                    selectedLabelColor = Color.White,
-                ),
-                border = null,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(1.dp)
+                    .height(42.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(AppPalette.Card))
                     .border(
-                        1.dp,
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(AppPalette.RedLine),
-                                Color(AppPalette.RedLine),
-                                Color(AppPalette.YellowLine),
-                                Color(AppPalette.YellowLine)
-                            )
-                        ),
+                        width = if (isCityLabels) 2.dp else 1.dp,
+                        color = if (isCityLabels) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                         shape = RoundedCornerShape(8.dp)
                     )
-            )
+                    .clickable { onModeChange(AlertRegionMode.CITY_LABELS) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = cityLabelsLabel,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (isCityLabels) FontWeight.Bold else FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                )
+            }
+
+            // 2. Fill: clean red fill, white font, centered text
+            val isFill = selected == AlertRegionMode.FILL
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(42.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(AppPalette.AlertRed))
+                    .border(
+                        width = if (isFill) 2.5.dp else 0.dp,
+                        color = if (isFill) Color.White else Color.Transparent,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .clickable { onModeChange(AlertRegionMode.FILL) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = fillLabel,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (isFill) FontWeight.Bold else FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                )
+            }
+
+            // 3. Border: clean yellow border, white font, centered text
+            val isBorder = selected == AlertRegionMode.BORDER
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(42.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(AppPalette.Card))
+                    .border(
+                        width = if (isBorder) 2.5.dp else 1.5.dp,
+                        color = if (isBorder) Color.White else Color(AppPalette.AlertYellow),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .clickable { onModeChange(AlertRegionMode.BORDER) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = borderLabel,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (isBorder) FontWeight.Bold else FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                )
+            }
         }
     }
 }

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Cleaned up alert region style buttons, moved show threat IDs below haptics, defaulted haptics to ON and small cities to OFF / Cleaned up alert region style buttons, moved show threat IDs below haptics, defaulted haptics to ON and small cities to OFF
+
+- Eliminated ghost hits by tightening hit-test radius to icon bounds, filtering animating/dead threats, and decoupling overlay invalidations from card recompositions / Eliminated ghost hits by tightening hit-test radius to icon bounds, filtering animating/dead threats, and decoupling overlay invalidations from card recompositions
+
 - Fixed stale offline timers firing all milestones at once by clearing the episode stamp on recovery and stitching only sub-3s flaps / Fixed stale offline timers firing all milestones at once by clearing the episode stamp on recovery and stitching only sub-3s flaps
 
 - Alert strokes now render above admin borders so active threats override outlines / Alert strokes now render above admin borders so active threats override outlines

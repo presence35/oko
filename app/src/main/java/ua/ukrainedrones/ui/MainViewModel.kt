@@ -132,7 +132,7 @@ data class UiState(
     val overlapMode: OverlapMode = OverlapMode.DEFAULT,
     val showMapScale: Boolean = true,
     val showMediumCities: Boolean = true,
-    val showSmallCities: Boolean = true,
+    val showSmallCities: Boolean = false,
     val showLargeCities: Boolean = true,
     val showThreatIdsOnMap: Boolean = false,
     val alertRegionMode: AlertRegionMode = AlertRegionMode.CITY_LABELS,
@@ -277,9 +277,8 @@ internal fun areSelectionUiVisuallyEqual(old: SelectionUi, new: SelectionUi): Bo
         if (oldSel.locality != newSel.locality || oldSel.district != newSel.district || oldSel.region != newSel.region) return false
         if (oldSel.confirmations != newSel.confirmations) return false
         if (oldSel.areaOnly != newSel.areaOnly) return false
-        if (oldSel.altitude != newSel.altitude) return false
         if (oldSel.reliability != newSel.reliability) return false
-        if (oldSel.direction != newSel.direction) return false
+        if (oldSel.heading != newSel.heading || oldSel.bearingDeg != newSel.bearingDeg) return false
         if (oldSel.updatedAtMillis != newSel.updatedAtMillis) return false
     }
 

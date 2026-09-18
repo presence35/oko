@@ -137,6 +137,7 @@ private fun fontAware(dp: Dp): Dp = dp * fontScale()
 @Composable
 private fun ThreatElapsedText(
     threat: NormalizedThreat,
+    engine: ThreatEngine,
     strings: Strings.StringSet
 ): Pair<String, Boolean> {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -146,8 +147,6 @@ private fun ThreatElapsedText(
             now = System.currentTimeMillis()
         }
     }
-    val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
-    val engine = remember(typeCatalog) { ThreatEngine(typeCatalog) }
     val nt = threat
     val stale = engine.isStale(nt, engine.propsFor(nt.type), now)
     val elapsedText = if (stale) strings.lastSeenAgoFormat.format(formatElapsedMss(threat.updatedAtMillis, now))
@@ -202,7 +201,7 @@ fun ThreatPopupCard(
     }
 
     // Elapsed time + stale flag from leaf composable (runs its own 1s clock, doesn't invalidate parent).
-    val (elapsedText, stale) = ThreatElapsedText(threat, s)
+    val (elapsedText, stale) = ThreatElapsedText(threat, engine, s)
 
     val confirmations = threat.confirmations.takeIf { it > 0 }
 
