@@ -1,5 +1,6 @@
 package ua.ukrainedrones.ui
 
+import ua.ukrainedrones.AlertRegionMode
 import android.graphics.PointF
 import android.view.MotionEvent
 import android.view.View
@@ -141,7 +142,7 @@ class MapLibreBridge(
     }
 
     fun updateAlerts(
-        fillAlertRegions: Boolean,
+        alertRegionMode: AlertRegionMode,
         redOblastIds: Set<String>,
         redRaions: Set<Pair<String, String>>,
         yellowOblastIds: Set<String>,
@@ -149,7 +150,7 @@ class MapLibreBridge(
     ) {
         val s = style ?: return
         MapLibreLayerManager.updateAlertRegions(
-            s, fillAlertRegions, redOblastIds, redRaions, yellowOblastIds, yellowRaions
+            s, alertRegionMode, redOblastIds, redRaions, yellowOblastIds, yellowRaions
         )
         mapView?.postInvalidateOnAnimation()
         overlayView?.postInvalidateOnAnimation()
@@ -160,9 +161,9 @@ class MapLibreBridge(
         raionKeys: Set<Pair<String, String>>,
         yellowOblastIds: Set<String>,
         yellowRaionKeys: Set<Pair<String, String>>,
-        fillEnabled: Boolean
+        alertRegionMode: AlertRegionMode
     ) {
-        updateAlerts(fillEnabled, oblastIds, raionKeys, yellowOblastIds, yellowRaionKeys)
+        updateAlerts(alertRegionMode, oblastIds, raionKeys, yellowOblastIds, yellowRaionKeys)
     }
 
     fun updateZones(

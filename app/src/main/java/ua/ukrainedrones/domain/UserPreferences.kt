@@ -12,6 +12,9 @@ enum class ThreatIconSet { PHOTO, ARMY, COMIC, RUSSIAN }
 /** How same-coordinate threats render on the map. */
 enum class OverlapMode { DEFAULT, GRID, SPREAD, COUNT }
 
+/** How official-alert regions are visualized on the map. */
+enum class AlertRegionMode { CITY_LABELS, FILL, BORDER }
+
 @Immutable
 data class UserPreferences(
     val language: AppLanguage = AppLanguage.UA,
@@ -78,7 +81,7 @@ data class UserPreferences(
     val officialAlertCityScope: Boolean = false,
     val moraleMasterEnabled: Boolean = false,
     val bootRestartEnabled: Boolean = true,
-    val fillAlertRegions: Boolean = false,
+    val alertRegionMode: AlertRegionMode = AlertRegionMode.CITY_LABELS,
     val showBorders: Boolean = true,
     val showRegionBorders: Boolean = false,
     val settingsHintRemaining: Int = 3,

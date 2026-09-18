@@ -740,11 +740,11 @@ class CityLabelOverlay(
                     if (forceAll) 3.5 else Double.MAX_VALUE
                 } else when (c.reveal) {
                     MajorReveal.OVERVIEW -> 3.5
-                    MajorReveal.MID -> 7.5
-                    MajorReveal.LATE -> 9.0
+                    MajorReveal.MID -> 6.0
+                    MajorReveal.LATE -> 7.5
                 }
-                CityTier.MEDIUM -> if (forceAll || showMediumCities) 8.5 else Double.MAX_VALUE
-                CityTier.MINOR -> if (forceAll || showSmallCities) 10.0 else Double.MAX_VALUE
+                CityTier.MEDIUM -> if (forceAll || showMediumCities) 7.0 else Double.MAX_VALUE
+                CityTier.MINOR -> if (forceAll || showSmallCities) 8.5 else Double.MAX_VALUE
             }
             if (zoom < minZoom) continue
             val pt = project(c.lat, c.lon) ?: continue

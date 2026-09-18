@@ -88,6 +88,7 @@ class UserPrefs(private val context: Context) {
     private val legacyJustFunMasterEnabledKey = booleanPreferencesKey("just_fun_master_enabled")
     private val bootRestartEnabledKey = booleanPreferencesKey("boot_restart_enabled")
     private val fillAlertRegionsKey = booleanPreferencesKey("fill_alert_regions")
+    private val alertRegionModeKey = stringPreferencesKey("alert_region_mode")
     private val showBordersKey = booleanPreferencesKey("show_borders")
     private val showRegionBordersKey = booleanPreferencesKey("show_region_borders")
     private val showLargeCitiesKey = booleanPreferencesKey("show_large_cities")
@@ -110,6 +111,11 @@ class UserPrefs(private val context: Context) {
         val overlap = this[overlapModeKey]?.let { stored ->
             OverlapMode.values().firstOrNull { it.name == stored }
         } ?: OverlapMode.DEFAULT
+        val alertRegionMode = when (val stored = this[alertRegionModeKey]) {
+            null -> this[fillAlertRegionsKey]?.let { if (it) AlertRegionMode.FILL else AlertRegionMode.CITY_LABELS }
+                ?: AlertRegionMode.CITY_LABELS
+            else -> AlertRegionMode.values().firstOrNull { it.name == stored } ?: AlertRegionMode.CITY_LABELS
+        }
         val mapVisible = ThreatType.values().filter { type ->
             this[cachedBooleanKey("threat_map_${type.name}")] ?: true
         }.toSet()
@@ -182,7 +188,7 @@ class UserPrefs(private val context: Context) {
             officialAlertCityScope = this[officialAlertCityScopeKey] ?: false,
             moraleMasterEnabled = this[moraleMasterEnabledKey] ?: this[legacyJustFunMasterEnabledKey] ?: false,
             bootRestartEnabled = this[bootRestartEnabledKey] ?: true,
-            fillAlertRegions = this[fillAlertRegionsKey] ?: false,
+            alertRegionMode = alertRegionMode,
             showBorders = this[showBordersKey] ?: true,
             showRegionBorders = this[showRegionBordersKey] ?: false,
             settingsHintRemaining = this[settingsHintRemainingKey] ?: 3,
@@ -418,8 +424,8 @@ class UserPrefs(private val context: Context) {
         context.dataStore.edit { it[bootRestartEnabledKey] = enabled }
     }
 
-    suspend fun setFillAlertRegions(enabled: Boolean) {
-        context.dataStore.edit { it[fillAlertRegionsKey] = enabled }
+    suspend fun setAlertRegionMode(mode: AlertRegionMode) {
+        context.dataStore.edit { it[alertRegionModeKey] = mode.name }
     }
 
     suspend fun setShowBorders(enabled: Boolean) {

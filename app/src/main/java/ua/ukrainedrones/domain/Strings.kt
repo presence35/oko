@@ -386,6 +386,9 @@ val nightSoundLabel: String,
         val largeCitiesChip: String,
         val fillAlertRegionsTitle: String,
         val fillAlertRegionsDesc: String,
+        val alertRegionModeCityLabelsChip: String,
+        val alertRegionModeFillChip: String,
+        val alertRegionModeBorderChip: String,
         val showBordersTitle: String,
         val showBordersDesc: String,
         val showRegionBordersTitle: String,
@@ -1074,6 +1077,9 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val largeCitiesChip: String get() = misc.largeCitiesChip
         val fillAlertRegionsTitle: String get() = misc.fillAlertRegionsTitle
         val fillAlertRegionsDesc: String get() = misc.fillAlertRegionsDesc
+        val alertRegionModeCityLabelsChip: String get() = misc.alertRegionModeCityLabelsChip
+        val alertRegionModeFillChip: String get() = misc.alertRegionModeFillChip
+        val alertRegionModeBorderChip: String get() = misc.alertRegionModeBorderChip
         val showBordersTitle: String get() = misc.showBordersTitle
         val showBordersDesc: String get() = misc.showBordersDesc
         val showRegionBordersTitle: String get() = misc.showRegionBordersTitle

@@ -407,6 +407,57 @@ internal fun CityLabelTogglesRow(
     }
 }
 
+@Composable
+internal fun AlertRegionModeRow(
+    title: String,
+    description: String,
+    selected: AlertRegionMode,
+    cityLabelsLabel: String,
+    fillLabel: String,
+    borderLabel: String,
+    onModeChange: (AlertRegionMode) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
+    ) {
+        Column {
+            Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(3.dp))
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = selected == AlertRegionMode.CITY_LABELS,
+                onClick = { onModeChange(AlertRegionMode.CITY_LABELS) },
+                label = { Text(cityLabelsLabel, style = MaterialTheme.typography.labelLarge) },
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = selected == AlertRegionMode.FILL,
+                onClick = { onModeChange(AlertRegionMode.FILL) },
+                label = { Text(fillLabel, style = MaterialTheme.typography.labelLarge) },
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = selected == AlertRegionMode.BORDER,
+                onClick = { onModeChange(AlertRegionMode.BORDER) },
+                label = { Text(borderLabel, style = MaterialTheme.typography.labelLarge) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
 /** ON = vivid primary pill with dark content; OFF = muted grey pill — the two states
  *  can't be confused in the dark theme. */
 @Composable

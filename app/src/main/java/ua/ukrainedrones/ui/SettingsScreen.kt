@@ -117,7 +117,7 @@ fun SettingsScreen(
     onShowMediumCitiesChange: (Boolean) -> Unit,
     onShowSmallCitiesChange: (Boolean) -> Unit,
     onShowLargeCitiesChange: (Boolean) -> Unit,
-    onFillAlertRegionsChange: (Boolean) -> Unit,
+    onAlertRegionModeChange: (AlertRegionMode) -> Unit,
     onShowBordersChange: (Boolean) -> Unit,
     onShowRegionBordersChange: (Boolean) -> Unit,
     onSheltersEnabledChange: (Boolean) -> Unit,
@@ -177,7 +177,7 @@ fun SettingsScreen(
     val showMediumCities = state.showMediumCities
     val showSmallCities = state.showSmallCities
     val showLargeCities = state.showLargeCities
-    val fillAlertRegions = state.fillAlertRegions
+    val alertRegionMode = state.alertRegionMode
     val showBorders = state.showBorders
     val showRegionBorders = state.showRegionBorders
     val sheltersEnabled = state.sheltersEnabled
@@ -1093,13 +1093,14 @@ fun SettingsScreen(
                         iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    AlertToggleRow(
+                    AlertRegionModeRow(
                         title = s.fillAlertRegionsTitle,
                         description = s.fillAlertRegionsDesc,
-                        checked = fillAlertRegions,
-                        onCheckedChange = onFillAlertRegionsChange,
-                        icon = rememberVectorPainter(Icons.Filled.Map),
-                        iconTint = ZoneRedColor
+                        selected = alertRegionMode,
+                        cityLabelsLabel = s.alertRegionModeCityLabelsChip,
+                        fillLabel = s.alertRegionModeFillChip,
+                        borderLabel = s.alertRegionModeBorderChip,
+                        onModeChange = onAlertRegionModeChange
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertToggleRow(

@@ -543,7 +543,7 @@ fun NeptunMapView(
     // Sync GPU layers with UI state
     LaunchedEffect(
         bridgeState.value,
-        uiState.fillAlertRegions,
+        uiState.alertRegionMode,
         uiState.showBorders,
         uiState.showRegionBorders,
         uiState.alertOblastIds,
@@ -561,7 +561,7 @@ fun NeptunMapView(
             raionKeys = uiState.alertRaionKeys,
             yellowOblastIds = uiState.alertYellowOblastIds,
             yellowRaionKeys = uiState.alertYellowRaionKeys,
-            fillEnabled = uiState.fillAlertRegions
+            alertRegionMode = uiState.alertRegionMode
         )
         bridge.updateBorders(
             showBorders = uiState.showBorders,
@@ -918,13 +918,13 @@ LaunchedEffect(selectedId) {
     // City alerts mapping
     val displayAlerts = remember(
         uiState.cityAlerts,
-        uiState.fillAlertRegions,
+        uiState.alertRegionMode,
         uiState.alertOblastIds,
         uiState.alertYellowOblastIds,
         uiState.alertRaionKeys,
         uiState.alertYellowRaionKeys
     ) {
-        if (!uiState.fillAlertRegions) {
+        if (uiState.alertRegionMode == AlertRegionMode.CITY_LABELS) {
             buildMap {
                 putAll(uiState.cityAlerts)
                 for (city in Cities.ALL) {
@@ -944,13 +944,13 @@ LaunchedEffect(selectedId) {
 
     val suppressedCities = remember(
         uiState.cityAlerts,
-        uiState.fillAlertRegions,
+        uiState.alertRegionMode,
         uiState.alertOblastIds,
         uiState.alertYellowOblastIds,
         uiState.alertRaionKeys,
         uiState.alertYellowRaionKeys
     ) {
-        if (uiState.fillAlertRegions) {
+        if (uiState.alertRegionMode != AlertRegionMode.CITY_LABELS) {
             uiState.cityAlerts.mapNotNull { (cityName, level) ->
                 val stem = Cities.cityOblast[cityName] ?: return@mapNotNull null
                 val id = CompactOblastBoundaries.canonicalId(stem) ?: return@mapNotNull null

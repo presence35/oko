@@ -2,6 +2,7 @@ package ua.ukrainedrones.ui
 
 import ua.ukrainedrones.theme.AppPalette
 import ua.ukrainedrones.community.CompactRaionBoundaries
+import ua.ukrainedrones.AlertRegionMode
 import ua.ukrainedrones.data.ApiMonitor
 import ua.ukrainedrones.data.SystemEntry
 import ua.ukrainedrones.data.SystemEntryKind
@@ -22,11 +23,12 @@ import org.maplibre.android.style.sources.GeoJsonSource
 object MapLibreLayerManager {
 
     private var lastStyle: Style? = null
-    private var lastFillAlertRegions: Boolean? = null
+    private var lastAlertRegionMode: AlertRegionMode? = null
     private var lastRedOblastIds: Set<String>? = null
     private var lastRedRaions: Set<Pair<String, String>>? = null
     private var lastYellowOblastIds: Set<String>? = null
     private var lastYellowRaions: Set<Pair<String, String>>? = null
+    private var lastSkipLogged: Boolean = false
 
     /**
      * Logs a fill-rendering problem both to Logcat and into the in-app Logs screen
@@ -191,7 +193,7 @@ object MapLibreLayerManager {
 
     fun updateAlertRegions(
         style: Style,
-        fillAlertRegions: Boolean,
+        alertRegionMode: AlertRegionMode,
         redOblastIds: Set<String>,
         redRaions: Set<Pair<String, String>>,
         yellowOblastIds: Set<String>,
@@ -199,31 +201,29 @@ object MapLibreLayerManager {
     ) {
         if (lastStyle !== style) {
             lastStyle = style
-            lastFillAlertRegions = null
+            lastAlertRegionMode = null
             lastRedOblastIds = null
             lastRedRaions = null
             lastYellowOblastIds = null
             lastYellowRaions = null
+            lastSkipLogged = false
             lastCenterLat = null
             lastCenterLon = null
             lastSlowRedKm = null
             lastSlowYellowKm = null
         }
 
-        if (!fillAlertRegions) {
-            if (lastFillAlertRegions == false) return
+        if (alertRegionMode == AlertRegionMode.CITY_LABELS) {
+            if (lastAlertRegionMode == AlertRegionMode.CITY_LABELS) return
             val redSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_RED)
             val yellowSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_YELLOW)
             if (redSrc == null || yellowSrc == null) {
-                // Same reasoning as below: don't cache the clear as done if we couldn't
-                // actually clear it, or a stale fill can stay on-screen forever after the
-                // user turns the toggle off.
                 fillDebugLog("updateAlertRegions: alert source(s) missing on style while clearing (red=$redSrc yellow=$yellowSrc) — not caching this as applied")
                 return
             }
             redSrc.setGeoJson(MapLibreGeoJson.EMPTY)
             yellowSrc.setGeoJson(MapLibreGeoJson.EMPTY)
-            lastFillAlertRegions = false
+            lastAlertRegionMode = AlertRegionMode.CITY_LABELS
             lastRedOblastIds = null
             lastRedRaions = null
             lastYellowOblastIds = null
@@ -231,14 +231,23 @@ object MapLibreLayerManager {
             return
         }
 
-        if (fillAlertRegions == lastFillAlertRegions &&
+        if (alertRegionMode == lastAlertRegionMode &&
             redOblastIds == lastRedOblastIds &&
             redRaions == lastRedRaions &&
             yellowOblastIds == lastYellowOblastIds &&
             yellowRaions == lastYellowRaions
         ) {
+            if (!lastSkipLogged) {
+                lastSkipLogged = true
+                fillDebugLog(
+                    "updateAlertRegions: skipped, no change since last apply " +
+                        "(mode=$alertRegionMode redObl=${redOblastIds.size} redRaion=${redRaions.size} " +
+                        "yellowObl=${yellowOblastIds.size} yellowRaion=${yellowRaions.size})"
+                )
+            }
             return
         }
+        lastSkipLogged = false
 
         val filteredYellowOblastIds = yellowOblastIds - redOblastIds
         val redCanonicalRaions = redRaions.mapNotNull { (id, raion) ->
@@ -253,14 +262,6 @@ object MapLibreLayerManager {
         val redSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_RED)
         val yellowSrc = style.getSourceAs<GeoJsonSource>(SOURCE_ALERT_YELLOW)
         if (redSrc == null || yellowSrc == null) {
-            // Never cache "applied" for a write we couldn't actually make. If the sources
-            // aren't on the style yet/anymore (style swap, GL surface torn down and recreated,
-            // any timing gap between setupLayers() and this call), the setGeoJson below would
-            // silently no-op — but the old code still recorded lastRedOblastIds/lastRedRaions/etc.
-            // as if it had succeeded. The next call with the SAME alert data would then hit the
-            // no-op guard above and return early forever, even after the sources become valid
-            // again, because nothing ever changed lastRedOblastIds. Bailing without touching the
-            // last* fields means the very next call (same data or not) will retry for real.
             fillDebugLog("updateAlertRegions: alert source(s) missing on style (red=$redSrc yellow=$yellowSrc) — not caching this as applied")
             return
         }
@@ -268,17 +269,38 @@ object MapLibreLayerManager {
         val yellowGeoJson = MapLibreGeoJson.alertRegions(filteredYellowOblastIds, filteredYellowRaions)
         redSrc.setGeoJson(redGeoJson)
         yellowSrc.setGeoJson(yellowGeoJson)
-        // Confirms the write actually reached the sources — the alertRegions() calls above
-        // already log per-region failures (missing polygon, degenerate ring), so this line is
-        // what tells you at a glance whether a red/yellow region you expected made it onto the
-        // map at all, without needing adb logcat.
+
+        val fillVisible = alertRegionMode == AlertRegionMode.FILL
+        style.getLayer(LAYER_ALERT_YELLOW)?.setProperties(visibility(if (fillVisible) Property.VISIBLE else Property.NONE))
+        style.getLayer(LAYER_ALERT_RED_FILL)?.setProperties(visibility(if (fillVisible) Property.VISIBLE else Property.NONE))
+
         fun featureCount(geoJson: String) = Regex("\"type\":\"Feature\"").findAll(geoJson).count()
+        fun bounds(geoJson: String): String {
+            val coordPairRegex = Regex("""\[(-?\d+\.?\d*),(-?\d+\.?\d*)\]""")
+            var minLon = Double.MAX_VALUE
+            var maxLon = -Double.MAX_VALUE
+            var minLat = Double.MAX_VALUE
+            var maxLat = -Double.MAX_VALUE
+            var n = 0
+            for (m in coordPairRegex.findAll(geoJson)) {
+                val lon = m.groupValues[1].toDoubleOrNull() ?: continue
+                val lat = m.groupValues[2].toDoubleOrNull() ?: continue
+                if (lon < minLon) minLon = lon
+                if (lon > maxLon) maxLon = lon
+                if (lat < minLat) minLat = lat
+                if (lat > maxLat) maxLat = lat
+                n++
+            }
+            return if (n == 0) "no coordinates found"
+            else "lat[$minLat..$maxLat] lon[$minLon..$maxLon] (n=$n points)"
+        }
         fillDebugLog(
-            "updateAlertRegions: applied redObl=${redOblastIds.size} redRaion=${redRaions.size} " +
+            "updateAlertRegions: applied mode=$alertRegionMode redObl=${redOblastIds.size} redRaion=${redRaions.size} " +
                 "yellowObl=${filteredYellowOblastIds.size} yellowRaion=${filteredYellowRaions.size} " +
                 "redFeatures=${featureCount(redGeoJson)} yellowFeatures=${featureCount(yellowGeoJson)}"
         )
-        lastFillAlertRegions = true
+        fillDebugLog("updateAlertRegions: redBounds=${bounds(redGeoJson)} yellowBounds=${bounds(yellowGeoJson)}")
+        lastAlertRegionMode = alertRegionMode
         lastRedOblastIds = redOblastIds
         lastRedRaions = redRaions
         lastYellowOblastIds = yellowOblastIds
@@ -294,7 +316,7 @@ object MapLibreLayerManager {
     ) {
         if (lastStyle !== style) {
             lastStyle = style
-            lastFillAlertRegions = null
+            lastAlertRegionMode = null
             lastRedOblastIds = null
             lastRedRaions = null
             lastYellowOblastIds = null

@@ -134,7 +134,7 @@ data class UiState(
     val showSmallCities: Boolean = true,
     val showLargeCities: Boolean = true,
     val showThreatIdsOnMap: Boolean = false,
-    val fillAlertRegions: Boolean = false,
+    val alertRegionMode: AlertRegionMode = AlertRegionMode.CITY_LABELS,
     val showBorders: Boolean = true,
     val showRegionBorders: Boolean = false,
     val alertOblastIds: Set<String> = emptySet(),
@@ -227,7 +227,7 @@ data class SettingsState(
     val showMediumCities: Boolean get() = prefs.showMediumCities
     val showSmallCities: Boolean get() = prefs.showSmallCities
     val showLargeCities: Boolean get() = prefs.showLargeCities
-    val fillAlertRegions: Boolean get() = prefs.fillAlertRegions
+    val alertRegionMode: AlertRegionMode get() = prefs.alertRegionMode
     val showBorders: Boolean get() = prefs.showBorders
     val showRegionBorders: Boolean get() = prefs.showRegionBorders
     val sheltersEnabled: Boolean get() = prefs.sheltersEnabled
@@ -439,7 +439,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val showSmallCities: Boolean,
         val showLargeCities: Boolean,
         val showThreatIdsOnMap: Boolean,
-        val fillAlertRegions: Boolean,
+        val alertRegionMode: AlertRegionMode,
         val showBorders: Boolean,
         val showRegionBorders: Boolean,
         val justFunMasterEnabled: Boolean,
@@ -539,7 +539,7 @@ val fastGroupCollapsed: Boolean,
             showSmallCities = showSmallCities,
             showLargeCities = showLargeCities,
             showThreatIdsOnMap = showThreatIdsOnMap,
-            fillAlertRegions = fillAlertRegions,
+            alertRegionMode = alertRegionMode,
             showBorders = showBorders,
             showRegionBorders = showRegionBorders,
             justFunMasterEnabled = justFunMasterEnabled,
@@ -716,7 +716,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             showSmallCities = prefs.showSmallCities,
             showLargeCities = prefs.showLargeCities,
             showThreatIdsOnMap = prefs.showThreatIdsOnMap,
-            fillAlertRegions = prefs.fillAlertRegions,
+            alertRegionMode = prefs.alertRegionMode,
 showBorders = prefs.showBorders,
             showRegionBorders = prefs.showRegionBorders,
             justFunMasterEnabled = prefs.justFunMasterEnabled,
@@ -1345,8 +1345,8 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setShowThreatIdsOnMap(show) }
     }
 
-    fun setFillAlertRegions(enabled: Boolean) {
-        viewModelScope.launch { prefs.setFillAlertRegions(enabled) }
+    fun setAlertRegionMode(mode: AlertRegionMode) {
+        viewModelScope.launch { prefs.setAlertRegionMode(mode) }
     }
 
     fun setShowBorders(enabled: Boolean) {
