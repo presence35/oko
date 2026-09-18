@@ -767,7 +767,9 @@ class CityLabelOverlay(
                 CityTier.MINOR -> (8.5 + (zoom - 10.0) * 0.7).coerceIn(8.5, 13.0)
             }).toFloat() * density
             val level = cityAlertLevels[c.nameUa] ?: AlertLevel.NONE
+            val suppressed = c.nameUa in suppressedAlertCities
             paint.color = when {
+                suppressed -> AppPalette.CityTextDefault.toInt()
                 level == AlertLevel.RED -> AppPalette.AlertRed.toInt()
                 level == AlertLevel.YELLOW -> AppPalette.AlertYellow.toInt()
                 else -> AppPalette.CityTextDefault.toInt()

@@ -8,10 +8,10 @@ object AppPalette {
     const val AlertYellow: Long = 0xFFF59E0B
     const val CityTextDefault: Long = 0xFFE2E8F0
 
-    const val RedFill: Long = 0xFFEF4444
-    const val RedLine: Long = 0xE1EF4444
-    const val YellowFill: Long = 0xFFF59E0B
-    const val YellowLine: Long = 0xBEF59E0B
+    const val RedFill: Long = 0xFFB91C1C
+    const val RedLine: Long = 0xE1B91C1C
+    const val YellowFill: Long = 0xFFD97706
+    const val YellowLine: Long = 0xBED97706
     const val ZoneRed: Long = 0xE6FF5252
     const val ZoneYellow: Long = 0xC8FFD500
 

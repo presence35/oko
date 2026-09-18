@@ -942,7 +942,7 @@ LaunchedEffect(selectedId) {
         uiState.alertRaionKeys,
         uiState.alertYellowRaionKeys
     ) {
-        if (uiState.alertRegionMode == AlertRegionMode.FILL) {
+        if (uiState.alertRegionMode != AlertRegionMode.CITY_LABELS) {
             uiState.cityAlerts.mapNotNull { (cityName, level) ->
                 val stem = Cities.cityOblast[cityName] ?: return@mapNotNull null
                 val id = CompactOblastBoundaries.canonicalId(stem) ?: return@mapNotNull null

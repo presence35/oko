@@ -6,7 +6,7 @@
 
 - Fixed white map on cold start by building border geometry off the main thread / Fixed white map on cold start by building border geometry off the main thread
 
-- City labels now stay red/yellow in city-labels and border modes, and turn white only when region fill is on / City labels now stay red/yellow in city-labels and border modes, and turn white only when region fill is on
+- City labels are colored only in city-labels mode; fill and border modes keep them white (alert already shown by fill/border) / Мітки міст кольорові лише в режимі міток; у режимах заливки та меж вони білі (тривога вже показана заливкою/межею)
 
 - Fill/border mode switches apply instantly without rebuilding unchanged region geometry / Fill/border mode switches apply instantly without rebuilding unchanged region geometry
 
@@ -20,9 +20,9 @@
 
 - Ukraine border kept for masking only — pure black outside, no tile download beyond bounds, border line not drawn and alert fills override white region borders / Межу України залишено лише для маскування — зовні чистий чорний, без завантаження тайлів за межами, лінію межі не малюємо, заливки тривог перекривають білі межі
 
-- Alerted cities now surface 25% earlier than their tier (RED/YELLOW only) and stay colored on fills, so a red region shows at country view / Міста під тривогою з'являються на 25% раніше свого рівня (лише RED/YELLOW) і лишаються кольоровими на заливках, тож червоний регіон видно з огляду країни
+- Alerted cities now surface 25% earlier than their tier (RED/YELLOW only), so a red region shows at country view / Міста під тривогою з'являються на 25% раніше свого рівня (лише RED/YELLOW), тож червоний регіон видно з огляду країни
 
-- Fill mode keeps borders white above opaque fills; border mode overrides white with red/yellow outlines, and zone circles use distinct gold/red so they don't merge with fills / У режимі заливки межі лишаються білими над непрозорими заливками; у режимі меж білий перекривається червоним/жовтим контуром, а кола зон — окремим золотом/червоним щоб не зливатися
+- Fill and border colors are now darker (deep red/amber) than bright zone circles (gold/red), with fill mode white borders and border mode colored override / Кольори заливки та меж тепер темніші (темно-червоний/бурштиновий) за яскраві кола зон (золотий/червоний), у заливці — білі межі, у режимі меж — кольорове перекриття
 
 - Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers / Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers
 
