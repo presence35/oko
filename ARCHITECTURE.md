@@ -485,15 +485,35 @@ Must not:
 Owns:
 - rendering
 - map interaction
-- visual animation
+- visual animation (frame-synchronized via MapLibre camera listeners and native invalidation)
 
 Must not:
 - decide whether a threat should alert
 - persist application state
 
+### UI Composables (e.g. ThreatPopupCard, Header, Footer)
+
+Owns:
+- pure presentation of state provided by ViewModel / UI models
+- user interaction callbacks
+
+Must not:
+- instantiate or query `ThreatEngine`
+- compute domain metrics (zoneTier, isStale, proximity formulas) locally
+- block or gate initial paint on complex background state recomputations
+
+## Domain vs Presentation Layering
+
+Domain evaluation belongs strictly to domain owners (`ThreatEngine`, `MainViewModel`, `AlertService`, `WidgetUpdater`):
+
+- **MainViewModel and AlertService:** both drive evaluation through the engine independently because the UI requires interactive state while background monitoring continues when UI is not active.
+- **Engine as Single Source of Truth:** `ThreatEngine` owns zone tiering, dead-reckoning, staleness/ghost rules, scoring, proximity, and official-alert facts. Composables and presentation layers never re-run or re-implement domain decisions.
+- **Pointer-first selection:** `selectionUi` emits an immediate shell (Frame 0) upon user selection so the card renders instantaneously, and asynchronously enriches with proximity and zone calculations as background updates complete.
+- **Frame-synchronized overlay:** `MapView` overlay tracking is driven directly by native MapLibre camera move callbacks (`addOnCameraMoveListener`) rather than Compose recomposition cycles, eliminating pan/zoom tracking lag.
+
 ## Deliberate tradeoffs / risks
 
-### Mirrored UI and alert evaluation
+### Domain evaluation ownership
 
 `MainViewModel` and `AlertService` both drive evaluation through the engine.
 
@@ -601,16 +621,18 @@ Run: `.\gradlew.bat :app:testDebugUnitTest`
 How hot data reaches the UI without recomposition storms (added 2026-08; keep in sync with
 MainViewModel.kt):
 
-- **UI samples the stream.** MainViewModel reads `combine(connectionState, threats, alerts).sample(120)` for the UI path only; AlertService keeps consuming the raw flows (mirror rule unaffected).
+- **UI samples the stream.** MainViewModel reads `combine(connectionState, threats, alerts).sample(120)` for the UI path only; AlertService keeps consuming the raw flows.
 - **Clock is not state.** There is no wall-clock StateFlow on the ViewModel — a global 1s ticker
   recomposed the whole tree for nothing. `lastFrameAt` is a flow collected only by the connection
   sheet; the shelter screen's GPS fix-age label runs a 10s local clock scoped to its own
   composition (it only ticks while that screen is open); the map's marker smoothing loop keeps its
   own 1s tick. None of these are fields of UiState, so a no-op tick never rebuilds the tree.
-- **Selection is not UiState either.** Selected threat / proximity / neutralized card /
-  fake-neutralize live in selectionUi: StateFlow<SelectionUi> (+ derived selectedThreatId
-  for the map marker highlight). Only ThreatCardHost collects it, so tapping a threat never
-  recomposes header/map/footer. FlourishPolicy gating moved verbatim into that chain.
+- **Pointer-first selection is not UiState either.** Selected threat / proximity / neutralized card /
+  fake-neutralize live in `selectionUi: StateFlow<SelectionUi>` (+ derived `selectedThreatId`
+  for the map marker highlight). `selectionUi` uses a two-tier pipeline: it emits the threat shell
+  immediately on tap (Frame 0) without waiting for background `uiState` recomputation, then enriches
+  proximity and zoneTier asynchronously. Only `ThreatCardHost` collects it, so tapping a threat never
+  recomposes header/map/footer. FlourishPolicy gating is evaluated in that chain.
 - **Off-main state building.** The uiState combine chain ends in .flowOn(Dispatchers.Default)
   before stateIn; uildUiState must stay free of main-thread/Android-UI dependencies.
 - **Stability.** Model classes passed to composables (Threat, ThreatProximity, City,

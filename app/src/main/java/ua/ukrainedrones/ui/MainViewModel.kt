@@ -855,28 +855,37 @@ showBorders = prefs.showBorders,
     }
 
     /**
-     * Popup state, derived cheaply per selection change (one map lookup + one proximity
-     * computation — the expensive evaluate() is NOT re-run). Re-derived on ambient UiState
-     * changes too, so focus/params/policy flags always match what the rest of the UI shows.
+     * Popup state, pointer-first: emits immediately on selection change so the threat card
+     * renders its shell on frame 0 without waiting for uiState recomputation, then enriches
+     * with proximity/zoneTier as background updates arrive.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val selectionUi: StateFlow<SelectionUi> = selectionInput.flatMapLatest { sel ->
-        uiState.map { ui ->
+    val selectionUi: StateFlow<SelectionUi> = selectionInput.transformLatest { sel ->
+        val initialThreat = sel.selected?.let { s -> threatsFlow.value[s.id] ?: s }
+        if (initialThreat != null) {
+            emit(
+                SelectionUi(
+                    selected = initialThreat,
+                    proximity = null,
+                    zoneTier = null,
+                    neutralized = null,
+                    fakeNeutralize = sel.fakeNeutralize
+                )
+            )
+        } else if (sel.neutralizedId == null) {
+            emit(SelectionUi())
+        }
+
+        combine(threatsFlow, uiState) { threats, ui ->
             val animOn = ui.deathAnimationEnabled
-            // Keep the selected threat pointer fresh (position/status may have updated)
-            val refreshed = sel.selected?.let { s -> threatsFlow.value[s.id] }
+            val refreshed = sel.selected?.let { s -> threats[s.id] }
             val nowMs = System.currentTimeMillis()
-            // The selected threat is gone (removed by the server, marked resolved/area-only, a
-            // ghost past the hard cap, or long-pressed) — show a brief neutralized card.
             val selectedGone = sel.selected != null && (
                 (refreshed?.let { t ->
                     t.status == "resolved" || engine.isGhost(t, engine.propsFor(t.type), nowMs)
                 } ?: true) ||
                     sel.selected.id == sel.neutralizedId
                 )
-            // With the death animation disabled the card never flips to the "Neutralized"
-            // compact form nor auto-dismisses; the flourish only runs while the map is visible
-            // and the shelter overlay is down (identical gating to the pre-split logic).
             val neutralizedThreat =
                 if (FlourishPolicy.showNeutralizedCard(selectedGone, animOn, sel.mapVisible, sel.shelterOverlayUp)) sel.selected else null
             val proximity = refreshed?.let { t ->
@@ -906,10 +915,11 @@ showBorders = prefs.showBorders,
                 neutralized = neutralizedThreat,
                 fakeNeutralize = sel.fakeNeutralize
             )
-        }.distinctUntilChanged { old, new ->
-            areSelectionUiVisuallyEqual(old, new)
+        }.distinctUntilChanged(::areSelectionUiVisuallyEqual).collect { enriched ->
+            emit(enriched)
         }
-    }.stateIn(
+    }.distinctUntilChanged(::areSelectionUiVisuallyEqual)
+    .stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         SelectionUi()

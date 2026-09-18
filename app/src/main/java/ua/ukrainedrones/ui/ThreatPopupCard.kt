@@ -2,7 +2,6 @@ package ua.ukrainedrones
 import ua.ukrainedrones.theme.AppPalette
 
 import ua.ukrainedrones.engine.SpeedSource
-import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.toThreatType
@@ -318,7 +317,7 @@ fun ThreatPopupCard(
                 val pillSpecs = if (distUser != null) {
                     buildList {
                         proximity?.etaToUserMin?.let { eta ->
-                            add(PillSpec(ThreatEngine.formatEtaMinutes(eta), s.etaUnit, GpsDot, null))
+                            add(PillSpec(formatEtaMinutes(eta), s.etaUnit, GpsDot, null))
                         }
                         add(PillSpec(formatKm(distUser), s.kmUnit, null, distCd))
                     }
@@ -707,7 +706,7 @@ private fun PillTrio(
 ) {
     proximity?.etaToUserMin?.let { eta ->
         MetricPill(
-            number = ThreatEngine.formatEtaMinutes(eta),
+            number = formatEtaMinutes(eta),
             unit = s.etaUnit,
             dotColor = GpsDot
         )
@@ -795,6 +794,9 @@ private fun MetricPill(
         }
     }
 }
+
+private fun formatEtaMinutes(min: Double): String =
+    min.roundToInt().coerceAtLeast(1).toString()
 
 private fun formatKm(km: Double): String = km.roundToInt().toString()
 
