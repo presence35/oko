@@ -713,14 +713,13 @@ private const val ALERT_ZOOM_FACTOR = 0.75
  *  progressively by [MajorReveal]: the top-5 overview set shows from the country view, MID
  *  majors from mid-zoom, the rest up close. MAJOR/MEDIUM/MINOR respect the Settings toggles
  *  ([showLargeCities] / [showMediumCities] / [showSmallCities], all on by default). Cities
- *  in [cityAlertLevels] are colored by alert severity (RED → red, YELLOW → amber).
- *  Alerted (RED/YELLOW) cities appear 10% earlier than their tier.
- *  Cities in [suppressedAlertCities] show off-white (the fill already communicates the alert). */
+ *  are colored only in city-labels mode; fill/border modes stay white. Alerted cities surface
+ *  25% earlier. */
 class CityLabelOverlay(
     context: Context,
     private val lang: AppLanguage,
     private val cityAlertLevels: Map<String, AlertLevel> = emptyMap(),
-    private val suppressedAlertCities: Set<String> = emptySet(),
+    private val alertRegionMode: AlertRegionMode = AlertRegionMode.CITY_LABELS,
     private val showLargeCities: Boolean = true,
     private val showMediumCities: Boolean = true,
     private val showSmallCities: Boolean = true,
@@ -767,9 +766,8 @@ class CityLabelOverlay(
                 CityTier.MINOR -> (8.5 + (zoom - 10.0) * 0.7).coerceIn(8.5, 13.0)
             }).toFloat() * density
             val level = cityAlertLevels[c.nameUa] ?: AlertLevel.NONE
-            val suppressed = c.nameUa in suppressedAlertCities
             paint.color = when {
-                suppressed -> AppPalette.CityTextDefault.toInt()
+                alertRegionMode != AlertRegionMode.CITY_LABELS -> AppPalette.CityTextDefault.toInt()
                 level == AlertLevel.RED -> AppPalette.AlertRed.toInt()
                 level == AlertLevel.YELLOW -> AppPalette.AlertYellow.toInt()
                 else -> AppPalette.CityTextDefault.toInt()

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -440,18 +441,90 @@ internal fun AlertRegionModeRow(
                 selected = selected == AlertRegionMode.CITY_LABELS,
                 onClick = { onModeChange(AlertRegionMode.CITY_LABELS) },
                 label = { Text(cityLabelsLabel, style = MaterialTheme.typography.labelLarge) },
+                leadingIcon = {
+                    Row(modifier = Modifier.size(width = 18.dp, height = 12.dp).clip(RoundedCornerShape(2.dp))) {
+                        Box(Modifier.weight(1f).fillMaxHeight().background(Color(AppPalette.AlertRed)))
+                        Box(Modifier.weight(1f).fillMaxHeight().background(Color(AppPalette.AlertYellow)))
+                    }
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = Color(AppPalette.Card),
+                    labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                    iconColor = Color.White,
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = Color(AppPalette.MapBackground),
+                    selectedLeadingIconColor = Color.White
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = selected == AlertRegionMode.CITY_LABELS,
+                    borderColor = MaterialTheme.colorScheme.outlineVariant,
+                    selectedBorderColor = Color(AppPalette.AlertRed),
+                    borderWidth = 1.dp,
+                    selectedBorderWidth = 1.5.dp
+                ),
                 modifier = Modifier.weight(1f)
             )
             FilterChip(
                 selected = selected == AlertRegionMode.FILL,
                 onClick = { onModeChange(AlertRegionMode.FILL) },
                 label = { Text(fillLabel, style = MaterialTheme.typography.labelLarge) },
+                leadingIcon = {
+                    Row(modifier = Modifier.size(width = 18.dp, height = 12.dp).clip(RoundedCornerShape(2.dp))) {
+                        Box(Modifier.weight(1f).fillMaxHeight().background(Color(AppPalette.RedFill)))
+                        Box(Modifier.weight(1f).fillMaxHeight().background(Color(AppPalette.YellowFill)))
+                    }
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = Color(AppPalette.Card),
+                    labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                    iconColor = Color.White,
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = Color(AppPalette.MapBackground),
+                    selectedLeadingIconColor = Color.White
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = selected == AlertRegionMode.FILL,
+                    borderColor = MaterialTheme.colorScheme.outlineVariant,
+                    selectedBorderColor = Color(AppPalette.RedFill),
+                    borderWidth = 1.dp,
+                    selectedBorderWidth = 1.5.dp
+                ),
                 modifier = Modifier.weight(1f)
             )
             FilterChip(
                 selected = selected == AlertRegionMode.BORDER,
                 onClick = { onModeChange(AlertRegionMode.BORDER) },
                 label = { Text(borderLabel, style = MaterialTheme.typography.labelLarge) },
+                leadingIcon = {
+                    Box(
+                        modifier = Modifier.size(18.dp).clip(RoundedCornerShape(3.dp))
+                            .border(2.dp, Color(AppPalette.RedLine), RoundedCornerShape(3.dp))
+                            .background(Color.Transparent)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().padding(2.dp)
+                                .border(1.dp, Color(AppPalette.YellowLine), RoundedCornerShape(1.dp))
+                        )
+                    }
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = Color(AppPalette.Card),
+                    labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                    iconColor = Color.White,
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = Color(AppPalette.MapBackground),
+                    selectedLeadingIconColor = Color.White
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = selected == AlertRegionMode.BORDER,
+                    borderColor = MaterialTheme.colorScheme.outlineVariant,
+                    selectedBorderColor = Color(AppPalette.RedLine),
+                    borderWidth = 1.dp,
+                    selectedBorderWidth = 1.5.dp
+                ),
                 modifier = Modifier.weight(1f)
             )
         }

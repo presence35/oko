@@ -98,7 +98,7 @@ object MapLibreLayerManager {
         // 1. Ukraine country border — not drawn (we keep the border knowledge for masking only, no line)
         // land border intentionally not added as a layer
 
-        // 2. Alert fills — opaque, below white borders so white shows on top in FILL
+        // 2. Alert fills — translucent (45%/35%), below white borders so white shows on top in FILL and land details show through
         val srcAlertYellow = GeoJsonSource(SOURCE_ALERT_YELLOW, MapLibreGeoJson.EMPTY)
         style.addSource(srcAlertYellow)
         style.addLayer(
@@ -343,4 +343,5 @@ object MapLibreLayerManager {
         redSrc?.setGeoJson(MapLibreGeoJson.singleCircle(centerLat, centerLon, slowRedKm))
         yellowSrc?.setGeoJson(MapLibreGeoJson.singleCircle(centerLat, centerLon, slowYellowKm))
     }
+
 }

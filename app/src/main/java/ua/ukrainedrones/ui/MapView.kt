@@ -934,34 +934,11 @@ LaunchedEffect(selectedId) {
         } else uiState.cityAlerts
     }
 
-    val suppressedCities = remember(
-        uiState.cityAlerts,
-        uiState.alertRegionMode,
-        uiState.alertOblastIds,
-        uiState.alertYellowOblastIds,
-        uiState.alertRaionKeys,
-        uiState.alertYellowRaionKeys
-    ) {
-        if (uiState.alertRegionMode != AlertRegionMode.CITY_LABELS) {
-            uiState.cityAlerts.mapNotNull { (cityName, level) ->
-                val stem = Cities.cityOblast[cityName] ?: return@mapNotNull null
-                val id = CompactOblastBoundaries.canonicalId(stem) ?: return@mapNotNull null
-                val covered = when (level) {
-                    AlertLevel.RED -> id in uiState.alertOblastIds || coversCityRaion(cityName, id, uiState.alertRaionKeys)
-                    AlertLevel.YELLOW -> id in uiState.alertYellowOblastIds || coversCityRaion(cityName, id, uiState.alertYellowRaionKeys) ||
-                        id in uiState.alertOblastIds || coversCityRaion(cityName, id, uiState.alertRaionKeys)
-                    else -> false
-                }
-                if (covered) cityName else null
-            }.toSet()
-        } else emptySet()
-    }
-
-    val cityLabelOverlay = remember(context, lang, displayAlerts, suppressedCities, uiState.showLargeCities, uiState.showMediumCities, uiState.showSmallCities) {
+    val cityLabelOverlay = remember(context, lang, displayAlerts, uiState.alertRegionMode, uiState.showLargeCities, uiState.showMediumCities, uiState.showSmallCities) {
         CityLabelOverlay(
             context, lang,
             cityAlertLevels = displayAlerts,
-            suppressedAlertCities = suppressedCities,
+            alertRegionMode = uiState.alertRegionMode,
             uiState.showLargeCities, uiState.showMediumCities, uiState.showSmallCities,
             forceShowAllProvider = { deathFx.forceShowAllCities.value }
         )
