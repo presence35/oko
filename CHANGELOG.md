@@ -4,6 +4,12 @@
 
 - Fixed stale offline timers firing all milestones at once by clearing the episode stamp on recovery and stitching only sub-3s flaps / Fixed stale offline timers firing all milestones at once by clearing the episode stamp on recovery and stitching only sub-3s flaps
 
+- Alert strokes now render above admin borders so active threats override outlines / Alert strokes now render above admin borders so active threats override outlines
+
+- Region borders now crisp white in FILL (override token opacity so translucent fills don't wash them gray) and muted under colored strokes in BORDER / Region borders now crisp white in FILL and muted under colored strokes in BORDER
+
+- Masked OpenGL white flash with dark curtain until first map frame (180ms fade, 2s fallback) / Masked OpenGL white flash with dark curtain until first map frame (180ms fade, 2s fallback)
+
 - Fixed white map on cold start by building border geometry off the main thread / Fixed white map on cold start by building border geometry off the main thread
 
 - City labels are colored only in city-labels mode; fill and border modes keep them white (alert already shown by fill/border) / Мітки міст кольорові лише в режимі міток; у режимах заливки та меж вони білі (тривога вже показана заливкою/межею)
@@ -15,6 +21,10 @@
 - Fixed red alert regions not rendering by dropping degenerate boundary slivers and normalizing polygon winding in alert fills / Fixed red alert regions not rendering by dropping degenerate boundary slivers and normalizing polygon winding in alert fills
 
 - Auto shoot-down now respects follow-bullet: off-screen strikes skip the countdown and animation when the setting is off, and the collector lives in the flourish / Auto shoot-down now respects follow-bullet: off-screen strikes skip the countdown and animation when the setting is off, and the collector lives in the flourish
+
+- Alert fills now translucent (45% red / 35% amber) so land details show through under the fills / Заливки тривог тепер напівпрозорі (45% червоний / 35% жовтий) щоб деталі ландшафту проглядалися крізь заливки
+
+- Settings alert-region options now show color previews: city labels split red/yellow text, fill chip 50/50 red-yellow gradient, border chip half-red half-yellow inner stroke / Налаштування режиму тривог тепер показують кольорові превʼю: мітки міст червоно-жовтий текст, заливка — градієнт, межі — внутрішня обведення
 
 - Alert fills now fully override borders without blending: land/oblast/raion borders render below opaque red/yellow fills so no pink appears when both are enabled / Заливки тривог тепер повністю перекривають межі без змішування: межі рендеряться під непрозорими червоними/жовтими заливками, тому рожевого не з'являється коли обидва увімкнені
 

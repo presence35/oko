@@ -29,6 +29,7 @@ import ua.ukrainedrones.UA_PAN_MAX_LAT
 import ua.ukrainedrones.UA_PAN_MAX_LON
 import ua.ukrainedrones.UA_PAN_MIN_LAT
 import ua.ukrainedrones.UA_PAN_MIN_LON
+import ua.ukrainedrones.theme.AppPalette
 import kotlin.math.cos
 import kotlin.math.pow
 
@@ -58,6 +59,10 @@ class MapLibreBridge(
     private var onMapLongClickCallback: ((PointF, LatLng) -> Unit)? = null
 
     fun invalidateOverlay() {
+        overlayView?.invalidate()
+    }
+
+    fun invalidateOverlayNextFrame() {
         overlayView?.postInvalidateOnAnimation()
     }
 
@@ -138,11 +143,11 @@ class MapLibreBridge(
         }
     }
 
-    fun updateBorders(showBorders: Boolean, showRegionBorders: Boolean) {
+    fun updateBorders(showBorders: Boolean, showRegionBorders: Boolean, alertRegionMode: AlertRegionMode) {
         val s = style ?: return
-        MapLibreLayerManager.updateBordersVisibility(s, showBorders, showRegionBorders)
-        mapView?.postInvalidateOnAnimation()
-        overlayView?.postInvalidateOnAnimation()
+        MapLibreLayerManager.updateBordersVisibility(s, showBorders, showRegionBorders, alertRegionMode)
+        mapView?.invalidate()
+        overlayView?.invalidate()
     }
 
     fun updateAlerts(
@@ -156,8 +161,8 @@ class MapLibreBridge(
         MapLibreLayerManager.updateAlertRegions(
             s, alertRegionMode, redOblastIds, redRaions, yellowOblastIds, yellowRaions
         )
-        mapView?.postInvalidateOnAnimation()
-        overlayView?.postInvalidateOnAnimation()
+        mapView?.invalidate()
+        overlayView?.invalidate()
     }
 
     fun updateAlerts(
@@ -178,8 +183,8 @@ class MapLibreBridge(
     ) {
         val s = style ?: return
         MapLibreLayerManager.updateZoneCircles(s, centerLat, centerLon, slowRedKm, slowYellowKm)
-        mapView?.postInvalidateOnAnimation()
-        overlayView?.postInvalidateOnAnimation()
+        mapView?.invalidate()
+        overlayView?.invalidate()
     }
 }
 
@@ -225,10 +230,10 @@ fun MapLibreHostView(
         object : FrameLayout(context) {
             override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
                 val handled = super.dispatchTouchEvent(ev)
-                if (ev.actionMasked == MotionEvent.ACTION_MOVE ||
-                    ev.actionMasked == MotionEvent.ACTION_DOWN
+                if (ev.actionMasked != MotionEvent.ACTION_UP &&
+                    ev.actionMasked != MotionEvent.ACTION_CANCEL
                 ) {
-                    overlayView.postInvalidateOnAnimation()
+                    overlayView.invalidate()
                 }
                 return handled
             }
@@ -237,8 +242,23 @@ fun MapLibreHostView(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+            // Zero-cost backdrop during initial layout passes before children attach.
+            setBackgroundColor(AppPalette.MapBackground.toInt())
         }
     }
+    val curtainView = remember {
+        View(context).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            isClickable = false
+            isFocusable = false
+            // Matches Carto dark canvas so cold start transitions seamlessly.
+            setBackgroundColor(AppPalette.MapBackground.toInt())
+        }
+    }
+    val curtainCleanup = remember { object { var fn: (() -> Unit)? = null } }
     val mapView = remember {
         val opts = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
         MapView(context, opts).apply {
@@ -267,6 +287,7 @@ fun MapLibreHostView(
         lifecycle.addObserver(observer)
         onDispose {
             lifecycle.removeObserver(observer)
+            curtainCleanup.fn?.invoke()
         }
     }
 
@@ -276,6 +297,8 @@ fun MapLibreHostView(
                 removeAllViews()
                 addView(mapView)
                 addView(overlayView)
+                // Covers TextureView until the native GL engine finishes painting dark tiles.
+                addView(curtainView)
                 bridge.mapView = mapView
                 bridge.overlayView = overlayView
 
@@ -312,6 +335,36 @@ fun MapLibreHostView(
                             }
                         }
 
+                        // TextureView paints its dark frame asynchronously after style compilation;
+                        // lifting the curtain only after the frame finishes prevents any white clear-color leak.
+                        var dismissed = false
+                        fun dismissCurtain() {
+                            if (dismissed) return
+                            dismissed = true
+                            curtainView.animate()
+                                .alpha(0f)
+                                .setDuration(180)
+                                .withEndAction { container.removeView(curtainView) }
+                                .start()
+                        }
+                        val frameListener = object : MapView.OnDidFinishRenderingFrameListener {
+                            override fun onDidFinishRenderingFrame(fully: Boolean, t1: Double, t2: Double) {
+                                mapView.removeOnDidFinishRenderingFrameListener(this)
+                                dismissCurtain()
+                            }
+                        }
+                        mapView.addOnDidFinishRenderingFrameListener(frameListener)
+                        val timeoutRunnable = Runnable {
+                            mapView.removeOnDidFinishRenderingFrameListener(frameListener)
+                            dismissCurtain()
+                        }
+                        // Prevents a permanently obscured map if GL rendering stalls or device locks.
+                        curtainView.postDelayed(timeoutRunnable, 2000)
+                        curtainCleanup.fn = {
+                            curtainView.removeCallbacks(timeoutRunnable)
+                            mapView.removeOnDidFinishRenderingFrameListener(frameListener)
+                        }
+
                         val projLambda: (Double, Double) -> PointF? = { lat, lon ->
                             val pt = mapLibreMap.projection.toScreenLocation(LatLng(lat, lon))
                             PointF(pt.x, pt.y)
@@ -319,11 +372,11 @@ fun MapLibreHostView(
                         bridge.project = projLambda
 
                         mapLibreMap.addOnCameraMoveListener {
-                            overlayView.postInvalidateOnAnimation()
+                            overlayView.invalidate()
                             bridge.dispatchCameraMove()
                         }
                         mapLibreMap.addOnCameraIdleListener {
-                            overlayView.postInvalidateOnAnimation()
+                            overlayView.invalidate()
                             onCameraChange()
                             bridge.dispatchCameraMove()
                         }

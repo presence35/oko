@@ -103,10 +103,10 @@ private fun sheltersBoundingBox(near: List<NearestShelter>): CameraBounds? {
 // Bounded cache for rendered marker-icon BITMAPS — key "type|iconSet|revealed".
 private val threatIconCache = object : LruCache<String, Bitmap>(48) {}
 
-/** Threat marker icon size tracks map zoom. */
+/** Threat marker icon size tracks map zoom — continuous so zoom interpolation doesn't jump. */
 private fun threatIconSizeDp(zoom: Double): Int {
     val scale = ((zoom - 11.5) / 3.0 * 2.0 + 1.0).coerceIn(1.0, 3.0)
-    return (32.0 * scale / 8.0).roundToInt() * 8
+    return (32.0 * scale).roundToInt().coerceIn(32, 96)
 }
 
 /** Marker rotation that points a threat icon's nose along compass bearing. */
@@ -570,13 +570,15 @@ fun NeptunMapView(
         bridgeState.value,
         bridgeState.value?.layersReady?.value,
         uiState.showBorders,
-        uiState.showRegionBorders
+        uiState.showRegionBorders,
+        uiState.alertRegionMode
     ) {
         val bridge = bridgeState.value ?: return@LaunchedEffect
         if (!bridge.layersReady.value) return@LaunchedEffect
         bridge.updateBorders(
             showBorders = uiState.showBorders,
-            showRegionBorders = uiState.showRegionBorders
+            showRegionBorders = uiState.showRegionBorders,
+            alertRegionMode = uiState.alertRegionMode
         )
     }
     LaunchedEffect(

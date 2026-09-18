@@ -1,8 +1,8 @@
 package ua.ukrainedrones.ui
 
+import ua.ukrainedrones.AlertRegionMode
 import ua.ukrainedrones.theme.AppPalette
 import ua.ukrainedrones.community.CompactRaionBoundaries
-import ua.ukrainedrones.AlertRegionMode
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
@@ -114,7 +114,7 @@ object MapLibreLayerManager {
             }
         )
 
-        // 3. Oblast borders — white, above fills so FILL shows white subdivision
+        // 3. Static admin borders — white, below alert strokes so active threat overrides them
         val srcOblast = GeoJsonSource(SOURCE_OBLAST_BORDERS, data.oblastBorders)
         style.addSource(srcOblast)
         style.addLayer(
@@ -126,8 +126,6 @@ object MapLibreLayerManager {
                 )
             }
         )
-
-        // 4. Raion borders — white, above fills
         val srcRaion = GeoJsonSource(SOURCE_RAION_BORDERS, data.raionBorders)
         style.addSource(srcRaion)
         style.addLayer(
@@ -140,7 +138,7 @@ object MapLibreLayerManager {
             }
         )
 
-        // 5. Alert outlines — colored, above white so BORDER overrides white with r/y
+        // 4. Alert strokes — colored, on top of static borders so active threat boundaries always override admin outlines
         style.addLayer(
             LineLayer(LAYER_ALERT_YELLOW_LINE, SOURCE_ALERT_YELLOW).apply {
                 setProperties(
@@ -200,11 +198,25 @@ object MapLibreLayerManager {
         }
     }
 
-    fun updateBordersVisibility(style: Style, showBorders: Boolean, showRegionBorders: Boolean) {
+    fun updateBordersVisibility(style: Style, showBorders: Boolean, showRegionBorders: Boolean, alertRegionMode: AlertRegionMode) {
         val oblastVis = if (showBorders) Property.VISIBLE else Property.NONE
         val raionVis = if (showBorders && showRegionBorders) Property.VISIBLE else Property.NONE
-        style.getLayer(LAYER_OBLAST_BORDERS)?.setProperties(visibility(oblastVis))
-        style.getLayer(LAYER_RAION_BORDERS)?.setProperties(visibility(raionVis))
+        val oblastBorderLayer = style.getLayer(LAYER_OBLAST_BORDERS)
+        oblastBorderLayer?.setProperties(
+            visibility(oblastVis),
+            lineColor(
+                if (alertRegionMode == AlertRegionMode.FILL) 0xCCFFFFFF.toInt() else AppPalette.OblastBorder.toInt()
+            ),
+            lineWidth(1.5f)
+        )
+        val raionBorderLayer = style.getLayer(LAYER_RAION_BORDERS)
+        raionBorderLayer?.setProperties(
+            visibility(raionVis),
+            lineColor(
+                if (alertRegionMode == AlertRegionMode.FILL) 0x99FFFFFF.toInt() else AppPalette.RaionBorder.toInt()
+            ),
+            lineWidth(1f)
+        )
     }
 
     fun updateAlertRegions(
