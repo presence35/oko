@@ -2,10 +2,9 @@ package ua.ukrainedrones
 
 import android.content.Context
 import android.graphics.drawable.Drawable
-import android.os.VibrationAttributes
-import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.SystemClock
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -101,7 +100,7 @@ class DeathFxController(
         return pt.x in inset..(b.width - inset) && pt.y in inset..(b.height - inset)
     }
 
-    private val vibrator = context.getSystemService(Vibrator::class.java)
+    private val vibrator = ContextCompat.getSystemService(context, Vibrator::class.java)
     // The delayed "shot then kill" haptic jobs — each strike launches one; clear() cancels them
     // all so an eject also silences the pending detonation buzz. Pruned on completion.
     private val hapticJobs = mutableListOf<Job>()
@@ -442,15 +441,9 @@ class DeathFxController(
         if (BuildConfig.DEBUG) android.util.Log.d("VibTrace", "strikeHaptics() source=flourish")
         val vibrator = vibrator ?: return
         val job = scope.launch {
-            vibrator.vibrate(
-                VibrationEffect.createOneShot(40L, VibrationEffect.DEFAULT_AMPLITUDE),
-                VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM)
-            )
+            vibrator.vibrateAlarm(40L)
             delay(DEATH_EXPLOSION_START_MS)
-            vibrator.vibrate(
-                VibrationEffect.createOneShot(120L, VibrationEffect.DEFAULT_AMPLITUDE),
-                VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM)
-            )
+            vibrator.vibrateAlarm(120L)
         }
         hapticJobs += job
         job.invokeOnCompletion { hapticJobs.remove(job) }

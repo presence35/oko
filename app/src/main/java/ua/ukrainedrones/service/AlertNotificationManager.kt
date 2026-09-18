@@ -409,18 +409,22 @@ class AlertNotificationManager(private val context: Context) {
 
     private fun retryPendingIntent(): PendingIntent {
         val intent = Intent(context, AlertService::class.java).setAction(ACTION_RETRY)
-        return PendingIntent.getForegroundService(
-            context, 1, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(context, 1, intent, flags)
+        } else {
+            PendingIntent.getService(context, 1, intent, flags)
+        }
     }
 
     private fun ignoreRetryPendingIntent(): PendingIntent {
         val intent = Intent(context, AlertService::class.java).setAction(ACTION_IGNORE_RETRY)
-        return PendingIntent.getForegroundService(
-            context, 2, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(context, 2, intent, flags)
+        } else {
+            PendingIntent.getService(context, 2, intent, flags)
+        }
     }
 
     private fun updatePendingIntent(): PendingIntent {

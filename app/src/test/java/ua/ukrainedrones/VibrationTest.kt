@@ -29,4 +29,17 @@ class VibrationTest {
     fun `out of range falls back to the default`() {
         assertArrayEquals(vibrationPattern(3), vibrationPattern(99))
     }
+
+    @Test
+    fun `vibration patterns have valid positive timings`() {
+        for (lvl in 1..4) {
+            val pattern = vibrationPattern(lvl)
+            assertTrue("Pattern for level $lvl must not be empty", pattern.isNotEmpty())
+            assertTrue("Initial delay must be non-negative", pattern[0] >= 0)
+            for (i in 1 until pattern.size) {
+                assertTrue("Timing step $i in level $lvl must be strictly positive", pattern[i] > 0)
+            }
+        }
+    }
 }
+

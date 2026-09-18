@@ -1,6 +1,7 @@
 package ua.ukrainedrones
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.os.Build
 import android.os.VibrationAttributes
 import android.os.VibrationEffect
@@ -14,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 
 /** Global toggle for press haptics — provided from the user setting at the app root. */
 val LocalHapticsEnabled = staticCompositionLocalOf { true }
@@ -61,21 +63,55 @@ fun Modifier.pressTick(source: InteractionSource): Modifier {
     return this
 }
 
+/**
+ * Safely plays a vibration on the ALARM channel with full backward compatibility:
+ * - API >= 33: Uses [VibrationAttributes.createForUsage] with USAGE_ALARM.
+ * - API 26..32: Uses [AudioAttributes] with USAGE_ALARM and CONTENT_TYPE_SONIFICATION to bypass touch-mute.
+ * - API < 26: Falls back to legacy [Vibrator.vibrate].
+ *
+ * Catches hardware exceptions and OEM edge cases to prevent app crashes on non-standard Android builds.
+ */
+fun Vibrator.vibrateAlarm(durationMs: Long, amplitude: Int = VibrationEffect.DEFAULT_AMPLITUDE) {
+    if (!hasVibrator()) return
+    runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val effect = VibrationEffect.createOneShot(durationMs, amplitude)
+            val attributes = VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM)
+            vibrate(effect, attributes)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val effect = VibrationEffect.createOneShot(durationMs, amplitude)
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            @Suppress("DEPRECATION")
+            vibrate(effect, audioAttributes)
+        } else {
+            @Suppress("DEPRECATION")
+            vibrate(durationMs)
+        }
+    }
+}
+
+/**
+ * Safely plays a standard vibration effect across all Android versions without crashing older devices.
+ */
+fun Vibrator.vibrateSafe(durationMs: Long, amplitude: Int = VibrationEffect.DEFAULT_AMPLITUDE) {
+    if (!hasVibrator()) return
+    runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrate(VibrationEffect.createOneShot(durationMs, amplitude))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrate(durationMs)
+        }
+    }
+}
+
 private fun tick(context: Context) {
     if (BuildConfig.DEBUG) android.util.Log.d("VibTrace", "tick() source=pressTick")
-    val vibrator = context.getSystemService(Vibrator::class.java) ?: return
-    if (!vibrator.hasVibrator()) return
-    // One-shot with full amplitude (same mechanism as the shoot-down flourish) — the
-    // predefined EFFECT_TICK is a device-tuned "keyboard tap" that many OEMs render as a no-op.
-    val effect = VibrationEffect.createOneShot(30L, VibrationEffect.DEFAULT_AMPLITUDE)
-    if (Build.VERSION.SDK_INT >= 30) {
-        vibrator.vibrate(
-            effect,
-            VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM)
-        )
-    } else {
-        vibrator.vibrate(effect)
-    }
+    val vibrator = ContextCompat.getSystemService(context, Vibrator::class.java) ?: return
+    vibrator.vibrateAlarm(30L, VibrationEffect.DEFAULT_AMPLITUDE)
 }
 
 /**

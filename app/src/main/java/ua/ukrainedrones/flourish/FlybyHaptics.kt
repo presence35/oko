@@ -1,12 +1,12 @@
 package ua.ukrainedrones
 
-import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import kotlin.math.roundToInt
 
 /**
@@ -19,12 +19,12 @@ fun FlybyHaptics(
     enabled: Boolean = true
 ) {
     val context = LocalContext.current
-    val vibrator = remember { context.getSystemService(Vibrator::class.java) }
+    val vibrator = remember(context) { ContextCompat.getSystemService(context, Vibrator::class.java) }
 
     // Throttle to ~30 Hz to avoid spamming the vibrator
     val lastFire = remember { mutableStateOf(0L) }
 
-    if (!enabled || !vibrator.hasVibrator()) return
+    if (!enabled || vibrator == null || !vibrator.hasVibrator()) return
 
     val now = System.currentTimeMillis()
     if (now - lastFire.value < 33) return // ~30 Hz max
@@ -45,15 +45,15 @@ fun FlybyHaptics(
     when {
         progress < 0.3f -> {
             // Approach: steady low rumble
-            vibrator.vibrate(VibrationEffect.createOneShot(60, amplitude))
+            vibrator.vibrateSafe(60L, amplitude)
         }
         progress in 0.45f..0.55f -> {
             // Closest approach: strong pulse
-            vibrator.vibrate(VibrationEffect.createOneShot(120, 255))
+            vibrator.vibrateSafe(120L, 255)
         }
         progress in 0.7f..0.9f -> {
             // Receding: fading pulses
-            vibrator.vibrate(VibrationEffect.createOneShot(40, amplitude))
+            vibrator.vibrateSafe(40L, amplitude)
         }
     }
 }
