@@ -181,19 +181,24 @@ fun ThreatPopupCard(
     // Wave count (group size) prefixes the title when the server reports it (>1 only).
     val titleLabel = if (threat.count > 1) "${threat.count}x $typeLabel" else typeLabel
 
-    val regionText = listOf(threat.locality, threat.district, threat.region)
-        .filter { !it.isNullOrBlank() }
-        .distinct()
-        .joinToString(" · ")
-        .ifBlank { s.noRegion }
+    // Memoize region formatting and transliteration so card recompositions avoid redundant string operations.
+    val regionText = remember(threat.locality, threat.district, threat.region, s.noRegion) {
+        listOf(threat.locality, threat.district, threat.region)
+            .filter { !it.isNullOrBlank() }
+            .distinct()
+            .joinToString(" · ")
+            .ifBlank { s.noRegion }
+    }
 
     // NEPTUN's locality text is Ukrainian; for the EN UI transliterate it (place names are
     // romanized, never semantically translated — the romanization is all an EN reader needs).
     // The national MiG carries descriptors, not places — show the fixed EN text instead.
-    val displayRegion = when {
-        lang == AppLanguage.EN && isNationalMig(threat) -> nationalMigWhereText()
-        lang == AppLanguage.EN -> Transliteration.transliterate(regionText)
-        else -> regionText
+    val displayRegion = remember(regionText, threat.type, threat.locality, threat.district, threat.region, lang) {
+        when {
+            lang == AppLanguage.EN && isNationalMig(threat) -> nationalMigWhereText()
+            lang == AppLanguage.EN -> Transliteration.transliterate(regionText)
+            else -> regionText
+        }
     }
 
     // Elapsed time + stale flag from leaf composable (runs its own 1s clock, doesn't invalidate parent).
@@ -201,9 +206,11 @@ fun ThreatPopupCard(
 
     val confirmations = threat.confirmations.takeIf { it > 0 }
 
-    val band = proximity?.let { p ->
-        val props = typeCatalog[threat.type] ?: return@let null
-        engine.zoneTier(props, p.distToUserKm ?: return@let null, p.speedKmh, p.params)
+    val band = remember(proximity?.distToUserKm, proximity?.speedKmh, proximity?.params, threat.type) {
+        proximity?.let { p ->
+            val props = typeCatalog[threat.type] ?: return@let null
+            engine.zoneTier(props, p.distToUserKm ?: return@let null, p.speedKmh, p.params)
+        }
     }
     val bandColor = when (band) {
         ThreatZone.INNER -> DistUserRed

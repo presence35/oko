@@ -113,7 +113,7 @@ import kotlin.math.sin
 private enum class Screen { MAP, SETTINGS, GUIDE, SHELTERS, LOGS }
 
 private val _ukraineBlue = Color(AppPalette.UkraineBlue)
-private val _ukraineYellow = Color(AppPalette.AlertYellow)
+private val _ukraineYellow = Color(AppPalette.UkraineYellow)
 private val AlertRed = Color(AppPalette.AlertRed)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -656,7 +656,7 @@ private fun MapScreen(
         label = "gearPulse"
     )
     var fitUkraineTick by remember { mutableStateOf(0) }
-    var scaleMpp by remember { mutableStateOf(0.0) }
+    val scaleState = remember { ScaleState() }
     var zoomZone by remember { mutableStateOf<ThreatZone?>(null) }
     var zoomTick by remember { mutableStateOf(0) }
     var fitZonesTick by remember { mutableStateOf(0) }
@@ -895,7 +895,7 @@ private fun MapScreen(
                         selectedThreatId = selectedThreatId,
                         lang = uiState.language,
                         iconSet = uiState.iconSet,
-                        onScaleChange = { scaleMpp = it },
+                        onScaleChange = { scaleState.mpp = it },
                         onThreatTapped = {
                             onShowNearbySheltersChange(false)
                             selectedShelter = null
@@ -956,12 +956,11 @@ private fun MapScreen(
                             .padding(start = 12.dp, bottom = 4.dp),
                         contentAlignment = Alignment.BottomStart
                     ) {
-                        if (uiState.showMapScale) {
-                            ScaleIndicator(
-                                metersPerPixel = scaleMpp,
-                                lang = uiState.language
-                            )
-                        }
+                        LocalizedScaleIndicator(
+                            scaleState = scaleState,
+                            visible = uiState.showMapScale,
+                            lang = uiState.language
+                        )
                     }
                     Text(
                         "© CARTO",
@@ -1458,6 +1457,28 @@ private fun UkraineEmblem(level: AlertLevel, modifier: Modifier = Modifier, cont
                 AlertLevel.NONE -> null
             },
             modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Stable
+private class ScaleState(initialMpp: Double = 0.0) {
+    var mpp by mutableDoubleStateOf(initialMpp)
+}
+
+// Scoped composable ensures high-frequency zoom and pan scale updates do not recompose the main screen tree.
+@Composable
+private fun LocalizedScaleIndicator(
+    scaleState: ScaleState,
+    visible: Boolean,
+    lang: AppLanguage,
+    modifier: Modifier = Modifier
+) {
+    if (visible && scaleState.mpp > 0.0) {
+        ScaleIndicator(
+            metersPerPixel = scaleState.mpp,
+            lang = lang,
+            modifier = modifier
         )
     }
 }

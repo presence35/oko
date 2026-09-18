@@ -12,11 +12,11 @@ const val UA_WIDE_MAX_LAT = 54.4
 const val UA_WIDE_MIN_LON = 20.1
 const val UA_WIDE_MAX_LON = 42.2
 
-/** Ukraine buffered pan bounds — ~0.8° margin around Ukraine extents. */
-const val UA_PAN_MIN_LAT = 43.4
-const val UA_PAN_MAX_LAT = 53.4
-const val UA_PAN_MIN_LON = 21.0
-const val UA_PAN_MAX_LON = 41.5
+// Relaxed camera target bounds providing breathing room so fast pans and flings decelerate smoothly without boundary snapping.
+const val UA_PAN_MIN_LAT = 41.0
+const val UA_PAN_MAX_LAT = 56.0
+const val UA_PAN_MIN_LON = 18.0
+const val UA_PAN_MAX_LON = 45.0
 
 /** Odesa city centre — fallback camera target before the first GPS fix. */
 const val ODESA_LAT = 46.4832

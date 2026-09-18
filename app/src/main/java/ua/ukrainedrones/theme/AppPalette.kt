@@ -22,6 +22,7 @@ object AppPalette {
     const val GpsBlue: Long = 0xFF2196F3
     const val WidgetBlue: Long = 0xFF1E88E5
     const val UkraineBlue: Long = 0xFF005BBB
+    const val UkraineYellow: Long = 0xFFFFD500
     const val Gold: Long = 0xFFFFD700
 
     const val Background: Long = 0xFF121212

@@ -970,8 +970,16 @@ LaunchedEffect(selectedId) {
                     val nowMs = System.currentTimeMillis()
                     val ring = newRingState.value
 
-                    // 1. City labels
-                    cityLabelOverlay.draw(canvas, currentZoom, projLambda)
+                    // 1. City labels (culled by visible viewport bounding box queried once per frame)
+                    val bounds = bridge.visibleGeoBounds(paddingX = 240f, paddingY = 60f)
+                    if (bounds != null) {
+                        cityLabelOverlay.draw(
+                            canvas, currentZoom, projLambda,
+                            bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon
+                        )
+                    } else {
+                        cityLabelOverlay.draw(canvas, currentZoom, projLambda)
+                    }
 
                     // 2. Nearby shelters
                     if (showNearbySheltersState && focusLocationState != null && shelterIndex != null) {

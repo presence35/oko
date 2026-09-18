@@ -45,6 +45,7 @@ import ua.ukrainedrones.engine.SpeedSource
 import ua.ukrainedrones.engine.ZoneParams
 import ua.ukrainedrones.service.ServiceState
 import ua.ukrainedrones.service.MonitoringStatus
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.random.Random
 
@@ -257,6 +258,49 @@ data class SelectionUi(
     val neutralized: NormalizedThreat? = null,   // resolved card while the death window plays
     val fakeNeutralize: Boolean = false
 )
+
+// Stabilizes card state: suppresses re-emission during 120ms tick loops unless user-visible content changes.
+internal fun areSelectionUiVisuallyEqual(old: SelectionUi, new: SelectionUi): Boolean {
+    if (old === new) return true
+    if (old.fakeNeutralize != new.fakeNeutralize) return false
+    if ((old.neutralized == null) != (new.neutralized == null)) return false
+    if (old.neutralized?.id != new.neutralized?.id) return false
+    if ((old.selected == null) != (new.selected == null)) return false
+
+    val oldSel = old.selected
+    val newSel = new.selected
+    if (oldSel != null && newSel != null) {
+        if (oldSel.id != newSel.id) return false
+        if (oldSel.type != newSel.type) return false
+        if (oldSel.status != newSel.status) return false
+        if (oldSel.count != newSel.count) return false
+        if (oldSel.locality != newSel.locality || oldSel.district != newSel.district || oldSel.region != newSel.region) return false
+        if (oldSel.confirmations != newSel.confirmations) return false
+        if (oldSel.areaOnly != newSel.areaOnly) return false
+        if (oldSel.altitude != newSel.altitude) return false
+        if (oldSel.reliability != newSel.reliability) return false
+        if (oldSel.direction != newSel.direction) return false
+        if (oldSel.updatedAtMillis != newSel.updatedAtMillis) return false
+    }
+
+    val oldProx = old.proximity
+    val newProx = new.proximity
+    if ((oldProx == null) != (newProx == null)) return false
+    if (oldProx != null && newProx != null) {
+        if (oldProx.speedSource != newProx.speedSource) return false
+        if (oldProx.params != newProx.params) return false
+        if (oldProx.distToUserKm?.roundToInt() != newProx.distToUserKm?.roundToInt()) return false
+
+        val oldEta = oldProx.etaToUserMin?.let { ThreatEngine.formatEtaMinutes(it) }
+        val newEta = newProx.etaToUserMin?.let { ThreatEngine.formatEtaMinutes(it) }
+        if (oldEta != newEta) return false
+
+        val oldSpeed = oldProx.speedKmh?.roundToInt()
+        val newSpeed = newProx.speedKmh?.roundToInt()
+        if (oldSpeed != newSpeed) return false
+    }
+    return true
+}
 
 /** One-shot request from a notification tap to bring the camera onto a threat. */
 @Immutable
@@ -855,6 +899,8 @@ showBorders = prefs.showBorders,
                 neutralized = neutralizedThreat,
                 fakeNeutralize = sel.fakeNeutralize
             )
+        }.distinctUntilChanged { old, new ->
+            areSelectionUiVisuallyEqual(old, new)
         }
     }.stateIn(
         viewModelScope,

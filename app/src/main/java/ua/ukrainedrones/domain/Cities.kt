@@ -738,7 +738,11 @@ class CityLabelOverlay(
     fun draw(
         canvas: Canvas,
         zoom: Double,
-        project: (lat: Double, lon: Double) -> PointF?
+        project: (lat: Double, lon: Double) -> PointF?,
+        minLat: Double = -90.0,
+        maxLat: Double = 90.0,
+        minLon: Double = -180.0,
+        maxLon: Double = 180.0
     ) {
         val forceAll = forceShowAllProvider()
         for (c in Cities.ALL) {
@@ -756,6 +760,10 @@ class CityLabelOverlay(
             val isAlerted = cityAlertLevels[c.nameUa]?.let { it == AlertLevel.RED || it == AlertLevel.YELLOW } == true
             val minZoom = if (isAlerted && baseZoom != Double.MAX_VALUE) baseZoom * ALERT_ZOOM_FACTOR else baseZoom
             if (zoom < minZoom) continue
+
+            // Mathematical viewport culling on CPU avoids JNI projection bridge transitions for off-screen cities.
+            if (c.lat < minLat || c.lat > maxLat || c.lon < minLon || c.lon > maxLon) continue
+
             val pt = project(c.lat, c.lon) ?: continue
             if (pt.x < -240f || pt.x > canvas.width + 240f ||
                 pt.y < -60f || pt.y > canvas.height + 60f

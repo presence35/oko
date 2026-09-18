@@ -33,6 +33,13 @@ import ua.ukrainedrones.theme.AppPalette
 import kotlin.math.cos
 import kotlin.math.pow
 
+data class VisibleBounds(
+    val minLat: Double,
+    val maxLat: Double,
+    val minLon: Double,
+    val maxLon: Double
+)
+
 /**
  * State and bridge holder for MapLibre map controller, GPU vector layers, and coordinate projection.
  */
@@ -53,6 +60,21 @@ class MapLibreBridge(
     val centerLon: Double get() = map?.cameraPosition?.target?.longitude ?: 0.0
     val latitude: Double get() = centerLat
     val longitude: Double get() = centerLon
+
+    // Visible geographic bounds computed once per frame from screen corners to cull off-screen labels prior to JNI projection.
+    fun visibleGeoBounds(paddingX: Float = 0f, paddingY: Float = 0f): VisibleBounds? {
+        val w = width.toFloat().takeIf { it > 0f } ?: return null
+        val h = height.toFloat().takeIf { it > 0f } ?: return null
+        val p1 = fromPixels(-paddingX, -paddingY) ?: return null
+        val p2 = fromPixels(w + paddingX, -paddingY) ?: return null
+        val p3 = fromPixels(-paddingX, h + paddingY) ?: return null
+        val p4 = fromPixels(w + paddingX, h + paddingY) ?: return null
+        val minLat = minOf(p1.lat, p2.lat, p3.lat, p4.lat)
+        val maxLat = maxOf(p1.lat, p2.lat, p3.lat, p4.lat)
+        val minLon = minOf(p1.lon, p2.lon, p3.lon, p4.lon)
+        val maxLon = maxOf(p1.lon, p2.lon, p3.lon, p4.lon)
+        return VisibleBounds(minLat, maxLat, minLon, maxLon)
+    }
 
     private var onCameraMoveCallback: (() -> Unit)? = null
     private var onMapClickCallback: ((PointF, LatLng) -> Unit)? = null
@@ -227,17 +249,9 @@ fun MapLibreHostView(
         }
     }
     val container = remember {
-        object : FrameLayout(context) {
-            override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-                val handled = super.dispatchTouchEvent(ev)
-                if (ev.actionMasked != MotionEvent.ACTION_UP &&
-                    ev.actionMasked != MotionEvent.ACTION_CANCEL
-                ) {
-                    overlayView.invalidate()
-                }
-                return handled
-            }
-        }.apply {
+        // Redundant overlay invalidation removed from dispatchTouchEvent: MapLibre's camera
+        // move callbacks already invalidate the overlay in sync with the display refresh rate.
+        FrameLayout(context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -309,6 +323,8 @@ fun MapLibreHostView(
                         isLogoEnabled = false
                         isCompassEnabled = false
                         isRotateGesturesEnabled = false
+                        // Tilt is disabled so fast two-finger pan gestures never alter camera pitch in a 2D basemap.
+                        isTiltGesturesEnabled = false
                     }
                     mapLibreMap.setMinZoomPreference(3.6)
                     mapLibreMap.setMaxZoomPreference(19.0)
