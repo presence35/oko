@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed stale offline timers firing all milestones at once by clearing the episode stamp on recovery and stitching only sub-3s flaps / Fixed stale offline timers firing all milestones at once by clearing the episode stamp on recovery and stitching only sub-3s flaps
+
 - Fixed white map on cold start by building border geometry off the main thread / Fixed white map on cold start by building border geometry off the main thread
 
 - City labels now stay red/yellow in city-labels and border modes, and turn white only when region fill is on / City labels now stay red/yellow in city-labels and border modes, and turn white only when region fill is on

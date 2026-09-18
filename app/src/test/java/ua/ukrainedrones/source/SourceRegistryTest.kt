@@ -426,6 +426,55 @@ class SourceRegistryTest {
     }
 
     @Test
+    fun `sub-grace drop clears degradedSince once healthy`() {
+        var tick = 1_000_000_000L
+        Monotonic.nowProvider = { tick }
+        val registry = SourceRegistry()
+        val ws = FakeSource("ws", connectionInit = SourceState.CONNECTED)
+        registry.register(ws, testScope())
+        tick += 60_000L
+        ws.emitConnection(SourceState.OFFLINE)
+        tick += 2_000L
+        ws.emitConnection(SourceState.CONNECTED)
+        assertEquals(null, registry.degradedSince.value)
+    }
+
+    @Test
+    fun `drop after sustained health starts a fresh episode`() {
+        var tick = 1_000_000_000L
+        Monotonic.nowProvider = { tick }
+        val registry = SourceRegistry()
+        val ws = FakeSource("ws", connectionInit = SourceState.CONNECTED)
+        registry.register(ws, testScope())
+        tick += 60_000L
+        ws.emitConnection(SourceState.OFFLINE)
+        tick += 2_000L
+        ws.emitConnection(SourceState.CONNECTED)
+        assertEquals(null, registry.degradedSince.value)
+        tick += 10_000L
+        ws.emitConnection(SourceState.OFFLINE)
+        assertEquals(tick, registry.degradedSince.value)
+    }
+
+    @Test
+    fun `rapid flap stitches back to previous episode`() {
+        var tick = 1_000_000_000L
+        Monotonic.nowProvider = { tick }
+        val registry = SourceRegistry()
+        val ws = FakeSource("ws", connectionInit = SourceState.CONNECTED)
+        registry.register(ws, testScope())
+        tick += 60_000L
+        ws.emitConnection(SourceState.OFFLINE)
+        val episodeStart = registry.degradedSince.value
+        tick += 1_000L
+        ws.emitConnection(SourceState.CONNECTED)
+        assertEquals(null, registry.degradedSince.value)
+        tick += 1_000L
+        ws.emitConnection(SourceState.OFFLINE)
+        assertEquals(episodeStart, registry.degradedSince.value)
+    }
+
+    @Test
     fun `setEnabled propagates to source`() {
         val registry = SourceRegistry()
         val a = FakeSource("a")

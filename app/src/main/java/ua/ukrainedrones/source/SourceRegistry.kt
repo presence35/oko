@@ -78,9 +78,11 @@ class SourceRegistry {
     private val _degradedSince = MutableStateFlow<Long?>(null)
     val degradedSince: StateFlow<Long?> = _degradedSince.asStateFlow()
 
-    /** Last monotonic stamp of an unhealthy reading. A sub-grace flap keeps the previous
-     *  degraded stamp so episode timers don't restart at zero on micro-reconnects. */
-    private var lastDropMono = 0L
+    /** Last monotonic stamp of a healthy reading, plus the previous episode start.
+     *  Healthy always means no active episode ([_degradedSince] is null); a drop after only
+     *  a sub-grace healthy window stitches back onto the previous episode start. */
+    private var lastHealthyMono = 0L
+    private var lastDegradedSinceMono: Long? = null
 
     /** True when a non-WS fallback source is actually delivering real data (POLLING + CONNECTED). */
     private val _coveredByFallback = MutableStateFlow(false)
@@ -311,28 +313,28 @@ class SourceRegistry {
         _wsHealthy.value = wsDelivering
         _degraded.value = active.isNotEmpty() && !_wsHealthy.value
         val nowMono = Monotonic.now()
-        // Flap-grace: readings within the grace of the last drop stitch back onto the
-        // previous episode instead of restarting its timers at zero. Genuine recoveries
-        // (or drops after past-grace health) start fresh.
+        // Healthy never holds an episode: clear the stamp and remember the window for
+        // flap stitching. Drops stitch back only after a sub-grace healthy window;
+        // retries while down never reset the timer.
         _degradedSince.value = when {
             _wsHealthy.value -> {
                 val prev = _degradedSince.value
-                if (prev != null && lastDropMono > 0L && nowMono - lastDropMono < EPISODE_CONTINUITY_GRACE_MS) {
-                    prev
-                } else {
-                    null
-                }
+                if (prev != null) lastDegradedSinceMono = prev
+                lastHealthyMono = nowMono
+                null
             }
             else -> {
-                // A recheck while down/connecting never starts a fresh episode: once stamped,
-                // the episode runs until a genuine healthy recovery (the wsHealthy branch) nulls
-                // it past the flap grace. Manual or auto retries must not reset the timers.
                 val prev = _degradedSince.value
                 if (prev != null) {
                     prev
                 } else {
-                    lastDropMono = nowMono
-                    nowMono
+                    val stitched = lastDegradedSinceMono
+                    if (stitched != null && nowMono - lastHealthyMono < EPISODE_CONTINUITY_GRACE_MS) {
+                        stitched
+                    } else {
+                        lastDegradedSinceMono = null
+                        nowMono
+                    }
                 }
             }
         }
