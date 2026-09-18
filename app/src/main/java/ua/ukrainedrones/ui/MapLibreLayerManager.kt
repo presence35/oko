@@ -109,22 +109,13 @@ object MapLibreLayerManager {
      * Alert and zone sources start empty; content arrives via updateAlertRegions/updateZoneCircles.
      */
     fun addStaticLayers(style: Style, data: StaticLayersData) {
-        // 0. Outside Ukraine mask — disabled: void outside Ukraine is now pure background (no border polygon needed)
-        //         val srcMask = GeoJsonSource(SOURCE_OUTSIDE_MASK, data.outsideMask)
-        // style.addSource(srcMask)
-        // style.addLayer(FillLayer(LAYER_OUTSIDE_MASK, SOURCE_OUTSIDE_MASK).apply { setProperties(fillColor(AppPalette.Mask.toInt())) })
+        // 0. Outside Ukraine mask — computed from UKRAINE_BORDER, gives pure blackness outside with no tile download beyond bounds
+        val srcMask = GeoJsonSource(SOURCE_OUTSIDE_MASK, data.outsideMask)
+        style.addSource(srcMask)
+        style.addLayer(FillLayer(LAYER_OUTSIDE_MASK, SOURCE_OUTSIDE_MASK).apply { setProperties(fillColor(AppPalette.Mask.toInt())) })
 
-        // 1. Static land border (hugs coastline/rivers) — below alert fills so r/y overrides
-        val srcLandBorder = GeoJsonSource(SOURCE_LAND_BORDER, data.landBorder)
-        style.addSource(srcLandBorder)
-        style.addLayer(
-            LineLayer(LAYER_LAND_BORDER, SOURCE_LAND_BORDER).apply {
-                setProperties(
-                    lineColor(AppPalette.LandBorder.toInt()),
-                    lineWidth(2f)
-                )
-            }
-        )
+        // 1. Ukraine country border — not drawn (we keep the border knowledge for masking only, no line)
+        // land border intentionally not added as a layer
 
         // 2. Oblast borders — below alert fills
         val srcOblast = GeoJsonSource(SOURCE_OBLAST_BORDERS, data.oblastBorders)
@@ -226,11 +217,8 @@ object MapLibreLayerManager {
     }
 
     fun updateBordersVisibility(style: Style, showBorders: Boolean, showRegionBorders: Boolean) {
-        val landVis = if (!showBorders) Property.VISIBLE else Property.NONE
         val oblastVis = if (showBorders) Property.VISIBLE else Property.NONE
         val raionVis = if (showBorders && showRegionBorders) Property.VISIBLE else Property.NONE
-
-        style.getLayer(LAYER_LAND_BORDER)?.setProperties(visibility(landVis))
         style.getLayer(LAYER_OBLAST_BORDERS)?.setProperties(visibility(oblastVis))
         style.getLayer(LAYER_RAION_BORDERS)?.setProperties(visibility(raionVis))
     }

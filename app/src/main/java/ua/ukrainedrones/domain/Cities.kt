@@ -707,7 +707,7 @@ private const val ZOOM_MAJOR_MID = 6.0
 private const val ZOOM_MAJOR_LATE = 7.5
 private const val ZOOM_MEDIUM = 7.0
 private const val ZOOM_MINOR = 8.5
-private const val ALERT_ZOOM_FACTOR = 0.9
+private const val ALERT_ZOOM_FACTOR = 0.75
 
 /** Draws city names in the current language, sized to zoom level. MAJOR labels reveal
  *  progressively by [MajorReveal]: the top-5 overview set shows from the country view, MID
@@ -767,9 +767,7 @@ class CityLabelOverlay(
                 CityTier.MINOR -> (8.5 + (zoom - 10.0) * 0.7).coerceIn(8.5, 13.0)
             }).toFloat() * density
             val level = cityAlertLevels[c.nameUa] ?: AlertLevel.NONE
-            val suppressed = c.nameUa in suppressedAlertCities
             paint.color = when {
-                suppressed || level == AlertLevel.NONE -> AppPalette.CityTextDefault.toInt()
                 level == AlertLevel.RED -> AppPalette.AlertRed.toInt()
                 level == AlertLevel.YELLOW -> AppPalette.AlertYellow.toInt()
                 else -> AppPalette.CityTextDefault.toInt()

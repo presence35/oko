@@ -20,6 +20,7 @@ object MapLibreStyle {
               "tiles": [$tileUrls],
               "tileSize": 256,
               "maxzoom": 19,
+              "bounds": [21.0, 43.4, 41.5, 53.4],
               "attribution": "© OpenStreetMap contributors © CARTO"
             }
           },

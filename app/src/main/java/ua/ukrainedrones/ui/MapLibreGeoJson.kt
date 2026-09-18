@@ -76,8 +76,17 @@ object MapLibreGeoJson {
         return if (area < 0) pts.asReversed() else pts
     }
 
-    // Disabled: outside mask no longer drawn — void is pure background, no border polygon needed.
-    fun outsideUkraineMask(): String = EMPTY
+    fun outsideUkraineMask(): String {
+        val border = ua.ukrainedrones.UKRAINE_BORDER
+        val closedRing = if (border.isNotEmpty() && (border.first().lat != border.last().lat || border.first().lon != border.last().lon)) {
+            border + border.first()
+        } else {
+            border
+        }
+        val ukraineRing = closedRing.joinToString(",") { "[${it.lon},${it.lat}]" }
+        val worldOuter = "[-180.0,-85.0],[180.0,-85.0],[180.0,85.0],[-180.0,85.0],[-180.0,-85.0]"
+        return """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$worldOuter],[$ukraineRing]]}}]}"""
+    }
 
     /** Ukraine land border outline — hugs land/river borders and skips open sea coastline. */
     fun landBorder(): String {

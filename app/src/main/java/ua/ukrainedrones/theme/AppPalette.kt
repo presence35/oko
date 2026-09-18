@@ -55,7 +55,7 @@ object AppPalette {
     const val WarningLine: Long = 0xFF3A2B00
     const val StopPillBg: Long = 0xFF3A2E00
 
-    const val Mask: Long = 0xE60D1117
+    const val Mask: Long = 0xFF0D1117
     const val LandBorder: Long = 0x46FFFFFF
     const val OblastBorder: Long = 0x78B4B4C8
     const val RaionBorder: Long = 0x46B4B4C8

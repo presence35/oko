@@ -16,9 +16,9 @@
 
 - Alert fills now fully override borders without blending: land/oblast/raion borders render below opaque red/yellow fills so no pink appears when both are enabled / Заливки тривог тепер повністю перекривають межі без змішування: межі рендеряться під непрозорими червоними/жовтими заливками, тому рожевого не з'являється коли обидва увімкнені
 
-- Outside-Ukraine mask disabled — no border polygon compute or draw, pure background void outside Ukraine / Маску поза Україною вимкнено — жодних обчислень чи промальовування полігону межі, за межами — чистий фон
+- Ukraine border kept for masking only — pure black outside, no tile download beyond bounds, border line not drawn and alert fills override white region borders / Межу України залишено лише для маскування — зовні чистий чорний, без завантаження тайлів за межами, лінію межі не малюємо, заливки тривог перекривають білі межі
 
-- Alerted cities now surface 10% earlier than their tier (RED/YELLOW only), so a red region shows a label even from the full-map view / Міста під тривогою з'являються на 10% раніше свого рівня (лише RED/YELLOW), тож червоний регіон показує підпис навіть з повного огляду карти
+- Alerted cities now surface 25% earlier than their tier (RED/YELLOW only) and stay colored on fills, so a red region shows at country view / Міста під тривогою з'являються на 25% раніше свого рівня (лише RED/YELLOW) і лишаються кольоровими на заливках, тож червоний регіон видно з огляду країни
 
 - Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers / Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers
 
