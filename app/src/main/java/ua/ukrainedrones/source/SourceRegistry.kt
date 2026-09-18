@@ -1,6 +1,7 @@
 package ua.ukrainedrones.source
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -8,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import ua.ukrainedrones.ConnectionLog
 import ua.ukrainedrones.connection.ConnEvent
@@ -32,8 +34,6 @@ data class SourceEvent(
 
 private val emptyConnEvents = MutableStateFlow<List<ConnEvent>>(emptyList()).asStateFlow()
 private val emptyRetryState = MutableStateFlow<ConnRetryState?>(null).asStateFlow()
-private val emptyMilestones: SharedFlow<ConnectionMilestone> =
-    MutableSharedFlow<ConnectionMilestone>(extraBufferCapacity = 1).asSharedFlow()
 
 /**
  * Health authority over all threat sources. Owns the merged feeds and the aggregate
@@ -121,9 +121,17 @@ class SourceRegistry {
         logSource?.annotateConnectionLog(kind, attempt, delayMs, detail)
     }
 
-    /** Offline-episode milestone feed for notifications (empty when no log source). */
-    val connectionMilestones: SharedFlow<ConnectionMilestone>
-        get() = logSource?.milestones ?: emptyMilestones
+    /** Offline-episode milestone feed — owned here, once per episode. */
+    private val _connectionMilestones = MutableSharedFlow<ConnectionMilestone>(extraBufferCapacity = 16)
+    val connectionMilestones: SharedFlow<ConnectionMilestone> = _connectionMilestones.asSharedFlow()
+
+    private var firedM3 = false
+    private var firedM5 = false
+    private var firedM6 = false
+    private var firedM10 = false
+    private var firedM20 = false
+    private var milestoneEpisodeStart = 0L
+    private var milestoneLoopStarted = false
 
     /** Branding link shown in the Logs header (domain of the primary source). */
     val siteUrl: String? get() = _sources.value.firstOrNull()?.siteUrl
@@ -147,6 +155,15 @@ class SourceRegistry {
         }
         scope.launch {
             source.removedThreats.collect { _removedThreats.tryEmit(it) }
+        }
+        if (!milestoneLoopStarted) {
+            milestoneLoopStarted = true
+            scope.launch {
+                while (isActive) {
+                    delay(MILESTONE_CHECK_MS)
+                    checkMilestones(Monotonic.now())
+                }
+            }
         }
         recheckConnection()
     }
@@ -260,6 +277,13 @@ class SourceRegistry {
         /** How long a threat-data update can be absent from ALL sources before the merged feed is
          *  treated as stale (hides the map/zone logic). */
         const val THREAT_DATA_STALE_MS = 120_000L
+
+        private const val MILESTONE_CHECK_MS = 3_000L
+        private const val MILESTONE_3_MS = 3 * 60_000L
+        private const val MILESTONE_5_MS = 5 * 60_000L
+        private const val MILESTONE_6_MS = 6 * 60_000L
+        private const val MILESTONE_10_MS = 10 * 60_000L
+        private const val MILESTONE_20_MS = 20 * 60_000L
     }
 
     private fun Source.isAuthoritativeAlertSource(): Boolean = when (sourceType) {
@@ -317,6 +341,39 @@ class SourceRegistry {
                 it.operationalMode.value == OperationalMode.POLLING &&
                 map[it.id] == SourceState.CONNECTED
         }
+    }
+
+    private fun checkMilestones(nowMono: Long) {
+        val since = _degradedSince.value ?: return
+        if (!isOffline(nowMono)) return
+        if (since != milestoneEpisodeStart) {
+            resetMilestoneFlags()
+            milestoneEpisodeStart = since
+            logSource?.dismissLogCard()
+        }
+        val age = nowMono - since
+        maybeFireMilestone(age, MILESTONE_3_MS, firedM3, ConnEventKind.MILESTONE_3, ConnectionMilestone.M3) { firedM3 = true }
+        maybeFireMilestone(age, MILESTONE_5_MS, firedM5, ConnEventKind.MILESTONE_5, ConnectionMilestone.M5_CRITICAL) { firedM5 = true }
+        maybeFireMilestone(age, MILESTONE_6_MS, firedM6, ConnEventKind.MILESTONE_6, ConnectionMilestone.M6) { firedM6 = true }
+        maybeFireMilestone(age, MILESTONE_10_MS, firedM10, ConnEventKind.MILESTONE_10, ConnectionMilestone.M10) { firedM10 = true }
+        if (age >= MILESTONE_20_MS && !firedM20) {
+            firedM20 = true
+            logSource?.annotateConnectionLog(ConnEventKind.MILESTONE_20)
+            logSource?.annotateConnectionLog(ConnEventKind.GAVE_UP)
+            _connectionMilestones.tryEmit(ConnectionMilestone.M20_GAVE_UP)
+        }
+    }
+
+    private fun maybeFireMilestone(ageMs: Long, thresholdMs: Long, fired: Boolean, kind: ConnEventKind, milestone: ConnectionMilestone, mark: () -> Unit) {
+        if (ageMs >= thresholdMs && !fired) {
+            mark()
+            logSource?.annotateConnectionLog(kind)
+            _connectionMilestones.tryEmit(milestone)
+        }
+    }
+
+    private fun resetMilestoneFlags() {
+        firedM3 = false; firedM5 = false; firedM6 = false; firedM10 = false; firedM20 = false
     }
 
     /** Offline escalation (red + offline notification): immediate when the transport is physically

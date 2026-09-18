@@ -18,12 +18,12 @@ enum class ConnEventKind {
     GAVE_UP, IGNORE_MUTED, FALLBACK_ACTIVE, FALLBACK_RESTORED, SOURCE_TOGGLED
 }
 
-/** A reconnect that survives this long counts as a genuine recovery; shorter blips
- *  stitch back onto the previous offline episode (timers, milestones, critical dedup). */
+/** A degraded episode shorter than this is stitched back onto the previous one
+ *  instead of restarting its timers. Used only by [ua.ukrainedrones.source.SourceRegistry]. */
 const val EPISODE_CONTINUITY_GRACE_MS = 3_000L
 
-/** Offline-episode milestone signal, emitted once per episode on the milestones flow.
- *  The supervisor owns emission timing; consumers (AlertService) own notifications. */
+/** Offline-episode milestone signal, emitted once per episode by [ua.ukrainedrones.source.SourceRegistry].
+ *  Transport ([ua.ukrainedrones.connection.ResilientConnectionSupervisor]) never emits it. */
 enum class ConnectionMilestone(val minutes: Int) {    M3(3),
     M5_CRITICAL(5),
     M6(6),
@@ -101,7 +101,7 @@ sealed interface ConnectionState {
      * Socket is disconnected or unavailable.
      *
      * @property since Epoch millis when this offline episode began.
-     * @property reconnectStartMillis Epoch millis when reconnection began (persisted across retries & process restarts).
+     * @property reconnectStartMillis Wall-clock stamp of the down edge (plain, no flap stitching).
      * @property reason Human-readable or error message describing the drop.
      * @property attempt Current retry count in the active backoff sequence.
      */

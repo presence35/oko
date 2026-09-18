@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ua.ukrainedrones.ConnectionLog
@@ -17,7 +16,6 @@ import ua.ukrainedrones.engine.MonitorCoreImpl
 import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.OblastAlert
 import ua.ukrainedrones.engine.ThreatProps
-import ua.ukrainedrones.service.ServiceState
 
 /**
  * The NEPTUN source: powered by the resilient threat engine core.
@@ -76,16 +74,11 @@ class NeptunSource(private val context: Context) : Source, ConnectionLogSource {
 
     override val connEvents: StateFlow<List<ConnEvent>> get() = supervisor.connEvents
     override val retryState: StateFlow<ConnRetryState?> get() = supervisor.retryState
-    override val milestones: SharedFlow<ConnectionMilestone> get() = supervisor.milestones
 
     override fun start(scope: CoroutineScope) {
         scope.launch {
-            val svc = ServiceState(context.applicationContext)
-            supervisor.start(
-                savedReconnectStartMs = svc.reconnectStartMillis().first()
-            )
+            supervisor.start()
         }
-        scope.launch { persistReconnectStart() }
         scope.launch {
             supervisor.connectionState.collect { cs ->
                 _connectionState.value = mapConnectionState(cs)
@@ -95,17 +88,6 @@ class NeptunSource(private val context: Context) : Source, ConnectionLogSource {
                 } else if (cs.isConnected) {
                     core.onNetworkReconnected()
                 }
-            }
-        }
-    }
-
-    private suspend fun persistReconnectStart() {
-        val svc = ServiceState(context.applicationContext)
-        supervisor.connectionState.collect { cs ->
-            when (cs) {
-                is ConnectionState.Offline -> svc.setReconnectStartMillis(cs.reconnectStartMillis)
-                is ConnectionState.Connected -> svc.setReconnectStartMillis(0L)
-                else -> {}
             }
         }
     }

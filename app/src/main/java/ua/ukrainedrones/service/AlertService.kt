@@ -181,8 +181,6 @@ class AlertService : Service() {
     }
     @Volatile private var lastCleanAllClearCity: String? = null
 
-    private var hasActiveThreats = false
-    private var isOutage = false
     private var lastSweepAtMs = 0L
 
     /** The registry degraded-since stamp the critical offline notif already fired for
@@ -398,7 +396,7 @@ class AlertService : Service() {
             val nowFlow = MutableStateFlow(System.currentTimeMillis())
             launch {
                 while (true) {
-                    val fast = screenOnFlow.value || hasActiveThreats || isOutage
+                    val fast = screenOnFlow.value
                     delay(if (fast) MONITOR_TICK_MS else MONITOR_TICK_IDLE_MS)
                     nowFlow.value = System.currentTimeMillis()
                 }
@@ -914,8 +912,6 @@ fastYellowArmed = p.fastYellowArmed,
             emptySince = null
         }
 
-        hasActiveThreats = state.zoneThreats.isNotEmpty() || state.focusOblastLevel != AlertLevel.NONE
-        isOutage = !AppSources.registry.wsHealthy.value
     }
 
     private fun persistKnownZones() {

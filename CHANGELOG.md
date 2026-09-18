@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers / Fixed offline notification firing after seconds instead of minutes by making the degraded/offline episode single-authority in SourceRegistry, removing duplicate transport timers
+
+- Fixed battery drain during outages by throttling background monitor ticks to 30s when the screen is off — active threats or degraded connectivity no longer force 1s wakeups / Fixed battery drain during outages by throttling background monitor ticks to 30s when the screen is off — active threats or degraded connectivity no longer force 1s wakeups
+
 - Switched alert map fills and city coverage to direct canonical boundary lookup, eliminating stem-heuristic mismatches on Latin and Cyrillic alert keys / Switched alert map fills and city coverage to direct canonical boundary lookup, eliminating stem-heuristic mismatches on Latin and Cyrillic alert keys
 
 - Threat markers now show only the last four ID digits, threat cards no longer expose IDs, and Locate zooms directly to the maximum normal map zoom / Threat markers now show only the last four ID digits, threat cards no longer expose IDs, and Locate zooms directly to the maximum normal map zoom

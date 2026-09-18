@@ -7,10 +7,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.util.Log
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -54,11 +51,6 @@ class ResilientConnectionSupervisor(
         const val BASE_BACKOFF_MS = 1_000L
         const val MAX_BACKOFF_MS = 30_000L
         const val WATCHDOG_TICK_MS = 3_000L
-        const val MILESTONE_3_MS = 3 * 60_000L
-        const val MILESTONE_5_MS = 5 * 60_000L
-        const val MILESTONE_6_MS = 6 * 60_000L
-        const val MILESTONE_10_MS = 10 * 60_000L
-        const val MILESTONE_20_MS = 20 * 60_000L
         /** Offline/Connecting with a live network and no reconnect progress past this → force retry. */
         const val STUCK_OFFLINE_MS = MAX_BACKOFF_MS + 20_000L
         private const val MAX_CONN_EVENTS = 50
@@ -105,23 +97,6 @@ class ResilientConnectionSupervisor(
 
     private val _retryState = MutableStateFlow<ConnRetryState?>(null)
     val retryState: StateFlow<ConnRetryState?> = _retryState.asStateFlow()
-
-    /** Offline-episode milestones, once per episode. The service collects this for
-     *  notifications; the same marks are also recorded in [connEvents]. */
-    private val _milestones = MutableSharedFlow<ConnectionMilestone>(extraBufferCapacity = 16)
-    val milestones: SharedFlow<ConnectionMilestone> = _milestones.asSharedFlow()
-
-    /** Which milestones already fired for [milestoneEpisodeStart] (a reconnectStartMillis). */
-    private var firedM3 = false
-    private var firedM5 = false
-    private var firedM6 = false
-    private var firedM10 = false
-    private var firedM20 = false
-    private var milestoneEpisodeStart = 0L
-    /** Flap-grace continuity: last adopted episode start (wall) + last Connected stamp (mono).
-     *  A sub-grace drop resumes the previous episode instead of restarting timers at zero. */
-    private var lastEpisodeStartMs = 0L
-    private var lastHealthyMono = 0L
 
     val lastSocketFrame = MutableStateFlow(0L)
 
@@ -170,7 +145,7 @@ class ResilientConnectionSupervisor(
         }
     }
 
-    fun start(savedReconnectStartMs: Long = 0L) {
+    fun start() {
         if (!isRunning.compareAndSet(false, true)) return
 
         val request = NetworkRequest.Builder()
@@ -190,21 +165,16 @@ class ResilientConnectionSupervisor(
 
         startWatchdogLoop()
         lastReconnectProgressMono.set(Monotonic.now())
-        lastEpisodeStartMs = 0L
-        lastHealthyMono = 0L
 
         if (valid) {
             triggerReconnect("Initial start")
         } else {
-            val startMs = if (savedReconnectStartMs > 0L) savedReconnectStartMs else System.currentTimeMillis()
+            val now = System.currentTimeMillis()
             updateConnectionState(ConnectionState.Offline(
-                since = System.currentTimeMillis(),
-                reconnectStartMillis = startMs,
+                since = now,
+                reconnectStartMillis = now,
                 reason = "No validated internet"
             ))
-            // Resumed mid-episode: past milestones are recorded silently (no flow emission,
-            // so the service sends no retroactive burst); future crossings notify normally.
-            markPastMilestonesSilent(System.currentTimeMillis() - startMs)
             recordEvent(ConnEventKind.NO_NETWORK)
         }
     }
@@ -229,12 +199,10 @@ class ResilientConnectionSupervisor(
         // No job is scheduled from here, so any posted countdown is phantom — clear it.
         _retryState.value = null
         val now = System.currentTimeMillis()
-        // Episode age is stamped once on the Connected → down edge; flickers never rewrite it.
-        val episodeStart = beginEpisodeIfNeeded(now)
         val prev = _connectionState.value
         updateConnectionState(ConnectionState.Offline(
             since = prev.offlineSinceOrNull ?: now,
-            reconnectStartMillis = episodeStart,
+            reconnectStartMillis = now,
             reason = reason
         ))
         if (!wasDown) recordEvent(ConnEventKind.NO_NETWORK)
@@ -271,18 +239,8 @@ class ResilientConnectionSupervisor(
                     }
                 }
 
-                // Genuine recovery: only forget the episode after stable connection past the
-                // flap grace; a quicker drop stitches back onto it (see beginEpisodeIfNeeded).
-                if (cs.isConnected && milestoneEpisodeStart != 0L &&
-                    nowMono - lastHealthyMono >= EPISODE_CONTINUITY_GRACE_MS
-                ) {
-                    resetMilestoneFlags()
-                    milestoneEpisodeStart = 0L
-                }
-
                 val csNow = _connectionState.value
                 if (csNow is ConnectionState.Offline || csNow is ConnectionState.Connecting) {
-                    checkMilestones(System.currentTimeMillis())
                     if (!isNetworkValidated.get()) {
                         pollNetworkValidation()
                     } else {
@@ -357,7 +315,7 @@ class ResilientConnectionSupervisor(
             val prev = _connectionState.value
             updateConnectionState(ConnectionState.Offline(
                 since = prev.offlineSinceOrNull ?: now,
-                reconnectStartMillis = beginEpisodeIfNeeded(now),
+                reconnectStartMillis = now,
                 reason = reason,
                 attempt = attempt
             ))
@@ -378,7 +336,7 @@ class ResilientConnectionSupervisor(
             attempt = reconnectAttempts.get(),
             nextRetryAtMs = 0L,
             networkValidated = isNetworkValidated.get(),
-            reconnectStartMillis = beginEpisodeIfNeeded(System.currentTimeMillis())
+            reconnectStartMillis = System.currentTimeMillis()
         ))
 
         val request = Request.Builder()
@@ -395,7 +353,6 @@ class ResilientConnectionSupervisor(
                 lastIncomingByteMono.set(Monotonic.now())
                 reconnectAttempts.set(0)
                 _retryState.value = null
-                onBecameConnected()
                 val nowWall = System.currentTimeMillis()
                 updateConnectionState(ConnectionState.Connected(gen, nowWall, nowWall))
                 onBaselineRequired()
@@ -410,7 +367,6 @@ class ResilientConnectionSupervisor(
                 val currentCs = _connectionState.value
                 if (currentCs !is ConnectionState.Connected) {
                     val openedAt = if (currentCs is ConnectionState.Degraded) currentCs.openedAtMs else System.currentTimeMillis()
-                    onBecameConnected()
                     updateConnectionState(ConnectionState.Connected(gen, openedAt, System.currentTimeMillis()))
                 }
                 onFrameReceived(text)
@@ -420,7 +376,6 @@ class ResilientConnectionSupervisor(
                 if (connectionGeneration.get() != gen) return
                 if (disconnectHandledGen.getAndSet(gen) == gen) return
                 activeWebSocket = null
-                beginEpisodeIfNeeded(System.currentTimeMillis())
                 recordEvent(ConnEventKind.CONNECTION_LOST, detail = t.message)
                 scheduleReconnectWithBackoff("Socket failure: ${t.message}")
             }
@@ -436,7 +391,6 @@ class ResilientConnectionSupervisor(
                 // No validated gate: the backoff path itself no-ops into handleNetworkLost
                 // when the network is down, so a validation flap can never strand us.
                 if (isRunning.get()) {
-                    beginEpisodeIfNeeded(System.currentTimeMillis())
                     scheduleReconnectWithBackoff("Socket closed ($code)")
                 }
             }
@@ -478,89 +432,6 @@ class ResilientConnectionSupervisor(
     fun setActiveSource(sourceId: String?) {
         activeSource = sourceId
         ConnectionLog.setPendingSource(sourceId)
-    }
-
-    /** Returns the current episode's reconnectStartMillis, starting a new episode (and rotating
-     *  the transient log) when the previous state carried none. A sub-grace drop resumes the
-     *  previous episode with its log and milestone progress intact. Call before recording any
-     *  event for the drop so rotation never wipes the new episode's first line. */
-    private fun beginEpisodeIfNeeded(nowWall: Long): Long {
-        val existing = _connectionState.value.reconnectStartMillisOrZero
-        if (existing > 0L) return existing
-        if (lastEpisodeStartMs > 0L && Monotonic.now() - lastHealthyMono < EPISODE_CONTINUITY_GRACE_MS) {
-            return lastEpisodeStartMs
-        }
-        _connEvents.value = emptyList()
-        return nowWall
-    }
-
-    /** Records a fresh recovery; milestone/episode forgetting happens lazily in the watchdog
-     *  once the connection proves stable past the flap grace. */
-    private fun onBecameConnected() {
-        lastHealthyMono = Monotonic.now()
-        lastEpisodeStartMs = milestoneEpisodeStart
-    }
-
-    private fun resetMilestoneFlags() {
-        firedM3 = false
-        firedM5 = false
-        firedM6 = false
-        firedM10 = false
-        firedM20 = false
-    }
-
-    /** Live milestone timer: fires each mark once per episode into the log and the milestones
-     *  flow. Keyed off the persisted reconnectStartMillis, so process restarts don't refire. */
-    private fun checkMilestones(nowWall: Long) {
-        val cs = _connectionState.value
-        if (cs !is ConnectionState.Offline && cs !is ConnectionState.Connecting) return
-        val episodeStart = cs.reconnectStartMillisOrZero
-        if (episodeStart <= 0L) return
-        if (episodeStart != milestoneEpisodeStart) {
-            resetMilestoneFlags()
-            milestoneEpisodeStart = episodeStart
-        }
-        val age = nowWall - episodeStart
-        maybeFireMilestone(age, MILESTONE_3_MS, firedM3, ConnEventKind.MILESTONE_3, ConnectionMilestone.M3) { firedM3 = true }
-        maybeFireMilestone(age, MILESTONE_5_MS, firedM5, ConnEventKind.MILESTONE_5, ConnectionMilestone.M5_CRITICAL) { firedM5 = true }
-        maybeFireMilestone(age, MILESTONE_6_MS, firedM6, ConnEventKind.MILESTONE_6, ConnectionMilestone.M6) { firedM6 = true }
-        maybeFireMilestone(age, MILESTONE_10_MS, firedM10, ConnEventKind.MILESTONE_10, ConnectionMilestone.M10) { firedM10 = true }
-        if (age >= MILESTONE_20_MS && !firedM20) {
-            firedM20 = true
-            recordEvent(ConnEventKind.MILESTONE_20)
-            recordEvent(ConnEventKind.GAVE_UP)
-            _milestones.tryEmit(ConnectionMilestone.M20_GAVE_UP)
-        }
-    }
-
-    private fun maybeFireMilestone(
-        ageMs: Long,
-        thresholdMs: Long,
-        fired: Boolean,
-        kind: ConnEventKind,
-        milestone: ConnectionMilestone,
-        mark: () -> Unit
-    ) {
-        if (ageMs >= thresholdMs && !fired) {
-            mark()
-            recordEvent(kind)
-            _milestones.tryEmit(milestone)
-        }
-    }
-
-    /** Restart catch-up for a persisted episode: past marks are recorded silently (no flow
-     *  emission → no retroactive notification burst); future crossings notify normally. */
-    private fun markPastMilestonesSilent(ageMs: Long) {
-        milestoneEpisodeStart = _connectionState.value.reconnectStartMillisOrZero
-        if (ageMs >= MILESTONE_3_MS && !firedM3) { firedM3 = true; recordEvent(ConnEventKind.MILESTONE_3) }
-        if (ageMs >= MILESTONE_5_MS && !firedM5) { firedM5 = true; recordEvent(ConnEventKind.MILESTONE_5) }
-        if (ageMs >= MILESTONE_6_MS && !firedM6) { firedM6 = true; recordEvent(ConnEventKind.MILESTONE_6) }
-        if (ageMs >= MILESTONE_10_MS && !firedM10) { firedM10 = true; recordEvent(ConnEventKind.MILESTONE_10) }
-        if (ageMs >= MILESTONE_20_MS && !firedM20) {
-            firedM20 = true
-            recordEvent(ConnEventKind.MILESTONE_20)
-            recordEvent(ConnEventKind.GAVE_UP)
-        }
     }
 
     fun recordEvent(
