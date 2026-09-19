@@ -3,7 +3,10 @@ package ua.ukrainedrones
 import ua.ukrainedrones.engine.LatLng
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
@@ -11,6 +14,7 @@ import android.location.LocationManager
 import android.os.Build
 import android.os.CancellationSignal
 import android.os.Looper
+import android.os.PowerManager
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,12 +34,14 @@ import kotlinx.coroutines.launch
 /**
  * Shared, battery-first device location. One listener owned by the foreground service so the
  * UI and the alert logic read the same fix. The red/yellow zones are km-scale, so a coarse
- * fix is plenty: ~2-minute updates, only when the device actually moves >250 m, via the
- * network provider plus a passive copy of fixes other apps request (zero extra radio).
- * Falls back to the last known fix so zone circles keep drawing while indoors.
+ * fix is plenty: passive copies of fixes other apps request are always live (zero extra
+ * radio). Our own network subscription is only kept while the screen is on (2-min / 0-m,
+ * so it stays live while you're moving the phone) and dropped when the screen is off —
+ * polling in your pocket all night adds no zone value. Falls back to the last known
+ * persisted fix so zone circles keep drawing while indoors.
  *
- * When periodic GPS is enabled, wakes GPS for a few seconds every 15 minutes to calibrate and
- * prevent cell-tower drift.
+ * When periodic GPS is enabled, wakes GPS for a few seconds every 15 minutes — and only
+ * while the screen is on — to calibrate and prevent cell-tower drift.
  */
 object LocationTracker {
     private const val UPDATE_INTERVAL_MS = 120_000L
@@ -78,6 +84,11 @@ object LocationTracker {
     private var started = false
     private var appContext: Context? = null
     private var listener: LocationListener? = null
+    private var networkListener: LocationListener? = null
+    private var screenReceiver: BroadcastReceiver? = null
+
+    private fun isScreenOn(ctx: Context): Boolean =
+        (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
 
     fun isFresh(now: Long = System.currentTimeMillis(), maxAgeMs: Long = MAX_LOCATION_AGE_MS): Boolean {
         val fixTime = _lastFixAtMs.value ?: return false
@@ -106,13 +117,13 @@ object LocationTracker {
             val lm = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
             val looper = Looper.getMainLooper()
 
-            // Shared continuous subscriptions, best-effort per provider. Network is the
-            // cheap own fix (the alert zones are km-scale, so GPS accuracy isn't needed);
-            // passive copies fixes that other apps (Maps, etc.) already requested — zero
-            // extra radio. One dead or disabled provider never takes the others down.
-            val subscribed = subscribeProvider(lm, LocationManager.NETWORK_PROVIDER, l, looper) ||
-                subscribeProvider(lm, LocationManager.PASSIVE_PROVIDER, l, looper)
-            if (subscribed) started = true
+            // Passive copies of other apps' fixes are always live (zero extra radio).
+            // Our own network subscription is only kept while the screen is on — polling
+            // in your pocket all night adds no zone value and the cheap periodic GPS
+            // sync still covers the drift case.
+            val passiveOk = subscribeProvider(lm, LocationManager.PASSIVE_PROVIDER, l, looper)
+            if (passiveOk) started = true
+            applyScreenState(lm, looper)
 
             // No fresh fix → retry a cheap network one-shot (cell-tower baseline) until the provider warms
             // at cold start, and while following kick the precise GPS retry so the fix upgrades
@@ -133,6 +144,7 @@ object LocationTracker {
                 }
             }
 
+            registerScreenReceiver(lm, app)
             // Periodic 15-min GPS sync loop when user enabled it
             startPeriodicGpsLoop(app)
         } catch (_: SecurityException) {
@@ -140,15 +152,62 @@ object LocationTracker {
         }
     }
 
-    private fun subscribeProvider(lm: LocationManager, provider: String, l: LocationListener, looper: Looper): Boolean =
+    private fun subscribeProvider(lm: LocationManager, provider: String, l: LocationListener, looper: Looper, minDistance: Float = MIN_DISTANCE_METERS): Boolean =
         runCatching {
             if (lm.isProviderEnabled(provider)) {
-                lm.requestLocationUpdates(provider, UPDATE_INTERVAL_MS, MIN_DISTANCE_METERS, l, looper)
+                lm.requestLocationUpdates(provider, UPDATE_INTERVAL_MS, minDistance, l, looper)
                 true
             } else {
                 false
             }
         }.getOrDefault(false)
+
+    /** Own network subscription: 2-min while the screen is on (responsive), dropped when off. */
+    private fun applyScreenState(lm: LocationManager, looper: Looper) {
+        val ctx = appContext ?: return
+        val on = isScreenOn(ctx)
+        if (on && networkListener == null) {
+            val net = object : LocationListener {
+                override fun onLocationChanged(loc: Location) { recordFix(loc) }
+            }
+            networkListener = net
+            subscribeProvider(lm, LocationManager.NETWORK_PROVIDER, net, looper, minDistance = 0f)
+            if (!isFresh()) snapNow()
+        } else if (!on && networkListener != null) {
+            val net = networkListener
+            networkListener = null
+            net?.let { runCatching { lm.removeUpdates(it) } }
+        }
+    }
+
+    /** Instant fix from platform last-known + fresh network one-shot — screen-on path. */
+    private fun snapNow() {
+        val ctx = appContext ?: return
+        pickLastKnown(ctx)?.let { recordFix(it) }
+        requestNetworkFix(ctx)
+    }
+
+    private fun registerScreenReceiver(lm: LocationManager, app: Context) {
+        val f = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        screenReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                val i = intent ?: return
+                when (i.action) {
+                    Intent.ACTION_SCREEN_ON -> applyScreenState(lm, Looper.getMainLooper())
+                    Intent.ACTION_SCREEN_OFF -> {
+                        networkListener?.let {
+                            runCatching { lm.removeUpdates(it) }
+                            networkListener = null
+                        }
+                    }
+                }
+            }
+        }
+        runCatching { app.registerReceiver(screenReceiver, f) }
+    }
 
     private fun startPeriodicGpsLoop(app: Context) {
         periodicJob?.cancel()
@@ -158,7 +217,8 @@ object LocationTracker {
                 if (enabled) {
                     while (isActive) {
                         delay(PERIODIC_GPS_INTERVAL_MS)
-                        forceRefresh()
+                        // Never grab a satellite lock with the screen off — pocket battery drain.
+                        if (isScreenOn(app)) forceRefresh()
                     }
                 }
             }
@@ -282,6 +342,15 @@ object LocationTracker {
             }
         }
         listener = null
+        networkListener?.let {
+            runCatching {
+                val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                lm.removeUpdates(it)
+            }
+        }
+        networkListener = null
+        screenReceiver?.let { runCatching { ctx.unregisterReceiver(it) } }
+        screenReceiver = null
         started = false
     }
 

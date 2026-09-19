@@ -123,7 +123,7 @@ def slug_city_key(title: str, org: str) -> tuple[str, str, bool]:
 # Built from headers actually observed across data.gov.ua shelter feeds.
 _ROLE_SYNONYMS = {
     "uid": {"uid", "id", "shelterid", "shelter_id", "objectid", "guid",
-            "globalid", "object_id"},
+            "globalid", "object_id", "shelterld"},
     "lat": {"lat", "latitude", "shelterlat", "shelter_lat", "y", "широта"},
     "lng": {"lon", "lng", "long", "longitude", "shelterlon", "shelter_lon",
             "x", "довгота"},
@@ -135,8 +135,10 @@ _ROLE_SYNONYMS = {
                 "addresspostcode", "address_postcode",
                 "street_type", "street_name", "housenumber", "street",
                 "house", "адреса", "адресаукриття"},
+    "latlng": {"coordinatesshelter", "coordinates", "coord", "coords",
+               "координати"},
     "type": {"type", "kind", "status", "view", "вид", "видспоруди",
-             "object"},
+             "object", "typeshelter", "shelterтype"},
     "name": {"name", "title", "type_building", "назва"},
     "owner": {"owner", "balanceholder", "balanceholdername", "holder",
               "балансоутримувач", "власник"},
@@ -192,21 +194,23 @@ def auto_field_map(columns: list[str]) -> tuple[dict, list[str]]:
         addr_hits.sort(key=lambda c: order.get(_norm_col(c), 999))
         fmap["address"] = addr_hits if len(addr_hits) > 1 else addr_hits[0]
 
-    for role in ("type", "name", "owner", "capacity", "updated"):
+    for role in ("type", "name", "owner", "capacity", "updated", "latlng"):
         hits = claim(role, _ROLE_SYNONYMS[role])
         if hits:
             fmap[role] = hits if len(hits) > 1 else hits[0]
 
-    if "lat" not in fmap or "lng" not in fmap:
+    if ("lat" not in fmap or "lng" not in fmap) and "latlng" not in fmap:
         warnings.append("no lat/lng columns — not ingestible")
     return fmap, warnings
 
 
-# Per-dataset overrides, keyed by CKAN package id (stable across renames).
-# Keys: skip (reason) | field_map | delimiter | city | oblast | collapse
-# (collapse: merge this dataset into another key's file, for oblast
-# aggregates that duplicate hromada files — unset until normalize exists).
+# Per-dataset overrides, keyed by CKAN package id or auto slug (slugs are
+# readable; uids survive renames — either works, uid wins on conflict).
+# Keys: skip (reason) | field_map | delimiter | city | city_name | oblast.
 OVERRIDES: dict[str, dict] = {
+    # Address register without coordinates — ungeocodeable, nothing to ingest.
+    "oblast-shchodo": {"skip": "no coords, district/community/city/street only"},
+    "oblast-ternopilskiy": {"skip": "register-style rows, no coords or address"},
 }
 
 
@@ -411,8 +415,15 @@ def _normalize_row(row: dict, field_map: dict, city: str, oblast: str,
     auto-ingest path so both apply identical rules (uid ids, swap healing,
     null-cell handling). Returns (shelter|None, drop_reason|None).
     """
-    lat = _parse_coord(_cell(row, field_map["lat"]))
-    lng = _parse_coord(_cell(row, field_map["lng"]))
+    lat = _parse_coord(_cell(row, field_map.get("lat", "")))
+    lng = _parse_coord(_cell(row, field_map.get("lng", "")))
+    if lat is None or lng is None:
+        # Combined "lat,lon" in a single column (coordinatesShelter et al).
+        pair = _cell(row, field_map.get("latlng", "")) or ""
+        parts = re.split(r"[;,]", pair)
+        if len(parts) >= 2:
+            lat = _parse_coord(parts[0])
+            lng = _parse_coord(parts[1])
     if lat is None or lng is None:
         return None, "no-coords"
     if not _ukraine_bbox(lat, lng) and _ukraine_bbox(lng, lat):
@@ -564,10 +575,12 @@ def fetch_table(url: str, pinned_delimiter: str | None = None
             })
         return "xlsx", header, rows, f"sheet={ws.title}"
     if blob.lstrip()[:1] in (b"{", b"["):
-        try:
-            return _dispatch_json(json.loads(blob.decode("utf-8-sig")))
-        except (ValueError, UnicodeDecodeError, AttributeError):
-            pass  # fall through to CSV attempt
+        for enc in ("utf-8-sig", "cp1251"):
+            try:
+                return _dispatch_json(json.loads(blob.decode(enc)))
+            except (ValueError, UnicodeDecodeError, AttributeError):
+                continue
+        # fall through to CSV attempt
     text, enc = _decode_text(blob)
     if text.lstrip()[:1] == "<":
         raise ValueError("HTML error page, not data")
@@ -640,17 +653,29 @@ def ingest_dataset(dataset: dict, city: str, oblast: str, source_name: str,
             report["tried"].append(attempt)
             continue
         attempt["parsed"] = f"{kind} {dialect}, {len(rows)} raw rows"
+        attempt["columns"] = [str(c)[:40] for c in columns[:12]]
         fmap = pinned.get("field_map")
         if fmap is None:
             fmap, warns = auto_field_map(columns)
             attempt["automap"] = True
             attempt["warnings"] = warns
-            if "lat" not in fmap or "lng" not in fmap:
+            if (("lat" not in fmap or "lng" not in fmap)
+                    and "latlng" not in fmap):
                 attempt["result"] = "no lat/lng columns"
                 report["tried"].append(attempt)
                 continue
         else:
             attempt["automap"] = False
+        attempt["roles"] = {k: (v if isinstance(v, str) else f"{len(v)}cols")
+                            for k, v in fmap.items()}
+        if rows:
+            latc = fmap.get("lat") or fmap.get("latlng") or ""
+            lngc = fmap.get("lng", "")
+            if isinstance(latc, list):
+                latc = latc[0]
+            attempt["sample"] = (
+                f"{str(rows[0].get(latc))[:40]} / "
+                f"{str(rows[0].get(lngc))[:40]}")
         kept: list[dict] = []
         for i, row in enumerate(rows):
             try:
@@ -803,6 +828,7 @@ def main(argv=None):
         return only is None or only in key.lower() or only in title.lower()
 
     coverage: list[tuple[str, int, int, str, str]] = []
+    _last_reports: dict[str, dict] = {}
 
     def run_pinned():
         for city_key, fetcher in SOURCES.items():
@@ -852,14 +878,14 @@ def main(argv=None):
     for d in sorted(datasets, key=lambda d: d.get("uid") or ""):
         uid = d.get("uid") or ""
         title, org = d.get("title") or "", d.get("organization") or ""
-        ov = OVERRIDES.get(uid, {})
-        if ov.get("skip"):
-            coverage.append((uid[:8], 0, 0, "auto", f"SKIPPED:{ov['skip']}"[:60]))
-            continue
         urls = [u for u, _ in _candidate_resources(d)]
         if any(u.startswith(p) for u in urls for p in PINNED_URLS):
             continue  # pinned fetcher owns this feed; no double ingest
         key, oblast, is_oblast = slug_city_key(title, org)
+        ov = OVERRIDES.get(uid, {}) or OVERRIDES.get(key, {})
+        if ov.get("skip"):
+            coverage.append((key, 0, 0, "auto", f"SKIPPED:{ov['skip']}"[:60]))
+            continue
         if ov.get("city"):
             key = ov["city"]
         base, n = key, 2
@@ -879,6 +905,7 @@ def main(argv=None):
         oblast = ov.get("oblast") or oblast
         shelters, report = ingest_dataset(d, city, oblast, f"{key}-ckan",
                                           pinned=ov)
+        _last_reports[key] = report
         flags = list(report.get("flags", []))
         for w in sum((a.get("warnings", []) for a in report.get("tried", [])),
                      []):
@@ -911,6 +938,24 @@ def main(argv=None):
         print(f"--- problems: {len(problems)} ---")
         for k, f in problems:
             print(f"  ! {k}: {f}")
+    diag = []
+    for key, rows, _, origin, _ in coverage:
+        if origin != "auto" or rows != 0:
+            continue
+        for a in _last_reports.get(key, {}).get("tried", []):
+            res = a.get("result", "?")
+            if "no lat/lng" in res and a.get("columns"):
+                diag.append((key, f"{res} :: {' | '.join(a['columns'])}"))
+                break
+            if res.endswith("kept") and a.get("roles"):
+                roles = " ".join(f"{k}={v}" for k, v in a["roles"].items()
+                                 if k in ("lat", "lng", "latlng", "uid"))
+                diag.append((key, f"{res} [{roles}] sample={a.get('sample')}"))
+                break
+    if diag:
+        print(f"--- headers ({len(diag)} failed sources) ---")
+        for key, detail in diag:
+            print(f"  H {key}: {detail}")
     return 0
 
 
