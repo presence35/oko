@@ -30,8 +30,9 @@ import kotlinx.coroutines.launch
 /**
  * Shared, battery-first device location. One listener owned by the foreground service so the
  * UI and the alert logic read the same fix. The red/yellow zones are km-scale, so a coarse
- * fix is plenty: ~2-minute updates, only when the device actually moves >250 m. Falls back to
- * the last known fix so zone circles keep drawing while indoors.
+ * fix is plenty: ~2-minute updates, only when the device actually moves >250 m, via the
+ * network provider plus a passive copy of fixes other apps request (zero extra radio).
+ * Falls back to the last known fix so zone circles keep drawing while indoors.
  *
  * When periodic GPS is enabled, wakes GPS for a few seconds every 15 minutes to calibrate and
  * prevent cell-tower drift.
@@ -105,14 +106,13 @@ object LocationTracker {
             val lm = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
             val looper = Looper.getMainLooper()
 
-            // Network provider only: the alert zones are km-scale, so a coarse fix is
-            // plenty, and skipping GPS keeps the radio off (battery-cheapest).
-            val requested = runCatching {
-                lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, UPDATE_INTERVAL_MS, MIN_DISTANCE_METERS, l, looper)
-            }
-            if (requested.isSuccess) {
-                started = true
-            }
+            // Shared continuous subscriptions, best-effort per provider. Network is the
+            // cheap own fix (the alert zones are km-scale, so GPS accuracy isn't needed);
+            // passive copies fixes that other apps (Maps, etc.) already requested — zero
+            // extra radio. One dead or disabled provider never takes the others down.
+            val subscribed = subscribeProvider(lm, LocationManager.NETWORK_PROVIDER, l, looper) ||
+                subscribeProvider(lm, LocationManager.PASSIVE_PROVIDER, l, looper)
+            if (subscribed) started = true
 
             // No fresh fix → retry a cheap network one-shot (cell-tower baseline) until the provider warms
             // at cold start, and while following kick the precise GPS retry so the fix upgrades
@@ -139,6 +139,16 @@ object LocationTracker {
             _location.value = null
         }
     }
+
+    private fun subscribeProvider(lm: LocationManager, provider: String, l: LocationListener, looper: Looper): Boolean =
+        runCatching {
+            if (lm.isProviderEnabled(provider)) {
+                lm.requestLocationUpdates(provider, UPDATE_INTERVAL_MS, MIN_DISTANCE_METERS, l, looper)
+                true
+            } else {
+                false
+            }
+        }.getOrDefault(false)
 
     private fun startPeriodicGpsLoop(app: Context) {
         periodicJob?.cancel()
@@ -228,34 +238,23 @@ object LocationTracker {
         }
 
         if (fine) {
-            // GPS gets a few patient attempts before falling back to network — a single short
-            // one-shot often misses on a cold/poor signal, but re-armed attempts lock.
+            // A continuous GPS listener beats short one-shots: it keeps the radio armed
+            // the whole window instead of cancelling every attempt, so a cold/poor signal
+            // (old devices, indoors) actually has time to lock. Removed once a fix lands
+            // or the window ends, then network fallback.
             scope.launch {
-                var attempt = 0
-                var signal: CancellationSignal? = null
-                while (!completed.get() && attempt < MAX_GPS_ATTEMPTS) {
-                    attempt++
-                    signal?.cancel()
-                    signal = CancellationSignal()
-                    runCatching {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            lm.getCurrentLocation(
-                                LocationManager.GPS_PROVIDER,
-                                signal,
-                                ContextCompat.getMainExecutor(ctx)
-                            ) { loc ->
-                                if (loc != null) finish(loc)
-                            }
-                        } else {
-                            lm.requestSingleUpdate(LocationManager.GPS_PROVIDER, object : LocationListener {
-                                override fun onLocationChanged(loc: Location) { finish(loc) }
-                                override fun onProviderDisabled(provider: String) { }
-                            }, Looper.getMainLooper())
-                        }
+                val gpsListener = object : LocationListener {
+                    override fun onLocationChanged(loc: Location) {
+                        if (loc != null) finish(loc)
                     }
-                    delay(GPS_ATTEMPT_MS)
+
+                    override fun onProviderDisabled(provider: String) { }
                 }
-                signal?.cancel()
+                runCatching {
+                    lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0L, 0f, gpsListener, Looper.getMainLooper())
+                }
+                delay(GPS_ATTEMPT_MS * MAX_GPS_ATTEMPTS)
+                runCatching { lm.removeUpdates(gpsListener) }
                 if (!completed.get()) {
                     tryNetworkFallback()
                     delay(NETWORK_FALLBACK_MS)

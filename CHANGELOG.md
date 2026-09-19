@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed stale GPS on devices with a missing network provider: subscribe passively to fixes other apps request, and keep GPS armed during calibration until satellites lock / Fixed stale GPS on devices with a missing network provider: subscribe passively to fixes other apps request, and keep GPS armed during calibration until satellites lock
+
 - Map shelter pins now show only shelters inside your red zone radius / Map shelter pins now show only shelters inside your red zone radius
 
 - Home-screen widget now goes live within seconds even when placed after the app has been running / Home-screen widget now goes live within seconds even when placed after the app has been running

@@ -105,12 +105,14 @@ internal fun GpsCalibrationRow(
     }
 
     val preciseFixMs = lastPreciseFixMs
-    val statusText = if (preciseFixMs != null) {
-        val now = System.currentTimeMillis()
+    val now = System.currentTimeMillis()
+    val statusText = if (preciseFixMs != null && (now - preciseFixMs) <= LocationTracker.MAX_LOCATION_AGE_MS) {
         val age = formatAlertAge(now, preciseFixMs, s)
         String.format(s.lastGpsFixFormat, if (age.isBlank()) s.gpsFixJustNow else age)
     } else if (lastFixMs != null) {
-        s.networkLocationOnly
+        // Fine permission granted but no fresh precise fix → the position is stale, not
+        // merely coarse. Old devices (missing/disabled network provider) hang here.
+        if (fineGranted) s.gpsFixStale else s.networkLocationOnly
     } else {
         s.shelterGpsUnknown
     }

@@ -448,6 +448,7 @@ val nightSoundLabel: String,
         val gpsFixFresh: String,
         val gpsStatusTitle: String,
         val networkLocationOnly: String,
+        val gpsFixStale: String,
         val updatingPreciseGpsToast: String,
         val gpsUnavailableFollowMe: String,
         val shelterLongPressTip: String,
@@ -1139,6 +1140,7 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val gpsUnavailableFollowMe: String get() = misc.gpsUnavailableFollowMe
         val gpsStatusTitle: String get() = misc.gpsStatusTitle
         val networkLocationOnly: String get() = misc.networkLocationOnly
+        val gpsFixStale: String get() = misc.gpsFixStale
         val updatingPreciseGpsToast: String get() = misc.updatingPreciseGpsToast
         val shelterLongPressTip: String get() = misc.shelterLongPressTip
         val shelterTapTip: String get() = misc.shelterTapTip
