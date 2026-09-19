@@ -1,7 +1,6 @@
 package ua.ukrainedrones
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -107,7 +106,8 @@ fun FeatureGuideScreen(
             TopAppBar(
                 title = { Text(s.guideTitle) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    val hapticBack = rememberHapticClick(onBack)
+                    IconButton(onClick = hapticBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
                     }
                 }
@@ -151,7 +151,7 @@ private fun FeatureCard(f: GuideFeature) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded }
+                    .hapticClickable { expanded = !expanded }
                     .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {

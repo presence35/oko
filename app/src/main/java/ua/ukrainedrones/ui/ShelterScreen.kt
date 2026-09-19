@@ -131,7 +131,7 @@ fun ShelterScreen(
             TopAppBar(
                 title = { Text(s.shelterScreenTitle) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = rememberHapticClick(onBack)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
                     }
                 }
@@ -260,7 +260,7 @@ private fun GpsHeaderRow(
                     }
                 } else {
                     OutlinedButton(
-                        onClick = onCalibrate,
+                        onClick = rememberHapticClick(onCalibrate),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Icon(
@@ -363,7 +363,7 @@ private fun GpsHeaderRow(
             }
             Spacer(Modifier.height(10.dp))
             Button(
-                onClick = onShowOnMap,
+                onClick = rememberHapticClick(onShowOnMap),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(
@@ -391,7 +391,7 @@ private fun GpsHeaderRow(
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = onOpenSettings) {
+                    TextButton(onClick = rememberHapticClick(onOpenSettings)) {
                         Text(s.gpsOpenSettings)
                     }
                 }
@@ -489,7 +489,7 @@ private fun ShelterCard(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable(onClick = onOpenInMaps)
+                        .hapticClickable(onClick = onOpenInMaps)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {

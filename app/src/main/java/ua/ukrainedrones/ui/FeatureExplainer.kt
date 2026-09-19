@@ -49,7 +49,7 @@ fun FeatureExplainerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text(s.explainers.gotIt) } },
+        confirmButton = { TextButton(onClick = rememberHapticClick(onDismiss)) { Text(s.explainers.gotIt) } },
         title = { Text(explainer.title) },
         text = {
             Column {

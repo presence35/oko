@@ -75,11 +75,7 @@ fun BoxScope.FlourishFooter(
             .align(Alignment.BottomCenter)
             .heightIn(min = FOOTER_BAND_DP)
             .background(if (isCountdown) Color.Black.copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.55f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onStop
-            )
+            .hapticClickable(onClick = onStop)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Row(

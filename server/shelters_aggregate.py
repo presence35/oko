@@ -353,7 +353,11 @@ def _cell(row: dict, spec) -> str | None:
     cols = [spec] if isinstance(spec, str) else (spec or [])
     parts = []
     for col in cols:
-        v = (row.get(col) or "").strip()
+        v = row.get(col)
+        if v is None:
+            continue
+        v = v if isinstance(v, str) else str(v)
+        v = v.strip()
         if v and v.lower() != "null":
             parts.append(v)
     return ", ".join(parts) or None
@@ -649,8 +653,12 @@ def ingest_dataset(dataset: dict, city: str, oblast: str, source_name: str,
             attempt["automap"] = False
         kept: list[dict] = []
         for i, row in enumerate(rows):
-            shelter, reason = _normalize_row(row, fmap, city, oblast,
-                                            source_name, i)
+            try:
+                shelter, reason = _normalize_row(row, fmap, city, oblast,
+                                                source_name, i)
+            except Exception as e:
+                reason = f"row-error:{type(e).__name__}"
+                shelter = None
             if shelter is not None:
                 kept.append(shelter)
             elif reason:
@@ -737,6 +745,16 @@ PINNED_URLS = (
 )
 
 
+def _disk_count(path: str) -> int:
+    """Envelope count of an existing output file (head-sniff, no full parse)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            m = re.search(r'"count":\s*(\d+)', f.read(400))
+        return int(m.group(1)) if m else 0
+    except (OSError, ValueError):
+        return 0
+
+
 def _write_city_file(city_key: str, shelters: list[dict],
                      generated_at: str) -> tuple[str, int]:
     out_path = os.path.join(OUTPUT_DIR, f"{city_key}.json")
@@ -792,8 +810,8 @@ def main(argv=None):
                 continue
             out_path = os.path.join(OUTPUT_DIR, f"{city_key}.json")
             if skip_existing and os.path.exists(out_path):
-                print(f"[skip-existing] {city_key}")
-                coverage.append((city_key, -1, os.path.getsize(out_path),
+                coverage.append((city_key, _disk_count(out_path),
+                                 os.path.getsize(out_path),
                                  "pinned", "SKIP_EXISTING"))
                 continue
             try:
@@ -853,8 +871,8 @@ def main(argv=None):
         used_keys.add(key)
         out_path = os.path.join(OUTPUT_DIR, f"{key}.json")
         if skip_existing and os.path.exists(out_path):
-            print(f"[skip-existing] {key}")
-            coverage.append((key, -1, os.path.getsize(out_path),
+            coverage.append((key, _disk_count(out_path),
+                             os.path.getsize(out_path),
                              "auto", "SKIP_EXISTING"))
             continue
         city = ov.get("city_name") or _display_name(title, org, is_oblast)
@@ -887,6 +905,12 @@ def main(argv=None):
         mark = " " if rows and rows > 0 else "!"
         print(f"  {mark} {key}: rows={rows} KB={size // 1024} "
               f"{origin} {flags}")
+    problems = [(k, f or "ZERO_ROWS") for k, r, _, _, f in coverage
+                if "SKIP_EXISTING" not in f and (r <= 0 or f)]
+    if problems:
+        print(f"--- problems: {len(problems)} ---")
+        for k, f in problems:
+            print(f"  ! {k}: {f}")
     return 0
 
 

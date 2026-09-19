@@ -105,7 +105,7 @@ fun ZonesPanel(
                 modifier = Modifier.weight(1f)
             )
             IconButton(
-                onClick = onOpenThreatSettings,
+                onClick = rememberHapticClick(onOpenThreatSettings),
                 modifier = Modifier.size(32.dp)
             ) {
                 Icon(
@@ -257,7 +257,7 @@ internal fun ZoneRow(
         // Per-zone alert bell + switch on the left: filled/colored while armed,
         // red crossed bell when muted.
         IconButton(
-            onClick = { onArmedChange(!armed) },
+            onClick = rememberHapticClick { onArmedChange(!armed) },
             modifier = Modifier.size(40.dp)
         ) {
             if (armed) {

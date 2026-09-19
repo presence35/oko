@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Haptics on every button and tappable row (press tick via shared Haptics helpers) / Haptics on every button and tappable row (press tick via shared Haptics helpers)
+
 - Fixed stale GPS on devices with a missing network provider: subscribe passively to fixes other apps request, and keep GPS armed during calibration until satellites lock / Fixed stale GPS on devices with a missing network provider: subscribe passively to fixes other apps request, and keep GPS armed during calibration until satellites lock
 
 - Map shelter pins now show only shelters inside your red zone radius / Map shelter pins now show only shelters inside your red zone radius

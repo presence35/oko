@@ -1,7 +1,6 @@
 package ua.ukrainedrones
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
@@ -48,7 +47,7 @@ internal fun ToggleChip(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick)
+            .hapticClickable(enabled = enabled, onClick = onClick)
             .alpha(if (enabled) 1f else 0.4f),
         border = if (on && enabled) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
     ) {
@@ -86,8 +85,9 @@ internal fun IconToggle(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
+    val hapticClick = rememberHapticClick(onClick)
     IconButton(
-        onClick = onClick,
+        onClick = hapticClick,
         enabled = enabled,
         modifier = Modifier
             .alpha(if (enabled) 1f else 0.4f)
@@ -240,8 +240,9 @@ private fun SlimIconToggle(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
+    val hapticClick = rememberHapticClick(onClick)
     IconButton(
-        onClick = onClick,
+        onClick = hapticClick,
         enabled = enabled,
         modifier = Modifier
             .alpha(if (enabled) 1f else 0.4f)

@@ -113,7 +113,7 @@ internal fun CardSizeTile(
     Card(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick),
+            .hapticClickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
         border = if (selected) {
             BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
@@ -369,7 +369,7 @@ internal fun CityLabelTogglesRow(
         ) {
             FilterChip(
                 selected = largeChecked,
-                onClick = { onLargeChange(!largeChecked) },
+                onClick = rememberHapticClick { onLargeChange(!largeChecked) },
                 label = { Text(largeLabel, style = MaterialTheme.typography.labelLarge) },
                 leadingIcon = {
                     Icon(
@@ -383,7 +383,7 @@ internal fun CityLabelTogglesRow(
             )
             FilterChip(
                 selected = mediumChecked,
-                onClick = { onMediumChange(!mediumChecked) },
+                onClick = rememberHapticClick { onMediumChange(!mediumChecked) },
                 label = { Text(mediumLabel, style = MaterialTheme.typography.labelLarge) },
                 leadingIcon = {
                     Icon(
@@ -397,7 +397,7 @@ internal fun CityLabelTogglesRow(
             )
             FilterChip(
                 selected = smallChecked,
-                onClick = { onSmallChange(!smallChecked) },
+                onClick = rememberHapticClick { onSmallChange(!smallChecked) },
                 label = { Text(smallLabel, style = MaterialTheme.typography.labelLarge) },
                 leadingIcon = {
                     Icon(
@@ -455,7 +455,7 @@ internal fun AlertRegionModeRow(
                         color = if (isCityLabels) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                         shape = RoundedCornerShape(8.dp)
                     )
-                    .clickable { onModeChange(AlertRegionMode.CITY_LABELS) },
+                    .hapticClickable { onModeChange(AlertRegionMode.CITY_LABELS) },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -483,7 +483,7 @@ internal fun AlertRegionModeRow(
                         color = if (isFill) Color.White else Color.Transparent,
                         shape = RoundedCornerShape(8.dp)
                     )
-                    .clickable { onModeChange(AlertRegionMode.FILL) },
+                    .hapticClickable { onModeChange(AlertRegionMode.FILL) },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -511,7 +511,7 @@ internal fun AlertRegionModeRow(
                         color = if (isBorder) Color.White else Color(AppPalette.AlertYellow),
                         shape = RoundedCornerShape(8.dp)
                     )
-                    .clickable { onModeChange(AlertRegionMode.BORDER) },
+                    .hapticClickable { onModeChange(AlertRegionMode.BORDER) },
                 contentAlignment = Alignment.Center
             ) {
                 Text(

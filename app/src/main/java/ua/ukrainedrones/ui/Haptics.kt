@@ -6,6 +6,8 @@ import android.os.Build
 import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
@@ -14,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 
@@ -120,3 +123,29 @@ private fun tick(context: Context) {
  * gate on [LocalHapticsEnabled] themselves.
  */
 internal fun hapticTick(context: Context) = tick(context)
+
+@Composable
+fun Modifier.hapticClickable(
+    enabled: Boolean = true,
+    onClick: () -> Unit
+): Modifier = composed {
+    val interaction = remember { MutableInteractionSource() }
+    pressTick(interaction).clickable(
+        interactionSource = interaction,
+        indication = androidx.compose.foundation.LocalIndication.current,
+        enabled = enabled,
+        onClick = onClick
+    )
+}
+
+@Composable
+fun rememberHapticClick(onClick: () -> Unit): () -> Unit {
+    val appContext = LocalContext.current.applicationContext
+    val enabled = LocalHapticsEnabled.current
+    return remember(enabled, appContext, onClick) {
+        {
+            if (enabled) tick(appContext)
+            onClick()
+        }
+    }
+}

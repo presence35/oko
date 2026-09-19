@@ -352,7 +352,7 @@ fun SettingsScreen(
                         },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
+                                IconButton(onClick = rememberHapticClick { searchQuery = "" }) {
                                     Icon(Icons.Default.Close, contentDescription = s.settingsSearchClear)
                                 }
                             }
@@ -370,7 +370,7 @@ fun SettingsScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = rememberHapticClick(onBack)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
                     }
                 }
@@ -564,7 +564,7 @@ fun SettingsScreen(
                                 )
                                 Spacer(Modifier.height(10.dp))
                                 Button(
-                                    onClick = {
+                                    onClick = rememberHapticClick {
                                         val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                                             putExtra(Settings.EXTRA_APP_PACKAGE, appContext.packageName)
                                             flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -699,7 +699,7 @@ fun SettingsScreen(
                             )
                             Spacer(Modifier.height(12.dp))
                             Button(
-                                onClick = { BatteryOptimization.requestExemption(appContext) },
+                                onClick = rememberHapticClick { BatteryOptimization.requestExemption(appContext) },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(s.batteryAllowButton, fontWeight = FontWeight.SemiBold)
@@ -819,7 +819,7 @@ fun SettingsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onOpenShelterList() }
+                            .hapticClickable { onOpenShelterList() }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -879,7 +879,7 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
+                                .hapticClickable {
                                     if (index == 0) onFastGroupCollapse(!fastGroupCollapsed)
                                     else onSlowGroupCollapse(!slowGroupCollapsed)
                                 }
@@ -1150,7 +1150,7 @@ fun SettingsScreen(
                     // Reset tip counters
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                         OutlinedButton(
-                            onClick = onResetTips,
+                            onClick = rememberHapticClick(onResetTips),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(
@@ -1288,7 +1288,7 @@ fun SettingsScreen(
             if (searching.not() || StandaloneSetting.RELAUNCH in matchedStandalone) {
             item {
                 OutlinedButton(
-                    onClick = onRelaunchSetup,
+                    onClick = rememberHapticClick(onRelaunchSetup),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
@@ -1305,7 +1305,7 @@ fun SettingsScreen(
             if (searching.not() || StandaloneSetting.GUIDE in matchedStandalone) {
             item {
                 OutlinedButton(
-                    onClick = onOpenGuide,
+                    onClick = rememberHapticClick(onOpenGuide),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(s.guideSettingsButton, fontWeight = FontWeight.SemiBold)
@@ -1321,7 +1321,7 @@ fun SettingsScreen(
             item {
                 if (isChecking) {
                     Button(
-                        onClick = onCheckUpdate,
+                        onClick = rememberHapticClick(onCheckUpdate),
                         enabled = false,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -1334,7 +1334,7 @@ fun SettingsScreen(
                     }
                 } else if (latestVersion != null) {
                     Button(
-                        onClick = onCheckUpdate,
+                        onClick = rememberHapticClick(onCheckUpdate),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
@@ -1350,7 +1350,7 @@ fun SettingsScreen(
                     }
                 } else {
                     OutlinedButton(
-                        onClick = onCheckUpdate,
+                        onClick = rememberHapticClick(onCheckUpdate),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
@@ -1368,7 +1368,7 @@ fun SettingsScreen(
             if (searching.not() || StandaloneSetting.EXIT in matchedStandalone) {
             item {
                 Button(
-                    onClick = onExit,
+                    onClick = rememberHapticClick(onExit),
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error,
@@ -1388,7 +1388,7 @@ fun SettingsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Row(
-                        modifier = Modifier.clickable { uriHandler.openUri(telegramUrl) },
+                        modifier = Modifier.hapticClickable { uriHandler.openUri(telegramUrl) },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
@@ -1448,13 +1448,13 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(onClick = rememberHapticClick {
                     onBootRestartChange(false)
                     showBootRestartOffConfirm = false
                 }) { Text(s.bootRestartDisableButton) }
             },
             dismissButton = {
-                TextButton(onClick = { showBootRestartOffConfirm = false }) { Text(s.backButton) }
+                TextButton(onClick = rememberHapticClick { showBootRestartOffConfirm = false }) { Text(s.backButton) }
             }
         )
     }

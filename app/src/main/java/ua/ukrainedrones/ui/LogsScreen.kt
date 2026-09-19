@@ -289,9 +289,10 @@ fun LogsDropDownSheet(
             edgePadding = 0.dp
         ) {
             tabFilters.forEachIndexed { index, f ->
+                val hapticTab = rememberHapticClick { filter = f; visibleCount = VISIBLE_INITIAL }
                 Tab(
                     selected = filter == f,
-                    onClick = { filter = f; visibleCount = VISIBLE_INITIAL },
+                    onClick = hapticTab,
                     text = { Text(tabLabels[index]) }
                 )
             }
@@ -422,7 +423,7 @@ fun LogsDropDownSheet(
                 if (isDecisions) {
                     item(key = "clear") {
                         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            TextButton(onClick = { scope.launch(Dispatchers.IO) { DebugLog.clear() } }) {
+                            TextButton(onClick = rememberHapticClick { scope.launch(Dispatchers.IO) { DebugLog.clear() } }) {
                                 Text(s.debugLogClear)
                             }
                         }
@@ -606,7 +607,7 @@ private fun ViewOptionsRow(
             GroupBy.entries.forEach { value ->
                 FilterChip(
                     selected = groupBy == value,
-                    onClick = { onGroupBy(value) },
+                    onClick = rememberHapticClick { onGroupBy(value) },
                     label = { Text(groupLabel[value]!!) },
                     leadingIcon = {
                         Icon(groupIcon[value]!!, contentDescription = groupLabel[value], modifier = Modifier.size(16.dp))
@@ -624,13 +625,13 @@ private fun ViewOptionsRow(
             if (groupBy == GroupBy.PROXIMITY) {
                 FilterChip(
                     selected = proximitySort == ProximitySort.DISTANCE,
-                    onClick = { onProximitySortChange(ProximitySort.DISTANCE) },
+                    onClick = rememberHapticClick { onProximitySortChange(ProximitySort.DISTANCE) },
                     label = { Text(s.logsSortDistance) },
                     leadingIcon = { Icon(Icons.Filled.Place, contentDescription = s.logsSortDistance, modifier = Modifier.size(16.dp)) }
                 )
                 FilterChip(
                     selected = proximitySort == ProximitySort.AGE,
-                    onClick = { onProximitySortChange(ProximitySort.AGE) },
+                    onClick = rememberHapticClick { onProximitySortChange(ProximitySort.AGE) },
                     label = { Text(s.logsSortAge) },
                     leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = s.logsSortAge, modifier = Modifier.size(16.dp)) }
                 )
@@ -638,20 +639,20 @@ private fun ViewOptionsRow(
                 val sortRotation by animateFloatAsState(targetValue = if (newestFirst) 0f else 180f, label = "sortRotation")
                 FilterChip(
                     selected = newestFirst,
-                    onClick = onSortToggle,
+                    onClick = rememberHapticClick(onSortToggle),
                     label = { Text(if (newestFirst) s.logsSortNewest else s.logsSortOldest) },
                     leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = if (newestFirst) s.logsSortNewest else s.logsSortOldest, modifier = Modifier.graphicsLayer { rotationZ = sortRotation }.size(16.dp)) }
                 )
             }
             FilterChip(
                 selected = shownOnly,
-                onClick = { onShownOnlyChange(!shownOnly) },
+                onClick = rememberHapticClick { onShownOnlyChange(!shownOnly) },
                 label = { Text(s.logsNotified) },
                 leadingIcon = { Icon(Icons.Filled.CheckCircle, contentDescription = s.logsNotified, modifier = Modifier.size(16.dp)) }
             )
             FilterChip(
                 selected = showFlourish,
-                onClick = { onShowFlourishChange(!showFlourish) },
+                onClick = rememberHapticClick { onShowFlourishChange(!showFlourish) },
                 label = { Text(s.logsFlourishToggle) },
                 leadingIcon = { Icon(Icons.Filled.Star, contentDescription = s.logsFlourishToggle, modifier = Modifier.size(16.dp)) }
             )
@@ -665,7 +666,7 @@ private fun LegendRow(s: Strings.StringSet, expanded: Boolean, onToggle: () -> U
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onToggle)
+                .hapticClickable(onClick = onToggle)
                 .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -813,7 +814,7 @@ private fun TypeSubHeader(sub: TypeSubGroup, lang: AppLanguage, iconSet: ThreatI
 
 @Composable
 private fun ShowMoreButton(s: Strings.StringSet, onMore: () -> Unit) {
-    TextButton(onClick = onMore) {
+    TextButton(onClick = rememberHapticClick(onMore)) {
         Text(s.logsShowMore)
         Spacer(Modifier.width(2.dp))
         DoubleArrowDown()
@@ -1072,7 +1073,7 @@ private fun RetryLogCard(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable(onClick = onDismiss)
+            modifier = Modifier.hapticClickable(onClick = onDismiss)
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Sort,
@@ -1427,7 +1428,7 @@ private fun SourceCard(source: Source, state: SourceState, s: Strings.StringSet)
         }
         TextButton(
             enabled = !testing,
-            onClick = {
+            onClick = rememberHapticClick {
                 scope.launch {
                     testing = true
                     testResult = source.testConnection()

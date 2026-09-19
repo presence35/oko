@@ -264,7 +264,7 @@ internal fun SubToggleCell(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
-            .clickable { onCheckedChange(!checked) }
+            .hapticClickable { onCheckedChange(!checked) }
             .padding(horizontal = 8.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -304,9 +304,10 @@ internal fun SearchChipsRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             chips.forEach { chip ->
+                val hapticChip = rememberHapticClick { onChip(chip) }
                 FilterChip(
                     selected = false,
-                    onClick = { onChip(chip) },
+                    onClick = hapticChip,
                     label = { Text(chip.label(lang)) }
                 )
             }

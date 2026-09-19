@@ -139,7 +139,7 @@ internal fun FirstLaunchWizard(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = onLater) {
+                IconButton(onClick = rememberHapticClick(onLater)) {
                     Icon(
                         imageVector = Icons.Filled.Close,
                         contentDescription = s.languageChooseLater,
@@ -165,7 +165,7 @@ internal fun FirstLaunchWizard(
                         if (!tipsRevealed) {
                             Spacer(Modifier.height(24.dp))
                             Button(
-                                onClick = { tipsRevealed = true },
+                                onClick = rememberHapticClick { tipsRevealed = true },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(s.okButton, fontWeight = FontWeight.SemiBold)
@@ -277,7 +277,7 @@ internal fun FirstLaunchWizard(
                 val backInteraction = remember { MutableInteractionSource() }
                 if (step > 0) {
                     IconButton(
-                        onClick = { step-- },
+                        onClick = rememberHapticClick { step-- },
                         modifier = Modifier.pressTick(backInteraction)
                     ) {
                         Icon(
@@ -307,7 +307,7 @@ internal fun FirstLaunchWizard(
                     contentAlignment = Alignment.Center
                 ) {
                     Button(
-                        onClick = { if (step < totalSteps - 1) step++ else onComplete() },
+                        onClick = rememberHapticClick { if (step < totalSteps - 1) step++ else onComplete() },
                         enabled = nextEnabled,
                         interactionSource = nextInteraction,
                         modifier = Modifier
@@ -1067,8 +1067,8 @@ internal fun BatteryOnboardingDialog(
     val body = if (oemInfo.isAggressive) s.batteryOemBody else s.batteryBody
     AlertDialog(
         onDismissRequest = onLater,
-        confirmButton = { TextButton(onClick = onAllow) { Text(s.batteryAllowButton) } },
-        dismissButton = { TextButton(onClick = onLater) { Text(s.batteryLater) } },
+        confirmButton = { TextButton(onClick = rememberHapticClick(onAllow)) { Text(s.batteryAllowButton) } },
+        dismissButton = { TextButton(onClick = rememberHapticClick(onLater)) { Text(s.batteryLater) } },
         title = { Text(title) },
         text = { Text(body) }
     )
