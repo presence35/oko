@@ -14,10 +14,10 @@ Only when the user says **"release it"**, perform a full release:
 
 ## While working
 
-- Never look at more files than you need to, esp if I tell you specifically what to touch.
+- Never look at more files than you need to, esp if I tell you specifically what to touch. Skip verify for pure-docs/string-only edits"
 - Always find elegant solutions, not the easy code!
-- Append user-visible changes to `CHANGELOG.md` under `## [Unreleased]` as you go, so any session can release them. Be highly brief.
-- Changelog entries are short one-liners: `- EN text / UA text`. Each line is split on the first ` / ` to produce the release notes for `version.json`. No multi-paragraph essays.
+- Append user-visible changes to `CHANGELOG.md` under `## [Unreleased]` as you go, so any session can release them. Be highly brief. Add mm-dd_h:m:s.
+- Changelog entries are short one-liners: `- EN text / UA text`. Each line is split on the first ` / ` to produce the release notes for `version.json`. No multi-paragraph essays. never use '/' inside a half of an entry.
 - The server `version.json` is generated from `app/version.properties` (versionCode/versionName) plus the `## [Unreleased]` entries in `CHANGELOG.md` (auto-derived at release time). FTP creds live in `app/upload.properties` (git-ignored).
 - Version numbers: `versionCode` is a monotonic integer; `versionName` is human-readable. Keep both bumped together (the `bumpVersion` task does this).
 - **EN-only strings during normal work.** Do NOT translate strings to UA — write only the
@@ -79,18 +79,3 @@ When you add a source file or change a documented invariant, update the module m
 key-invariants section of `ARCHITECTURE.md` in the same change, so the docs never rot.
 
 
-### OpenCode Zen Agent Routing Profiles
-
-This profile manages task distribution.
-
-## 🚀 Active Architecture Matrix
-
-| Agent Role | Target Model | Scope of Responsibility | Trigger Keywords |
-| :--- | :--- | :--- | :--- |
-| **Lead Architect & Debugger** | `Big Pickle` | Complex architecture, multi-file bugs, concurrency, background services | `crash, deadlock, architectural, coroutine, refactor` |
-| **Context & Log ingestion** | `Ling 3.0 Flash Fin Free` | Logcat ingestion, dependency trees, Gradle scripts, massive trace files | `logcat, build.gradle, stacktrace, analyze repo` |
-| **UI/UX & Jetpack Compose** | `Muse Spark 1.3 Free` | UI design, Compose layouts, XML resources, styling, custom views | `compose, theme, canvas, padding, preview, ui` |
-| **Rapid Scaffolder & Routing**| `MiMo V2.5 Free` | Boilerplate generation, quick local scripts, simple data classes | `generate boilerplate, fast script, helper class` |
-| **API & Data Structurer**   | `Nemotron 3.5 Lightning Free` | Retrofit schemas, Room DB entities, JSON parsing, API routing structures | `room db, retrofit, api schema, json` |
-
----

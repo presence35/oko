@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Slim blue needle pin for the pinned city with the tip exactly on the zone epicentre at any zoom / Slim blue needle pin for the pinned city with the tip exactly on the zone epicentre at any zoom
+
 - Fixed decisions log duplicate key crash, restored full drone decisions visibility, and added suppressed bell to legend / Fixed decisions log duplicate key crash, restored full drone decisions visibility, and added suppressed bell to legend
 
 - Fixed overnight ConcurrentModificationException crashes by synchronizing tally snapshots, debug sweep verdicts, and threat updates / Fixed overnight ConcurrentModificationException crashes by synchronizing tally snapshots, debug sweep verdicts, and threat updates

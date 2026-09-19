@@ -1011,6 +1011,7 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val debugLogNight: String get() = misc.debugLogNight
         val debugLogShown: String get() = misc.debugLogShown
         val debugLogSuppressed: String get() = misc.debugLogSuppressed
+        val debugLogSuppressedLegend: String get() = misc.debugLogSuppressedLegend
         val logsFilterSources: String get() = misc.logsFilterSources
         val logsEmptySources: String get() = misc.logsEmptySources
         val sourceTypeWs: String get() = misc.sourceTypeWs

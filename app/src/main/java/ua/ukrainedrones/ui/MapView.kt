@@ -193,43 +193,22 @@ private fun gpsDotBitmap(context: Context, hasFix: Boolean): Bitmap {
     return bmp
 }
 
-/** Map pin with the tip at the bottom centre. */
+private var pinnedPinCache: Bitmap? = null
+private var pinnedPinDensity: Float = 0f
+
+/** Slim needle pin marking the pinned city, tip at the bottom centre. */
 private fun pinBitmap(context: Context): Bitmap {
     val density = context.resources.displayMetrics.density
-    val w = (30 * density).toInt()
-    val h = (42 * density).toInt()
+    pinnedPinCache?.takeIf { pinnedPinDensity == density }?.let { return it }
+    val src = ContextCompat.getDrawable(context, R.drawable.ic_pinned_city)!!
+    val w = (20 * density).toInt().coerceAtLeast(2)
+    val h = (32 * density).toInt().coerceAtLeast(2)
     val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
-    val path = Path().apply {
-        moveTo(w / 2f, h.toFloat())
-        cubicTo(w * 0.24f, h * 0.62f, 0f, h * 0.38f, 0f, h * 0.30f)
-        cubicTo(0f, h * 0.08f, w * 0.22f, 0f, w / 2f, 0f)
-        cubicTo(w * 0.78f, 0f, w.toFloat(), h * 0.08f, w.toFloat(), h * 0.30f)
-        cubicTo(w.toFloat(), h * 0.38f, w * 0.76f, h * 0.62f, w / 2f, h.toFloat())
-        close()
-    }
-    canvas.drawPath(path, Paint().apply {
-        isAntiAlias = true
-        style = Paint.Style.FILL
-        color = AppPalette.UkraineBlue.toInt()
-    })
-    canvas.drawPath(path, Paint().apply {
-        isAntiAlias = true
-        style = Paint.Style.STROKE
-        strokeWidth = 2f * density
-        color = Color.WHITE
-    })
-    val innerR = (4.6f * density)
-    canvas.drawCircle(w / 2f, h * 0.28f, innerR, Paint().apply {
-        isAntiAlias = true
-        style = Paint.Style.FILL
-        color = Color.WHITE
-    })
-    canvas.drawCircle(w / 2f, h * 0.28f, innerR * 0.55f, Paint().apply {
-        isAntiAlias = true
-        style = Paint.Style.FILL
-        color = AppPalette.AlertYellow.toInt()
-    })
+    src.setBounds(0, 0, w, h)
+    src.draw(canvas)
+    pinnedPinCache = bmp
+    pinnedPinDensity = density
     return bmp
 }
 
@@ -250,12 +229,12 @@ private fun chipLabel(t: NormalizedThreat, chip: String?, showThreatIds: Boolean
     if (!showThreatIds && sim == null && chip == null) return null
     val shortId = if (showThreatIds) t.id.takeLast(4) else null
     return when {
-        sim != null && shortId != null && chip != null -> "#$shortId · $sim · $chip"
-        sim != null && shortId != null -> "#$shortId · $sim"
+        sim != null && shortId != null && chip != null -> "$shortId · $sim · $chip"
+        sim != null && shortId != null -> "$shortId · $sim"
         sim != null && chip != null -> "$sim · $chip"
         sim != null -> sim
-        shortId != null && chip != null -> "#$shortId · $chip"
-        shortId != null -> "#$shortId"
+        shortId != null && chip != null -> "$shortId · $chip"
+        shortId != null -> "$shortId"
         chip != null -> chip
         else -> null
     }
@@ -1001,11 +980,13 @@ LaunchedEffect(selectedId) {
 
                     // 4. Pinned city pin
                     if (!uiState.followMe && uiState.pinnedCity != null) {
-                        val city = uiState.pinnedCity!!
-                        val pt = bridge.project(city.lat, city.lon)
-                        if (pt != null) {
-                            val bmp = pinBitmap(context)
-                            canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height.toFloat() * 1.5f, null)
+                        val pos = focusLocationState
+                        if (pos != null) {
+                            val pt = bridge.project(pos.lat, pos.lon)
+                            if (pt != null) {
+                                val bmp = pinBitmap(context)
+                                canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height.toFloat(), null)
+                            }
                         }
                     }
 
