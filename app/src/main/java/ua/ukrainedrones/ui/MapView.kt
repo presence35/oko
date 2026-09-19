@@ -193,25 +193,6 @@ private fun gpsDotBitmap(context: Context, hasFix: Boolean): Bitmap {
     return bmp
 }
 
-private var pinnedPinCache: Bitmap? = null
-private var pinnedPinDensity: Float = 0f
-
-/** Slim needle pin marking the pinned city, tip at the bottom centre. */
-private fun pinBitmap(context: Context): Bitmap {
-    val density = context.resources.displayMetrics.density
-    pinnedPinCache?.takeIf { pinnedPinDensity == density }?.let { return it }
-    val src = ContextCompat.getDrawable(context, R.drawable.ic_pinned_city)!!
-    val w = (20 * density).toInt().coerceAtLeast(2)
-    val h = (32 * density).toInt().coerceAtLeast(2)
-    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bmp)
-    src.setBounds(0, 0, w, h)
-    src.draw(canvas)
-    pinnedPinCache = bmp
-    pinnedPinDensity = density
-    return bmp
-}
-
 private data class NewRingState(val id: String?, val activeUntilMs: Long)
 
 private const val NEW_RING_MS = 8_000L
@@ -467,7 +448,7 @@ fun NeptunMapView(
     val mapVisibleState by rememberUpdatedState(mapVisible)
     val alertActiveState by rememberUpdatedState(uiState.alertActive)
     val showNearbySheltersState by rememberUpdatedState(showNearbyShelters)
-    val shelterEntryGuardUntil = remember { mutableStateOf(0L) }
+    val shelterEntryGuardUntil = remember { mutableStateOf(Long.MAX_VALUE) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val hiddenTypesState by rememberUpdatedState(uiState.hiddenTypes)
     val iconSetState by rememberUpdatedState(uiState.iconSet)
@@ -481,6 +462,7 @@ fun NeptunMapView(
     val deathAnimationEnabledState by rememberUpdatedState(uiState.deathAnimationEnabled)
     val showThreatIdsOnMapState by rememberUpdatedState(uiState.showThreatIdsOnMap)
     val hapticsOnState by rememberUpdatedState(LocalHapticsEnabled.current)
+    val liveUiState by rememberUpdatedState(uiState)
 
     val threatOutcomes = remember { mutableStateMapOf<String, BehaviorOutcome>() }
     val threatPlacements = remember { mutableStateMapOf<String, ThreatScreenPlacement>() }
@@ -966,27 +948,13 @@ LaunchedEffect(selectedId) {
                         }
                     }
 
-                    // 3. GPS dot
-                    if (uiState.followMe) {
-                        val pos = uiState.userLocation ?: focusLocationState
-                        if (pos != null) {
-                            val pt = bridge.project(pos.lat, pos.lon)
-                            if (pt != null) {
-                                val bmp = gpsDotBitmap(context, uiState.gpsFixAvailable)
-                                canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height / 2f, null)
-                            }
-                        }
-                    }
-
-                    // 4. Pinned city pin
-                    if (!uiState.followMe && uiState.pinnedCity != null) {
-                        val pos = focusLocationState
-                        if (pos != null) {
-                            val pt = bridge.project(pos.lat, pos.lon)
-                            if (pt != null) {
-                                val bmp = pinBitmap(context)
-                                canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height.toFloat(), null)
-                            }
+                    // 3. GPS dot — marks the zone epicentre in every mode.
+                    val dotPos = liveUiState.userLocation ?: focusLocationState
+                    if (dotPos != null) {
+                        val pt = bridge.project(dotPos.lat, dotPos.lon)
+                        if (pt != null) {
+                            val bmp = gpsDotBitmap(context, liveUiState.gpsFixAvailable)
+                            canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height / 2f, null)
                         }
                     }
 

@@ -10,7 +10,7 @@
 
 - Speed-cache track history bounded so long-running monitoring stays lean / Speed-cache track history bounded so long-running monitoring stays lean
 
-- Slim blue needle pin for the pinned city with the tip exactly on the zone epicentre at any zoom / Slim blue needle pin for the pinned city with the tip exactly on the zone epicentre at any zoom
+- Removed the pinned-city pin, the GPS dot now marks the zone epicentre in all modes / Removed the pinned-city pin, the GPS dot now marks the zone epicentre in all modes
 
 - Fixed decisions log duplicate key crash, restored full drone decisions visibility, and added suppressed bell to legend / Fixed decisions log duplicate key crash, restored full drone decisions visibility, and added suppressed bell to legend
 
