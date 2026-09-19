@@ -71,14 +71,9 @@ import kotlin.math.sqrt
 private const val DEFAULT_CENTER_LAT = ODESA_LAT
 private const val DEFAULT_CENTER_LON = ODESA_LON
 
-/** Max zoom outside shelter mode — the ~5 km threat-map viewport. */
+/** Max zoom — ~5 km threat-map viewport; shelters no longer unlock deeper street-level zoom. */
 private const val NORMAL_MAX_ZOOM = 14.5
-
-/** Deep zoom, unlocked only while the shelter overlay is up (street-level shelter detail). */
-private const val SHELTER_MAX_ZOOM = 16.0
-
-/** Zooming below this level makes shelter pins clutter — auto-exit shelter mode. */
-private const val SHELTER_AUTO_EXIT_ZOOM = 13.0
+private const val SHELTER_MAX_ZOOM = 14.5
 
 /** Ukraine bounding limits. */
 private const val UA_MIN_LAT = UA_TIGHT_MIN_LAT
@@ -448,7 +443,7 @@ fun NeptunMapView(
     val mapVisibleState by rememberUpdatedState(mapVisible)
     val alertActiveState by rememberUpdatedState(uiState.alertActive)
     val showNearbySheltersState by rememberUpdatedState(showNearbyShelters)
-    val shelterEntryGuardUntil = remember { mutableStateOf(Long.MAX_VALUE) }
+    val shelterSnapshot = remember { mutableStateOf<List<NearestShelter>>(emptyList()) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val hiddenTypesState by rememberUpdatedState(uiState.hiddenTypes)
     val iconSetState by rememberUpdatedState(uiState.iconSet)
@@ -698,16 +693,20 @@ LaunchedEffect(selectedId) {
     // Shelter mode zoom & fit. Pins are bounded to the red-zone radius so a sparse focus
     // (a pinned city with no local shelters) never pads the list with far-away shelters,
     // blows up the fit box and trips the zoom-out auto-exit on the next pan or zoom.
+    // The 25 are snapshotted at entry — pan/zoom then cannot change the set, only move it.
     LaunchedEffect(showNearbyShelters, shelterZoomTick, focusLocationState, shelterIndex, slowRedKmState) {
         val bridge = bridgeState.value ?: return@LaunchedEffect
         bridge.setMaxZoom(if (showNearbyShelters) SHELTER_MAX_ZOOM else NORMAL_MAX_ZOOM)
-        if (!showNearbyShelters) return@LaunchedEffect
-        shelterEntryGuardUntil.value = System.currentTimeMillis() + 1500
+        if (!showNearbyShelters) {
+            shelterSnapshot.value = emptyList()
+            return@LaunchedEffect
+        }
         val focus = focusLocationState
         val near = focus?.let { f ->
             shelterIndex?.nearest(f.lat, f.lon, limit = 25, maxDistanceMeters = slowRedKmState * 1000.0)
         }
         if (near.isNullOrEmpty()) {
+            shelterSnapshot.value = emptyList()
             if (focus != null && shelterIndex != null) {
                 showToast(strings.shelterEmpty)
                 onExitShelterMode()
@@ -716,6 +715,7 @@ LaunchedEffect(selectedId) {
             camera.animateTo(bridge, bridge.latitude, bridge.longitude, 16.0, 400L)
             return@LaunchedEffect
         }
+        shelterSnapshot.value = near
         val box = sheltersBoundingBox(near)
         if (box != null) {
             camera.fitBox(bridge, box.north, box.east, box.south, box.west, durationMs = 0)
@@ -949,10 +949,9 @@ LaunchedEffect(selectedId) {
                         cityLabelOverlay.draw(canvas, currentZoom, projLambda)
                     }
 
-                    // 2. Nearby shelters
-                    if (showNearbySheltersState && focusLocationState != null && shelterIndex != null) {
-                        val nearList = shelterIndex.nearest(focusLocationState!!.lat, focusLocationState!!.lon, limit = 25, maxDistanceMeters = slowRedKmState * 1000.0)
-                        for (item in nearList) {
+                    // 2. Nearby shelters — drawn from the snapshot taken at entry so pan/zoom can't change the set.
+                    if (showNearbySheltersState && shelterSnapshot.value.isNotEmpty()) {
+                        for (item in shelterSnapshot.value) {
                             val pt = bridge.project(item.shelter.lat, item.shelter.lon) ?: continue
                             val isSelected = selectedShelter?.shelter?.id == item.shelter.id
                             val bmp = shelterMarkerBitmap(context, item.shelter.type, isSelected)
@@ -1031,12 +1030,6 @@ LaunchedEffect(selectedId) {
                         lastScaleZoom = z
                         onScaleChange(bridge.metersPerPixel())
                     }
-                    if (showNearbySheltersState &&
-                        System.currentTimeMillis() >= shelterEntryGuardUntil.value &&
-                        z < SHELTER_AUTO_EXIT_ZOOM
-                    ) {
-                        onExitShelterMode()
-                    }
                 }
                 val findBestThreatAt: (PointF, Float) -> NormalizedThreat? = { screenPt, extraPaddingDp ->
                     val density = context.resources.displayMetrics.density
@@ -1059,9 +1052,8 @@ LaunchedEffect(selectedId) {
                     if (activeThreats.isEmpty()) {
                         null
                     } else {
-                        val shelterPts = if (showNearbySheltersState && focusLocationState != null && shelterIndex != null) {
-                            val nearList = shelterIndex.nearest(focusLocationState!!.lat, focusLocationState!!.lon, limit = 25, maxDistanceMeters = slowRedKmState * 1000.0)
-                            nearList.mapNotNull { item ->
+                        val shelterPts = if (showNearbySheltersState && shelterSnapshot.value.isNotEmpty()) {
+                            shelterSnapshot.value.mapNotNull { item ->
                                 bridge.project(item.shelter.lat, item.shelter.lon)?.let { p ->
                                     PointF(p.x, p.y - 18f * density)
                                 }
@@ -1105,14 +1097,13 @@ LaunchedEffect(selectedId) {
 
                 val hitTestShelterOrThreat: (PointF) -> Boolean = { screenPt ->
                     var handled = false
-                    // 1. Check shelter hit
-                    if (showNearbySheltersState && focusLocationState != null && shelterIndex != null) {
+                    // 1. Check shelter hit — snapshot, so tap target matches what's drawn.
+                    if (showNearbySheltersState && shelterSnapshot.value.isNotEmpty()) {
                         val density = context.resources.displayMetrics.density
                         val threshold = 32f * density
-                        val nearList = shelterIndex.nearest(focusLocationState!!.lat, focusLocationState!!.lon, limit = 25, maxDistanceMeters = slowRedKmState * 1000.0)
                         var bestShelter: NearestShelter? = null
                         var bestDist = threshold
-                        for (item in nearList) {
+                        for (item in shelterSnapshot.value) {
                             val p = bridge.project(item.shelter.lat, item.shelter.lon) ?: continue
                             val dx = p.x - screenPt.x
                             val dy = (p.y - 18f * density) - screenPt.y
