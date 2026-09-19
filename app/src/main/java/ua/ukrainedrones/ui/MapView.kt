@@ -154,36 +154,44 @@ private fun threatIconFor(
     return BitmapDrawable(context.resources, bmp)
 }
 
-/** Classic "blue glowing dot" used as the GPS location icon. */
+/**
+ * "GPS dot" used as the My-Location marker, styled to look like Google Maps: a larger solid
+ * blue core with a white outer ring. While a fix is acquiring, the blue core/glow is dimmed to
+ * grey so the dot still reads as "off"; a free radial glow halo marks an acquired fix.
+ */
 private fun gpsDotBitmap(context: Context, hasFix: Boolean): Bitmap {
     val density = context.resources.displayMetrics.density
-    val coreR = 4f * density
+    val coreR = 6f * density
+    val whiteRingHalf = 1.2f * density          // so full ring visual = 2.4dp, centered on the core edge
+    val ringR = coreR + whiteRingHalf
     val glowR = coreR * 2.8f
     val size = (glowR * 2).toInt().coerceAtLeast(2)
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     val cx = size / 2f
     val cy = size / 2f
-    val glowA = if (hasFix) AppPalette.GpsGlow.toInt() else AppPalette.GpsGlowOff.toInt()
-    val baseColor = if (hasFix) AppPalette.GpsBlue.toInt() else AppPalette.TextSecondary.toInt()
+
+    val coreColor = if (hasFix) AppPalette.GpsBlue.toInt() else AppPalette.TextSecondary.toInt()
+    val glowColor = if (hasFix) AppPalette.GpsGlow.toInt() else AppPalette.GpsGlowOff.toInt()
+
+    // Soft glow halo behind the dot (light-blue when fixed, grey when not).
     val glow = Paint().apply {
         shader = RadialGradient(
             cx, cy, glowR,
-            intArrayOf(glowA, Color.argb(0, Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor))),
+            intArrayOf(glowColor, Color.TRANSPARENT),
             floatArrayOf(0.45f, 1f),
             Shader.TileMode.CLAMP
         )
     }
     canvas.drawCircle(cx, cy, glowR, glow)
-    canvas.drawCircle(cx, cy, coreR, Paint().apply {
+
+    // Blue core + white outer ring — reads as the GMaps pin from every map theme.
+    canvas.drawCircle(cx, cy, coreR, Paint().apply { isAntiAlias = true; color = coreColor })
+    canvas.drawCircle(cx, cy, ringR, Paint().apply {
         isAntiAlias = true
-        color = if (hasFix) AppPalette.GpsBlue.toInt() else AppPalette.TextSecondary.toInt()
-    })
-    canvas.drawCircle(cx, cy, coreR * 0.55f, Paint().apply {
         style = Paint.Style.STROKE
-        isAntiAlias = true
-        strokeWidth = 1.5f * density
-        color = Color.WHITE
+        strokeWidth = 2.4f * density
+        color = if (hasFix) Color.WHITE else AppPalette.TextSecondary.toInt()
     })
     return bmp
 }

@@ -139,6 +139,16 @@ fun Modifier.hapticClickable(
 }
 
 @Composable
+fun <T> rememberHapticClick(onValueChange: (T) -> Unit): (T) -> Unit {
+    val appContext = LocalContext.current.applicationContext
+    val enabled = LocalHapticsEnabled.current
+    return remember(enabled, appContext, onValueChange) { { newValue ->
+        if (enabled) tick(appContext)
+        onValueChange(newValue)
+    } }
+}
+
+@Composable
 fun rememberHapticClick(onClick: () -> Unit): () -> Unit {
     val appContext = LocalContext.current.applicationContext
     val enabled = LocalHapticsEnabled.current

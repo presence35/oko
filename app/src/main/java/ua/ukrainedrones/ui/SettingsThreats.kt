@@ -2,8 +2,6 @@ package ua.ukrainedrones
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -66,16 +64,10 @@ internal fun ThreatSettingsCard(
                     contentDescription = label
                 )
                 Spacer(Modifier.width(12.dp))
-                val expandInteraction = remember { MutableInteractionSource() }
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .pressTick(expandInteraction)
-                        .clickable(
-                            interactionSource = expandInteraction,
-                            indication = ripple(bounded = true),
-                            onClick = onExpandChange
-                        )
+                        .hapticClickable(onClick = onExpandChange)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(

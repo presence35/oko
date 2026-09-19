@@ -108,18 +108,18 @@ internal fun AlertToggleRow(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val hapticToggle = rememberHapticClick(onCheckedChange)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (!enabled) Modifier.alpha(0.5f) else Modifier)
             .explainerFlash(flash)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (isPressed) 0.06f else 0f))
-            .pressTick(interactionSource)
             .toggleable(
                 value = checked,
                 enabled = enabled,
                 role = Role.Switch,
-                onValueChange = onCheckedChange,
+                onValueChange = hapticToggle,
                 interactionSource = interactionSource,
                 indication = ripple(bounded = true)
             )
@@ -336,6 +336,7 @@ internal fun CollapsibleSectionCard(
         animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
         label = "chevronAngle"
     )
+    val hapticToggle = rememberHapticClick(onToggle)
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = if (cardColor != null) CardDefaults.cardColors(containerColor = cardColor) else CardDefaults.cardColors(),
@@ -345,11 +346,10 @@ internal fun CollapsibleSectionCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .pressTick(interactionSource)
                     .clickable(
                         interactionSource = interactionSource,
                         indication = ripple(bounded = true),
-                        onClick = onToggle
+                        onClick = hapticToggle
                     )
                     .background(
                         MaterialTheme.colorScheme.onSurface.copy(
@@ -457,14 +457,14 @@ internal fun LanguageFlag(
         animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
         label = "langFlagScale"
     )
+    val hapticClick = rememberHapticClick(onClick)
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .pressTick(interactionSource)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(bounded = true),
-                onClick = onClick
+                onClick = hapticClick
             )
             .then(
                 if (active) Modifier.background(UkraineBlue.copy(alpha = 0.25f)) else Modifier

@@ -9,10 +9,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -415,16 +413,10 @@ fun SettingsScreen(
                 // "Official signals come first" — first, default expanded, needs two taps to collapse.
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        val disclaimerInteraction = remember { MutableInteractionSource() }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .pressTick(disclaimerInteraction)
-                                .clickable(
-                                    interactionSource = disclaimerInteraction,
-                                    indication = ripple(bounded = true),
-                                    onClick = onDisclaimerClick
-                                )
+                                .hapticClickable(onClick = onDisclaimerClick)
                                 .padding(horizontal = 16.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {

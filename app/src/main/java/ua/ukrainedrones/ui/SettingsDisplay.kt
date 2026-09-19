@@ -192,7 +192,6 @@ internal fun OverlapModeChip(
     onClick: () -> Unit
 ) {
     val selectedMode = mode == selected
-    val interactionSource = remember { MutableInteractionSource() }
     Surface(
         shape = RoundedCornerShape(8.dp),
         color = if (selectedMode) MaterialTheme.colorScheme.primary else Color.Transparent,
@@ -201,9 +200,7 @@ internal fun OverlapModeChip(
             1.dp,
             if (selectedMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
         ),
-        modifier = modifier
-            .pressTick(interactionSource)
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+        modifier = modifier.clickable(onClick = rememberHapticClick(onClick))
     ) {
         Text(
             label,
@@ -272,15 +269,15 @@ internal fun IconSetTile(
         animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
         label = "iconSetScale"
     )
+    val hapticClick = rememberHapticClick(onClick)
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .pressTick(interactionSource)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(bounded = true),
-                onClick = onClick
+                onClick = hapticClick
             )
             .graphicsLayer { scaleX = scale.value; scaleY = scale.value },
         shape = RoundedCornerShape(14.dp),
