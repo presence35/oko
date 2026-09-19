@@ -57,6 +57,7 @@ import ua.ukrainedrones.engine.NormalizedThreat
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.coversCityRaion
+import ua.ukrainedrones.engine.destinationPoint
 import ua.ukrainedrones.engine.threatTypeInfoByString
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.community.CompactOblastBoundaries
@@ -1076,6 +1077,71 @@ LaunchedEffect(selectedId) {
                         onExitShelterMode()
                     }
                 }
+                val findBestThreatAt: (PointF, Float) -> NormalizedThreat? = { screenPt, extraPaddingDp ->
+                    val density = context.resources.displayMetrics.density
+                    val iconSizeDp = if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32
+                    val baseRadius = (iconSizeDp / 2f + extraPaddingDp) * density
+                    val maxRadius = 48f * density
+
+                    val activeThreats = ArrayList<Pair<NormalizedThreat, PointF>>(mapThreatsState.size)
+                    for (t in mapThreatsState) {
+                        if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
+                        val placement = threatPlacements[t.id]
+                        if (placement != null && !placement.visible) continue
+                        val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)
+                        val sp = bridge.project(outcome.lat, outcome.lon) ?: continue
+                        val sx = sp.x + (placement?.offsetDx ?: 0f)
+                        val sy = sp.y + (placement?.offsetDy ?: 0f)
+                        activeThreats.add(t to PointF(sx, sy))
+                    }
+
+                    if (activeThreats.isEmpty()) {
+                        null
+                    } else {
+                        val shelterPts = if (showNearbySheltersState && focusLocationState != null && shelterIndex != null) {
+                            val nearList = shelterIndex.nearest(focusLocationState!!.lat, focusLocationState!!.lon, limit = 25)
+                            nearList.mapNotNull { item ->
+                                bridge.project(item.shelter.lat, item.shelter.lon)?.let { p ->
+                                    PointF(p.x, p.y - 18f * density)
+                                }
+                            }
+                        } else emptyList()
+
+                        var bestThreat: NormalizedThreat? = null
+                        var bestDist = Float.MAX_VALUE
+
+                        for (i in 0 until activeThreats.size) {
+                            val (t, pt) = activeThreats[i]
+                            val dx = pt.x - screenPt.x
+                            val dy = pt.y - screenPt.y
+                            val d = sqrt(dx * dx + dy * dy)
+
+                            var neighborDist = Float.MAX_VALUE
+                            for (j in 0 until activeThreats.size) {
+                                if (i == j) continue
+                                val otherPt = activeThreats[j].second
+                                val ndx = otherPt.x - pt.x
+                                val ndy = otherPt.y - pt.y
+                                val nd = sqrt(ndx * ndx + ndy * ndy)
+                                if (nd < neighborDist) neighborDist = nd
+                            }
+                            for (sPt in shelterPts) {
+                                val ndx = sPt.x - pt.x
+                                val ndy = sPt.y - pt.y
+                                val nd = sqrt(ndx * ndx + ndy * ndy)
+                                if (nd < neighborDist) neighborDist = nd
+                            }
+
+                            val dynamicRadius = maxRadius.coerceAtMost(neighborDist * 0.5f).coerceAtLeast(baseRadius)
+                            if (d <= dynamicRadius && d < bestDist) {
+                                bestThreat = t
+                                bestDist = d
+                            }
+                        }
+                        bestThreat
+                    }
+                }
+
                 val hitTestShelterOrThreat: (PointF) -> Boolean = { screenPt ->
                     var handled = false
                     // 1. Check shelter hit
@@ -1103,27 +1169,7 @@ LaunchedEffect(selectedId) {
 
                     // 2. Check threat hit if not hit shelter
                     if (!handled) {
-                        val density = context.resources.displayMetrics.density
-                        val iconSizeDp = if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32
-                        val threshold = (iconSizeDp / 2f + 4f) * density
-                        var bestThreat: NormalizedThreat? = null
-                        var bestDist = threshold
-                        for (t in mapThreatsState) {
-                            if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
-                            val placement = threatPlacements[t.id]
-                            if (placement != null && !placement.visible) continue
-                            val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)
-                            val sp = bridge.project(outcome.lat, outcome.lon) ?: continue
-                            val sx = sp.x + (placement?.offsetDx ?: 0f)
-                            val sy = sp.y + (placement?.offsetDy ?: 0f)
-                            val dx = sx - screenPt.x
-                            val dy = sy - screenPt.y
-                            val d = sqrt(dx * dx + dy * dy)
-                            if (d <= bestDist) {
-                                bestThreat = t
-                                bestDist = d
-                            }
-                        }
+                        val bestThreat = findBestThreatAt(screenPt, 4f)
                         if (bestThreat != null) {
                             if (hapticsOnState) hapticTick(context)
                             onThreatTapped(bestThreat)
@@ -1143,28 +1189,7 @@ LaunchedEffect(selectedId) {
                     }
                 }
                 bridge.setOnMapLongClickListener { screenPt, geoPt ->
-                    val density = context.resources.displayMetrics.density
-                    val iconSizeDp = if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32
-                    val threshold = (iconSizeDp / 2f + 8f) * density
-                    var bestThreat: NormalizedThreat? = null
-                    var bestDist = threshold
-                    for (t in mapThreatsState) {
-                        if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
-                        val placement = threatPlacements[t.id]
-                        if (placement != null && !placement.visible) continue
-                        val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)
-                        val sp = bridge.project(outcome.lat, outcome.lon) ?: continue
-                        val sx = sp.x + (placement?.offsetDx ?: 0f)
-                        val sy = sp.y + (placement?.offsetDy ?: 0f)
-                        val dx = sx - screenPt.x
-                        val dy = sy - screenPt.y
-                        val d = sqrt(dx * dx + dy * dy)
-                        if (d <= bestDist) {
-                            bestThreat = t
-                            bestDist = d
-                        }
-                    }
-                    val targetThreat = bestThreat
+                    val targetThreat = findBestThreatAt(screenPt, 8f)
                     if (targetThreat != null && deathAnimationEnabledState) {
                         val threatId = targetThreat.id
                         val outcome = threatOutcomes[threatId]
@@ -1180,13 +1205,22 @@ LaunchedEffect(selectedId) {
                         val played = if (deathFx.isActiveFor(threatId)) {
                             deathFx.strikeDud(threatId, strikeLat, strikeLon)
                         } else {
+                            val speedMps = typeCatalog[threatType.apiKey]?.nominalSpeedMps ?: 0.0
+                            val course = outcome?.headingDeg?.toDouble() ?: engine.courseDeg(targetThreat)
+                            val distMeters = speedMps * (DEATH_EXPLOSION_START_MS / 1000.0)
+                            val intercept = if (distMeters > 0.0 && (course != 0.0 || outcome?.headingDeg != null)) {
+                                destinationPoint(strikeLat, strikeLon, distMeters, course)
+                            } else {
+                                LatLng(strikeLat, strikeLon)
+                            }
                             deathFx.strike(
                                 id = threatId,
-                                lat = strikeLat,
-                                lon = strikeLon,
+                                geo = intercept,
+                                startGeo = LatLng(strikeLat, strikeLon),
                                 icon = icon,
                                 rotationDeg = rotation,
-                                alpha = 1f
+                                alpha = 1f,
+                                type = threatType
                             )
                         }
                         if (played) {

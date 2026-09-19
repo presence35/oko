@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -95,6 +96,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -192,7 +194,7 @@ fun LogsDropDownSheet(
     var groupBy by rememberSaveable { mutableStateOf(GroupBy.TIMELINE) }
     var newestFirst by rememberSaveable { mutableStateOf(true) }
     var proximitySort by rememberSaveable { mutableStateOf(ProximitySort.DISTANCE) }
-    var shownOnly by rememberSaveable { mutableStateOf(true) }
+    var shownOnly by rememberSaveable { mutableStateOf(false) }
     var showFlourish by rememberSaveable { mutableStateOf(false) }
     var legendExpanded by rememberSaveable { mutableStateOf(false) }
     var visibleCount by remember { mutableIntStateOf(VISIBLE_INITIAL) }
@@ -394,18 +396,18 @@ fun LogsDropDownSheet(
                                 item(key = "sub-${group.id}-$type") {
                                     TypeSubHeader(TypeSubGroup(type, subEntries), lang, iconSet)
                                 }
-                                items(subEntries, key = { "row-${it.atMillis}-${it.threatId}" }) { entry ->
+                                itemsIndexed(subEntries, key = { index, entry -> "sub-${group.id}-$type-$index-${entry.atMillis}-${entry.threatId}-${entry.kind.name}" }) { _, entry ->
                                     DecisionCard(entry, s, lang, now, iconSet)
                                 }
                             }
                     } else {
-                        items(group.entries, key = { "row-${it.atMillis}-${it.threatId}" }) { entry ->
+                        itemsIndexed(group.entries, key = { index, entry -> "group-${group.id}-$index-${entry.atMillis}-${entry.threatId}-${entry.kind.name}" }) { _, entry ->
                             DecisionCard(entry, s, lang, now, iconSet)
                         }
                     }
                 }
             } else {
-                items(visible, key = { "flat-${it.atMillis}-${it::class.simpleName}" }) { row ->
+                itemsIndexed(visible, key = { index, row -> "flat-$index-${row.atMillis}-${row::class.simpleName}" }) { _, row ->
                     LogRowCard(row, s, lang, now, iconSet)
                 }
             }
@@ -697,6 +699,9 @@ private fun LegendRow(s: Strings.StringSet, expanded: Boolean, onToggle: () -> U
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LegendItem(Icons.Filled.CheckCircle, s.debugLogShown)
+                    LegendItem(painterResource(R.drawable.ic_notifications_off), s.debugLogSuppressedLegend, tint = DebugAmber)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LegendItem(Icons.Outlined.History, s.debugReasonStale)
                 }
             }
@@ -711,6 +716,24 @@ private fun LegendItem(icon: ImageVector, label: String) {
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun LegendItem(painter: Painter, label: String, tint: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            painter = painter,
+            contentDescription = null,
+            tint = tint,
             modifier = Modifier.size(16.dp)
         )
         Spacer(Modifier.width(4.dp))

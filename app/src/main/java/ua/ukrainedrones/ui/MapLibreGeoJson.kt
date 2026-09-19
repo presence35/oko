@@ -24,6 +24,11 @@ object MapLibreGeoJson {
      */
     private const val MIN_RING_AREA_SQ_DEG = 1e-4
 
+    /** RFC 7946 coordinates: strictly standard '.' decimal separator, immune to device locale. */
+    private fun geoNum(v: Double): String = (kotlin.math.round(v * 10_000.0) / 10_000.0).toString()
+
+    private fun coordPair(lon: Double, lat: Double): String = "[${geoNum(lon)},${geoNum(lat)}]"
+
     /** Signed ring area via the shoelace formula. Positive = counter-clockwise. */
     private fun signedArea(points: List<LatLon>): Double {
         var sum = 0.0
@@ -34,16 +39,20 @@ object MapLibreGeoJson {
         return sum / 2.0
     }
 
-    /** Round to 4dp, dedup consecutive, close ring if needed → coordinate string. */
+    /** Round to 4dp, dedup consecutive on doubles, close ring if needed → coordinate string. */
     private fun formatPoints(pts: List<LatLon>): String {
-        val rounded = pts.map { Pair("%.4f".format(it.lon), "%.4f".format(it.lat)) }
-        val deduped = rounded.filterIndexed { i, p ->
-            i == 0 || p != rounded[i - 1]
+        val out = ArrayList<LatLon>(pts.size + 1)
+        for (pt in pts) {
+            val rLat = kotlin.math.round(pt.lat * 10_000.0) / 10_000.0
+            val rLon = kotlin.math.round(pt.lon * 10_000.0) / 10_000.0
+            if (out.isEmpty() || out.last().lat != rLat || out.last().lon != rLon) {
+                out.add(LatLon(rLat, rLon))
+            }
         }
-        val closed = if (deduped.size >= 3 && deduped.first() != deduped.last()) {
-            deduped + deduped.first()
-        } else deduped
-        return closed.joinToString(",") { "[${it.first},${it.second}]" }
+        val closed = if (out.size >= 3 && out.first() != out.last()) {
+            out + out.first()
+        } else out
+        return closed.joinToString(",") { coordPair(it.lon, it.lat) }
     }
 
     /**
@@ -74,14 +83,14 @@ object MapLibreGeoJson {
         } else {
             border
         }
-        val ukraineRing = closedRing.joinToString(",") { "[${it.lon},${it.lat}]" }
+        val ukraineRing = closedRing.joinToString(",") { coordPair(it.lon, it.lat) }
         val worldOuter = "[-180.0,-85.0],[180.0,-85.0],[180.0,85.0],[-180.0,85.0],[-180.0,-85.0]"
         return """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[$worldOuter],[$ukraineRing]]}}]}"""
     }
 
     /** Ukraine land border outline — hugs land/river borders and skips open sea coastline. */
     fun landBorder(): String {
-        val coords = UKRAINE_LAND_BORDER.joinToString(",") { "[${it.lon},${it.lat}]" }
+        val coords = UKRAINE_LAND_BORDER.joinToString(",") { coordPair(it.lon, it.lat) }
         return """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
     }
 
@@ -179,11 +188,11 @@ object MapLibreGeoJson {
             return EMPTY
         }
         val radiusM = radiusKm * 1000.0
-        val coords = (0..segments).map { i ->
+        val coords = (0..segments).joinToString(",") { i ->
             val bearing = 360.0 * (i % segments) / segments
             val pt = destinationPoint(centerLat, centerLon, radiusM, bearing)
-            "[%.4f,%.4f]".format(pt.lon, pt.lat)
-        }.joinToString(",")
+            coordPair(pt.lon, pt.lat)
+        }
         return """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
     }
 }

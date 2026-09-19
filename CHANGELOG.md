@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Fixed decisions log duplicate key crash, restored full drone decisions visibility, and added suppressed bell to legend / Fixed decisions log duplicate key crash, restored full drone decisions visibility, and added suppressed bell to legend
+
+- Fixed overnight ConcurrentModificationException crashes by synchronizing tally snapshots, debug sweep verdicts, and threat updates / Fixed overnight ConcurrentModificationException crashes by synchronizing tally snapshots, debug sweep verdicts, and threat updates
+
+- Fixed broken map zone circles and alert polygons under Ukrainian system locales / Fixed broken map zone circles and alert polygons under Ukrainian system locales
+
+- Smooth projectile intercept animation with in-flight threat motion and aligned popup controls / Smooth projectile intercept animation with in-flight threat motion and aligned popup controls
+
+- Dynamic threat tap target expanding up to 48dp when isolated without stealing taps from nearby entities / Dynamic threat tap target expanding up to 48dp when isolated without stealing taps from nearby entities
+
 - Eliminated popup card open hitch by isolating height state from full-screen recomposition, removing title icon spring allocations, and pausing idle frame loops / Eliminated popup card open hitch by isolating height state from full-screen recomposition, removing title icon spring allocations, and pausing idle frame loops
 
 - Instant 0ms threat tap haptic and card launch via direct touch interception / Instant 0ms threat tap haptic and card launch via direct touch interception

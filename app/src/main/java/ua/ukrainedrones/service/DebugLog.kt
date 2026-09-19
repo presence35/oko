@@ -94,6 +94,7 @@ object DebugLog {
     val entries: StateFlow<List<DebugLogEntry>> = _entries.asStateFlow()
 
     /** Threat-id → transition fingerprint; only logged when it changes (no per-tick spam). */
+    private val verdictsLock = Any()
     private val verdicts = mutableMapOf<String, String>()
 
     @Volatile private var attached = false
@@ -117,7 +118,7 @@ object DebugLog {
 
     /** Wipe the whole log (Debug log screen "Clear" button). */
     fun clear() {
-        verdicts.clear()
+        synchronized(verdictsLock) { verdicts.clear() }
         _entries.value = emptyList()
         persist()
     }
@@ -180,9 +181,12 @@ object DebugLog {
      * never re-derives decision formulas.
      */
     fun sweep(ctx: DebugLogContext) {
-        val (newEntries, nextVerdicts) = computeSweep(ctx, verdicts)
-        verdicts.clear()
-        verdicts.putAll(nextVerdicts)
+        val newEntries = synchronized(verdictsLock) {
+            val (entries, nextVerdicts) = computeSweep(ctx, verdicts)
+            verdicts.clear()
+            verdicts.putAll(nextVerdicts)
+            entries
+        }
         newEntries.forEach { record(it) }
     }
 

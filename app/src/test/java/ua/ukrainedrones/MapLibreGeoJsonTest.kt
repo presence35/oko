@@ -1,12 +1,38 @@
 package ua.ukrainedrones
 
+import java.util.Locale
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ua.ukrainedrones.community.CompactOblastBoundaries
 import ua.ukrainedrones.ui.MapLibreGeoJson
 
 class MapLibreGeoJsonTest {
+
+    @Test
+    fun `geojson - strict standard dot decimals under Ukrainian comma-decimal locale`() {
+        val prevLocale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale("uk", "UA"))
+
+            // Zone circles
+            val circleJson = MapLibreGeoJson.singleCircle(50.45, 30.52, 10.0)
+            assertFalse("Circle GeoJSON must not contain comma-decimal numbers", circleJson.contains(Regex("""\d,\d""")))
+            assertTrue("Circle GeoJSON must contain dot-decimal numbers", circleJson.contains(Regex("""\d\.\d""")))
+
+            // Oblast alerts and borders
+            val alertJson = MapLibreGeoJson.alertRegions(setOf("kyivska"))
+            assertFalse("Alert GeoJSON must not contain comma-decimal numbers", alertJson.contains(Regex("""\d,\d""")))
+            assertTrue("Alert GeoJSON must contain dot-decimal numbers", alertJson.contains(Regex("""\d\.\d""")))
+
+            val borderJson = MapLibreGeoJson.oblastBorders()
+            assertFalse("Border GeoJSON must not contain comma-decimal numbers", borderJson.contains(Regex("""\d,\d""")))
+            assertTrue("Border GeoJSON must contain dot-decimal numbers", borderJson.contains(Regex("""\d\.\d""")))
+        } finally {
+            Locale.setDefault(prevLocale)
+        }
+    }
 
     @Test
     fun `alertRegions - raion still fills when parent oblast id present but resolves to nothing`() {

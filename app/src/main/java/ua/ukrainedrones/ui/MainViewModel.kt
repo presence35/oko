@@ -864,15 +864,28 @@ showBorders = prefs.showBorders,
         flow {
             val initialThreat = sel.selected?.let { s -> threatsFlow.value[s.id] ?: s }
             if (initialThreat != null) {
-                emit(
-                    SelectionUi(
-                        selected = initialThreat,
-                        proximity = null,
-                        zoneTier = null,
-                        neutralized = null,
-                        fakeNeutralize = sel.fakeNeutralize
+                val isNeutralized = sel.selected != null && sel.selected.id == sel.neutralizedId
+                if (isNeutralized) {
+                    emit(
+                        SelectionUi(
+                            selected = null,
+                            proximity = null,
+                            zoneTier = null,
+                            neutralized = initialThreat,
+                            fakeNeutralize = sel.fakeNeutralize
+                        )
                     )
-                )
+                } else {
+                    emit(
+                        SelectionUi(
+                            selected = initialThreat,
+                            proximity = null,
+                            zoneTier = null,
+                            neutralized = null,
+                            fakeNeutralize = sel.fakeNeutralize
+                        )
+                    )
+                }
             } else if (sel.neutralizedId == null) {
                 emit(SelectionUi())
             }

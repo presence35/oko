@@ -1285,7 +1285,7 @@ private fun ThreatCardHost(
             if (sel.selected != null) {
                 val threat = sel.selected
                 Column(
-                    modifier = if (smallCard) Modifier.wrapContentSize() else Modifier.fillMaxWidth()
+                    modifier = if (smallCard) Modifier.widthIn(max = 300.dp) else Modifier.fillMaxWidth()
                 ) {
                     ThreatPopupCard(
                         threat = threat,
@@ -1299,21 +1299,20 @@ private fun ThreatCardHost(
                         alertsOff = threat.type.toThreatType() in silencedTypes,
                         onDismiss = onDismiss,
                         fakeNeutralize = sel.fakeNeutralize,
-                        modifier = if (smallCard) Modifier.wrapContentWidth() else Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         ThreatCardSizeControl(
                             current = cardSize,
                             contentDescription = s.cardSizeLabel,
-                            onClick = { onThreatCardSizeChange(nextThreatCardSize(cardSize)) },
-                            modifier = Modifier.padding(top = 6.dp)
+                            onClick = { onThreatCardSizeChange(nextThreatCardSize(cardSize)) }
                         )
                         LocateThreatControl(
-                            onClick = { onLocateThreat(threat) },
-                            modifier = Modifier.padding(top = 6.dp)
+                            onClick = { onLocateThreat(threat) }
                         )
                     }
                 }

@@ -36,6 +36,7 @@ class NeutralizedTally(
         private const val NOTIF_NEUTRALIZED = 6
     }
 
+    private val tallyLock = Any()
     private var neutralizedCount = 0
     private val perTypeCounts = mutableMapOf<ThreatType, Int>()
 
@@ -70,18 +71,27 @@ class NeutralizedTally(
     // two memory records at the same spot ("two bullets, one threat").
     private val seenRemovalIds = ArrayDeque<String>()
 
+    private data class TallySnapshot(
+        val count: Int,
+        val typeCounts: Map<ThreatType, Int>,
+        val memory: List<ResolvedRecord>
+    )
+
     /** A server-driven resolution just arrived: count it into the tally and remember it for the
      *  replay.  */
     fun onResolved(removed: ThreatRemoved, lang: AppLanguage) {
         if (!justFunEnabled.value) return
-        if (seenRemovalIds.contains(removed.id)) return
-        seenRemovalIds.addLast(removed.id)
-        while (seenRemovalIds.size > 64) seenRemovalIds.removeFirst()
-        neutralizedCount++
-        perTypeCounts[removed.type] = (perTypeCounts[removed.type] ?: 0) + 1
-        resolvedMemory.addLast(ResolvedRecord(removed.lat, removed.lon, removed.type, removed.region))
-        
-        postNeutralizedTally(lang)
+        val snapshot = synchronized(tallyLock) {
+            if (seenRemovalIds.contains(removed.id)) return
+            seenRemovalIds.addLast(removed.id)
+            while (seenRemovalIds.size > 64) seenRemovalIds.removeFirst()
+            neutralizedCount++
+            perTypeCounts[removed.type] = (perTypeCounts[removed.type] ?: 0) + 1
+            resolvedMemory.addLast(ResolvedRecord(removed.lat, removed.lon, removed.type, removed.region))
+            TallySnapshot(neutralizedCount, perTypeCounts.toMap(), resolvedMemory.toList())
+        }
+
+        postNeutralizedTally(snapshot, lang)
     }
 
     fun eject() {}
@@ -92,9 +102,11 @@ class NeutralizedTally(
      *  60s grace window, so without it the same threats would re-count and re-post the tally
      *  (~1 min after the user dismissed it) and the map would replay what was already seen. */
     fun reset() {
-        neutralizedCount = 0
-        perTypeCounts.clear()
-        resolvedMemory.clear()
+        synchronized(tallyLock) {
+            neutralizedCount = 0
+            perTypeCounts.clear()
+            resolvedMemory.clear()
+        }
         try {
             NotificationManagerCompat.from(context).cancel(NOTIF_NEUTRALIZED)
         } catch (_: SecurityException) {}
@@ -103,11 +115,11 @@ class NeutralizedTally(
     /** Silent, dismissible running tally of resolved threats near the focus. Re-posted on the
      *  same id with an incremented count each time; swiping it away (delete intent) resets the
      *  count so it stays gone until the next resolution starts a fresh tally. */
-    private fun postNeutralizedTally(lang: AppLanguage) {
+    private fun postNeutralizedTally(snapshot: TallySnapshot, lang: AppLanguage) {
         scope.launch {
             val allUkraine = runCatching { UserPrefs(context).preferences.first().neutralizedTallyAllUkraine }.getOrDefault(false)
             val badge = if (allUkraine) "🇺🇦" else ""
-            val breakdown = perTypeCounts.entries
+            val breakdown = snapshot.typeCounts.entries
                 .sortedWith(compareByDescending<Map.Entry<ThreatType, Int>> { it.value }.thenBy { it.key.ordinal })
                 .joinToString(" · ") { (type, count) ->
                     val info = ThreatTypeCatalog.INFO[type]
@@ -116,10 +128,10 @@ class NeutralizedTally(
                 }
             val builder = NotificationCompat.Builder(context, CHANNEL_NEUTRALIZED)
                 .setSmallIcon(R.drawable.ic_trident)
-                .setContentTitle("$badge ${resolvedThreatsPhrase(neutralizedCount, lang)}")
+                .setContentTitle("$badge ${resolvedThreatsPhrase(snapshot.count, lang)}")
                 .setContentText(breakdown)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setContentIntent(neutralizedTapPendingIntent())
+                .setContentIntent(neutralizedTapPendingIntent(snapshot.memory))
                 .setDeleteIntent(neutralizedDismissPendingIntent())
             safeNotify(NOTIF_NEUTRALIZED, builder.build())
         }
@@ -140,11 +152,11 @@ class NeutralizedTally(
      * activity from a notification-launched service) with the remembered resolutions baked in
      * right now, so the tap always replays the latest show.
      */
-    private fun neutralizedTapPendingIntent(): PendingIntent {
-        val latArr = resolvedMemory.map { it.lat }.toDoubleArray()
-        val lonArr = resolvedMemory.map { it.lon }.toDoubleArray()
-        val typeArr = resolvedMemory.map { it.type.name }.toTypedArray()
-        val regionArr = resolvedMemory.map { it.region }.toTypedArray()
+    private fun neutralizedTapPendingIntent(memory: List<ResolvedRecord>): PendingIntent {
+        val latArr = memory.map { it.lat }.toDoubleArray()
+        val lonArr = memory.map { it.lon }.toDoubleArray()
+        val typeArr = memory.map { it.type.name }.toTypedArray()
+        val regionArr = memory.map { it.region }.toTypedArray()
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or

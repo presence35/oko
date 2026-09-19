@@ -71,6 +71,7 @@ private enum class ExplosionKind {
 private class ActiveDeath(
     val id: String?,
     val geo: LatLng,
+    val startGeo: LatLng = geo,
     var origin: LatLng?,
     val start: Long,
     val icon: Drawable?,
@@ -111,6 +112,7 @@ class ThreatDeathOverlay {
     fun spawn(
         id: String? = null,
         geo: LatLng,
+        startGeo: LatLng = geo,
         origin: LatLng? = null,
         icon: Drawable? = null,
         rotationDeg: Float = 0f,
@@ -122,7 +124,7 @@ class ThreatDeathOverlay {
         if (deaths.size >= MAX_DEATHS) return
         deaths.add(
             ActiveDeath(
-                id, geo, origin, SystemClock.elapsedRealtime() + fireAtDelayMs.coerceAtLeast(0L),
+                id, geo, startGeo, origin, SystemClock.elapsedRealtime() + fireAtDelayMs.coerceAtLeast(0L),
                 icon, rotationDeg, alpha, dud = false,
                 durationMs = if (quickBoom) DEATH_EXPLOSION_START_MS + QUICK_EXPLOSION_LEN_MS
                              else DEATH_DURATION_MS,
@@ -135,7 +137,7 @@ class ThreatDeathOverlay {
     fun spawnDud(id: String?, geo: LatLng, origin: LatLng?) {
         if (origin == null || deaths.size >= MAX_DEATHS) return
         deaths.add(
-            ActiveDeath(id, geo, origin, SystemClock.elapsedRealtime(), null, 0f, 1f, dud = true)
+            ActiveDeath(id, geo, geo, origin, SystemClock.elapsedRealtime(), null, 0f, 1f, dud = true)
         )
         syncActive()
     }
@@ -284,7 +286,7 @@ class ThreatDeathOverlay {
                     val w = icon.intrinsicWidth.coerceAtLeast(1) / 2f
                     val h = icon.intrinsicHeight.coerceAtLeast(1) / 2f
                     icon.alpha = (d.alpha * 255).toInt()
-                    val pt = project(d.geo.lat, d.geo.lon) ?: continue
+                    val pt = project(d.startGeo.lat, d.startGeo.lon) ?: continue
                     canvas.save()
                     canvas.translate(pt.x, pt.y)
                     canvas.rotate(d.rotationDeg)
@@ -303,16 +305,23 @@ class ThreatDeathOverlay {
             val t = (rawElapsed.toFloat() / dur).coerceIn(0f, 1f)
 
             d.icon?.let { icon ->
-                val w = icon.intrinsicWidth.coerceAtLeast(1) / 2f
-                val h = icon.intrinsicHeight.coerceAtLeast(1) / 2f
-                val fade = if (t >= boomT) 0f else 1f
-                icon.alpha = (d.alpha * fade * 255).toInt()
-                canvas.save()
-                canvas.translate(x, y)
-                canvas.rotate(d.rotationDeg)
-                icon.setBounds(-w.toInt(), -h.toInt(), w.toInt(), h.toInt())
-                icon.draw(canvas)
-                canvas.restore()
+                if (t < boomT) {
+                    val p = if (boomT > 0f) (t / boomT).coerceIn(0f, 1f) else 1f
+                    val droneLat = d.startGeo.lat + (d.geo.lat - d.startGeo.lat) * p
+                    val droneLon = d.startGeo.lon + (d.geo.lon - d.startGeo.lon) * p
+                    val iconPt = project(droneLat, droneLon)
+                    if (iconPt != null) {
+                        val w = icon.intrinsicWidth.coerceAtLeast(1) / 2f
+                        val h = icon.intrinsicHeight.coerceAtLeast(1) / 2f
+                        icon.alpha = (d.alpha * 255).toInt()
+                        canvas.save()
+                        canvas.translate(iconPt.x, iconPt.y)
+                        canvas.rotate(d.rotationDeg)
+                        icon.setBounds(-w.toInt(), -h.toInt(), w.toInt(), h.toInt())
+                        icon.draw(canvas)
+                        canvas.restore()
+                    }
+                }
             }
 
             if (t in 0f..boomT && d.origin != null) {

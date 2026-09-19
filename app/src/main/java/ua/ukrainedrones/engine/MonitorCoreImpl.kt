@@ -27,7 +27,7 @@ class MonitorCoreImpl(
         const val PREFS_NAME = "neptun_engine_state"
         const val KEY_HAD_ACTIVE_ALERT = "had_active_alert"
         const val KEY_LAST_ALERT_TIME = "last_alert_time"
-        const val USER_SHOT_GRACE_MS = 3_000L
+        const val USER_SHOT_GRACE_MS = 6_500L
     }
 
     private val prefs: SharedPreferences =
@@ -45,6 +45,7 @@ class MonitorCoreImpl(
     private val _lastUpdateEpochMs = MutableStateFlow(0L)
     override val lastUpdateEpochMs: StateFlow<Long> = _lastUpdateEpochMs.asStateFlow()
 
+    private val threatLock = Any()
     private val rawThreatMap = ConcurrentHashMap<String, NormalizedThreat>()
     private val userShotAt = ConcurrentHashMap<String, Long>()
 
@@ -72,15 +73,18 @@ class MonitorCoreImpl(
         val now = System.currentTimeMillis()
         val nowMono = Monotonic.now()
 
-        rawThreatMap.clear()
-
+        val nextMap = mutableMapOf<String, NormalizedThreat>()
         for (t in threats) {
-            rawThreatMap[t.id] = t
+            nextMap[t.id] = t
         }
 
-        userShotAt.entries.removeIf { nowMono - it.value > USER_SHOT_GRACE_MS }
+        synchronized(threatLock) {
+            rawThreatMap.clear()
+            rawThreatMap.putAll(nextMap)
+            userShotAt.entries.removeIf { nowMono - it.value > USER_SHOT_GRACE_MS }
+            _threats.value = rawThreatMap.values.toList()
+        }
 
-        _threats.value = rawThreatMap.values.toList()
         _lastUpdateEpochMs.value = now
         _isInformationStale.value = false
 
@@ -90,8 +94,11 @@ class MonitorCoreImpl(
     override fun upsertThreat(threat: NormalizedThreat) {
         val now = System.currentTimeMillis()
 
-        rawThreatMap[threat.id] = threat
-        _threats.value = rawThreatMap.values.toList()
+        synchronized(threatLock) {
+            rawThreatMap[threat.id] = threat
+            _threats.value = rawThreatMap.values.toList()
+        }
+
         _lastUpdateEpochMs.value = now
         _isInformationStale.value = false
 
@@ -99,8 +106,10 @@ class MonitorCoreImpl(
     }
 
     override fun removeThreat(threatId: String) {
-        rawThreatMap.remove(threatId)
-        _threats.value = rawThreatMap.values.toList()
+        synchronized(threatLock) {
+            rawThreatMap.remove(threatId)
+            _threats.value = rawThreatMap.values.toList()
+        }
         persistActiveAlertState()
     }
 

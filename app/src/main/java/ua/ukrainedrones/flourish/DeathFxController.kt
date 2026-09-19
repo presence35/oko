@@ -22,7 +22,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ua.ukrainedrones.BehaviorOutcome
+import ua.ukrainedrones.AppSources
 import ua.ukrainedrones.engine.LatLng
+import ua.ukrainedrones.engine.destinationPoint
+import ua.ukrainedrones.engine.typicalSpeedKmh
 import ua.ukrainedrones.source.RESOLVED_REPLAY_GRACE_MS
 import ua.ukrainedrones.source.ThreatRemoved
 import ua.ukrainedrones.ui.MapLibreBridge
@@ -304,18 +307,27 @@ class DeathFxController(
                 if (!isMapInFocus()) return@collect
                 if (r.type in hiddenTypes()) return@collect
                 val outcome = resolveOutcome(r.id)
-                val anchorLat = outcome?.lat ?: r.lat
-                val anchorLon = outcome?.lon ?: r.lon
+                val baseLat = outcome?.lat ?: r.lat
+                val baseLon = outcome?.lon ?: r.lon
+                val speedMps = AppSources.registry.typeCatalog.value[r.type.apiKey]?.nominalSpeedMps ?: 0.0
+                val course = outcome?.headingDeg?.toDouble() ?: r.courseDeg
+                val distMeters = speedMps * (DEATH_EXPLOSION_START_MS / 1000.0)
+                val intercept = if (distMeters > 0.0 && (course != 0.0 || outcome?.headingDeg != null)) {
+                    destinationPoint(baseLat, baseLon, distMeters, course)
+                } else {
+                    LatLng(baseLat, baseLon)
+                }
                 if (isActiveFor(r.id)) {
-                    strikeDud(r.id, anchorLat, anchorLon)
+                    strikeDud(r.id, intercept)
                 } else {
                     val type = r.type
                     val icon = resolveIcon(type)
                     val rotation = resolveRotation(r)
                     val id = r.id
-                    startAutoCountdown(LatLng(anchorLat, anchorLon), type) {
-                        followStrike(anchorLat, anchorLon)
-                        strike(id = id, lat = anchorLat, lon = anchorLon, icon = icon, rotationDeg = rotation, alpha = 1f)
+                    val startGeo = LatLng(baseLat, baseLon)
+                    startAutoCountdown(intercept, type) {
+                        followStrike(intercept)
+                        strike(id = id, geo = intercept, startGeo = startGeo, icon = icon, rotationDeg = rotation, alpha = 1f, type = type)
                         strikeHaptics()
                     }
                 }
@@ -344,13 +356,14 @@ class DeathFxController(
     fun strike(
         id: String? = null,
         geo: LatLng,
+        startGeo: LatLng = geo,
         icon: Drawable? = null,
         rotationDeg: Float = 0f,
         alpha: Float = 1f,
         type: ThreatType = ThreatType.UNKNOWN
     ): Boolean {
         if (!justFunEnabled.value) return false
-        overlay.spawn(id, geo, randomEdgeOrigin(), icon, rotationDeg, alpha, type = type)
+        overlay.spawn(id, geo, startGeo, randomEdgeOrigin(), icon, rotationDeg, alpha, type = type)
         return true
     }
 
@@ -358,11 +371,13 @@ class DeathFxController(
         id: String? = null,
         lat: Double,
         lon: Double,
+        startLat: Double = lat,
+        startLon: Double = lon,
         icon: Drawable? = null,
         rotationDeg: Float = 0f,
         alpha: Float = 1f,
         type: ThreatType = ThreatType.UNKNOWN
-    ): Boolean = strike(id, LatLng(lat, lon), icon, rotationDeg, alpha, type)
+    ): Boolean = strike(id, LatLng(lat, lon), LatLng(startLat, startLon), icon, rotationDeg, alpha, type)
 
     /** Follow-up projectile for an already-destroyed threat: no icon, never explodes. Returns
      *  true only when a dud actually launched (master gate + a valid edge origin).

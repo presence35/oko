@@ -226,4 +226,25 @@ class DebugLogTest {
         val offEntry = entries.first { it.threatId == "off" }
         assertEquals(DebugLogReason.TYPE_OFF, offEntry.reason)
     }
+
+    @Test
+    fun `parallel sweep and clear does not throw ConcurrentModificationException`() {
+        val t1 = threat(id = "t1", lat = 46.48, lon = 30.73)
+        val t2 = threat(id = "t2", lat = 46.49, lon = 30.74)
+        val context = ctx(mapOf("t1" to t1, "t2" to t2))
+
+        val threads = (1..16).map { idx ->
+            Thread {
+                for (i in 0 until 100) {
+                    if (idx % 2 == 0) {
+                        DebugLog.sweep(context)
+                    } else {
+                        DebugLog.clear()
+                    }
+                }
+            }
+        }
+        threads.forEach { it.start() }
+        threads.forEach { it.join() }
+    }
 }
