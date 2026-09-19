@@ -724,7 +724,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             fastYellowArmed = prefs.fastYellowArmed,
             officialRedAlertsEnabled = prefs.officialRedAlertsEnabled,
             officialYellowAlertsEnabled = prefs.officialYellowAlertsEnabled,
-            officialAlertCityScope = prefs.officialAlertCityScope,
             nightOfficialAlertCityScope = prefs.nightOfficialAlertCityScope,
             sirenOverride = prefs.sirenOverride,
             criticalOfflineOverride = prefs.criticalOfflineOverride,

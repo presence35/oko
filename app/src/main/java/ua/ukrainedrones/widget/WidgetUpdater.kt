@@ -60,7 +60,6 @@ object WidgetUpdater {
 
     fun start(context: Context, scope: CoroutineScope) {
         scope.launch {
-            if (!hasPlacedWidgets(context)) return@launch
             val prefs = UserPrefs(context)
             val clock = MutableStateFlow(System.currentTimeMillis())
             launch {

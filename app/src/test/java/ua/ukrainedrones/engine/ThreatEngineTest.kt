@@ -7,6 +7,7 @@ import ua.ukrainedrones.Cities
 import ua.ukrainedrones.community.CompactOblastBoundaries
 import ua.ukrainedrones.community.CompactRaionBoundaries
 import ua.ukrainedrones.source.NeptunSource.Companion.NEPTUN_TYPES
+import ua.ukrainedrones.threat
 
 class ThreatEngineTest {
 
@@ -711,6 +712,48 @@ class ThreatEngineTest {
         val props = NEPTUN_TYPES["shahed"]!!
         val score = engine.scoreThreat(threat, props, 5.0, 2.0, params.slowRedKm, params.slowYellowKm, System.currentTimeMillis())
         assertTrue(score > 0.0)
+    }
+
+    @Test
+    fun `scoreThreat - unknown reliability scores per spec`() {
+        val props = NEPTUN_TYPES["shahed"]!!
+        fun score(reliability: String) = engine.scoreThreat(
+            threat(id = "r-$reliability", reliability = reliability),
+            props, 5.0, null, params.slowRedKm, params.slowYellowKm, System.currentTimeMillis()
+        )
+        val high = score("high")
+        val medium = score("medium")
+        val unknown = score("unknown")
+        val low = score("low")
+        assertEquals(1.0 / 0.7, high / unknown, 1e-9)
+        assertEquals(1.0 / 0.8, high / medium, 1e-9)
+        assertEquals(1.0 / 0.5, high / low, 1e-9)
+    }
+
+    @Test
+    fun `scoreThreat - mid and unrecognized reliability normalize via fromApi`() {
+        val props = NEPTUN_TYPES["shahed"]!!
+        fun score(reliability: String) = engine.scoreThreat(
+            threat(id = "r2-$reliability", reliability = reliability),
+            props, 5.0, null, params.slowRedKm, params.slowYellowKm, System.currentTimeMillis()
+        )
+        assertEquals(score("medium"), score("mid"), 1e-12)
+        assertEquals(score("unknown"), score("bogus"), 1e-12)
+    }
+
+    @Test
+    fun `speedCache - evicts the oldest track when over cap`() {
+        val props = NEPTUN_TYPES["shahed"]!!
+        engine.speedCache.record("old", 1_000L, 50.0, 30.0)
+        engine.speedCache.record("old", 301_000L, 50.1, 30.0)
+        val before = engine.speedCache.estimateWithSource("old", makeThreat(id = "old", speedKmh = null), props)
+        assertEquals(SpeedSource.RECORDED, before!!.second)
+        for (i in 0 until 600) {
+            engine.speedCache.record("flood-$i", 1_000_000L + i, 51.0, 31.0)
+        }
+        val after = engine.speedCache.estimateWithSource("old", makeThreat(id = "old", speedKmh = null), props)
+        assertNotNull(after)
+        assertEquals(SpeedSource.TYPICAL, after!!.second)
     }
 
     @Test

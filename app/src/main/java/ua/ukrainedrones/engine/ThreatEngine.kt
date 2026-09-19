@@ -3,6 +3,7 @@ package ua.ukrainedrones.engine
 import ua.ukrainedrones.AppLanguage
 import ua.ukrainedrones.Cities
 import ua.ukrainedrones.CityRaions
+import ua.ukrainedrones.Reliability
 import ua.ukrainedrones.community.CompactOblastBoundaries
 import ua.ukrainedrones.community.CompactRaionBoundaries
 import kotlin.math.*
@@ -387,7 +388,7 @@ class ThreatEngine(
         val baseSeverity = BASE_SEVERITY[t.type] ?: 4.0
         return (baseSeverity
             * distanceFactor
-            * reliabilityFactor(t.reliability)
+            * reliabilityFactor(Reliability.fromApi(t.reliability))
             * confirmFactor(t.confirmations)
             * countFactor(t.count)
             * qualityFactor(t)
@@ -421,12 +422,11 @@ class ThreatEngine(
             "recon" to 2.0
         )
 
-        private fun reliabilityFactor(r: String): Double = when (r.lowercase()) {
-            "high" -> 1.0
-            "medium" -> 0.8
-            "low" -> 0.5
-	    "unknown" -> 0.5
-            else -> 0.7
+        private fun reliabilityFactor(r: Reliability): Double = when (r) {
+            Reliability.HIGH -> 1.0
+            Reliability.MEDIUM -> 0.8
+            Reliability.LOW -> 0.5
+            Reliability.UNKNOWN -> 0.7
         }
 
         private fun confirmFactor(n: Int): Double = 1.0 + 0.15 * min((n - 1).coerceAtLeast(0), 6)

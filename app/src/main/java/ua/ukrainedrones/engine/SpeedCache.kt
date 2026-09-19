@@ -15,6 +15,9 @@ class SpeedCache {
         if (last != null && last.t == t) return
         q.addLast(Fix(t, lat, lon))
         while (q.size > 4) q.removeFirst()
+        if (fixes.size > MAX_TRACKS) {
+            fixes.entries.minByOrNull { it.value.lastOrNull()?.t ?: 0L }?.let { fixes.remove(it.key) }
+        }
     }
 
     @Synchronized
@@ -75,5 +78,6 @@ class SpeedCache {
 
     companion object {
         private const val HEADING_MIN_METERS = 100.0
+        private const val MAX_TRACKS = 500
     }
 }
