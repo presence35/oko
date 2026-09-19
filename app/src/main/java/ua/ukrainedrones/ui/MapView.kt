@@ -695,20 +695,32 @@ LaunchedEffect(selectedId) {
         )
     }
 
-    // Shelter mode zoom & fit
-    LaunchedEffect(showNearbyShelters, shelterZoomTick, focusLocationState, shelterIndex) {
+    // Shelter mode zoom & fit. Pins are bounded to the red-zone radius so a sparse focus
+    // (a pinned city with no local shelters) never pads the list with far-away shelters,
+    // blows up the fit box and trips the zoom-out auto-exit on the next pan or zoom.
+    LaunchedEffect(showNearbyShelters, shelterZoomTick, focusLocationState, shelterIndex, slowRedKmState) {
         val bridge = bridgeState.value ?: return@LaunchedEffect
         bridge.setMaxZoom(if (showNearbyShelters) SHELTER_MAX_ZOOM else NORMAL_MAX_ZOOM)
         if (!showNearbyShelters) return@LaunchedEffect
         shelterEntryGuardUntil.value = System.currentTimeMillis() + 1500
-        val near = focusLocationState?.let { f -> shelterIndex?.nearest(f.lat, f.lon, limit = 25) }
-        val box = near?.let { sheltersBoundingBox(it) }
+        val focus = focusLocationState
+        val near = focus?.let { f ->
+            shelterIndex?.nearest(f.lat, f.lon, limit = 25, maxDistanceMeters = slowRedKmState * 1000.0)
+        }
+        if (near.isNullOrEmpty()) {
+            if (focus != null && shelterIndex != null) {
+                showToast(strings.shelterEmpty)
+                onExitShelterMode()
+                return@LaunchedEffect
+            }
+            camera.animateTo(bridge, bridge.latitude, bridge.longitude, 16.0, 400L)
+            return@LaunchedEffect
+        }
+        val box = sheltersBoundingBox(near)
         if (box != null) {
             camera.fitBox(bridge, box.north, box.east, box.south, box.west, durationMs = 0)
         } else {
-            val centerLat = focusLocationState?.lat ?: bridge.latitude
-            val centerLon = focusLocationState?.lon ?: bridge.longitude
-            camera.animateTo(bridge, centerLat, centerLon, 16.0, 400L)
+            camera.animateTo(bridge, focus.lat, focus.lon, 16.0, 400L)
         }
     }
 
@@ -939,7 +951,7 @@ LaunchedEffect(selectedId) {
 
                     // 2. Nearby shelters
                     if (showNearbySheltersState && focusLocationState != null && shelterIndex != null) {
-                        val nearList = shelterIndex.nearest(focusLocationState!!.lat, focusLocationState!!.lon, limit = 25)
+                        val nearList = shelterIndex.nearest(focusLocationState!!.lat, focusLocationState!!.lon, limit = 25, maxDistanceMeters = slowRedKmState * 1000.0)
                         for (item in nearList) {
                             val pt = bridge.project(item.shelter.lat, item.shelter.lon) ?: continue
                             val isSelected = selectedShelter?.shelter?.id == item.shelter.id
@@ -1048,7 +1060,7 @@ LaunchedEffect(selectedId) {
                         null
                     } else {
                         val shelterPts = if (showNearbySheltersState && focusLocationState != null && shelterIndex != null) {
-                            val nearList = shelterIndex.nearest(focusLocationState!!.lat, focusLocationState!!.lon, limit = 25)
+                            val nearList = shelterIndex.nearest(focusLocationState!!.lat, focusLocationState!!.lon, limit = 25, maxDistanceMeters = slowRedKmState * 1000.0)
                             nearList.mapNotNull { item ->
                                 bridge.project(item.shelter.lat, item.shelter.lon)?.let { p ->
                                     PointF(p.x, p.y - 18f * density)
@@ -1097,7 +1109,7 @@ LaunchedEffect(selectedId) {
                     if (showNearbySheltersState && focusLocationState != null && shelterIndex != null) {
                         val density = context.resources.displayMetrics.density
                         val threshold = 32f * density
-                        val nearList = shelterIndex.nearest(focusLocationState!!.lat, focusLocationState!!.lon, limit = 25)
+                        val nearList = shelterIndex.nearest(focusLocationState!!.lat, focusLocationState!!.lon, limit = 25, maxDistanceMeters = slowRedKmState * 1000.0)
                         var bestShelter: NearestShelter? = null
                         var bestDist = threshold
                         for (item in nearList) {

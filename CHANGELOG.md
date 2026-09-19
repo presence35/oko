@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Map shelter pins now show only shelters inside your red zone radius / Map shelter pins now show only shelters inside your red zone radius
+
 - Home-screen widget now goes live within seconds even when placed after the app has been running / Home-screen widget now goes live within seconds even when placed after the app has been running
 
 - Night-time city-scope toggle now applies to the map banner when night custom zones are on / Night-time city-scope toggle now applies to the map banner when night custom zones are on

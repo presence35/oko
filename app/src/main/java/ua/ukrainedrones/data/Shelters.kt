@@ -95,8 +95,11 @@ class ShelterIndex private constructor(
     fun withinRegion(lat: Double, lon: Double): Boolean =
         lat in minLat..maxLat && lon in minLon..maxLon
 
-    /** Nearest [limit] shelters to the given point, closest first. */
-    fun nearest(fromLat: Double, fromLon: Double, limit: Int = 20): List<NearestShelter> {
+    /** Nearest [limit] shelters to the given point, closest first. When [maxDistanceMeters]
+     *  is set, only shelters within that radius are returned — a sparse focus yields a short
+     *  (possibly empty) list instead of padding with far-away shelters. Null (default) keeps
+     *  the legacy unlimited behavior used by the shelter directory list. */
+    fun nearest(fromLat: Double, fromLon: Double, limit: Int = 20, maxDistanceMeters: Double? = null): List<NearestShelter> {
         if (shelters.isEmpty()) return emptyList()
         val targetLimit = limit.coerceAtLeast(1)
 
@@ -122,6 +125,7 @@ class ShelterIndex private constructor(
         return sourceList
             .map { NearestShelter(it, it.distanceFlat(fromLat, fromLon)) }
             .sortedBy { it.distanceMeters }
+            .filter { maxDistanceMeters == null || it.distanceMeters <= maxDistanceMeters }
             .take(targetLimit)
     }
 

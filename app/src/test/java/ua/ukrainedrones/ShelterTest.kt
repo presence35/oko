@@ -68,6 +68,35 @@ class ShelterTest {
     }
 
     @Test
+    fun `nearest with radius keeps only nearby shelters sorted`() {
+        val index = ShelterIndex.fromJson(
+            payload(
+                arrayOf(1, "46.50,30.70", "i", "далеко", false),
+                arrayOf(2, "46.48,30.73", "i", "близько", false),
+                arrayOf(3, "46.50,30.75", "i", "середньо", false)
+            )
+        )!!
+        val near = index.nearest(46.48, 30.73, 10, maxDistanceMeters = 1000.0)
+        assertEquals(listOf("близько"), near.map { it.shelter.name })
+        val wider = index.nearest(46.48, 30.73, 10, maxDistanceMeters = 10000.0)
+        assertEquals(listOf("близько", "середньо", "далеко"), wider.map { it.shelter.name })
+    }
+
+    @Test
+    fun `nearest with radius never pads a sparse focus with far shelters`() {
+        val index = ShelterIndex.fromJson(
+            payload(
+                arrayOf(1, "46.48,30.73", "i", "Odesa", false),
+                arrayOf(2, "50.45,30.52", "i", "Kyiv", false)
+            )
+        )!!
+        // Kharkiv: nothing within 20 km — must be empty, not padded with Odesa/Kyiv.
+        assertTrue(index.nearest(49.99, 36.23, 25, maxDistanceMeters = 20000.0).isEmpty())
+        // Unlimited (directory behavior) still returns the closest available.
+        assertEquals(2, index.nearest(49.99, 36.23, 25).size)
+    }
+
+    @Test
     fun `withinRegion reflects the parsed data extent`() {
         val index = ShelterIndex.fromJson(payload(
             arrayOf(1, "46.48, 30.73", "i", "Odesa", false),
