@@ -130,6 +130,7 @@ fun SettingsScreen(
     onHighQualityExplosionsChange: (Boolean) -> Unit,
     onNeutralizedTallyChange: (Boolean) -> Unit,
     onNeutralizedTallyAllUkraineChange: (Boolean) -> Unit,
+    onAlarmEpisodeTallyChange: (Boolean) -> Unit,
     onThreatIconZoomChange: (Boolean) -> Unit,
     onFastGroupCollapse: (Boolean) -> Unit,
     onSlowGroupCollapse: (Boolean) -> Unit,
@@ -193,6 +194,7 @@ fun SettingsScreen(
     val highQualityExplosions = state.highQualityExplosions
     val neutralizedTallyEnabled = state.neutralizedTallyEnabled
     val neutralizedTallyAllUkraine = state.neutralizedTallyAllUkraine
+    val alarmEpisodeTallyEnabled = state.alarmEpisodeTallyEnabled
     val threatIconZoom = state.threatIconZoom
     val fastGroupCollapsed = state.fastGroupCollapsed
     val slowGroupCollapsed = state.slowGroupCollapsed
@@ -1256,6 +1258,16 @@ fun SettingsScreen(
                                     )
                                 }
                             }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            AlertToggleRow(
+                                title = s.alarmEpisodeTallyTitle,
+                                description = s.alarmEpisodeTallyDesc,
+                                checked = alarmEpisodeTallyEnabled,
+                                onCheckedChange = onAlarmEpisodeTallyChange,
+                                icon = rememberVectorPainter(Icons.Default.Notifications),
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                iconBadge = "1"
+                            )
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

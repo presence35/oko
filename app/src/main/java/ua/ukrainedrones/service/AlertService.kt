@@ -64,6 +64,7 @@ import ua.ukrainedrones.Strings
 import ua.ukrainedrones.UserPrefs
 import ua.ukrainedrones.engine.distanceFlat
 import ua.ukrainedrones.isWithinNight
+import ua.ukrainedrones.AlarmEpisodeTally
 import ua.ukrainedrones.NeutralizedTally
 import ua.ukrainedrones.engine.ThreatEngine
 import ua.ukrainedrones.service.ServiceState
@@ -193,6 +194,8 @@ class AlertService : Service() {
     @Volatile private var notifMuteUntilMs = 0L
 
     private val tally by lazy { NeutralizedTally(applicationContext, scope) }
+    private val episodeTally by lazy { AlarmEpisodeTally(applicationContext, scope) }
+    @Volatile private var episodeActive = false
     @Volatile private var currentToken: String? = null
 
     private data class MonitorState(
@@ -313,6 +316,7 @@ class AlertService : Service() {
                 )
             }
             NeutralizedTally.ACTION_NEUTRALIZED_DISMISS -> tally.reset()
+            AlarmEpisodeTally.ACTION_ALARM_EPISODE_DISMISS -> episodeTally.reset()
         }
         return START_STICKY
     }
@@ -360,6 +364,24 @@ class AlertService : Service() {
                         if (!inOblast(removed.region, removed.district, removed.locality, token)) return@collect
                     }
                     tally.onResolved(removed, p.language)
+                }
+        }
+
+        // Per-alarm episode buffer: focus-oblast only by design (the All-of-Ukraine
+        // opt-in stays with the running tally). Counted only while an alarm window
+        // is open; the window close posts the single summary.
+        scope.launch {
+            prefs.preferences
+                .map { it.alarmEpisodeTallyEnabled }
+                .distinctUntilChanged()
+                .flatMapLatest { enabled ->
+                    if (!enabled) emptyFlow() else AppSources.registry.removedThreats
+                }
+                .collect { removed ->
+                    if (!episodeActive) return@collect
+                    val token = currentToken ?: return@collect
+                    if (!inOblast(removed.region, removed.district, removed.locality, token)) return@collect
+                    episodeTally.onResolved(removed)
                 }
         }
 
@@ -877,6 +899,18 @@ fastYellowArmed = p.fastYellowArmed,
         reconcileEpisode(primary, state, all)
         reconcileNotif(primary, state)
 
+        // Morale-only episode window: scoped official level (red or yellow, no type
+        // gate), tracked even when official notifications are off so the summary
+        // still fires. The official all-clear path above is untouched.
+        val alarmNowActive = state.focusOblastLevel != AlertLevel.NONE
+        if (alarmNowActive && !episodeActive) {
+            episodeActive = true
+            episodeTally.begin()
+        } else if (!alarmNowActive && episodeActive) {
+            episodeActive = false
+            episodeTally.finish(state.focusBannerCity, state.lang, state.officialAlertsEnabled)
+        }
+
         val nowForSweep = System.currentTimeMillis()
         if (nowForSweep - lastSweepAtMs >= SWEEP_THROTTLE_MS) {
             lastSweepAtMs = nowForSweep
@@ -1128,6 +1162,7 @@ fastYellowArmed = p.fastYellowArmed,
         AppSources.clear()
         LocationTracker.stop()
         tally.reset()
+        episodeTally.reset()
         scope.cancel()
         super.onDestroy()
     }

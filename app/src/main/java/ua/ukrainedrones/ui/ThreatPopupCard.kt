@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.contentDescription as semanticsContentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,6 +39,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.shape.CircleShape
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -168,7 +173,8 @@ fun ThreatPopupCard(
     alertsOff: Boolean = false,
     neutralized: Boolean = false,
     neutralizing: Boolean = false,
-    fakeNeutralize: Boolean = false
+    fakeNeutralize: Boolean = false,
+    onRequestSizeToggle: (() -> Unit)? = null
 ) {
     val s = Strings.get(lang)
     val typeInfo = threatTypeInfoByString(threat.type) ?: ThreatTypeCatalog.INFO.getValue(ThreatType.UNKNOWN)
@@ -289,21 +295,21 @@ fun ThreatPopupCard(
                         fontScale = min(density.fontScale, 1.25f)
                     )
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                            verticalAlignment = Alignment.Top,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             ThreatIcon(
                                 type = threat.type.toThreatType(),
                                 set = iconSet,
-                                size = fontAware(52.dp),
+                                size = fontAware(44.dp),
                                 contentDescription = typeLabel
                             )
-                            Spacer(Modifier.width(10.dp))
+                            Spacer(Modifier.width(8.dp))
                             Column(
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(3.dp),
+                                horizontalAlignment = Alignment.Start,
                                 modifier = Modifier.weight(1f)
                             ) {
                                 if (distUser != null) {
@@ -327,10 +333,10 @@ fun ThreatPopupCard(
                                     )
                                 }
                             }
-                            Spacer(Modifier.width(12.dp))
+                            Spacer(Modifier.width(8.dp))
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.Top
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
@@ -340,7 +346,12 @@ fun ThreatPopupCard(
                                         color = Color(AppPalette.TextSecondary)
                                     )
                                     Spacer(Modifier.height(4.dp))
-                                    VerticalReliabilityBar(reliability = Reliability.fromApi(threat.reliability))
+                                    Box(
+                                        modifier = Modifier.height(fontAware(38.dp)),
+                                        contentAlignment = Alignment.BottomCenter
+                                    ) {
+                                        VerticalReliabilityBar(reliability = Reliability.fromApi(threat.reliability))
+                                    }
                                 }
                                 threat.uncertaintyKm?.let { uKm ->
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -351,17 +362,22 @@ fun ThreatPopupCard(
                                             color = Color(AppPalette.TextSecondary)
                                         )
                                         Spacer(Modifier.height(4.dp))
-                                        VerticalUncertaintyBar(uncertaintyKm = uKm)
+                                        Box(
+                                            modifier = Modifier.height(fontAware(38.dp)),
+                                            contentAlignment = Alignment.BottomCenter
+                                        ) {
+                                            VerticalUncertaintyBar(uncertaintyKm = uKm)
+                                        }
                                     }
                                 }
                             }
                         }
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(4.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            ThreatLevelGaugeHorizontal(level = threatLevel)
+                            ThreatLevelGaugeHorizontal(level = threatLevel, width = fontAware(120.dp))
                             Spacer(Modifier.weight(1f))
                             ThreatElapsedBadge(
                                 updatedAtMillis = threat.updatedAtMillis,
@@ -375,8 +391,9 @@ fun ThreatPopupCard(
             // The full card: clean layout without dividers, elapsed time on top-right,
             // P and R on separate lines for senior/large font accessibility.
             ThreatCardSize.LARGE -> {
-                Row(modifier = Modifier.padding(14.dp)) {
-                    Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row {
+                        Column(modifier = Modifier.weight(1f)) {
                         // Header: icon, type, status chips, region, and elapsed time on top-right
                         Row(verticalAlignment = Alignment.Top) {
                             ThreatIcon(
@@ -485,8 +502,9 @@ fun ThreatPopupCard(
                             }
                         }
                     }
-                    Spacer(Modifier.width(16.dp))
-                    ThreatLevelGauge(level = threatLevel)
+                        Spacer(Modifier.width(16.dp))
+                        ThreatLevelGauge(level = threatLevel)
+                    }
                 }
             }
         }
@@ -589,9 +607,9 @@ private fun VerticalReliabilityBar(reliability: Reliability) {
         repeat(3) { i ->
             Box(
                 modifier = Modifier
-                    .size(width = fontAware(12.dp), height = fontAware(6.dp))
+                    .size(width = fontAware(12.dp), height = fontAware(11.dp))
                     .clip(RoundedCornerShape(2.dp))
-                    .background(if (i < level) color else UncertaintyEmpty)
+                    .background(if (i >= 3 - level) color else UncertaintyEmpty)
             )
         }
     }
@@ -607,8 +625,59 @@ private fun VerticalUncertaintyBar(uncertaintyKm: Double) {
                 modifier = Modifier
                     .size(width = fontAware(12.dp), height = fontAware(6.dp))
                     .clip(RoundedCornerShape(2.dp))
-                    .background(if (i < bars) color else UncertaintyEmpty)
+                    .background(if (i >= 5 - bars) color else UncertaintyEmpty)
             )
+        }
+    }
+}
+
+internal fun nextThreatCardSize(current: ThreatCardSize): ThreatCardSize {
+    val values = ThreatCardSize.values()
+    return values[(current.ordinal + 1) % values.size]
+}
+
+@Composable
+internal fun ThreatCardSizeControl(
+    current: ThreatCardSize,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale = animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+        label = "cardSizeScale"
+    )
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = modifier
+            .sizeIn(minWidth = 32.dp, minHeight = 32.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .semantics { semanticsContentDescription = contentDescription }
+            .pressTick(interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true),
+                onClick = onClick
+            )
+            .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        listOf(2.dp, 6.dp).forEachIndexed { i, thickness ->
+            Box(
+                modifier = Modifier
+                    .width(20.dp)
+                    .height(thickness)
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        if (i == current.ordinal) MaterialTheme.colorScheme.primary
+                        else Color(AppPalette.TextSecondary)
+                    )
+            )
+            if (i < 1) Spacer(Modifier.height(4.dp))
         }
     }
 }

@@ -153,10 +153,15 @@ class MainActivity : ComponentActivity() {
         }
         if (records.isNotEmpty()) viewModel.triggerFlourish(records)
         // Reset the tally now that the show was replayed — same reset as swiping it away.
+        // Both tallies share the replay extras, so reset both; the untouched one is a no-op.
         runCatching {
             startService(
                 Intent(this, AlertService::class.java)
                     .setAction(NeutralizedTally.ACTION_NEUTRALIZED_DISMISS)
+            )
+            startService(
+                Intent(this, AlertService::class.java)
+                    .setAction(AlarmEpisodeTally.ACTION_ALARM_EPISODE_DISMISS)
             )
         }
     }

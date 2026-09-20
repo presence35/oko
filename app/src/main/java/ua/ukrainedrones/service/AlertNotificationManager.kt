@@ -55,6 +55,7 @@ class AlertNotificationManager(private val context: Context) {
         const val CHANNEL_OFFLINE = "offline"
         const val CHANNEL_OFFLINE_CRITICAL = "offline_critical"
         const val CHANNEL_UPDATE = "updates"
+        const val CHANNEL_ALARM_EPISODE = "alarm_episode"
 
         const val NOTIF_MONITOR = 1
         const val NOTIF_ALERT = 2
@@ -62,10 +63,11 @@ class AlertNotificationManager(private val context: Context) {
         const val NOTIF_MILESTONE = 5
         const val NOTIF_OFFLINE_CRITICAL = 6
         const val NOTIF_UPDATE = 7
+        const val NOTIF_ALARM_EPISODE = 8
 
         /** Bump to delete + recreate all managed channels (sound/importance/attrs are
          *  frozen by Android at creation — this is the only way a change takes effect). */
-        const val CHANNEL_SCHEMA_VERSION = 2
+        const val CHANNEL_SCHEMA_VERSION = 3
 
         fun areNotificationsEnabled(context: Context): Boolean {
             return NotificationManagerCompat.from(context).areNotificationsEnabled()
@@ -94,6 +96,7 @@ class AlertNotificationManager(private val context: Context) {
             CHANNEL_OFFLINE,
             CHANNEL_OFFLINE_CRITICAL,
             NeutralizedTally.CHANNEL_NEUTRALIZED,
+            CHANNEL_ALARM_EPISODE,
             CHANNEL_UPDATE
         )
 
@@ -191,6 +194,13 @@ class AlertNotificationManager(private val context: Context) {
         nm.createNotificationChannel(
             NotificationChannel(NeutralizedTally.CHANNEL_NEUTRALIZED, s.neutralizedNotifChannelName, NotificationManager.IMPORTANCE_LOW).apply {
                 description = s.neutralizedChannelDesc
+            }
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_ALARM_EPISODE, s.alarmEpisodeChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = s.alarmEpisodeChannelDesc
+                enableVibration(true)
+                setSound(sirenUri("all_clear"), notificationAttributes())
             }
         )
         nm.createNotificationChannel(

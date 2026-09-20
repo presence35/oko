@@ -51,6 +51,7 @@ data class UserPreferences(
     val highQualityExplosions: Boolean = true,
     val neutralizedTallyEnabled: Boolean = true,
     val neutralizedTallyAllUkraine: Boolean = false,
+    val alarmEpisodeTallyEnabled: Boolean = true,
     val legacyCacheCleaned: Boolean = false,
     val fastGroupCollapsed: Boolean = false,
     val slowGroupCollapsed: Boolean = false,

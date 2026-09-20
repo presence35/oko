@@ -781,15 +781,11 @@ def _disk_count(path: str) -> int:
 
 
 def _write_city_file(city_key: str, shelters: list[dict],
-                     generated_at: str) -> tuple[str, int]:
+                      generated_at: str) -> tuple[str, int]:
     out_path = os.path.join(OUTPUT_DIR, f"{city_key}.json")
+    data = [[s["id"], f"{s['lat']},{s['lng']}", s["name"]] for s in shelters]
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({
-            "generated_at": generated_at,
-            "city": city_key,
-            "count": len(shelters),
-            "shelters": shelters,
-        }, f, ensure_ascii=False, indent=2)
+        json.dump({"data": data}, f, ensure_ascii=False)
     return out_path, os.path.getsize(out_path)
 
 
@@ -801,6 +797,50 @@ def _display_name(title: str, org: str, is_oblast: bool) -> str:
             or _first_content_token(title or "")
             or _first_content_token(org or "")
             or "Unknown")
+
+
+def convert_to_compact():
+    """Rewrite existing verbose city JSON files to compact format.
+    Skips files already in compact format (have 'data' key)."""
+    converted = 0
+    for fname in os.listdir(OUTPUT_DIR):
+        if not fname.endswith(".json"):
+            continue
+        path = os.path.join(OUTPUT_DIR, fname)
+        with open(path, encoding="utf-8") as f:
+            try:
+                raw = json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                continue
+        if "data" in raw or "shelters" not in raw:
+            continue
+        shelters = raw["shelters"]
+        data = [[s["id"], f"{s['lat']},{s['lng']}", s["name"]] for s in shelters]
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"data": data}, f, ensure_ascii=False)
+        converted += 1
+    print(f"[convert] {converted} files rewritten to compact format")
+
+
+def build_shelters_json():
+    """Merge all city output files into single shelters.json for upload."""
+    all_data: list = []
+    for fname in sorted(os.listdir(OUTPUT_DIR)):
+        if not fname.endswith(".json") or fname == "shelters.json":
+            continue
+        path = os.path.join(OUTPUT_DIR, fname)
+        with open(path, encoding="utf-8") as f:
+            try:
+                raw = json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                continue
+        if "data" not in raw:
+            continue
+        all_data.extend(raw["data"])
+    out = os.path.join(OUTPUT_DIR, "shelters.json")
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump({"data": all_data}, f, ensure_ascii=False)
+    print(f"[build] shelters.json: {len(all_data)} shelters, {os.path.getsize(out) // 1024} KB")
 
 
 def main(argv=None):
@@ -823,6 +863,8 @@ def main(argv=None):
             return 1
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     generated_at = datetime.now(timezone.utc).isoformat()
+    if not list_only:
+        convert_to_compact()
 
     def want(key: str, title: str = "") -> bool:
         return only is None or only in key.lower() or only in title.lower()
@@ -976,8 +1018,9 @@ def main(argv=None):
         print(f"--- headers ({len(diag)} failed sources) ---")
         for key, detail in diag:
             print(f"  H {key}: {detail}")
+    build_shelters_json()
     return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

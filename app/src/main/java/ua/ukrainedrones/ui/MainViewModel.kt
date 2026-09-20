@@ -149,6 +149,7 @@ data class UiState(
     val followBullet: Boolean = true,
     val neutralizedTallyEnabled: Boolean = true,
     val neutralizedTallyAllUkraine: Boolean = false,
+    val alarmEpisodeTallyEnabled: Boolean = true,
     val threatIconZoom: Boolean = true,
     val fastGroupCollapsed: Boolean = false,
     val slowGroupCollapsed: Boolean = false,
@@ -240,6 +241,7 @@ data class SettingsState(
     val followBullet: Boolean get() = prefs.followBullet
     val neutralizedTallyEnabled: Boolean get() = prefs.neutralizedTallyEnabled
     val neutralizedTallyAllUkraine: Boolean get() = prefs.neutralizedTallyAllUkraine
+    val alarmEpisodeTallyEnabled: Boolean get() = prefs.alarmEpisodeTallyEnabled
     val threatIconZoom: Boolean get() = prefs.threatIconZoom
     val showThreatIdsOnMap: Boolean get() = prefs.showThreatIdsOnMap
     val fastGroupCollapsed: Boolean get() = prefs.fastGroupCollapsed
@@ -494,6 +496,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val followBullet: Boolean,
         val neutralizedTallyEnabled: Boolean,
         val neutralizedTallyAllUkraine: Boolean,
+        val alarmEpisodeTallyEnabled: Boolean,
         val threatIconZoom: Boolean,
 val fastGroupCollapsed: Boolean,
         val slowGroupCollapsed: Boolean,
@@ -594,6 +597,7 @@ val fastGroupCollapsed: Boolean,
             followBullet = followBullet,
             neutralizedTallyEnabled = neutralizedTallyEnabled,
             neutralizedTallyAllUkraine = neutralizedTallyAllUkraine,
+            alarmEpisodeTallyEnabled = alarmEpisodeTallyEnabled,
             threatIconZoom = threatIconZoom,
             fastGroupCollapsed = fastGroupCollapsed,
             slowGroupCollapsed = slowGroupCollapsed,
@@ -770,6 +774,7 @@ showBorders = prefs.showBorders,
             followBullet = prefs.followBullet,
             neutralizedTallyEnabled = prefs.neutralizedTallyEnabled,
             neutralizedTallyAllUkraine = prefs.neutralizedTallyAllUkraine,
+            alarmEpisodeTallyEnabled = prefs.alarmEpisodeTallyEnabled,
             threatIconZoom = prefs.threatIconZoom,
             fastGroupCollapsed = prefs.fastGroupCollapsed,
             slowGroupCollapsed = prefs.slowGroupCollapsed,
@@ -1480,6 +1485,10 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setNeutralizedTallyAllUkraine(enabled: Boolean) {
         viewModelScope.launch { prefs.setNeutralizedTallyAllUkraine(enabled) }
+    }
+
+    fun setAlarmEpisodeTallyEnabled(enabled: Boolean) {
+        viewModelScope.launch { prefs.setAlarmEpisodeTallyEnabled(enabled) }
     }
 
     fun setThreatIconZoom(enabled: Boolean) {

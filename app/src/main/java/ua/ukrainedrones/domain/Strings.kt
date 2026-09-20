@@ -135,6 +135,8 @@ val nightSoundLabel: String,
         val notifBodyRegion: String,
         val neutralizedNotifChannelName: String,
         val neutralizedChannelDesc: String,
+        val alarmEpisodeChannelName: String,
+        val alarmEpisodeChannelDesc: String,
         val notifUpdateTitle: String,
         val notifUpdateText: String,
         val notifUpdateChannelName: String,
@@ -408,6 +410,11 @@ val nightSoundLabel: String,
         val neutralizedTallyDesc: String,
         val neutralizedTallyAllUkraineTitle: String,
         val neutralizedTallyAllUkraineDesc: String,
+        val alarmEpisodeTallyTitle: String,
+        val alarmEpisodeTallyDesc: String,
+        val alarmEpisodeTitleFormat: String,
+        val alarmEpisodeBodyFormat: String,
+        val alarmEpisodeQuietText: String,
         val moraleNote: String,
         val iconSetTitle: String,
         val overlapModeTitle: String,
@@ -838,6 +845,8 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val notifBodyRegion: String get() = status.notifBodyRegion
         val neutralizedNotifChannelName: String get() = status.neutralizedNotifChannelName
         val neutralizedChannelDesc: String get() = status.neutralizedChannelDesc
+        val alarmEpisodeChannelName: String get() = status.alarmEpisodeChannelName
+        val alarmEpisodeChannelDesc: String get() = status.alarmEpisodeChannelDesc
         val notifUpdateTitle: String get() = status.notifUpdateTitle
         val notifUpdateText: String get() = status.notifUpdateText
         val notifUpdateChannelName: String get() = status.notifUpdateChannelName
@@ -1100,6 +1109,11 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val justFunNote: String get() = moraleNote
         val neutralizedTallyAllUkraineTitle: String get() = misc.neutralizedTallyAllUkraineTitle
         val neutralizedTallyAllUkraineDesc: String get() = misc.neutralizedTallyAllUkraineDesc
+        val alarmEpisodeTallyTitle: String get() = misc.alarmEpisodeTallyTitle
+        val alarmEpisodeTallyDesc: String get() = misc.alarmEpisodeTallyDesc
+        val alarmEpisodeTitleFormat: String get() = misc.alarmEpisodeTitleFormat
+        val alarmEpisodeBodyFormat: String get() = misc.alarmEpisodeBodyFormat
+        val alarmEpisodeQuietText: String get() = misc.alarmEpisodeQuietText
 val iconSetTitle: String get() = misc.iconSetTitle
         val overlapModeTitle: String get() = misc.overlapModeTitle
         val overlapModeDesc: String get() = misc.overlapModeDesc

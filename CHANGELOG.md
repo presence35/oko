@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Alarm summary: when your oblast alarm ends, a separate morale notification shows what was neutralized during that alarm, with tap-to-replay / Alarm summary: when your oblast alarm ends, a separate morale notification shows what was neutralized during that alarm, with tap-to-replay 09-20_23:10:00
+
 - Redesigned small threat card with fixed 280dp width, larger icon, no title, vertical R and P and horizontal skull gauge / Redesigned small threat card with fixed 280dp width, larger icon, no title, vertical R and P and horizontal skull gauge 09-20_19:42:05
 
 - Haptics on every button and tappable row (press tick via shared Haptics helpers) / Haptics on every button and tappable row (press tick via shared Haptics helpers)

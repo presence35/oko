@@ -56,6 +56,7 @@ class UserPrefs(private val context: Context) {
     private val highQualityExplosionsKey = booleanPreferencesKey("high_quality_explosions")
     private val neutralizedTallyEnabledKey = booleanPreferencesKey("neutralized_tally_enabled")
     private val neutralizedTallyAllUkraineKey = booleanPreferencesKey("neutralized_tally_all_ukraine")
+    private val alarmEpisodeTallyEnabledKey = booleanPreferencesKey("alarm_episode_tally_enabled")
     private val legacyCacheCleanedKey = booleanPreferencesKey("legacy_osmdroid_cleaned")
     private val fastGroupCollapsedKey = booleanPreferencesKey("fast_group_collapsed")
     private val slowGroupCollapsedKey = booleanPreferencesKey("slow_group_collapsed")
@@ -158,6 +159,7 @@ class UserPrefs(private val context: Context) {
             followBullet = this[followBulletKey] ?: true,
             neutralizedTallyEnabled = this[neutralizedTallyEnabledKey] ?: true,
             neutralizedTallyAllUkraine = this[neutralizedTallyAllUkraineKey] ?: false,
+            alarmEpisodeTallyEnabled = this[alarmEpisodeTallyEnabledKey] ?: true,
             legacyCacheCleaned = this[legacyCacheCleanedKey] ?: false,
             fastGroupCollapsed = this[fastGroupCollapsedKey] ?: false,
             slowGroupCollapsed = this[slowGroupCollapsedKey] ?: false,
@@ -470,6 +472,10 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setNeutralizedTallyAllUkraine(enabled: Boolean) {
         context.dataStore.edit { it[neutralizedTallyAllUkraineKey] = enabled }
+    }
+
+    suspend fun setAlarmEpisodeTallyEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[alarmEpisodeTallyEnabledKey] = enabled }
     }
 
     suspend fun setLegacyCacheCleaned(cleaned: Boolean) {

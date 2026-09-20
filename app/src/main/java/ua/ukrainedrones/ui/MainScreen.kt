@@ -403,6 +403,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onHighQualityExplosionsChange = remember { { viewModel.setHighQualityExplosions(it) } },
                 onNeutralizedTallyChange = remember { { viewModel.setNeutralizedTallyEnabled(it) } },
                 onNeutralizedTallyAllUkraineChange = remember { { viewModel.setNeutralizedTallyAllUkraine(it) } },
+                onAlarmEpisodeTallyChange = remember { { viewModel.setAlarmEpisodeTallyEnabled(it) } },
                 onThreatIconZoomChange = remember { { viewModel.setThreatIconZoom(it) } },
                 onFastGroupCollapse = remember { { viewModel.setFastGroupCollapsed(it) } },
                 onSlowGroupCollapse = remember { { viewModel.setSlowGroupCollapsed(it) } },
@@ -1272,7 +1273,7 @@ private fun ThreatCardHost(
     } else {
         Box(
             modifier = Modifier
-                .padding(top = 12.dp, start = 16.dp, end = 16.dp)
+                .padding(top = 8.dp, start = 16.dp, end = 16.dp)
                 .onGloballyPositioned { coords ->
                     val h = coords.size.height
                     if (h != lastReportedHeight) {
@@ -1302,7 +1303,7 @@ private fun ThreatCardHost(
                         modifier = Modifier
                     )
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        modifier = Modifier.width(280.dp).padding(top = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1840,60 +1841,6 @@ private fun ThreatStatusCell(
     }
 }
 
-/** Popup card-size stepper: SMALL → LARGE → SMALL… */
-private fun nextThreatCardSize(current: ThreatCardSize): ThreatCardSize {
-    val values = ThreatCardSize.values()
-    return values[(current.ordinal + 1) % values.size]
-}
-
-
-/** Two stacked lines (thin/thick) under the popup; tap cycles the card size. */
-@Composable
-private fun ThreatCardSizeControl(
-    current: ThreatCardSize,
-    contentDescription: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale = animateFloatAsState(
-        targetValue = if (isPressed) 0.9f else 1f,
-        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
-        label = "cardSizeScale"
-    )
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = modifier
-            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .semantics { semanticsContentDescription = contentDescription }
-            .pressTick(interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = ripple(bounded = true),
-                onClick = onClick
-            )
-            .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-    ) {
-        listOf(2.dp, 6.dp).forEachIndexed { i, thickness ->
-            Box(
-                modifier = Modifier
-                    .width(20.dp)
-                    .height(thickness)
-                    .clip(RoundedCornerShape(50))
-                    .background(
-                        if (i == current.ordinal) MaterialTheme.colorScheme.primary
-                        else Color(AppPalette.TextSecondary)
-                    )
-            )
-            if (i < 1) Spacer(Modifier.height(4.dp))
-        }
-    }
-}
-
 /** Crosshair icon button below the popup card that centres the map on the threat. */
 @Composable
 private fun LocateThreatControl(
@@ -1912,8 +1859,8 @@ private fun LocateThreatControl(
         contentDescription = null,
         tint = MaterialTheme.colorScheme.primary,
         modifier = modifier
-            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .sizeIn(minWidth = 32.dp, minHeight = 32.dp)
+            .clip(RoundedCornerShape(10.dp))
             .pressTick(interactionSource)
             .clickable(
                 interactionSource = interactionSource,
@@ -1921,8 +1868,8 @@ private fun LocateThreatControl(
                 onClick = onClick
             )
             .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-            .size(20.dp)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .size(18.dp)
     )
 }
 

@@ -11,10 +11,16 @@ import android.content.Intent
  */
 class NeutralizedDismissReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val action = intent.action?.let {
+            when (it) {
+                AlarmEpisodeTally.ACTION_ALARM_EPISODE_DISMISS -> it
+                else -> NeutralizedTally.ACTION_NEUTRALIZED_DISMISS
+            }
+        } ?: NeutralizedTally.ACTION_NEUTRALIZED_DISMISS
         try {
             context.startService(
                 Intent(context, AlertService::class.java)
-                    .setAction(NeutralizedTally.ACTION_NEUTRALIZED_DISMISS)
+                    .setAction(action)
             )
         } catch (_: IllegalStateException) {
             // Service not running or background start blocked — safe to ignore;
