@@ -87,11 +87,7 @@ class ThreatEngine(
             if (stale || focus == null) continue
             if (t.advisory || t.areaOnly || t.type in silencedTypes) continue
 
-            val distKm = if (props.isFast) {
-                distanceHaversine(focus.lat, focus.lon, predicted.lat, predicted.lon) / 1000.0
-            } else {
-                distanceHaversine(focus.lat, focus.lon, t.lat, t.lon) / 1000.0
-            }
+            val distKm = distanceHaversine(focus.lat, focus.lon, predicted.lat, predicted.lon) / 1000.0
             val speedKmh = speed?.times(3.6)
             val tier = zoneTier(props, distKm, speedKmh, params)
 

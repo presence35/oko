@@ -331,31 +331,6 @@ class ThreatEngineTest {
     }
 
     @Test
-    fun `evaluate - slow threat zones by raw fix, not dead-reckoned position`() {
-        val now = System.currentTimeMillis()
-        // Threat 14.9km north of user → raw fix inside slowRedKm=15 → INNER
-        // Heading south (180°) at 50 m/s; after 120s predicted drifts ~6km further north → ~21km,
-        // which is past slowRedKm and would tier OUTER if predicted were used for distance.
-        val threat = makeThreat(
-            lat = userLat + 0.1339, lon = userLng,
-            speedKmh = 180.0, bearingDeg = 180.0,
-            updatedAtMillis = now - 120_000,
-            confirmedAtMillis = now - 120_000
-        )
-        val result = engine.evaluate(
-            threats = listOf(threat),
-            focus = LatLng(userLat, userLng),
-            params = params,
-            hiddenTypes = emptySet(),
-            silencedTypes = emptySet(),
-            now = now
-        )
-        // Must tier INNER on raw fix distance, NOT on the predicted (further away) position.
-        assertEquals(ThreatZone.INNER, result.zoneThreats[threat.id])
-        assertEquals(ThreatZone.INNER, result.activeZone)
-    }
-
-    @Test
     fun `evaluate - Drone inside red returns INNER`() {
         val threat = makeThreat(
             lat = userLat + 0.05, lon = userLng, speedKmh = 180.0

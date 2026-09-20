@@ -152,8 +152,7 @@ For each threat:
   5. Add to mapThreats (all visible threats, raw fixes)
   6. Skip stale, advisory, areaOnly, silenced types, no focus → no zone evaluation
   7. Compute distance (Haversine)
-  8. For fast types: use predicted position for distance
-     For slow types: use raw fix for distance
+  8. Compute distance from predicted position (all types)
   9. Compute speed (server > measured > nominal from ThreatProps)
   10. Call zoneTier()
   11. If tiered: compute score, add to zoneThreatsMap, categorize inner/outer
@@ -332,19 +331,18 @@ Thread-safe. Owned by engine. Not a global singleton.
    (`courseDeg`/`motionHeading`) may use the measured fix-track heading as a last resort;
    dead-reckoning (`predictPosition`) uses only the server-reported course (`bearingDeg`/`heading`)
    and is gated on `canDrift`, so a marker never moves along a direction the source never gave it.
-7. **Slow tier uses raw fix.** Distance for slow threats is from the confirmed raw fix,
-   not the predicted position.
-8. **Fast tier uses predicted position.** Distance for fast threats is from the
-   dead-reckoned position.
-9. **`alwaysInnerWithinReach` types always ring INNER within reach.** MiG-31K takeoff = country-wide warning; the flag comes from `ThreatProps` (aviation sets it), so no type name is hardcoded in the engine. Only opt-out is the type's bell toggle.
-10. **Advisory/areaOnly never tier.** These are informational only.
-11. **Dark-only theme.** No light theme. Theme is a plugin interface; only dark ships.
-12. **Zero UI regressions.** Existing Compose UI, map markers, cards, settings must
-    receive data in their expected format without breaking changes.
-13. **Thread-safe speed cache.** Handles concurrent access from Main and IO.
-14. **Explicit `now` parameter.** All time-dependent functions take an explicit timestamp.
-    Enables deterministic testing.
-15. **Official-alert evaluation is engine-owned.** The gate, red-city labels and the
+7. **Zone distance uses predicted position for all types.** Both fast and slow threats tier
+   based on the dead-reckoned (predicted) position, so the zone label always matches the map
+   icon position — whatever the active plugin's prediction model shows is what the user sees.
+8. **`alwaysInnerWithinReach` types always ring INNER within reach.** MiG-31K takeoff = country-wide warning; the flag comes from `ThreatProps` (aviation sets it), so no type name is hardcoded in the engine. Only opt-out is the type's bell toggle.
+9. **Advisory/areaOnly never tier.** These are informational only.
+10. **Dark-only theme.** No light theme. Theme is a plugin interface; only dark ships.
+11. **Zero UI regressions.** Existing Compose UI, map markers, cards, settings must
+     receive data in their expected format without breaking changes.
+12. **Thread-safe speed cache.** Handles concurrent access from Main and IO.
+13. **Explicit `now` parameter.** All time-dependent functions take an explicit timestamp.
+     Enables deterministic testing.
+14. **Official-alert evaluation is engine-owned.** The gate, red-city labels and the
     reason all derive in `ThreatEngine.evaluate` / `engine/OblastAlert.kt`; consumers only
     orchestrate (region latch, announce-once, sound policy) and read the facts. The widget
     and the notification service consume the same `focusOblastAlertActive` /
