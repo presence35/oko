@@ -122,22 +122,17 @@ class FlourishTest {
     fun `neutralized card shows only when map is visible and shelters are down`() {
         assertTrue(
             FlourishPolicy.showNeutralizedCard(
-                selectedGone = true, animOn = true, mapVisible = true, shelterModeActive = false
+                selectedGone = true, animOn = true, mapVisible = true
             )
         )
         assertFalse(
             FlourishPolicy.showNeutralizedCard(
-                selectedGone = true, animOn = false, mapVisible = true, shelterModeActive = false
+                selectedGone = true, animOn = false, mapVisible = true
             )
         )
         assertFalse(
             FlourishPolicy.showNeutralizedCard(
-                selectedGone = true, animOn = true, mapVisible = false, shelterModeActive = false
-            )
-        )
-        assertFalse(
-            FlourishPolicy.showNeutralizedCard(
-                selectedGone = true, animOn = true, mapVisible = true, shelterModeActive = true
+                selectedGone = true, animOn = true, mapVisible = false
             )
         )
     }

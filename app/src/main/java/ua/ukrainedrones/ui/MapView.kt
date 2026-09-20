@@ -355,13 +355,13 @@ private fun shelterMarkerBitmap(
     return bmp
 }
 
-/** True when nothing covers the map and the app is visible. */
+/** True when the map screen is foregrounded — shelters no longer block morale. */
 internal fun mapIsUserFocus(
     paused: Boolean,
     mapVisible: Boolean,
-    sheltersUp: Boolean,
+    @Suppress("UNUSED_PARAMETER") sheltersUp: Boolean,
     lifecycleState: Lifecycle.State
-): Boolean = !paused && mapVisible && !sheltersUp && lifecycleState.isAtLeast(Lifecycle.State.STARTED)
+): Boolean = !paused && mapVisible && lifecycleState.isAtLeast(Lifecycle.State.STARTED)
 
 @Composable
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -760,8 +760,8 @@ LaunchedEffect(selectedId) {
         if (uiState.alertActive) deathFx.clear()
     }
 
-    LaunchedEffect(paused, mapVisible, showNearbyShelters) {
-        if (paused || !mapVisible || showNearbyShelters) {
+    LaunchedEffect(paused, mapVisible) {
+        if (paused || !mapVisible) {
             val interrupted = deathFx.isActive
             val queuedPending = uiState.flourish?.let { it.tick != lastFlourishTick.value } == true
             if ((interrupted || queuedPending) && deathAnimationEnabledState) onFlourishEjected()

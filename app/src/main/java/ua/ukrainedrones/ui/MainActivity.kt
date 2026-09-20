@@ -151,7 +151,11 @@ class MainActivity : ComponentActivity() {
                 add(FlourishRecord(lat, lon, type, regions?.getOrNull(i)))
             }
         }
-        if (records.isNotEmpty()) viewModel.triggerFlourish(records)
+        if (records.isNotEmpty()) {
+            viewModel.navigateToMap()
+            viewModel.setShelterModeActive(false)
+            viewModel.triggerFlourish(records)
+        }
         // Reset the tally now that the show was replayed — same reset as swiping it away.
         // Both tallies share the replay extras, so reset both; the untouched one is a no-op.
         runCatching {

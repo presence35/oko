@@ -909,7 +909,7 @@ showBorders = prefs.showBorders,
                         sel.selected.id == sel.neutralizedId
                     )
                 val neutralizedThreat =
-                    if (FlourishPolicy.showNeutralizedCard(selectedGone, animOn, sel.mapVisible, sel.shelterOverlayUp)) sel.selected else null
+                    if (FlourishPolicy.showNeutralizedCard(selectedGone, animOn, sel.mapVisible)) sel.selected else null
                 val proximity = refreshed?.let { t ->
                     engine.computeProximity(
                         t,
