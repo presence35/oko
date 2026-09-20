@@ -160,7 +160,8 @@ internal fun GpsCalibrationRow(
                 }
             } else {
                 OutlinedButton(
-                    onClick = rememberHapticClick(forceGps),
+                    onClick = forceGps,
+                    interactionSource = rememberHapticInteractionSource(),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Icon(
@@ -194,11 +195,12 @@ internal fun GpsCalibrationRow(
                 )
                 Spacer(Modifier.width(8.dp))
                 TextButton(
-                    onClick = rememberHapticClick {
+                    onClick = {
                         context.startActivity(
                             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
                         )
-                    }
+                    },
+                    interactionSource = rememberHapticInteractionSource()
                 ) {
                     Text(s.gpsOpenSettings)
                 }

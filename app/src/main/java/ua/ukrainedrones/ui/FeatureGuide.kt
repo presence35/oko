@@ -106,8 +106,7 @@ fun FeatureGuideScreen(
             TopAppBar(
                 title = { Text(s.guideTitle) },
                 navigationIcon = {
-                    val hapticBack = rememberHapticClick(onBack)
-                    IconButton(onClick = hapticBack) {
+                    IconButton(onClick = onBack, interactionSource = rememberHapticInteractionSource()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
                     }
                 }

@@ -174,7 +174,7 @@ private fun gpsDotBitmap(context: Context, hasFix: Boolean): Bitmap {
     canvas.drawCircle(cx, cy, coreR + whiteRingHalf, Paint().apply {
         isAntiAlias = true
         style = Paint.Style.STROKE
-        strokeWidth = strokeWidth
+        this.strokeWidth = strokeWidth
         color = ringColor
     })
     return bmp

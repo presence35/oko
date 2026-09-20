@@ -105,7 +105,8 @@ fun ZonesPanel(
                 modifier = Modifier.weight(1f)
             )
             IconButton(
-                onClick = rememberHapticClick(onOpenThreatSettings),
+                onClick = onOpenThreatSettings,
+                interactionSource = rememberHapticInteractionSource(),
                 modifier = Modifier.size(32.dp)
             ) {
                 Icon(
@@ -257,7 +258,8 @@ internal fun ZoneRow(
         // Per-zone alert bell + switch on the left: filled/colored while armed,
         // red crossed bell when muted.
         IconButton(
-            onClick = rememberHapticClick { onArmedChange(!armed) },
+            onClick = { onArmedChange(!armed) },
+            interactionSource = rememberHapticInteractionSource(),
             modifier = Modifier.size(40.dp)
         ) {
             if (armed) {
@@ -274,6 +276,7 @@ internal fun ZoneRow(
         Switch(
             checked = armed,
             onCheckedChange = onArmedChange,
+            interactionSource = rememberHapticInteractionSource(),
             colors = SwitchDefaults.colors(
                 checkedThumbColor = accent,
                 checkedTrackColor = accent.copy(alpha = 0.45f),

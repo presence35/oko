@@ -37,7 +37,7 @@ internal fun NightTimeField(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    OutlinedButton(onClick = rememberHapticClick(onClick), modifier = modifier) {
+    OutlinedButton(onClick = onClick, interactionSource = rememberHapticInteractionSource(), modifier = modifier) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -245,14 +245,17 @@ internal fun NightModeCard(
             },
             text = { TimePicker(state = timeState) },
             confirmButton = {
-                TextButton(onClick = rememberHapticClick {
-                    val minute = timeState.hour * 60 + timeState.minute
-                    if (editing == "start") onStartChange(minute) else onEndChange(minute)
-                    editing = null
-                }) { Text(s.okButton) }
+                TextButton(
+                    onClick = {
+                        val minute = timeState.hour * 60 + timeState.minute
+                        if (editing == "start") onStartChange(minute) else onEndChange(minute)
+                        editing = null
+                    },
+                    interactionSource = rememberHapticInteractionSource()
+                ) { Text(s.okButton) }
             },
             dismissButton = {
-                TextButton(onClick = rememberHapticClick { editing = null }) { Text(s.backButton) }
+                TextButton(onClick = { editing = null }, interactionSource = rememberHapticInteractionSource()) { Text(s.backButton) }
             }
         )
     }

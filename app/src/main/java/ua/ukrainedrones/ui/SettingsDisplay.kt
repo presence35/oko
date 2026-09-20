@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -200,7 +199,7 @@ internal fun OverlapModeChip(
             1.dp,
             if (selectedMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
         ),
-        modifier = modifier.clickable(onClick = rememberHapticClick(onClick))
+        modifier = modifier.hapticClickable(onClick = onClick)
     ) {
         Text(
             label,
@@ -262,22 +261,22 @@ internal fun IconSetTile(
     modifier: Modifier = Modifier,
     slot: Dp = IconTileSlot
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
+    val interactionSource = rememberHapticInteractionSource()
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale = animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
         animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
         label = "iconSetScale"
     )
-    val hapticClick = rememberHapticClick(onClick)
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
+            .pressTick(interactionSource)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(bounded = true),
-                onClick = hapticClick
+                onClick = onClick
             )
             .graphicsLayer { scaleX = scale.value; scaleY = scale.value },
         shape = RoundedCornerShape(14.dp),
@@ -366,7 +365,7 @@ internal fun CityLabelTogglesRow(
         ) {
             FilterChip(
                 selected = largeChecked,
-                onClick = rememberHapticClick { onLargeChange(!largeChecked) },
+                onClick = { onLargeChange(!largeChecked) },
                 label = { Text(largeLabel, style = MaterialTheme.typography.labelLarge) },
                 leadingIcon = {
                     Icon(
@@ -376,11 +375,12 @@ internal fun CityLabelTogglesRow(
                     )
                 },
                 colors = CityChipColors(selected = largeChecked),
+                interactionSource = rememberHapticInteractionSource(),
                 modifier = Modifier.weight(1f)
             )
             FilterChip(
                 selected = mediumChecked,
-                onClick = rememberHapticClick { onMediumChange(!mediumChecked) },
+                onClick = { onMediumChange(!mediumChecked) },
                 label = { Text(mediumLabel, style = MaterialTheme.typography.labelLarge) },
                 leadingIcon = {
                     Icon(
@@ -390,11 +390,12 @@ internal fun CityLabelTogglesRow(
                     )
                 },
                 colors = CityChipColors(selected = mediumChecked),
+                interactionSource = rememberHapticInteractionSource(),
                 modifier = Modifier.weight(1f)
             )
             FilterChip(
                 selected = smallChecked,
-                onClick = rememberHapticClick { onSmallChange(!smallChecked) },
+                onClick = { onSmallChange(!smallChecked) },
                 label = { Text(smallLabel, style = MaterialTheme.typography.labelLarge) },
                 leadingIcon = {
                     Icon(

@@ -350,7 +350,7 @@ fun SettingsScreen(
                         },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = rememberHapticClick { searchQuery = "" }) {
+                                IconButton(onClick = { searchQuery = "" }, interactionSource = rememberHapticInteractionSource()) {
                                     Icon(Icons.Default.Close, contentDescription = s.settingsSearchClear)
                                 }
                             }
@@ -368,7 +368,7 @@ fun SettingsScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = rememberHapticClick(onBack)) {
+                    IconButton(onClick = onBack, interactionSource = rememberHapticInteractionSource()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
                     }
                 }
@@ -556,13 +556,14 @@ fun SettingsScreen(
                                 )
                                 Spacer(Modifier.height(10.dp))
                                 Button(
-                                    onClick = rememberHapticClick {
+                                    onClick = {
                                         val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                                             putExtra(Settings.EXTRA_APP_PACKAGE, appContext.packageName)
                                             flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                         }
                                         appContext.startActivity(intent)
                                     },
+                                    interactionSource = rememberHapticInteractionSource(),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.error
                                     ),
@@ -691,7 +692,8 @@ fun SettingsScreen(
                             )
                             Spacer(Modifier.height(12.dp))
                             Button(
-                                onClick = rememberHapticClick { BatteryOptimization.requestExemption(appContext) },
+                                onClick = { BatteryOptimization.requestExemption(appContext) },
+                                interactionSource = rememberHapticInteractionSource(),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(s.batteryAllowButton, fontWeight = FontWeight.SemiBold)
@@ -721,7 +723,8 @@ fun SettingsScreen(
                     trailing = {
                         Switch(
                             checked = nightEnabled,
-                            onCheckedChange = { v -> showExplainer("nightMode"); onNightEnabledChange(v) }
+                            onCheckedChange = { v -> showExplainer("nightMode"); onNightEnabledChange(v) },
+                            interactionSource = rememberHapticInteractionSource()
                         )
                     }
                 ) {
@@ -1142,7 +1145,8 @@ fun SettingsScreen(
                     // Reset tip counters
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                         OutlinedButton(
-                            onClick = rememberHapticClick(onResetTips),
+                            onClick = onResetTips,
+                            interactionSource = rememberHapticInteractionSource(),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(
@@ -1177,7 +1181,8 @@ fun SettingsScreen(
                     trailing = {
                         Switch(
                             checked = justFunMasterEnabled,
-                            onCheckedChange = onJustFunMasterChange
+                            onCheckedChange = onJustFunMasterChange,
+                            interactionSource = rememberHapticInteractionSource()
                         )
                     }
                 ) {
@@ -1280,7 +1285,8 @@ fun SettingsScreen(
             if (searching.not() || StandaloneSetting.RELAUNCH in matchedStandalone) {
             item {
                 OutlinedButton(
-                    onClick = rememberHapticClick(onRelaunchSetup),
+                    onClick = onRelaunchSetup,
+                    interactionSource = rememberHapticInteractionSource(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
@@ -1297,7 +1303,8 @@ fun SettingsScreen(
             if (searching.not() || StandaloneSetting.GUIDE in matchedStandalone) {
             item {
                 OutlinedButton(
-                    onClick = rememberHapticClick(onOpenGuide),
+                    onClick = onOpenGuide,
+                    interactionSource = rememberHapticInteractionSource(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(s.guideSettingsButton, fontWeight = FontWeight.SemiBold)
@@ -1313,7 +1320,8 @@ fun SettingsScreen(
             item {
                 if (isChecking) {
                     Button(
-                        onClick = rememberHapticClick(onCheckUpdate),
+                        onClick = onCheckUpdate,
+                        interactionSource = rememberHapticInteractionSource(),
                         enabled = false,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -1326,7 +1334,8 @@ fun SettingsScreen(
                     }
                 } else if (latestVersion != null) {
                     Button(
-                        onClick = rememberHapticClick(onCheckUpdate),
+                        onClick = onCheckUpdate,
+                        interactionSource = rememberHapticInteractionSource(),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
@@ -1342,7 +1351,8 @@ fun SettingsScreen(
                     }
                 } else {
                     OutlinedButton(
-                        onClick = rememberHapticClick(onCheckUpdate),
+                        onClick = onCheckUpdate,
+                        interactionSource = rememberHapticInteractionSource(),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
@@ -1360,7 +1370,8 @@ fun SettingsScreen(
             if (searching.not() || StandaloneSetting.EXIT in matchedStandalone) {
             item {
                 Button(
-                    onClick = rememberHapticClick(onExit),
+                    onClick = onExit,
+                    interactionSource = rememberHapticInteractionSource(),
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error,
@@ -1440,13 +1451,16 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = rememberHapticClick {
-                    onBootRestartChange(false)
-                    showBootRestartOffConfirm = false
-                }) { Text(s.bootRestartDisableButton) }
+                TextButton(
+                    onClick = {
+                        onBootRestartChange(false)
+                        showBootRestartOffConfirm = false
+                    },
+                    interactionSource = rememberHapticInteractionSource()
+                ) { Text(s.bootRestartDisableButton) }
             },
             dismissButton = {
-                TextButton(onClick = rememberHapticClick { showBootRestartOffConfirm = false }) { Text(s.backButton) }
+                TextButton(onClick = { showBootRestartOffConfirm = false }, interactionSource = rememberHapticInteractionSource()) { Text(s.backButton) }
             }
         )
     }

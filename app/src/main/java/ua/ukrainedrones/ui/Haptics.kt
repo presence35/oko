@@ -9,6 +9,7 @@ import android.os.Vibrator
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,9 +46,11 @@ fun animationsOff(): Boolean {
  *
  * The source must also be passed to the element's clickable/toggleable, so both observe it:
  * ```
- * val interaction = remember { MutableInteractionSource() }
+ * val interaction = rememberHapticInteractionSource()
  * Modifier.pressTick(interaction).clickable(interactionSource = interaction, ...)
  * ```
+ * For Material components that own their tap handling (`Switch`, `Button`), just pass the
+ * source via their `interactionSource` param and keep the handler raw — no Modifier needed.
  *
  * Vibrates via the raw Vibrator service (same as the shot-down flourish) rather than Compose's
  * haptic feedback: USAGE_ALARM keeps the tick working even when system touch feedback is off.
@@ -138,24 +141,25 @@ fun Modifier.hapticClickable(
     )
 }
 
+/**
+ * Interaction source that ticks on press. Pass it to any Material component with an
+ * `interactionSource` param (`Switch`, `Button`, `TextButton`, `IconButton`) and keep the
+ * handler raw — haptics fire from the press itself, so handlers stay pure business logic:
+ * ```
+ * Switch(checked = c, onCheckedChange = onChange,
+ *     interactionSource = rememberHapticInteractionSource())
+ * ```
+ */
 @Composable
-fun <T> rememberHapticClick(onValueChange: (T) -> Unit): (T) -> Unit {
-    val appContext = LocalContext.current.applicationContext
+fun rememberHapticInteractionSource(): MutableInteractionSource {
+    val interaction = remember { MutableInteractionSource() }
     val enabled = LocalHapticsEnabled.current
-    return remember(enabled, appContext, onValueChange) { { newValue ->
-        if (enabled) tick(appContext)
-        onValueChange(newValue)
-    } }
-}
-
-@Composable
-fun rememberHapticClick(onClick: () -> Unit): () -> Unit {
     val appContext = LocalContext.current.applicationContext
-    val enabled = LocalHapticsEnabled.current
-    return remember(enabled, appContext, onClick) {
-        {
-            if (enabled) tick(appContext)
-            onClick()
+    LaunchedEffect(interaction, enabled) {
+        if (!enabled) return@LaunchedEffect
+        interaction.interactions.collect {
+            if (it is PressInteraction.Press) tick(appContext)
         }
     }
+    return interaction
 }

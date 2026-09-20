@@ -131,7 +131,7 @@ fun ShelterScreen(
             TopAppBar(
                 title = { Text(s.shelterScreenTitle) },
                 navigationIcon = {
-                    IconButton(onClick = rememberHapticClick(onBack)) {
+                    IconButton(onClick = onBack, interactionSource = rememberHapticInteractionSource()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
                     }
                 }
@@ -260,7 +260,8 @@ private fun GpsHeaderRow(
                     }
                 } else {
                     OutlinedButton(
-                        onClick = rememberHapticClick(onCalibrate),
+                        onClick = onCalibrate,
+                        interactionSource = rememberHapticInteractionSource(),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Icon(
@@ -322,7 +323,8 @@ private fun GpsHeaderRow(
                 )
                 Switch(
                     checked = sheltersEnabled,
-                    onCheckedChange = onSheltersEnabledChange
+                    onCheckedChange = onSheltersEnabledChange,
+                    interactionSource = rememberHapticInteractionSource()
                 )
             }
             Row(
@@ -358,12 +360,14 @@ private fun GpsHeaderRow(
                 Spacer(Modifier.width(8.dp))
                 Switch(
                     checked = withKids,
-                    onCheckedChange = onWithKidsChange
+                    onCheckedChange = onWithKidsChange,
+                    interactionSource = rememberHapticInteractionSource()
                 )
             }
             Spacer(Modifier.height(10.dp))
             Button(
-                onClick = rememberHapticClick(onShowOnMap),
+                onClick = onShowOnMap,
+                interactionSource = rememberHapticInteractionSource(),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(
@@ -391,7 +395,7 @@ private fun GpsHeaderRow(
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = rememberHapticClick(onOpenSettings)) {
+                    TextButton(onClick = onOpenSettings, interactionSource = rememberHapticInteractionSource()) {
                         Text(s.gpsOpenSettings)
                     }
                 }

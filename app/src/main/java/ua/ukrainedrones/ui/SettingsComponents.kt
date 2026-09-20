@@ -16,7 +16,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -106,20 +105,20 @@ internal fun AlertToggleRow(
     flash: Boolean = false,
     enabled: Boolean = true
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
+    val interactionSource = rememberHapticInteractionSource()
     val isPressed by interactionSource.collectIsPressedAsState()
-    val hapticToggle = rememberHapticClick(onCheckedChange)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (!enabled) Modifier.alpha(0.5f) else Modifier)
             .explainerFlash(flash)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (isPressed) 0.06f else 0f))
+            .pressTick(interactionSource)
             .toggleable(
                 value = checked,
                 enabled = enabled,
                 role = Role.Switch,
-                onValueChange = hapticToggle,
+                onValueChange = onCheckedChange,
                 interactionSource = interactionSource,
                 indication = ripple(bounded = true)
             )
@@ -278,7 +277,11 @@ internal fun SubToggleCell(
             )
         }
         Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            interactionSource = rememberHapticInteractionSource()
+        )
     }
 }
 
@@ -304,11 +307,11 @@ internal fun SearchChipsRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             chips.forEach { chip ->
-                val hapticChip = rememberHapticClick { onChip(chip) }
                 FilterChip(
                     selected = false,
-                    onClick = hapticChip,
-                    label = { Text(chip.label(lang)) }
+                    onClick = { onChip(chip) },
+                    label = { Text(chip.label(lang)) },
+                    interactionSource = rememberHapticInteractionSource()
                 )
             }
         }
@@ -329,14 +332,13 @@ internal fun CollapsibleSectionCard(
     trailing: @Composable (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
+    val interactionSource = rememberHapticInteractionSource()
     val isPressed by interactionSource.collectIsPressedAsState()
     val chevronAngle = animateFloatAsState(
         targetValue = if (expanded) 0f else 180f,
         animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
         label = "chevronAngle"
     )
-    val hapticToggle = rememberHapticClick(onToggle)
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = if (cardColor != null) CardDefaults.cardColors(containerColor = cardColor) else CardDefaults.cardColors(),
@@ -346,10 +348,11 @@ internal fun CollapsibleSectionCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .pressTick(interactionSource)
                     .clickable(
                         interactionSource = interactionSource,
                         indication = ripple(bounded = true),
-                        onClick = hapticToggle
+                        onClick = onToggle
                     )
                     .background(
                         MaterialTheme.colorScheme.onSurface.copy(
@@ -450,21 +453,21 @@ internal fun LanguageFlag(
     modifier: Modifier = Modifier,
     label: String? = null
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
+    val interactionSource = rememberHapticInteractionSource()
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale = animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
         animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
         label = "langFlagScale"
     )
-    val hapticClick = rememberHapticClick(onClick)
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
+            .pressTick(interactionSource)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(bounded = true),
-                onClick = hapticClick
+                onClick = onClick
             )
             .then(
                 if (active) Modifier.background(UkraineBlue.copy(alpha = 0.25f)) else Modifier

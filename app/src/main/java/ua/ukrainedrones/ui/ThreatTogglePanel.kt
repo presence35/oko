@@ -85,10 +85,10 @@ internal fun IconToggle(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    val hapticClick = rememberHapticClick(onClick)
     IconButton(
-        onClick = hapticClick,
+        onClick = onClick,
         enabled = enabled,
+        interactionSource = rememberHapticInteractionSource(),
         modifier = Modifier
             .alpha(if (enabled) 1f else 0.4f)
             .size(30.dp)
@@ -240,10 +240,10 @@ private fun SlimIconToggle(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    val hapticClick = rememberHapticClick(onClick)
     IconButton(
-        onClick = hapticClick,
+        onClick = onClick,
         enabled = enabled,
+        interactionSource = rememberHapticInteractionSource(),
         modifier = Modifier
             .alpha(if (enabled) 1f else 0.4f)
             .size(26.dp)

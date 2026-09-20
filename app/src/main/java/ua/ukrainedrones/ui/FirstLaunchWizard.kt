@@ -139,7 +139,7 @@ internal fun FirstLaunchWizard(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = rememberHapticClick(onLater)) {
+                IconButton(onClick = onLater, interactionSource = rememberHapticInteractionSource()) {
                     Icon(
                         imageVector = Icons.Filled.Close,
                         contentDescription = s.languageChooseLater,
@@ -165,7 +165,8 @@ internal fun FirstLaunchWizard(
                         if (!tipsRevealed) {
                             Spacer(Modifier.height(24.dp))
                             Button(
-                                onClick = rememberHapticClick { tipsRevealed = true },
+                                onClick = { tipsRevealed = true },
+                                interactionSource = rememberHapticInteractionSource(),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(s.okButton, fontWeight = FontWeight.SemiBold)
@@ -277,7 +278,8 @@ internal fun FirstLaunchWizard(
                 val backInteraction = remember { MutableInteractionSource() }
                 if (step > 0) {
                     IconButton(
-                        onClick = rememberHapticClick { step-- },
+                        onClick = { step-- },
+                        interactionSource = backInteraction,
                         modifier = Modifier.pressTick(backInteraction)
                     ) {
                         Icon(
@@ -307,7 +309,7 @@ internal fun FirstLaunchWizard(
                     contentAlignment = Alignment.Center
                 ) {
                     Button(
-                        onClick = rememberHapticClick { if (step < totalSteps - 1) step++ else onComplete() },
+                        onClick = { if (step < totalSteps - 1) step++ else onComplete() },
                         enabled = nextEnabled,
                         interactionSource = nextInteraction,
                         modifier = Modifier
@@ -836,6 +838,7 @@ private fun WizardZoneSliderRow(
         Switch(
             checked = armed,
             onCheckedChange = onArmedChange,
+            interactionSource = rememberHapticInteractionSource(),
             colors = SwitchDefaults.colors(
                 checkedThumbColor = color,
                 checkedTrackColor = color.copy(alpha = 0.45f),
@@ -965,7 +968,8 @@ private fun SetupFeaturesStep(
             }
             Switch(
                 checked = justFun,
-                onCheckedChange = onJustFunChange
+                onCheckedChange = onJustFunChange,
+                interactionSource = rememberHapticInteractionSource()
             )
         }
         AnimatedVisibility(visible = justFun) {
@@ -1067,8 +1071,8 @@ internal fun BatteryOnboardingDialog(
     val body = if (oemInfo.isAggressive) s.batteryOemBody else s.batteryBody
     AlertDialog(
         onDismissRequest = onLater,
-        confirmButton = { TextButton(onClick = rememberHapticClick(onAllow)) { Text(s.batteryAllowButton) } },
-        dismissButton = { TextButton(onClick = rememberHapticClick(onLater)) { Text(s.batteryLater) } },
+        confirmButton = { TextButton(onClick = onAllow, interactionSource = rememberHapticInteractionSource()) { Text(s.batteryAllowButton) } },
+        dismissButton = { TextButton(onClick = onLater, interactionSource = rememberHapticInteractionSource()) { Text(s.batteryLater) } },
         title = { Text(title) },
         text = { Text(body) }
     )

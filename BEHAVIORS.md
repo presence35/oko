@@ -381,6 +381,7 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 | Flyby animation | INNER-tier AVIATION | Random bearing, engine sound |
 | Neutralized tally | Threat removed | Persistent notification, tap replays |
 | Tally-tap replay | Tap tally notification | Groups threats spatially, replays deaths |
+| Press haptics | Any press (buttons, rows, switches, chips, tabs) | Raw-Vibrator tick, gated on the haptics pref |
 
 ### Flourish
 

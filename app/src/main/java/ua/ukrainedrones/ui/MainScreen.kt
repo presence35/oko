@@ -1962,8 +1962,8 @@ private fun UpdateDialog(
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = rememberHapticClick(onDownload)) { Text(s.updateDownload) } },
-                dismissButton = { TextButton(onClick = rememberHapticClick(onLater)) { Text(s.updateLater) } }
+                confirmButton = { TextButton(onClick = onDownload, interactionSource = rememberHapticInteractionSource()) { Text(s.updateDownload) } },
+                dismissButton = { TextButton(onClick = onLater, interactionSource = rememberHapticInteractionSource()) { Text(s.updateLater) } }
             )
         }
         is UpdateState.Downloading -> {
@@ -1990,16 +1990,16 @@ private fun UpdateDialog(
                     onDismissRequest = onLater,
                     title = { Text(s.updateInstallPermissionTitle) },
                     text = { Text(s.updateInstallPermissionBody) },
-                    confirmButton = { TextButton(onClick = rememberHapticClick(onOpenSettings)) { Text(s.updateOpenSettings) } },
-                    dismissButton = { TextButton(onClick = rememberHapticClick(onInstall)) { Text(s.updateInstall) } }
+                    confirmButton = { TextButton(onClick = onOpenSettings, interactionSource = rememberHapticInteractionSource()) { Text(s.updateOpenSettings) } },
+                    dismissButton = { TextButton(onClick = onInstall, interactionSource = rememberHapticInteractionSource()) { Text(s.updateInstall) } }
                 )
             } else {
                 AlertDialog(
                     onDismissRequest = onLater,
                     title = { Text(s.updateReadyToInstallTitle) },
                     text = { Text(s.updateReadyToInstallBody) },
-                    confirmButton = { TextButton(onClick = rememberHapticClick(onInstall)) { Text(s.updateInstall) } },
-                    dismissButton = { TextButton(onClick = rememberHapticClick(onLater)) { Text(s.updateLater) } }
+                    confirmButton = { TextButton(onClick = onInstall, interactionSource = rememberHapticInteractionSource()) { Text(s.updateInstall) } },
+                    dismissButton = { TextButton(onClick = onLater, interactionSource = rememberHapticInteractionSource()) { Text(s.updateLater) } }
                 )
             }
         }
@@ -2008,8 +2008,8 @@ private fun UpdateDialog(
                 onDismissRequest = onLater,
                 title = { Text(s.updateFailedTitle) },
                 text = { Text(state.message.orEmpty()) },
-                confirmButton = { TextButton(onClick = rememberHapticClick(onRetry)) { Text(s.updateRetry) } },
-                dismissButton = { TextButton(onClick = rememberHapticClick(onLater)) { Text(s.updateLater) } }
+                confirmButton = { TextButton(onClick = onRetry, interactionSource = rememberHapticInteractionSource()) { Text(s.updateRetry) } },
+                dismissButton = { TextButton(onClick = onLater, interactionSource = rememberHapticInteractionSource()) { Text(s.updateLater) } }
             )
         }
         else -> Unit
