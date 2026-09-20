@@ -370,6 +370,12 @@ fun ThreatPopupCard(
                                         }
                                     }
                                 }
+                                ThreatLevelGauge(
+                                    level = threatLevel,
+                                    height = fontAware(38.dp),
+                                    skullSize = fontAware(14.dp),
+                                    barWidth = fontAware(8.dp)
+                                )
                             }
                         }
                         Spacer(Modifier.height(4.dp))
@@ -381,8 +387,6 @@ fun ThreatPopupCard(
                                 updatedAtMillis = threat.updatedAtMillis,
                                 strings = s
                             )
-                            Spacer(Modifier.weight(1f))
-                            ThreatLevelGaugeHorizontal(level = threatLevel, width = fontAware(120.dp))
                         }
                     }
                 }
@@ -391,7 +395,10 @@ fun ThreatPopupCard(
             // The full card: clean layout without dividers, elapsed time on top-right,
             // P and R on separate lines for senior/large font accessibility.
             ThreatCardSize.LARGE -> {
-                Row(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
                     Column(modifier = Modifier.weight(1f)) {
                         // Header: icon, type, status chips, region, and elapsed time on top-right
                         Row(verticalAlignment = Alignment.Top) {
@@ -502,7 +509,7 @@ fun ThreatPopupCard(
                         }
                     }
                     Spacer(Modifier.width(16.dp))
-                    ThreatLevelGauge(level = threatLevel, height = fontAware(90.dp))
+                    ThreatLevelGauge(level = threatLevel)
                 }
             }
         }
@@ -547,44 +554,6 @@ internal fun repeatsShownInfo(course: String, typeLabel: String, labelEn: String
         while (padded in rest) rest = rest.replace(padded, " ")
     }
     return rest.isBlank()
-}
-
-/** Horizontal skull gauge for the compact card: skull left, bar fills left→right. */
-@Composable
-private fun ThreatLevelGaugeHorizontal(
-    level: Double,
-    width: Dp = fontAware(90.dp),
-    height: Dp = fontAware(10.dp),
-    skullSize: Dp = fontAware(18.dp)
-) {
-    val fraction = (level / 10.0).coerceIn(0.0, 1.0)
-    val color = levelColor(level)
-    val skullTint = if (level >= 3.0) color else Color(AppPalette.TextSecondary)
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            painter = painterResource(id = R.drawable.ic_skull),
-            contentDescription = null,
-            tint = skullTint,
-            modifier = Modifier.size(skullSize)
-        )
-        Spacer(Modifier.width(6.dp))
-        Box(
-            modifier = Modifier
-                .width(width)
-                .height(height)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color(AppPalette.Border))
-        ) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .width(width * fraction.toFloat().coerceAtLeast(0.02f))
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(color)
-            )
-        }
-    }
 }
 
 @Composable
@@ -684,7 +653,7 @@ internal fun ThreatCardSizeControl(
 @Composable
 private fun ThreatLevelGauge(
     level: Double,
-    height: Dp = fontAware(130.dp),
+    height: Dp = fontAware(100.dp),
     skullSize: Dp = fontAware(26.dp),
     barWidth: Dp = fontAware(12.dp)
 ) {
@@ -814,9 +783,27 @@ private fun MetricPill(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Text(
+                number,
+                color = Color(AppPalette.PillNumber),
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.semantics {
+                    if (contentDescription != null) this.contentDescription = contentDescription
+                }
+            )
+            Spacer(Modifier.width(2.dp))
+            Text(
+                unit,
+                color = Color(AppPalette.TextSecondary),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                softWrap = false
+            )
             if (dotColor != null) {
-                // Mirrors the map's GPS dot (same blue core + white ring) but with a much
-                // subtler radial glow so it reads as a card indicator, not a beacon.
+                Spacer(Modifier.width(6.dp))
                 Box(
                     modifier = Modifier
                         .size(fontAware(14.dp))
@@ -844,27 +831,7 @@ private fun MetricPill(
                             )
                         }
                 )
-                Spacer(Modifier.width(6.dp))
             }
-            Text(
-                number,
-                color = Color(AppPalette.PillNumber),
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.labelLarge,
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier.semantics {
-                    if (contentDescription != null) this.contentDescription = contentDescription
-                }
-            )
-            Spacer(Modifier.width(2.dp))
-            Text(
-                unit,
-                color = Color(AppPalette.TextSecondary),
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                softWrap = false
-            )
         }
     }
 }

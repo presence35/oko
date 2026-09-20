@@ -1380,19 +1380,6 @@ fun setAlertsArmed(armed: Boolean) {
         )
     }
 
-    /** One-time hint (first 3 ejections ever): a modal/background cut a running or queued
-     *  shoot-down show — tell the user it will wait until they're back on the map. */
-    fun notifyFlourishEjected() {
-        viewModelScope.launch {
-            val p = prefs.preferences.first()
-            val remaining = p.flourishEjectHintRemaining
-            if (remaining <= 0) return@launch
-            prefs.setFlourishEjectHintRemaining(remaining - 1)
-            val s = Strings.get(p.language)
-            showToast(s.flourishEjectToast, cardVisible = false)
-        }
-    }
-
     fun setDisclaimerCollapsed(collapsed: Boolean) {
         viewModelScope.launch { prefs.setDisclaimerCollapsed(collapsed) }
     }

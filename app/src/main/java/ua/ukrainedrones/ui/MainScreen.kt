@@ -287,7 +287,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                             if (viewModel.selectedThreatId.value == it.id) viewModel.selectThreat(null)
                             else viewModel.selectThreat(it)
                         },
-            onFlourishEjected = viewModel::notifyFlourishEjected,
             onThreatStripTap = { viewModel.panToThreat(it) },
             onDismissPopup = { viewModel.selectThreat(null) },
             onMapTapped = { viewModel.selectThreat(null) },
@@ -623,7 +622,6 @@ private fun MapScreen(
     onFastYellowArmedChange: (Boolean) -> Unit,
     onThreatCardSizeChange: (ThreatCardSize) -> Unit,
     onNeutralize: (String) -> Unit,
-    onFlourishEjected: () -> Unit,
     onFlybyFinished: (String) -> Unit,
     onEjectAll: () -> Unit,
     onLocateThreat: (NormalizedThreat) -> Unit = {},
@@ -942,7 +940,6 @@ private fun MapScreen(
                         onStrikeTypeChange = { strikeType = it },
                         onPendingStrikeCountChange = { pendingStrikeCount = it },
                         onCancelRequestTick = cancelTick,
-                        onFlourishEjected = onFlourishEjected,
                         modifier = Modifier.fillMaxSize()
                     )
                     uiState.flyby?.let { show ->
@@ -1304,10 +1301,10 @@ private fun ThreatCardHost(
                         alertsOff = threat.type.toThreatType() in silencedTypes,
                         onDismiss = onDismiss,
                         fakeNeutralize = sel.fakeNeutralize,
-                        modifier = Modifier
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Row(
-                        modifier = (if (cardSize == ThreatCardSize.SMALL) Modifier.width(250.dp) else Modifier.fillMaxWidth()).padding(top = 2.dp),
+                        modifier = (if (cardSize == ThreatCardSize.SMALL) Modifier.width(250.dp) else Modifier.fillMaxWidth().widthIn(max = 480.dp)).padding(top = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {

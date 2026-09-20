@@ -87,7 +87,6 @@ data class UserPreferences(
     val showRegionBorders: Boolean = false,
     val settingsHintRemaining: Int = 3,
     val threatToggleHintRemaining: Int = 3,
-    val flourishEjectHintRemaining: Int = 3,
     val shelterTipStage: Int = 0,
     val mapVisibleTypes: Set<ThreatType> = ThreatType.values().toSet(),
     val alertEnabledTypes: Set<ThreatType> = ThreatType.values().toSet()

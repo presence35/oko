@@ -905,10 +905,10 @@ fastYellowArmed = p.fastYellowArmed,
         val alarmNowActive = state.focusOblastLevel != AlertLevel.NONE
         if (alarmNowActive && !episodeActive) {
             episodeActive = true
-            episodeTally.begin()
+            episodeTally.begin(state.focusBannerCity, now)
         } else if (!alarmNowActive && episodeActive) {
             episodeActive = false
-            episodeTally.finish(state.focusBannerCity, state.lang, state.officialAlertsEnabled)
+            episodeTally.finish(state.focusBannerCity, state.lang, state.officialAlertsEnabled, now)
         }
 
         val nowForSweep = System.currentTimeMillis()

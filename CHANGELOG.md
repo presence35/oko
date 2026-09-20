@@ -2,12 +2,21 @@
 
 ## [Unreleased]
 
+- Logs header NEPTUN credit is now a single tappable cluster with a larger status-tinted trident and domain / Logs header NEPTUN credit is now a single tappable cluster with a larger status-tinted trident and domain 09-20_22:10:59
+
+- Removed the shoot-down show paused toast / Removed the shoot-down show paused toast 09-20_22:06:55
+
+- Large threat card now fills its row so the size and locate buttons sit on the card edges, not the screen edges / Large threat card now fills its row so the size and locate buttons sit on the card edges, not the screen edges 09-21_01:32:00
+
+- Small threat card skull is now a vertical gauge right of the P bar, timer left below / Small threat card skull is now a vertical gauge right of the P bar, timer left below 09-21_01:21:00
+
 - Morale settings now share a single source: wizard and Settings use the same toggles (including HD explosions and alarm summary) / Morale settings now share a single source: wizard and Settings use the same toggles (including HD explosions and alarm summary) 09-21_01:07:00
 
 - Fixed city size toggles not updating map labels / Fixed city size toggles not updating map labels 09-20_23:38:00
 
 - Alarm summary: when your oblast alarm ends, a separate morale notification shows what was neutralized during that alarm, with tap-to-replay / Alarm summary: when your oblast alarm ends, a separate morale notification shows what was neutralized during that alarm, with tap-to-replay 09-20_23:10:00
 - Morale replays and shot-down cards now play even with the shelter list open (tap snaps back to the map) / Morale replays and shot-down cards now play even with the shelter list open (tap snaps back to the map) 09-21_00:00:00
+- Alarm summary now keeps its origin city and shows duration (e.g. "Kyiv: 12min alarm summary" + "1 threat resolved. Tap to see.") / Alarm summary now keeps its origin city and shows duration (e.g. "Kyiv: 12min alarm summary" + "1 threat resolved. Tap to see.") 09-21_00:01:00
 
 - Redesigned small threat card with fixed 280dp width, larger icon, no title, vertical R and P and horizontal skull gauge / Redesigned small threat card with fixed 280dp width, larger icon, no title, vertical R and P and horizontal skull gauge 09-20_19:42:05
 

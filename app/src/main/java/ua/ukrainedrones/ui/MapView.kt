@@ -398,7 +398,6 @@ fun NeptunMapView(
     onStrikeTypeChange: (ThreatType?) -> Unit = {},
     onPendingStrikeCountChange: (Int) -> Unit = {},
     onCancelRequestTick: Int = 0,
-    onFlourishEjected: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
@@ -762,9 +761,6 @@ LaunchedEffect(selectedId) {
 
     LaunchedEffect(paused, mapVisible) {
         if (paused || !mapVisible) {
-            val interrupted = deathFx.isActive
-            val queuedPending = uiState.flourish?.let { it.tick != lastFlourishTick.value } == true
-            if ((interrupted || queuedPending) && deathAnimationEnabledState) onFlourishEjected()
             deathFx.clear()
         }
     }

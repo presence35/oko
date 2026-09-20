@@ -31,6 +31,8 @@ class AlarmEpisodeTally(
     private val tallyLock = Any()
     private var episodeCount = 0
     private val perTypeCounts = mutableMapOf<ThreatType, Int>()
+    private var episodeCity: String? = null
+    private var episodeStartMs: Long = 0L
 
     private val justFunEnabled = MutableStateFlow(false)
     private val episodeEnabled = MutableStateFlow(false)
@@ -75,11 +77,13 @@ class AlarmEpisodeTally(
     )
 
     /** A new alarm window opened on the focus: drop the previous window, keep the dedup ring. */
-    fun begin() {
+    fun begin(city: String, startMs: Long = System.currentTimeMillis()) {
         synchronized(tallyLock) {
             episodeCount = 0
             perTypeCounts.clear()
             episodeMemory.clear()
+            episodeCity = city
+            episodeStartMs = startMs
         }
         try {
             NotificationManagerCompat.from(context).cancel(NOTIF_ALARM_EPISODE)
@@ -100,25 +104,29 @@ class AlarmEpisodeTally(
     }
 
     /** The alarm window closed: post the one summary for it, replacing any previous window. */
-    fun finish(city: String, lang: AppLanguage, officialAlertsEnabled: Boolean) {
+    fun finish(currentCity: String, lang: AppLanguage, officialAlertsEnabled: Boolean, nowMs: Long = System.currentTimeMillis()) {
         if (!justFunEnabled.value || !episodeEnabled.value) {
             synchronized(tallyLock) {
                 episodeCount = 0
                 perTypeCounts.clear()
                 episodeMemory.clear()
+                episodeCity = null
+                episodeStartMs = 0L
             }
             return
         }
-        val snapshot = synchronized(tallyLock) {
-            EpisodeSnapshot(episodeCount, perTypeCounts.toMap(), episodeMemory.toList())
+        val (snapshot, city, durationMin) = synchronized(tallyLock) {
+            val c = episodeCity ?: currentCity
+            val start = episodeStartMs
+            val dur = if (start > 0L) ((nowMs - start) / 60_000L).toInt().coerceAtLeast(1) else 0
+            Triple(EpisodeSnapshot(episodeCount, perTypeCounts.toMap(), episodeMemory.toList()), c, dur)
         }
         if (snapshot.count == 0) {
-            // Users who disabled official alerts don't care about alarms — spare them the nothingness.
             if (!officialAlertsEnabled) return
-            postQuiet(city, lang)
+            postQuiet(city, lang, durationMin)
             return
         }
-        postSummary(snapshot, city, lang)
+        postSummary(snapshot, city, lang, durationMin)
     }
 
     fun reset() {
@@ -126,13 +134,15 @@ class AlarmEpisodeTally(
             episodeCount = 0
             perTypeCounts.clear()
             episodeMemory.clear()
+            episodeCity = null
+            episodeStartMs = 0L
         }
         try {
             NotificationManagerCompat.from(context).cancel(NOTIF_ALARM_EPISODE)
         } catch (_: SecurityException) {}
     }
 
-    private fun postSummary(snapshot: EpisodeSnapshot, city: String, lang: AppLanguage) {
+    private fun postSummary(snapshot: EpisodeSnapshot, city: String, lang: AppLanguage, durationMin: Int) {
         scope.launch {
             val s = Strings.get(lang)
             val breakdown = snapshot.typeCounts.entries
@@ -142,9 +152,10 @@ class AlarmEpisodeTally(
                     val label = if (info != null && lang == AppLanguage.UA) info.labelUa else info?.labelEn ?: type.name
                     "$label $count"
                 }
+            val title = if (durationMin > 0) String.format(s.alarmEpisodeTitleFormat, city, durationMin) else String.format("%1\$s: alarm summary", city)
             val builder = NotificationCompat.Builder(context, AlertNotificationManager.CHANNEL_ALARM_EPISODE)
                 .setSmallIcon(R.drawable.ic_trident)
-                .setContentTitle(String.format(s.alarmEpisodeTitleFormat, city))
+                .setContentTitle(title)
                 .setContentText(String.format(s.alarmEpisodeBodyFormat, resolvedThreatsPhrase(snapshot.count, lang)))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true)
@@ -155,12 +166,13 @@ class AlarmEpisodeTally(
         }
     }
 
-    private fun postQuiet(city: String, lang: AppLanguage) {
+    private fun postQuiet(city: String, lang: AppLanguage, durationMin: Int) {
         scope.launch {
             val s = Strings.get(lang)
+            val title = if (durationMin > 0) String.format(s.alarmEpisodeTitleFormat, city, durationMin) else String.format("%1\$s: alarm summary", city)
             val builder = NotificationCompat.Builder(context, AlertNotificationManager.CHANNEL_ALARM_EPISODE)
                 .setSmallIcon(R.drawable.ic_trident)
-                .setContentTitle(String.format(s.alarmEpisodeTitleFormat, city))
+                .setContentTitle(title)
                 .setContentText(s.alarmEpisodeQuietText)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setSilent(true)

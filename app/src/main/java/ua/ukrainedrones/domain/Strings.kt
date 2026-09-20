@@ -359,7 +359,6 @@ val nightSoundLabel: String,
         val debugKindRegionThreat: String,
         val debugKindFlourish: String,
         val flourishLogDetailFormat: String,
-        val flourishEjectToast: String,
         val debugKindRegionFormat: String,
         val debugTierRed: String,
         val debugTierYellow: String,
@@ -1056,7 +1055,6 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val debugKindRegionThreat: String get() = misc.debugKindRegionThreat
         val debugKindFlourish: String get() = misc.debugKindFlourish
         val flourishLogDetailFormat: String get() = misc.flourishLogDetailFormat
-        val flourishEjectToast: String get() = misc.flourishEjectToast
         val debugKindRegionFormat: String get() = misc.debugKindRegionFormat
         val debugTierRed: String get() = misc.debugTierRed
         val debugTierYellow: String get() = misc.debugTierYellow

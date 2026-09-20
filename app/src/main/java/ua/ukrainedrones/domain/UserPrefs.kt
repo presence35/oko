@@ -43,7 +43,6 @@ class UserPrefs(private val context: Context) {
     private val criticalOfflineBypassSilentKey = booleanPreferencesKey("critical_offline_bypass_silent")
     private val settingsHintRemainingKey = intPreferencesKey("settings_hint_remaining")
     private val threatToggleHintRemainingKey = intPreferencesKey("threat_toggle_hint_remaining")
-    private val flourishEjectHintRemainingKey = intPreferencesKey("flourish_eject_hint_remaining")
     private val shelterTipRemainingKey = intPreferencesKey("shelter_tip_remaining")
     private val threatCardSizeKey = stringPreferencesKey("threat_card_size")
     private val threatIconSetKey = stringPreferencesKey("threat_icon_set")
@@ -195,7 +194,6 @@ class UserPrefs(private val context: Context) {
             showRegionBorders = this[showRegionBordersKey] ?: false,
             settingsHintRemaining = this[settingsHintRemainingKey] ?: 3,
             threatToggleHintRemaining = this[threatToggleHintRemainingKey] ?: 3,
-            flourishEjectHintRemaining = this[flourishEjectHintRemainingKey] ?: 3,
             shelterTipStage = (this[shelterTipRemainingKey] ?: 0).coerceIn(0, 6),
             mapVisibleTypes = mapVisible,
             alertEnabledTypes = alertEnabled
@@ -302,7 +300,6 @@ class UserPrefs(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[settingsHintRemainingKey] = 3
             prefs[threatToggleHintRemainingKey] = 3
-            prefs[flourishEjectHintRemainingKey] = 3
             prefs[shelterTipRemainingKey] = 0
             listOf("followMe", "nightMode", "officialAlerts", "sirenOverride", "threatToggles", "cardSize")
                 .forEach { id -> prefs.remove(booleanPreferencesKey("explainer_seen_$id")) }
@@ -355,10 +352,6 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setThreatToggleHintRemaining(remaining: Int) {
         context.dataStore.edit { it[threatToggleHintRemainingKey] = remaining.coerceAtLeast(0) }
-    }
-
-    suspend fun setFlourishEjectHintRemaining(remaining: Int) {
-        context.dataStore.edit { it[flourishEjectHintRemainingKey] = remaining.coerceAtLeast(0) }
     }
 
     suspend fun setShelterTipStage(stage: Int) {
