@@ -859,14 +859,34 @@ def main(argv=None):
         datasets = discover_shelter_datasets()
         print(f"[discover] {len(datasets)} datasets tagged 'укриття'")
     except Exception as e:
-        print(f"[discover] failed, pinned SOURCES only: {e}")
-        datasets = []
+        print(f"[discover] live failed ({e}), trying cache...")
+        cache_candidates = [
+            os.environ.get("DISCOVERY_CACHE", ""),
+            os.path.join(os.environ.get("TEMP", ""), "opencode",
+                         "discovery.json"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "discovery.json"),
+        ]
+        cache_path = next((c for c in cache_candidates if c and os.path.exists(c)), "")
+        if os.path.exists(cache_path):
+            with open(cache_path, encoding="utf-8") as cf:
+                cached = json.load(cf)
+            if isinstance(cached, list):
+                datasets = cached
+            else:
+                datasets = cached.get(
+                    "result", {}).get("packages", cached.get(
+                        "packages", []))
+            print(f"[discover] loaded {len(datasets)} from cache {cache_path}")
+        else:
+            print(f"[discover] no cache at {cache_path}, pinned SOURCES only")
+            datasets = []
 
     if list_only:
         for d in sorted(datasets, key=lambda d: d.get("title") or ""):
             key, _, _ = slug_city_key(d.get("title"), d.get("organization"))
-            link = next((r["url"] for _, r in zip(
-                range(1), _candidate_resources(d))), None)
+            resources = _candidate_resources(d)
+            link = resources[0][0] if resources else None
             print(f"  {key} :: {d['title']} [{d['organization']}]")
             if link:
                 print(f"    {link}")

@@ -12,9 +12,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PointF
-import android.graphics.RadialGradient
 import android.graphics.Rect
-import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.util.LruCache
@@ -155,45 +153,38 @@ private fun threatIconFor(
 }
 
 /**
- * "GPS dot" used as the My-Location marker, styled to look like Google Maps: a larger solid
- * blue core with a white outer ring. While a fix is acquiring, the blue core/glow is dimmed to
- * grey so the dot still reads as "off"; a free radial glow halo marks an acquired fix.
+ * "GPS dot" used as the My-Location marker, styled to look like Google Maps: a solid blue
+ * core with a white outer ring. Dimmed to grey while a fix is acquiring. Drawn scaled by
+ * [dotScaleForZoom] so it never grows large enough to overtake the alert zone rings at
+ * low zoom (the dot stays a pin, not a billboard).
  */
 private fun gpsDotBitmap(context: Context, hasFix: Boolean): Bitmap {
     val density = context.resources.displayMetrics.density
     val coreR = 6f * density
-    val whiteRingHalf = 1.2f * density          // so full ring visual = 2.4dp, centered on the core edge
-    val ringR = coreR + whiteRingHalf
-    val glowR = coreR * 2.8f
-    val size = (glowR * 2).toInt().coerceAtLeast(2)
+    val whiteRingHalf = 1.2f * density          // 2.4dp ring visual, centered on the core edge
+    val strokeWidth = 2.4f * density
+    val size = (((coreR + whiteRingHalf) + strokeWidth / 2f) * 2).toInt().coerceAtLeast(2)
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     val cx = size / 2f
     val cy = size / 2f
-
     val coreColor = if (hasFix) AppPalette.GpsBlue.toInt() else AppPalette.TextSecondary.toInt()
-    val glowColor = if (hasFix) AppPalette.GpsGlow.toInt() else AppPalette.GpsGlowOff.toInt()
-
-    // Soft glow halo behind the dot (light-blue when fixed, grey when not).
-    val glow = Paint().apply {
-        shader = RadialGradient(
-            cx, cy, glowR,
-            intArrayOf(glowColor, Color.TRANSPARENT),
-            floatArrayOf(0.45f, 1f),
-            Shader.TileMode.CLAMP
-        )
-    }
-    canvas.drawCircle(cx, cy, glowR, glow)
-
-    // Blue core + white outer ring — reads as the GMaps pin from every map theme.
+    val ringColor = if (hasFix) Color.WHITE else AppPalette.TextSecondary.toInt()
     canvas.drawCircle(cx, cy, coreR, Paint().apply { isAntiAlias = true; color = coreColor })
-    canvas.drawCircle(cx, cy, ringR, Paint().apply {
+    canvas.drawCircle(cx, cy, coreR + whiteRingHalf, Paint().apply {
         isAntiAlias = true
         style = Paint.Style.STROKE
-        strokeWidth = 2.4f * density
-        color = if (hasFix) Color.WHITE else AppPalette.TextSecondary.toInt()
+        strokeWidth = strokeWidth
+        color = ringColor
     })
     return bmp
+}
+
+/** Scale the location dot down at low zoom so it never dwarfs alert-zone rings. */
+private fun dotScaleForZoom(zoom: Double): Float {
+    // full size by zoom ~9, half size at/below zoom ~4 (far-out map view).
+    val t = ((zoom - 4.0) / 5.0).coerceIn(0.0, 1.0).toFloat()
+    return 0.5f + 0.5f * t
 }
 
 private data class NewRingState(val id: String?, val activeUntilMs: Long)
@@ -973,7 +964,14 @@ LaunchedEffect(selectedId) {
                         val pt = bridge.project(dotPos.lat, dotPos.lon)
                         if (pt != null) {
                             val bmp = gpsDotBitmap(context, liveUiState.gpsFixAvailable)
-                            canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height / 2f, null)
+                            val scale = dotScaleForZoom(currentZoom)
+                            val pw = bmp.width / 2f
+                            val ph = bmp.height / 2f
+                            canvas.save()
+                            canvas.translate(pt.x, pt.y)
+                            canvas.scale(scale, scale)
+                            canvas.drawBitmap(bmp, -pw, -ph, null)
+                            canvas.restore()
                         }
                     }
 
