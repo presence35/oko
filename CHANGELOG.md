@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Redesigned small threat card with fixed 280dp width, larger icon, no title, vertical R and P and horizontal skull gauge / Redesigned small threat card with fixed 280dp width, larger icon, no title, vertical R and P and horizontal skull gauge 09-20_19:42:05
+
 - Haptics on every button and tappable row (press tick via shared Haptics helpers) / Haptics on every button and tappable row (press tick via shared Haptics helpers)
 
 - Night mode and morale master switches now tick like every other control / Night mode and morale master switches now tick like every other control

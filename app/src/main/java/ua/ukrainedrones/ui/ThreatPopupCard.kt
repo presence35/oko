@@ -253,10 +253,14 @@ fun ThreatPopupCard(
             ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, displayRegion) }
     }
 
+    val smallFixedWidth = 280.dp
     val cardInteraction = remember { MutableInteractionSource() }
     Surface(
         modifier = modifier
-            .widthIn(max = 480.dp)
+            .then(
+                if (cardSize == ThreatCardSize.SMALL) Modifier.width(smallFixedWidth)
+                else Modifier.widthIn(max = 480.dp)
+            )
             .then(
                 if (interactive) Modifier.pressTick(cardInteraction).clickable(
                     interactionSource = cardInteraction,
@@ -270,22 +274,13 @@ fun ThreatPopupCard(
         tonalElevation = 8.dp
     ) {
         when (cardSize) {
-            // Compact top-left card: icon + title + elapsed time on top-right,
-            // metric pills, R and P bars side-by-side, and vertical skull gauge on right edge.
             ThreatCardSize.SMALL -> {
                 val distUser = proximity?.distToUserKm
+                val etaMin = proximity?.etaToUserMin
                 val cityName = pinnedCity?.let { if (lang == AppLanguage.UA) it.nameUa else it.nameEn }
                 val distCd = if (cityName != null && distUser != null) {
                     String.format(s.pillDistanceCd, cityName, distUser.roundToInt())
                 } else null
-                val pillSpecs = if (distUser != null) {
-                    buildList {
-                        proximity?.etaToUserMin?.let { eta ->
-                            add(PillSpec(formatEtaMinutes(eta), s.etaUnit, GpsDot, null))
-                        }
-                        add(PillSpec(formatKm(distUser), s.kmUnit, null, distCd))
-                    }
-                } else emptyList()
 
                 val density = LocalDensity.current
                 CompositionLocalProvider(
@@ -294,113 +289,85 @@ fun ThreatPopupCard(
                         fontScale = min(density.fontScale, 1.25f)
                     )
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f, fill = false)
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            // Row 1: Header - Icon + Title + Status Chips + Elapsed time on top right
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ThreatIcon(
+                                type = threat.type.toThreatType(),
+                                set = iconSet,
+                                size = fontAware(52.dp),
+                                contentDescription = typeLabel
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.weight(1f)
                             ) {
-                                ThreatIcon(
-                                    type = threat.type.toThreatType(),
-                                    set = iconSet,
-                                    size = fontAware(34.dp),
-                                    contentDescription = typeLabel
-                                )
-                                    Text(
-                                        titleLabel,
-                                        fontWeight = FontWeight.SemiBold,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        color = Color.White
-                                    )
-                                if (alertsOff) {
-                                    AlertsOffChip(s)
-                                }
-                                if (threat.simulated) {
-                                    SimulationChip(s)
-                                }
-                                Spacer(Modifier.weight(1f, fill = false))
-                                ThreatElapsedBadge(
-                                    updatedAtMillis = threat.updatedAtMillis,
-                                    strings = s
-                                )
-                            }
-
-                            Spacer(Modifier.height(8.dp))
-
-                            // Row 2: Metric pills (or GPS off message)
-                            if (distUser != null) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    pillSpecs.forEach { p ->
+                                if (distUser != null) {
+                                    etaMin?.let { eta ->
                                         MetricPill(
-                                            number = p.number,
-                                            unit = p.unit,
-                                            contentDescription = p.contentDescription,
-                                            dotColor = p.dotColor
+                                            number = formatEtaMinutes(eta),
+                                            unit = s.etaUnit,
+                                            dotColor = GpsDot
                                         )
                                     }
+                                    MetricPill(
+                                        number = formatKm(distUser),
+                                        unit = s.kmUnit,
+                                        contentDescription = distCd
+                                    )
+                                } else {
+                                    Text(
+                                        s.gpsOffLabel,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(AppPalette.TextSecondary)
+                                    )
                                 }
-                            } else {
-                                Text(
-                                    s.gpsOffLabel,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(AppPalette.TextSecondary)
-                                )
                             }
-
-                            Spacer(Modifier.height(8.dp))
-
-                            // Row 3: R and P bars
+                            Spacer(Modifier.width(12.dp))
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
                                         s.reliabilityShort,
-                                        style = MaterialTheme.typography.labelMedium,
+                                        style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(AppPalette.TextSecondary)
                                     )
-                                    Spacer(Modifier.width(4.dp))
-                                    ReliabilityBar(
-                                        reliability = Reliability.fromApi(threat.reliability),
-                                        s = s,
-                                        compact = true
-                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    VerticalReliabilityBar(reliability = Reliability.fromApi(threat.reliability))
                                 }
                                 threat.uncertaintyKm?.let { uKm ->
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
                                             s.uncertaintyShort,
-                                            style = MaterialTheme.typography.labelMedium,
+                                            style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(AppPalette.TextSecondary)
                                         )
-                                        Spacer(Modifier.width(4.dp))
-                                        CompactUncertaintyBar(uncertaintyKm = uKm)
+                                        Spacer(Modifier.height(4.dp))
+                                        VerticalUncertaintyBar(uncertaintyKm = uKm)
                                     }
                                 }
                             }
                         }
-
-                        Spacer(Modifier.width(12.dp))
-
-                        // Vertical skull gauge on right edge
-                        ThreatLevelGauge(
-                            level = threatLevel,
-                            height = fontAware(70.dp),
-                            skullSize = fontAware(20.dp),
-                            barWidth = fontAware(10.dp)
-                        )
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            ThreatLevelGaugeHorizontal(level = threatLevel)
+                            Spacer(Modifier.weight(1f))
+                            ThreatElapsedBadge(
+                                updatedAtMillis = threat.updatedAtMillis,
+                                strings = s
+                            )
+                        }
                     }
                 }
             }
@@ -564,6 +531,86 @@ internal fun repeatsShownInfo(course: String, typeLabel: String, labelEn: String
         while (padded in rest) rest = rest.replace(padded, " ")
     }
     return rest.isBlank()
+}
+
+/** Horizontal skull gauge for the compact card: skull left, bar fills left→right. */
+@Composable
+private fun ThreatLevelGaugeHorizontal(
+    level: Double,
+    width: Dp = fontAware(90.dp),
+    height: Dp = fontAware(10.dp),
+    skullSize: Dp = fontAware(18.dp)
+) {
+    val fraction = (level / 10.0).coerceIn(0.0, 1.0)
+    val color = levelColor(level)
+    val skullTint = if (level >= 3.0) color else Color(AppPalette.TextSecondary)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_skull),
+            contentDescription = null,
+            tint = skullTint,
+            modifier = Modifier.size(skullSize)
+        )
+        Spacer(Modifier.width(6.dp))
+        Box(
+            modifier = Modifier
+                .width(width)
+                .height(height)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(AppPalette.Border))
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .width(width * fraction.toFloat().coerceAtLeast(0.02f))
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(color)
+            )
+        }
+    }
+}
+
+@Composable
+private fun VerticalReliabilityBar(reliability: Reliability) {
+    val level = when (reliability) {
+        Reliability.HIGH -> 3
+        Reliability.MEDIUM -> 2
+        Reliability.LOW -> 1
+        Reliability.UNKNOWN -> 0
+    }
+    val color = when (reliability) {
+        Reliability.HIGH -> DistUserGreen
+        Reliability.MEDIUM -> DistUserAmber
+        Reliability.LOW -> ReliabilityRed
+        Reliability.UNKNOWN -> Color(AppPalette.TextSecondary)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        repeat(3) { i ->
+            Box(
+                modifier = Modifier
+                    .size(width = fontAware(12.dp), height = fontAware(6.dp))
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(if (i < level) color else UncertaintyEmpty)
+            )
+        }
+    }
+}
+
+@Composable
+private fun VerticalUncertaintyBar(uncertaintyKm: Double) {
+    val bars = uncertaintyBars(uncertaintyKm)
+    val color = uncertaintyColor(bars)
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        repeat(5) { i ->
+            Box(
+                modifier = Modifier
+                    .size(width = fontAware(12.dp), height = fontAware(6.dp))
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(if (i < bars) color else UncertaintyEmpty)
+            )
+        }
+    }
 }
 
 /** Vertical 0–10 gauge: skull above a bar that fills with the level. */

@@ -1263,7 +1263,6 @@ private fun ThreatCardHost(
     BackHandler(enabled = sel.selected != null || sel.neutralized != null) { onDismiss() }
 
     var lastReportedHeight by remember { mutableIntStateOf(0) }
-    val smallCard = cardSize == ThreatCardSize.SMALL
 
     if (sel.selected == null && sel.neutralized == null) {
         if (lastReportedHeight != 0) {
@@ -1285,7 +1284,8 @@ private fun ThreatCardHost(
             if (sel.selected != null) {
                 val threat = sel.selected
                 Column(
-                    modifier = if (smallCard) Modifier.widthIn(max = 300.dp) else Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     ThreatPopupCard(
                         threat = threat,
@@ -1299,7 +1299,7 @@ private fun ThreatCardHost(
                         alertsOff = threat.type.toThreatType() in silencedTypes,
                         onDismiss = onDismiss,
                         fakeNeutralize = sel.fakeNeutralize,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
@@ -1349,7 +1349,7 @@ private fun ThreatCardHost(
                         neutralizing = neutralizing,
                         onDismiss = onDismiss,
                         fakeNeutralize = sel.fakeNeutralize,
-                        modifier = if (smallCard) Modifier.widthIn(max = 300.dp) else Modifier.fillMaxWidth()
+                        modifier = Modifier
                     )
                 }
             }
