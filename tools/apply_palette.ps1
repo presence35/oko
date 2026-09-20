@@ -128,13 +128,13 @@ foreach ($f in $files) {
     })
 
     # Identifier rename: ThreatPalette -> AppPalette, and relocate its import
-    $text = $text.Replace('import ua.ukrainedrones.ThreatPalette', 'import ua.ukrainedrones.theme.AppPalette')
+    $text = $text.Replace('import com.presaince.oko.ThreatPalette', 'import com.presaince.oko.theme.AppPalette')
     $text = [regex]::Replace($text, '\bThreatPalette\b', { param($m) 'AppPalette' })
 
     # Import injection for consumers outside the theme package
-    if ($text.Contains('AppPalette') -and -not $text.Contains('import ua.ukrainedrones.theme.AppPalette') -and $rel -notlike 'theme\*') {
+    if ($text.Contains('AppPalette') -and -not $text.Contains('import com.presaince.oko.theme.AppPalette') -and $rel -notlike 'theme\*') {
         $text = [regex]::Replace($text, '(?m)^(package [^\r\n]+)\r?\n', { param($m)
-            $m.Groups[1].Value + "`r`n" + 'import ua.ukrainedrones.theme.AppPalette' + "`r`n"
+            $m.Groups[1].Value + "`r`n" + 'import com.presaince.oko.theme.AppPalette' + "`r`n"
         }, 1)
     }
 

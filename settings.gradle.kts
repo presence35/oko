@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "UkraineDrones"
+rootProject.name = "Oko"
 include(":app")

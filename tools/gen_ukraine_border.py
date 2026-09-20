@@ -259,7 +259,7 @@ def emit_kt(border, land_border):
     land_pts = rdp_simplify(land_border, LAND_EPSILON)
 
     lines = [
-        "package ua.ukrainedrones",
+        "package com.presaince.oko",
         "",
         "import org.osmdroid.util.GeoPoint",
         "",

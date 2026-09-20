@@ -1,0 +1,125 @@
+package com.presaince.oko
+
+import com.presaince.oko.engine.ThreatEngine
+import com.presaince.oko.engine.ThreatProps
+import com.presaince.oko.engine.ThreatZone
+import com.presaince.oko.engine.ZoneParams
+import com.presaince.oko.engine.LatLng
+import com.presaince.oko.engine.NormalizedThreat
+import com.presaince.oko.engine.OblastAlert
+import com.presaince.oko.engine.distanceFlat
+import com.presaince.oko.engine.toThreatType
+import kotlin.math.roundToInt
+
+/**
+ * A lightweight, serializable snapshot of the threat state for the home-screen widget.
+ *
+ * Pure and deterministic — computed from shared domain functions only, never by the widget
+ * itself. The widget simply renders whatever it is handed, so the launcher process can never
+ * re-derive or drift from the app's zone/alert logic (mirror rule: see ARCHITECTURE.md).
+ */
+data class WidgetSnapshot(
+    val threatCount: Int = 0,
+    val typeCounts: Map<ThreatType, Int> = emptyMap(),
+    val activeZone: ThreatZone? = null,
+    val nearestKm: Double? = null,
+    val officialAlert: Boolean = false,
+    /** Whether a yellow-level (tactical) official alert is active for the focus — lets the
+     *  widget tint its trident amber instead of red. Red still wins when both are active. */
+    val officialYellowAlert: Boolean = false,
+    val sourceOnline: Boolean = false,
+    /** No WS source delivering (disabled, silent, or down) — mirrors the app's degraded pill. */
+    val sourceDegraded: Boolean = false,
+    /** The nearest non-stale map-enabled threat (id + position), so the widget can highlight
+     *  and reveal it — mirrors the footer strip's nearest-first semantics. */
+    val primaryThreat: WidgetThreat? = null,
+    val updatedAtMs: Long = 0L
+) {
+    companion object {
+        /** Max distance (km) at which a threat is still shown as a rounded nearest value. */
+        const val NEAREST_CAP_KM = 500.0
+    }
+}
+
+/** Lightweight serializable threat reference for the widget's primary icon + tap-to-map. */
+data class WidgetThreat(
+    val id: String,
+    val lat: Double,
+    val lon: Double,
+    val type: ThreatType
+)
+
+/**
+ * Computes the widget snapshot from the shared domain state. Mirrors the footer-strip
+ * semantics of the main UI: counts non-stale, non-resolved, map-enabled threats; the nearest
+ * distance and zone derive from the focus point via the threat engine; the official-alert flag
+ * matches the focus oblast via [resolveFocus] (majors-only, same as the app). No decision
+ * logic lives in the widget layer.
+ */
+fun computeWidgetSnapshot(
+    threats: Map<String, NormalizedThreat>,
+    alerts: List<OblastAlert>,
+    focus: LatLng?,
+    token: String?,
+    params: ZoneParams,
+    mapEnabled: Set<ThreatType>,
+    now: Long = System.currentTimeMillis(),
+    degraded: Boolean = false,
+    offline: Boolean = false,
+    /** Merged per-type props from SourceRegistry.typeCatalog — never a concrete source map. */
+    typeCatalog: Map<String, ThreatProps> = emptyMap()
+): WidgetSnapshot {
+    val threatList = threats.values
+        .filter { it.type.toThreatType() in mapEnabled }
+    val engine = ThreatEngine(typeCatalog)
+    val eval = engine.evaluate(
+        threats = threatList,
+        focus = focus,
+        params = params,
+        hiddenTypes = emptySet(),
+        silencedTypes = emptySet(),
+        now = now,
+        alerts = alerts,
+        focusToken = token
+    )
+
+    var count = 0
+    var nearestKm: Double? = null
+    var primaryThreat: WidgetThreat? = null
+    var nearestDist = Double.MAX_VALUE
+    val typeCounts = LinkedHashMap<ThreatType, Int>()
+    for (nt in eval.mapThreats) {
+        if (engine.isStale(nt, engine.propsFor(nt.type), now)) continue
+        count++
+        typeCounts[nt.type.toThreatType()] = (typeCounts[nt.type.toThreatType()] ?: 0) + 1
+        if (focus != null) {
+            val d = distanceFlat(focus.lat, focus.lon, nt.lat, nt.lon) / 1000.0
+            if (nearestKm == null || d < nearestKm) nearestKm = d
+            if (d < nearestDist) {
+                nearestDist = d
+                primaryThreat = WidgetThreat(nt.id, nt.lat, nt.lon, nt.type.toThreatType())
+            }
+        } else if (primaryThreat == null) {
+            primaryThreat = WidgetThreat(nt.id, nt.lat, nt.lon, nt.type.toThreatType())
+        }
+    }
+    nearestKm = nearestKm?.let { it.coerceAtMost(WidgetSnapshot.NEAREST_CAP_KM).roundToInt().toDouble() }
+
+    val officialAlert = eval.focusOblastAlertActive
+    val officialYellowAlert = eval.focusOblastYellowAlertActive
+
+    // Three-tier, mirroring the app pill: green when a WS source delivers, orange when degraded,
+    // red only on the offline escalation. Caller (WidgetUpdater) derives these from the registry.
+    return WidgetSnapshot(
+        threatCount = count,
+        typeCounts = typeCounts,
+        activeZone = eval.activeZone,
+        nearestKm = nearestKm,
+        officialAlert = officialAlert,
+        officialYellowAlert = officialYellowAlert,
+        sourceOnline = !offline,
+        sourceDegraded = degraded,
+        primaryThreat = primaryThreat,
+        updatedAtMs = now
+    )
+}

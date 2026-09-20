@@ -17,7 +17,7 @@ contract, see [`BEHAVIORS.md`](BEHAVIORS.md). For release/dev workflow conventio
 .\gradlew.bat :app:testDebugUnitTest
 ```
 
-Requires Kotlin 1.9.24, JDK 17, minSdk 26 / targetSdk 35 (namespace `ua.ukrainedrones`).
+Requires Kotlin 1.9.24, JDK 17, minSdk 26 / targetSdk 35 (namespace `com.presaince.oko`).
 
 Release builds (`:app:release`) require git-ignored `app/keystore.properties` (signing) and
 `app/upload.properties` (FTP creds) — see `AGENTS.md` for the full release workflow.

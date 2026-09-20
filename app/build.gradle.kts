@@ -32,11 +32,11 @@ val telegramBotToken: String = telegramProps.getProperty("botToken") ?: ""
 val telegramChatId: String = telegramProps.getProperty("chatId") ?: ""
 
 android {
-    namespace = "ua.ukrainedrones"
+    namespace = "com.presaince.oko"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "ua.ukrainedrones"
+        applicationId = "com.presaince.oko"
         minSdk = 26
         targetSdk = 35
         versionCode = (readVersionProps().getProperty("versionCode") ?: "1").toIntOrNull() ?: 1

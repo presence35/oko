@@ -2,7 +2,8 @@
 
 ## [Unreleased]
 
-- Threat cards are no longer forced to fill the full available width / Threat cards are no longer forced to fill the full available width 09-20_12:00:00
+- Falling debris advisory is now wired up: 0-10 min slider in Settings drives the all-clear countdown in the notification and footer / Falling debris advisory is now wired up: 0-10 min slider in Settings drives the all-clear countdown in the notification and footer 09-20_12:00:00
+- Threat cards are no longer forced to fill the full available width; hover buttons are left-aligned side by side / Threat cards are no longer forced to fill the full available width; hover buttons are left-aligned side by side 09-20_12:00:00
 - Morale settings now share a single source: wizard and Settings use the same toggles (including HD explosions and alarm summary) / Morale settings now share a single source: wizard and Settings use the same toggles (including HD explosions and alarm summary) 09-21_01:07:00
 
 - Fixed city size toggles not updating map labels / Fixed city size toggles not updating map labels 09-20_23:38:00

@@ -116,7 +116,7 @@ def main():
 
     # Emit Kotlin — one private function per stem, mapOf at top.
     lines = [
-        "package ua.ukrainedrones",
+        "package com.presaince.oko",
         "",
         "/**",
         " * Auto-generated oblast boundary polygons from EugeneBorshch/ukraine_geojson (ODbL).",
