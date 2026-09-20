@@ -259,7 +259,7 @@ fun ThreatPopupCard(
             ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, displayRegion) }
     }
 
-    val smallFixedWidth = 280.dp
+    val smallFixedWidth = 250.dp
     val cardInteraction = remember { MutableInteractionSource() }
     Surface(
         modifier = modifier
@@ -377,12 +377,12 @@ fun ThreatPopupCard(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            ThreatLevelGaugeHorizontal(level = threatLevel, width = fontAware(120.dp))
-                            Spacer(Modifier.weight(1f))
                             ThreatElapsedBadge(
                                 updatedAtMillis = threat.updatedAtMillis,
                                 strings = s
                             )
+                            Spacer(Modifier.weight(1f))
+                            ThreatLevelGaugeHorizontal(level = threatLevel, width = fontAware(120.dp))
                         }
                     }
                 }
@@ -391,9 +391,8 @@ fun ThreatPopupCard(
             // The full card: clean layout without dividers, elapsed time on top-right,
             // P and R on separate lines for senior/large font accessibility.
             ThreatCardSize.LARGE -> {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row {
-                        Column(modifier = Modifier.weight(1f)) {
+                Row(modifier = Modifier.padding(14.dp)) {
+                    Column(modifier = Modifier.weight(1f)) {
                         // Header: icon, type, status chips, region, and elapsed time on top-right
                         Row(verticalAlignment = Alignment.Top) {
                             ThreatIcon(
@@ -502,9 +501,8 @@ fun ThreatPopupCard(
                             }
                         }
                     }
-                        Spacer(Modifier.width(16.dp))
-                        ThreatLevelGauge(level = threatLevel)
-                    }
+                    Spacer(Modifier.width(16.dp))
+                    ThreatLevelGauge(level = threatLevel, height = fontAware(90.dp))
                 }
             }
         }

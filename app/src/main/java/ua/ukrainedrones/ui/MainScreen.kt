@@ -530,8 +530,10 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
             flybyAnimationEnabled = uiState.flybyAnimationEnabled,
             deathAnimationEnabled = uiState.deathAnimationEnabled,
             followBullet = uiState.followBullet,
+            highQualityExplosions = uiState.highQualityExplosions,
             neutralizedTallyEnabled = uiState.neutralizedTallyEnabled,
             neutralizedTallyAllUkraine = uiState.neutralizedTallyAllUkraine,
+            alarmEpisodeTallyEnabled = uiState.alarmEpisodeTallyEnabled,
             iconSetForFun = uiState.iconSet,
             onChoose = { viewModel.setLanguage(it) },
             onThreatEnabledToggle = { type, enabled -> viewModel.setThreatEnabled(type, enabled) },
@@ -542,8 +544,10 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
             onFlybyAnimationChange = { viewModel.setFlybyAnimationEnabled(it) },
             onDeathAnimationChange = { viewModel.setDeathAnimationEnabled(it) },
             onFollowBulletChange = { viewModel.setFollowBullet(it) },
+            onHighQualityExplosionsChange = { viewModel.setHighQualityExplosions(it) },
             onNeutralizedTallyChange = { viewModel.setNeutralizedTallyEnabled(it) },
             onNeutralizedTallyAllUkraineChange = { viewModel.setNeutralizedTallyAllUkraine(it) },
+            onAlarmEpisodeTallyChange = { viewModel.setAlarmEpisodeTallyEnabled(it) },
             onIconSetChangeForFun = { viewModel.setThreatIconSet(it) },
             onSlowRedChange = { viewModel.setSlowRedKm(it) },
             onSlowYellowChange = { viewModel.setSlowYellowKm(it) },
@@ -1303,7 +1307,7 @@ private fun ThreatCardHost(
                         modifier = Modifier
                     )
                     Row(
-                        modifier = Modifier.width(280.dp).padding(top = 2.dp),
+                        modifier = (if (cardSize == ThreatCardSize.SMALL) Modifier.width(250.dp) else Modifier.fillMaxWidth()).padding(top = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {

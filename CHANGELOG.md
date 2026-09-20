@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Morale settings now share a single source: wizard and Settings use the same toggles (including HD explosions and alarm summary) / Morale settings now share a single source: wizard and Settings use the same toggles (including HD explosions and alarm summary) 09-21_01:07:00
+
+- Fixed city size toggles not updating map labels / Fixed city size toggles not updating map labels 09-20_23:38:00
+
 - Alarm summary: when your oblast alarm ends, a separate morale notification shows what was neutralized during that alarm, with tap-to-replay / Alarm summary: when your oblast alarm ends, a separate morale notification shows what was neutralized during that alarm, with tap-to-replay 09-20_23:10:00
 
 - Redesigned small threat card with fixed 280dp width, larger icon, no title, vertical R and P and horizontal skull gauge / Redesigned small threat card with fixed 280dp width, larger icon, no title, vertical R and P and horizontal skull gauge 09-20_19:42:05

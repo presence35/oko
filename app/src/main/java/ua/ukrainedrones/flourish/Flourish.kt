@@ -160,8 +160,8 @@ internal fun clusterFlourishByOblast(records: List<FlourishRecord>): List<List<F
 }
 
 /** When a selected threat vanishes it shows the compact "shot-down" card and drops the
- *  selection only while the death animation is on, the map is the visible screen and the
- *  shelter overlay is down — nothing animates anywhere when the flourish is off. */
+ *  selection only while the death animation is on and the map is the visible screen —
+ *  shelters no longer block morale (see plan: full removal). */
 object FlourishPolicy {
     /** The selection should be dropped (card self-destructs) once the threat is gone and the
      *  death animation is enabled. */
@@ -171,7 +171,14 @@ object FlourishPolicy {
     fun showNeutralizedCard(
         selectedGone: Boolean,
         animOn: Boolean,
+        mapVisible: Boolean
+    ): Boolean = selectedGone && animOn && mapVisible
+
+    @Deprecated("Use 3-arg overload", ReplaceWith("showNeutralizedCard(selectedGone, animOn, mapVisible)"))
+    fun showNeutralizedCard(
+        selectedGone: Boolean,
+        animOn: Boolean,
         mapVisible: Boolean,
-        shelterModeActive: Boolean
-    ): Boolean = selectedGone && animOn && mapVisible && !shelterModeActive
+        @Suppress("UNUSED_PARAMETER") shelterModeActive: Boolean
+    ): Boolean = showNeutralizedCard(selectedGone, animOn, mapVisible)
 }

@@ -908,6 +908,7 @@ LaunchedEffect(selectedId) {
             forceShowAllProvider = { deathFx.forceShowAllCities.value }
         )
     }
+    val cityLabelOverlayState = androidx.compose.runtime.rememberUpdatedState(cityLabelOverlay)
 
     LaunchedEffect(cityLabelOverlay) {
         bridgeState.value?.invalidateOverlay()
@@ -939,13 +940,14 @@ LaunchedEffect(selectedId) {
 
                     // 1. City labels (culled by visible viewport bounding box queried once per frame)
                     val bounds = bridge.visibleGeoBounds(paddingX = 240f, paddingY = 60f)
+                    val overlay = cityLabelOverlayState.value
                     if (bounds != null) {
-                        cityLabelOverlay.draw(
+                        overlay.draw(
                             canvas, currentZoom, projLambda,
                             bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon
                         )
                     } else {
-                        cityLabelOverlay.draw(canvas, currentZoom, projLambda)
+                        overlay.draw(canvas, currentZoom, projLambda)
                     }
 
                     // 2. Nearby shelters — drawn from the snapshot taken at entry so pan/zoom can't change the set.
