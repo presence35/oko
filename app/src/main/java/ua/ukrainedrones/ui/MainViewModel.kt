@@ -197,6 +197,7 @@ data class SettingsState(
     val officialAlertsEnabled: Boolean get() = officialRedAlertsEnabled || officialYellowAlertsEnabled
     val officialAlertCityScope: Boolean get() = prefs.officialAlertCityScope
     val sirenOverride: Boolean get() = prefs.sirenOverride
+    val fallingDebrisDelaySec: Int get() = prefs.fallingDebrisDelaySec
     val criticalOfflineOverride: Boolean get() = prefs.criticalOfflineOverride
     val criticalOfflineBypassSilent: Boolean get() = prefs.criticalOfflineBypassSilent
     val bootRestartEnabled: Boolean get() = prefs.bootRestartEnabled
@@ -1152,6 +1153,10 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setSirenOverride(override: Boolean) {
         viewModelScope.launch { prefs.setSirenOverride(override) }
+    }
+
+    fun setFallingDebrisDelaySec(sec: Int) {
+        viewModelScope.launch { prefs.setFallingDebrisDelaySec(sec) }
     }
 
     fun setCriticalOfflineOverride(enabled: Boolean) {

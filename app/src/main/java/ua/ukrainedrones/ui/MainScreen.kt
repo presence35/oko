@@ -6,6 +6,7 @@ import ua.ukrainedrones.engine.ThreatZone
 import ua.ukrainedrones.engine.AlertLevel
 import ua.ukrainedrones.engine.toThreatType
 import ua.ukrainedrones.engine.distanceFlat
+import ua.ukrainedrones.service.FallingDebrisBuffer
 
 import android.Manifest
 import android.content.Intent
@@ -353,6 +354,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onOfficialYellowAlertsChange = remember { { viewModel.setOfficialYellowAlertsEnabled(it) } },
                 onOfficialAlertCityScopeChange = remember { { viewModel.setOfficialAlertCityScope(it) } },
                 onSirenOverrideChange = remember { { viewModel.setSirenOverride(it) } },
+                onFallingDebrisDelayChange = remember { { viewModel.setFallingDebrisDelaySec(it) } },
                 onCriticalOfflineOverrideChange = remember { { viewModel.setCriticalOfflineOverride(it) } },
                 onCriticalOfflineBypassSilentChange = remember { { viewModel.setCriticalOfflineBypassSilent(it) } },
                 onBootRestartChange = remember { { viewModel.setBootRestartEnabled(it) } },
@@ -1066,6 +1068,7 @@ private fun MapScreen(
                             calmMessage = remember(uiState.language, uiState.calmMessagesEnabled) {
                                 noThreatsMessage(uiState.language, uiState.calmMessagesEnabled)
                             },
+                            debrisText = debrisFooterText(s),
                             onThreatStripTap = onThreatStripTap
                         )
                     }
@@ -1286,7 +1289,7 @@ private fun ThreatCardHost(
             if (sel.selected != null) {
                 val threat = sel.selected
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.wrapContentWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     ThreatPopupCard(
@@ -1301,10 +1304,10 @@ private fun ThreatCardHost(
                         alertsOff = threat.type.toThreatType() in silencedTypes,
                         onDismiss = onDismiss,
                         fakeNeutralize = sel.fakeNeutralize,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
                     )
                     Row(
-                        modifier = (if (cardSize == ThreatCardSize.SMALL) Modifier.width(250.dp) else Modifier.fillMaxWidth().widthIn(max = 480.dp)).padding(top = 2.dp),
+                        modifier = (if (cardSize == ThreatCardSize.SMALL) Modifier.width(250.dp) else Modifier.wrapContentWidth()).padding(top = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1363,6 +1366,15 @@ private fun ThreatCardHost(
  *  Pure threat display — knows nothing about flourish phases. Owns its per-type cycle state
  *  so unrelated recompositions of the surrounding scope don't re-run grouping or sorting. */
 @Composable
+private fun debrisFooterText(s: Strings.StringSet): String? {
+    val sec by FallingDebrisBuffer.secondsRemaining.collectAsState()
+    if (sec <= 0) return null
+    val mm = sec / 60
+    val ss = sec % 60
+    return String.format(s.fallingDebrisFooterCountdown, String.format("%d:%02d", mm, ss))
+}
+
+@Composable
 private fun ThreatStripFooter(
     inner: List<NormalizedThreat>,
     outer: List<NormalizedThreat>,
@@ -1371,6 +1383,7 @@ private fun ThreatStripFooter(
     focusLocation: LatLng?,
     iconSet: ThreatIconSet,
     calmMessage: String,
+    debrisText: String?,
     onThreatStripTap: (NormalizedThreat) -> Unit
 ) {
     val innerCounts = inner.groupingBy { it.type.toThreatType() }.eachCount()
@@ -1380,7 +1393,7 @@ private fun ThreatStripFooter(
     }
     if (total == 0) {
         Text(
-            calmMessage,
+            debrisText ?: calmMessage,
             style = MaterialTheme.typography.bodyMedium,
             color = Color(AppPalette.SafeGreen),
             textAlign = TextAlign.Center,

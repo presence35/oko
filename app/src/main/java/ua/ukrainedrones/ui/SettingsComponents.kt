@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 internal val UkraineBlue = Color(AppPalette.UkraineBlue)
 
@@ -441,6 +442,55 @@ internal fun WarningTriangle(modifier: Modifier = Modifier) {
             color = Color(AppPalette.WarningLine),
             radius = 1.4f,
             center = Offset(w / 2f, h * 0.8f)
+        )
+    }
+}
+
+@Composable
+internal fun FallingDebrisDelayRow(
+    seconds: Int,
+    title: String,
+    description: String,
+    offLabel: String,
+    onCommit: (Int) -> Unit
+) {
+    var local by remember { mutableStateOf((seconds / 60).toFloat()) }
+    LaunchedEffect(seconds) { local = (seconds / 60).toFloat() }
+    val minutes = local.roundToInt().coerceIn(0, 10)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 4.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(
+                if (minutes == 0) offLabel else "$minutes min",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Slider(
+            value = local,
+            onValueChange = { local = it },
+            valueRange = 0f..10f,
+            steps = 9,
+            onValueChangeFinished = { onCommit(minutes * 60) },
+            interactionSource = rememberHapticInteractionSource(),
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }

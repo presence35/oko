@@ -164,32 +164,14 @@ fun ShelterPopupCard(
                 }
 
                 // Action button: Open in maps
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .clickable {
-                            val uri = Uri.parse("geo:0,0?q=${shelter.shelter.lat},${shelter.shelter.lon}($name)")
-                            val intent = Intent(Intent.ACTION_VIEW, uri)
-                            runCatching { context.startActivity(intent) }
-                        }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Outlined.LocationOn,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        s.shelterOpenInMaps,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+                OpenInMapsButton(
+                    lang = lang,
+                    onClick = {
+                        val uri = Uri.parse("geo:0,0?q=${shelter.shelter.lat},${shelter.shelter.lon}($name)")
+                        val intent = Intent(Intent.ACTION_VIEW, uri)
+                        runCatching { context.startActivity(intent) }
+                    }
+                )
             }
         }
     }

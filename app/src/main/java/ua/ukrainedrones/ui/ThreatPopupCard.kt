@@ -370,12 +370,6 @@ fun ThreatPopupCard(
                                         }
                                     }
                                 }
-                                ThreatLevelGauge(
-                                    level = threatLevel,
-                                    height = fontAware(38.dp),
-                                    skullSize = fontAware(14.dp),
-                                    barWidth = fontAware(8.dp)
-                                )
                             }
                         }
                         Spacer(Modifier.height(4.dp))
@@ -387,6 +381,8 @@ fun ThreatPopupCard(
                                 updatedAtMillis = threat.updatedAtMillis,
                                 strings = s
                             )
+                            Spacer(Modifier.weight(1f))
+                            ThreatLevelGaugeHorizontal(level = threatLevel, width = fontAware(120.dp))
                         }
                     }
                 }
@@ -554,6 +550,44 @@ internal fun repeatsShownInfo(course: String, typeLabel: String, labelEn: String
         while (padded in rest) rest = rest.replace(padded, " ")
     }
     return rest.isBlank()
+}
+
+/** Horizontal skull gauge for the compact card: skull left, bar fills left→right. */
+@Composable
+private fun ThreatLevelGaugeHorizontal(
+    level: Double,
+    width: Dp = fontAware(90.dp),
+    height: Dp = fontAware(10.dp),
+    skullSize: Dp = fontAware(18.dp)
+) {
+    val fraction = (level / 10.0).coerceIn(0.0, 1.0)
+    val color = levelColor(level)
+    val skullTint = if (level >= 3.0) color else Color(AppPalette.TextSecondary)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_skull),
+            contentDescription = null,
+            tint = skullTint,
+            modifier = Modifier.size(skullSize)
+        )
+        Spacer(Modifier.width(6.dp))
+        Box(
+            modifier = Modifier
+                .width(width)
+                .height(height)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(AppPalette.Border))
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .width(width * fraction.toFloat().coerceAtLeast(0.02f))
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(color)
+            )
+        }
+    }
 }
 
 @Composable

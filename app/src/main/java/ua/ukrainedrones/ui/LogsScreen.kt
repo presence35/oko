@@ -233,8 +233,7 @@ fun LogsDropDownSheet(
             .fillMaxHeight(0.85f)
             .background(Color(AppPalette.Card))
     ) {
-        // Top Header Bar — title + NEPTUN attribution cluster (mark + domain + status).
-        val siteUrl = registry.siteUrl
+        // Top Header Bar — clean single-row: title, then NEPTUN mark + domain + status + counts.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -248,43 +247,36 @@ fun LogsDropDownSheet(
                 color = Color.White,
                 modifier = Modifier.weight(1f)
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable {
-                        siteUrl?.let { url ->
-                            context.startActivity(
-                                Intent(
-                                    Intent.ACTION_VIEW,
-                                    Uri.parse(url)
-                                )
+            Image(
+                painter = painterResource(R.drawable.neptun),
+                contentDescription = s.attributionText,
+                colorFilter = ColorFilter.tint(connColor),
+                modifier = Modifier.height(16.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            val siteUrl = registry.siteUrl
+            Text(
+                siteUrl?.removePrefix("https://")?.removeSuffix("/") ?: "",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.clickable {
+                    siteUrl?.let { url ->
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(url)
                             )
-                        }
+                        )
                     }
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.neptun),
-                    contentDescription = s.attributionText,
-                    colorFilter = ColorFilter.tint(connColor),
-                    modifier = Modifier.height(22.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    siteUrl?.removePrefix("https://")?.removeSuffix("/") ?: "",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    healthWord,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = connColor
-                )
-            }
+                }
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                healthWord,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = connColor
+            )
         }
 
         // Tabs

@@ -86,6 +86,7 @@ fun SettingsScreen(
     onOfficialYellowAlertsChange: (Boolean) -> Unit,
     onOfficialAlertCityScopeChange: (Boolean) -> Unit,
     onSirenOverrideChange: (Boolean) -> Unit,
+    onFallingDebrisDelayChange: (Int) -> Unit,
     onCriticalOfflineOverrideChange: (Boolean) -> Unit,
     onCriticalOfflineBypassSilentChange: (Boolean) -> Unit,
     onBootRestartChange: (Boolean) -> Unit,
@@ -150,6 +151,7 @@ fun SettingsScreen(
     val officialYellowAlertsEnabled = state.officialYellowAlertsEnabled
     val officialAlertCityScope = state.officialAlertCityScope
     val sirenOverride = state.sirenOverride
+    val fallingDebrisDelaySec = state.fallingDebrisDelaySec
     val criticalOfflineOverride = state.criticalOfflineOverride
     val criticalOfflineBypassSilent = state.criticalOfflineBypassSilent
     val nightEnabled = state.nightEnabled
@@ -619,6 +621,14 @@ fun SettingsScreen(
                         icon = painterResource(R.drawable.ic_volume_up),
                         iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
                         flash = flashId == "sirenOverride"
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    FallingDebrisDelayRow(
+                        seconds = fallingDebrisDelaySec,
+                        title = s.fallingDebrisDelayTitle,
+                        description = s.fallingDebrisDelayDesc,
+                        offLabel = s.fallingDebrisOffLabel,
+                        onCommit = onFallingDebrisDelayChange
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertToggleRow(

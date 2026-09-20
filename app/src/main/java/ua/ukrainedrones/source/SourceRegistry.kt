@@ -136,8 +136,7 @@ class SourceRegistry {
     private var milestoneLoopStarted = false
 
     /** Branding link shown in the Logs header (domain of the primary source). */
-    val siteUrl: String? get() = _sources.value.firstOrNull { it.id == PRIMARY_SOURCE_ID }?.siteUrl
-        ?: _sources.value.firstOrNull()?.siteUrl
+    val siteUrl: String? get() = _sources.value.firstOrNull()?.siteUrl
 
     fun register(source: Source, scope: CoroutineScope) {
         _sources.update { it + source }

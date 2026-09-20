@@ -2,14 +2,7 @@
 
 ## [Unreleased]
 
-- Logs header NEPTUN credit is now a single tappable cluster with a larger status-tinted trident and domain / Logs header NEPTUN credit is now a single tappable cluster with a larger status-tinted trident and domain 09-20_22:10:59
-
-- Removed the shoot-down show paused toast / Removed the shoot-down show paused toast 09-20_22:06:55
-
-- Large threat card now fills its row so the size and locate buttons sit on the card edges, not the screen edges / Large threat card now fills its row so the size and locate buttons sit on the card edges, not the screen edges 09-21_01:32:00
-
-- Small threat card skull is now a vertical gauge right of the P bar, timer left below / Small threat card skull is now a vertical gauge right of the P bar, timer left below 09-21_01:21:00
-
+- Threat cards are no longer forced to fill the full available width / Threat cards are no longer forced to fill the full available width 09-20_12:00:00
 - Morale settings now share a single source: wizard and Settings use the same toggles (including HD explosions and alarm summary) / Morale settings now share a single source: wizard and Settings use the same toggles (including HD explosions and alarm summary) 09-21_01:07:00
 
 - Fixed city size toggles not updating map labels / Fixed city size toggles not updating map labels 09-20_23:38:00

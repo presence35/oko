@@ -223,6 +223,7 @@ class AlertService : Service() {
         val yellowAlertsEnabled: Boolean = true,
         val zoneSirenOverride: Boolean,
         val officialSirenOverride: Boolean,
+        val fallingDebrisDelaySec: Int,
         val degraded: Boolean = false,
         val threats: Map<String, NormalizedThreat>,
         val rawThreats: Map<String, NormalizedThreat> = emptyMap(),
@@ -317,6 +318,10 @@ class AlertService : Service() {
             }
             NeutralizedTally.ACTION_NEUTRALIZED_DISMISS -> tally.reset()
             AlarmEpisodeTally.ACTION_ALARM_EPISODE_DISMISS -> episodeTally.reset()
+            AlertNotificationManager.ACTION_ALLCLEAR_DISMISSED -> {
+                allClearSwipedAway = true
+                debrisBuffer.abort()
+            }
         }
         return START_STICKY
     }
@@ -559,6 +564,7 @@ fastYellowArmed = p.fastYellowArmed,
             yellowAlertsEnabled = p.officialYellowAlertsEnabled,
                     zoneSirenOverride = zoneSirenOverride,
                     officialSirenOverride = officialSirenOverride,
+                    fallingDebrisDelaySec = p.fallingDebrisDelaySec,
                     degraded = registry.degraded.value,
                     threats = threats,
                     rawThreats = rawThreats,
@@ -820,8 +826,18 @@ fastYellowArmed = p.fastYellowArmed,
             }
             if (lastOfficialEpisode != null && state.focusOblastRawLevel == AlertLevel.NONE && state.officialAlertsEnabled) {
                 if (alertable.isEmpty()) cancelAlert()
+                allClearSwipedAway = false
                 lastCleanAllClearCity = state.focusBannerCity
-                debrisBuffer.start(durationSeconds = 180)
+                lastChannelLang = state.lang
+                val s = Strings.get(state.lang)
+                val delay = state.fallingDebrisDelaySec.coerceIn(0, 600)
+                if (delay > 0) {
+                    postAllClear(s, state.focusBannerCity, debrisSeconds = delay, silent = true)
+                    debrisBuffer.start(durationSeconds = delay)
+                } else {
+                    postAllClear(s, state.focusBannerCity, debrisSeconds = 0, silent = true)
+                    audioAlarmDispatcher.dispatchAllClearChime()
+                }
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
                     sirenOverride = state.officialSirenOverride, vibrationLevel = null,
