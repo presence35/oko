@@ -38,6 +38,14 @@ import com.presaince.oko.engine.LatLng
 import com.presaince.oko.engine.OblastAlert
 import com.presaince.oko.engine.inOblast
 import com.presaince.oko.engine.ThreatZone
+import com.presaince.oko.AlertService
+import com.presaince.oko.DebugLog
+import com.presaince.oko.DebugLogKind
+import com.presaince.oko.DebugLogReason
+import com.presaince.oko.DigestWindow
+import com.presaince.oko.NotifyPlugin
+import com.presaince.oko.NotifyPrefs
+import com.presaince.oko.ZonePolicy
 import com.presaince.oko.engine.AlertLevel
 import com.presaince.oko.engine.toEngineString
 import com.presaince.oko.engine.toThreatType
@@ -144,6 +152,7 @@ data class UiState(
     val alertYellowRaionKeys: Set<Pair<String, String>> = emptySet(),
     val alertingOblastCount: Int = 0,
     val justFunMasterEnabled: Boolean = false,
+    val moraleVoice: MoraleVoice = MoraleVoice.RANDOM,
     val deathAnimationEnabled: Boolean = true,
     val flybyAnimationEnabled: Boolean = true,
     val followBullet: Boolean = true,
@@ -192,6 +201,10 @@ data class SettingsState(
     val slowYellowArmed: Boolean get() = prefs.slowYellowArmed
     val fastRedArmed: Boolean get() = prefs.fastRedArmed
     val fastYellowArmed: Boolean get() = prefs.fastYellowArmed
+    val zonePolicy: ZonePolicy get() = prefs.zonePolicy
+    val digestMax: Int get() = prefs.digestMax
+    val digestWindow: DigestWindow get() = prefs.digestWindow
+    val digestPerType: Boolean get() = prefs.digestPerType
     val officialRedAlertsEnabled: Boolean get() = prefs.officialRedAlertsEnabled
     val officialYellowAlertsEnabled: Boolean get() = prefs.officialYellowAlertsEnabled
     val officialAlertsEnabled: Boolean get() = officialRedAlertsEnabled || officialYellowAlertsEnabled
@@ -237,6 +250,7 @@ data class SettingsState(
     val sheltersEnabled: Boolean get() = prefs.sheltersEnabled
     val sheltersWithKids: Boolean get() = prefs.sheltersWithKidsEnabled
     val justFunMasterEnabled: Boolean get() = prefs.justFunMasterEnabled
+    val moraleVoice: MoraleVoice get() = prefs.moraleVoice
     val deathAnimationEnabled: Boolean get() = prefs.deathAnimationEnabled
     val highQualityExplosions: Boolean get() = prefs.highQualityExplosions
     val flybyAnimationEnabled: Boolean get() = prefs.flybyAnimationEnabled
@@ -393,6 +407,8 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
 
     private val registry = AppSources.registry
     private val engine = ThreatEngine(registry.typeCatalog.value)
+    /** Previous tick's engine tiers — the hysteresis band input for the map evaluation. */
+    private var lastZoneTiers: Map<String, ThreatZone> = emptyMap()
     private val threatsFlow = registry.allThreats.map { list ->
         list.associate { it.id to it }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
@@ -493,6 +509,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val showBorders: Boolean,
         val showRegionBorders: Boolean,
         val justFunMasterEnabled: Boolean,
+        val moraleVoice: MoraleVoice,
         val deathAnimationEnabled: Boolean,
         val flybyAnimationEnabled: Boolean,
         val followBullet: Boolean,
@@ -595,6 +612,7 @@ val fastGroupCollapsed: Boolean,
             showBorders = showBorders,
             showRegionBorders = showRegionBorders,
             justFunMasterEnabled = justFunMasterEnabled,
+            moraleVoice = moraleVoice,
             deathAnimationEnabled = deathAnimationEnabled,
             flybyAnimationEnabled = flybyAnimationEnabled,
             followBullet = followBullet,
@@ -773,6 +791,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
 showBorders = prefs.showBorders,
             showRegionBorders = prefs.showRegionBorders,
             justFunMasterEnabled = prefs.justFunMasterEnabled,
+            moraleVoice = prefs.moraleVoice,
             deathAnimationEnabled = prefs.deathAnimationEnabled,
             flybyAnimationEnabled = prefs.flybyAnimationEnabled,
             followBullet = prefs.followBullet,
@@ -1008,8 +1027,9 @@ showBorders = prefs.showBorders,
             focusToken = focusToken,
             focusCityUa = attribution.bannerCityUa.takeIf { it.isNotBlank() },
             cityScope = officialAlertCityScope,
-            lang = language
-        )
+            lang = language,
+            prevTiers = lastZoneTiers
+        ).also { lastZoneTiers = it.zoneThreats }
         val inInner = evaluation.threatsInner
         val inOuter = evaluation.threatsOuter
         val mapThreats = evaluation.mapThreats
@@ -1408,6 +1428,10 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setOverlapMode(mode) }
     }
 
+    fun setMoraleVoice(voice: MoraleVoice) {
+        viewModelScope.launch { prefs.setMoraleVoice(voice) }
+    }
+
     fun setShowMediumCities(show: Boolean) {
         viewModelScope.launch { prefs.setShowMediumCities(show) }
     }
@@ -1423,6 +1447,31 @@ fun setAlertsArmed(armed: Boolean) {
     fun setShowThreatIdsOnMap(show: Boolean) {
         viewModelScope.launch { prefs.setShowThreatIdsOnMap(show) }
     }
+
+    fun setZonePolicy(policy: ZonePolicy) {
+        viewModelScope.launch { prefs.setZonePolicy(policy) }
+    }
+
+    fun setDigestMax(max: Int) {
+        viewModelScope.launch { prefs.setDigestMax(max) }
+    }
+
+    fun setDigestWindow(window: DigestWindow) {
+        viewModelScope.launch { prefs.setDigestWindow(window) }
+    }
+
+    fun setDigestPerType(perType: Boolean) {
+        viewModelScope.launch { prefs.setDigestPerType(perType) }
+    }
+
+    /** What-if retrospective: sounds per preset over the last-24h zone FIRED rows. */
+    val policyWhatIf: StateFlow<Map<ZonePolicy, Int>> =
+        combine(DebugLog.entries, prefs.preferences) { entries, p ->
+            val fired = entries.filter {
+                it.kind == DebugLogKind.ZONE_ENTER && it.reason == DebugLogReason.FIRED
+            }
+            NotifyPlugin.whatIf(fired, NotifyPrefs(p.zonePolicy, p.digestMax, p.digestWindow, p.digestPerType))
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     fun setAlertRegionMode(mode: AlertRegionMode) {
         viewModelScope.launch { prefs.setAlertRegionMode(mode) }

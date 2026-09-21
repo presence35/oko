@@ -357,13 +357,24 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 
 | Behavior | Trigger | Notes |
 |---|---|---|
-| Zone siren | Threat enters armed zone tier | 20s grace, coalescing |
+| Zone siren | Plugin verdict SOUND for the winning threat | Frequency preset, floor, digest (below) |
+| Zone silent update | Verdict SILENT (downgrade, steady, winner-switch) | Content refresh, no sound |
 | Official siren | `officialAlertActiveFor()` true | Region-latched, persists across restart |
 | All-clear | Raw official episode ends for the latched focus region | One clear per episode: red, yellow, or red-then-yellow; never more than one. Keyed on the raw ending, so a mid-episode scope drop (alert narrowed away from your city) still gets its all-clear |
 | Offline critical | Offline 5 min, or 1 min while an official alert (red/yellow) is active on the focus oblast | Once per episode, honors the critical-offline toggle; milestone emission (SourceRegistry `degradedSince` + `connectionMilestones`) vs notification (service) |
 | Offline bypass silent | Sub-toggle of offline critical | Plays sound in silent mode |
 | Night siren overrides | Night window active | Separate zone + official override flags |
 | Resolved tally | Threat removed from stream | Scoped to focus oblast or all-Ukraine |
+
+### Notification policy (NotifyPlugin — frequency, not capability)
+
+- Capability ("can it ever sound": armed bells, official toggles, per-type enables) is separate from frequency ("how often": the preset). The service executes verdicts; all judgment lives in the plugin.
+- Tiers carry a 10% spatial hysteresis band (`ZONE_HYSTERESIS_MARGIN`): upgrades immediate, downgrades/exits hold. Shared by map + service.
+- An episode opens on first zone sighting and closes only when the track dies (stale / resolved / gone). Flicker ticks never close it, so they never re-sound. A user-shot same-id respawn inside the grace is the same kill, never a new onset.
+- Floor (inside every preset, never a service bypass): the first INNER sighting of an episode always sounds, as does any escalation to INNER. Presets only quiet repeats.
+- Presets: Every change (entries + re-entries + escalations sound) / Once per threat (default) / Once per type (until the sky is clear of it) / Digest (max N sounds per window: off, 2/10/60 min, or per alarm sitting; counted per type or across all; default 10/sitting/all).
+- Every swallowed sound is logged with its policy reason (RATE_LIMITED / ONCE_PER_THREAT / ONCE_PER_TYPE). Preset switch = fresh start; digest tweaks clear only rate buckets.
+- Official alerts keep onset-always semantics outside the presets (byte-for-byte prior behavior).
 
 ### UI
 

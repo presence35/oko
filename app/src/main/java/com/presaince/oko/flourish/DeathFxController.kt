@@ -131,6 +131,8 @@ class DeathFxController(
     /** The threat type being targeted while an auto-countdown runs — null once it fires. */
     private val _strikeType = MutableStateFlow<ThreatType?>(null)
     val strikeType: StateFlow<ThreatType?> = _strikeType.asStateFlow()
+    private val _strikeAnchor = MutableStateFlow<LatLng?>(null)
+    val strikeAnchor: StateFlow<LatLng?> = _strikeAnchor.asStateFlow()
 
     /** Number of auto-strikes currently pending (countdown) or in flight — the count the
      *  countdown overlay shows next to the type label, so it reads N during a wave, not 0. */
@@ -194,6 +196,7 @@ class DeathFxController(
         replayJob?.cancel()
         replayJob = null
         _replayProgress.value = null
+        _strikeAnchor.value = null
         forceShowAllCities.value = false
         cancelAutoCountdown()
         _autoStrikeActive.value = false
@@ -209,12 +212,15 @@ class DeathFxController(
     }
 
     /** Launch the tally-tap replay on the controller's scope, replacing any show in flight. */
-    fun startReplay(records: List<FlourishRecord>) {
+    fun startReplay(focus: LatLng?, records: List<FlourishRecord>) {
         if (!justFunEnabled.value) return
         replayJob?.cancel()
         _replayProgress.value = null
-        replayJob = scope.launch { replay(records) }
+        replayJob = scope.launch { replay(focus, records) }
     }
+
+    @Deprecated("Use focus overload", ReplaceWith("startReplay(null, records)"))
+    fun startReplay(records: List<FlourishRecord>) = startReplay(null, records)
 
     /**
      * Start a 3-second countdown before an auto-strike fires. [onFire] executes when the
@@ -227,6 +233,7 @@ class DeathFxController(
         if (!followBulletEnabled.value && !isOnScreen(anchor.lat, anchor.lon)) return
         countdownJob?.cancel()
         pendingAutoStrike = onFire
+        _strikeAnchor.value = anchor
         _strikeType.value = type
         _pendingStrikeCount.update { it + 1 }
         countdownJob = scope.launch {
@@ -341,6 +348,7 @@ class DeathFxController(
         pendingAutoStrike = null
         _countdown.value = null
         _strikeType.value = null
+        _strikeAnchor.value = null
         _autoStrikeActive.value = false
     }
 
@@ -363,6 +371,7 @@ class DeathFxController(
         type: ThreatType = ThreatType.UNKNOWN
     ): Boolean {
         if (!justFunEnabled.value) return false
+        _strikeAnchor.value = geo
         overlay.spawn(id, geo, startGeo, randomEdgeOrigin(), icon, rotationDeg, alpha, type = type)
         return true
     }
@@ -472,7 +481,7 @@ class DeathFxController(
      * red alert ejects it (see [clear], which also cancels this show mid-flight). Launched via
      * [startReplay]; the caller gates on visibility/alert/lifecycle before invoking.
      */
-    suspend fun replay(records: List<FlourishRecord>) {
+    suspend fun replay(focus: LatLng?, records: List<FlourishRecord>) {
         if (!justFunEnabled.value) return
         val b = bridge() ?: return
         if (records.isEmpty()) return
@@ -539,7 +548,9 @@ class DeathFxController(
                     bulletInGroup = k + 1,
                     groupSize = group.size,
                     bulletOverall = index,
-                    totalRecords = records.size
+                    totalRecords = records.size,
+                    groupType = flourishGroupType(group),
+                    distanceKm = flourishGroupDistanceKm(group, focus)
                 )
                 strikeHaptics()
             }

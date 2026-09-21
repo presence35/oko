@@ -78,6 +78,26 @@ object Strings {
         val officialAlertScopeDesc: String,
         val sirenOverrideTitle: String,
         val sirenOverrideDesc: String,
+        val notifyPolicyTitle: String,
+        val notifyPolicyDesc: String,
+        val policyEveryChangeTitle: String,
+        val policyEveryChangeDesc: String,
+        val policyOncePerThreatTitle: String,
+        val policyOncePerThreatDesc: String,
+        val policyOncePerTypeTitle: String,
+        val policyOncePerTypeDesc: String,
+        val policyDigestTitle: String,
+        val policyDigestDesc: String,
+        val digestMaxLabel: String,
+        val digestWindowLabel: String,
+        val digestScopeLabel: String,
+        val digestScopePerType: String,
+        val digestScopeAny: String,
+        val digestWindowOff: String,
+        val digestWindowEpisode: String,
+        val digestWindowMinFormat: String,
+        val policyWhatIfActualFormat: String,
+        val policyWhatIfEstimateFormat: String,
         val fallingDebrisDelayTitle: String,
         val fallingDebrisDelayDesc: String,
         val fallingDebrisOffLabel: String,
@@ -353,6 +373,9 @@ val nightSoundLabel: String,
         val debugReasonStale: String,
         val debugReasonOutsideZones: String,
         val debugReasonToggleOff: String,
+        val debugReasonRateLimited: String,
+        val debugReasonOncePerThreat: String,
+        val debugReasonOncePerType: String,
         val debugKindOfficialOn: String,
         val debugKindOfficialOff: String,
         val debugKindZoneEnter: String,
@@ -589,8 +612,10 @@ val nightSoundLabel: String,
         val fakeNeutralizingLabel: String,
         val fakeNeutralizingNote: String,
         val flourishDisabledToastFormat: String,
-val tapToCancelLabel: String,
-        val stopReplayLabel: String
+        val tapToCancelLabel: String,
+        val stopReplayLabel: String,
+        val flourishResolvingVerb: String,
+        val flourishNeutralizingVerb: String
     )
 
     /** One-time explainer copy. [items] order: threatToggles, officialAlerts, sirenOverride,
@@ -720,6 +745,26 @@ val tapToCancelLabel: String,
         val officialAlertScopeDesc: String get() = settings.officialAlertScopeDesc
         val sirenOverrideTitle: String get() = settings.sirenOverrideTitle
         val sirenOverrideDesc: String get() = settings.sirenOverrideDesc
+        val notifyPolicyTitle: String get() = settings.notifyPolicyTitle
+        val notifyPolicyDesc: String get() = settings.notifyPolicyDesc
+        val policyEveryChangeTitle: String get() = settings.policyEveryChangeTitle
+        val policyEveryChangeDesc: String get() = settings.policyEveryChangeDesc
+        val policyOncePerThreatTitle: String get() = settings.policyOncePerThreatTitle
+        val policyOncePerThreatDesc: String get() = settings.policyOncePerThreatDesc
+        val policyOncePerTypeTitle: String get() = settings.policyOncePerTypeTitle
+        val policyOncePerTypeDesc: String get() = settings.policyOncePerTypeDesc
+        val policyDigestTitle: String get() = settings.policyDigestTitle
+        val policyDigestDesc: String get() = settings.policyDigestDesc
+        val digestMaxLabel: String get() = settings.digestMaxLabel
+        val digestWindowLabel: String get() = settings.digestWindowLabel
+        val digestScopeLabel: String get() = settings.digestScopeLabel
+        val digestScopePerType: String get() = settings.digestScopePerType
+        val digestScopeAny: String get() = settings.digestScopeAny
+        val digestWindowOff: String get() = settings.digestWindowOff
+        val digestWindowEpisode: String get() = settings.digestWindowEpisode
+        val digestWindowMinFormat: String get() = settings.digestWindowMinFormat
+        val policyWhatIfActualFormat: String get() = settings.policyWhatIfActualFormat
+        val policyWhatIfEstimateFormat: String get() = settings.policyWhatIfEstimateFormat
         val fallingDebrisDelayTitle: String get() = settings.fallingDebrisDelayTitle
         val fallingDebrisDelayDesc: String get() = settings.fallingDebrisDelayDesc
         val fallingDebrisOffLabel: String get() = settings.fallingDebrisOffLabel
@@ -1049,6 +1094,9 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val debugReasonStale: String get() = misc.debugReasonStale
         val debugReasonOutsideZones: String get() = misc.debugReasonOutsideZones
         val debugReasonToggleOff: String get() = misc.debugReasonToggleOff
+        val debugReasonRateLimited: String get() = misc.debugReasonRateLimited
+        val debugReasonOncePerThreat: String get() = misc.debugReasonOncePerThreat
+        val debugReasonOncePerType: String get() = misc.debugReasonOncePerType
         val debugKindOfficialOn: String get() = misc.debugKindOfficialOn
         val debugKindOfficialOff: String get() = misc.debugKindOfficialOff
         val debugKindZoneEnter: String get() = misc.debugKindZoneEnter
@@ -1273,6 +1321,8 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val flourishDisabledToastFormat: String get() = guide.flourishDisabledToastFormat
         val tapToCancelLabel: String get() = guide.tapToCancelLabel
         val stopReplayLabel: String get() = guide.stopReplayLabel
+        val flourishResolvingVerb: String get() = guide.flourishResolvingVerb
+        val flourishNeutralizingVerb: String get() = guide.flourishNeutralizingVerb
         val explainerVisualLabel: String get() = explainers.visualLabel
         val explainerScenarioLabel: String get() = explainers.scenarioLabel
         val explainerGotIt: String get() = explainers.gotIt
@@ -1299,6 +1349,9 @@ fun sourcesWord(count: Int, lang: AppLanguage): String {
     return forms[pluralIndex(count, lang).coerceAtMost(forms.lastIndex)]
 }
 
+fun flourishDistanceSuffix(km: Int, lang: AppLanguage): String =
+    " · $km ${Strings.get(lang).kmUnit}"
+
 fun resolvedThreatsPhrase(count: Int, lang: AppLanguage): String {
     val s = Strings.get(lang)
     val form = s.wordForms.resolvedThreats[pluralIndex(count, lang).coerceAtMost(s.wordForms.resolvedThreats.lastIndex)]
@@ -1311,10 +1364,14 @@ fun resolvingThreatsPhrase(count: Int, lang: AppLanguage): String {
     return String.format(form, count)
 }
 
-fun noThreatsMessage(lang: AppLanguage, calmMessages: Boolean = true): String {
+fun noThreatsMessage(
+    lang: AppLanguage,
+    calmMessages: Boolean = true,
+    voice: MoraleVoice = MoraleVoice.RANDOM
+): String {
     val s = Strings.get(lang)
     if (!calmMessages) return s.status.noThreatsMessage
-    return s.calmMessages.random()
+    return moraleVoicePack(lang, resolveMoraleVoice(voice)).calm.random()
 }
 
 fun preciseGpsAgePhrase(minutes: Long, lang: AppLanguage): String {

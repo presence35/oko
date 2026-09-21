@@ -27,10 +27,12 @@ enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, REGION_THREAT, 
 /**
  * Why a decision landed the way it did. [FIRED] = a notification was actually posted
  * (zone siren or official alert / all-clear); every other value is a "why not".
+ * The RATE_LIMITED / ONCE_PER_THREAT / ONCE_PER_TYPE trio mirrors [PolicyReason]:
+ * the NotifyPlugin swallowed a would-be sound.
  */
 enum class DebugLogReason {
     FIRED, BELL_MUTED, ALREADY_NOTIFIED, COALESCED, TYPE_OFF, ADVISORY, STALE,
-    OUTSIDE_ZONES, TOGGLE_OFF
+    OUTSIDE_ZONES, TOGGLE_OFF, RATE_LIMITED, ONCE_PER_THREAT, ONCE_PER_TYPE
 }
 
 /**
@@ -66,8 +68,10 @@ data class DebugLogContext(
     val enabledTypes: Set<ThreatType>,
     val zoneThreats: Map<String, ThreatZone>,
     val alertable: Map<String, ThreatZone>,
-    val knownZones: Map<String, ThreatZone>,
-    val postedId: String?,
+    /** This tick's per-threat plugin verdicts (alertable ids only). */
+    val verdicts: Map<String, PluginVerdict>,
+    /** Threat id driving the shown notification (the post winner), if any. */
+    val winnerId: String?,
     val night: Boolean,
     val sirenOverride: Boolean,
     val fastVibrationLevel: Int,
@@ -173,12 +177,37 @@ object DebugLog {
     }
 
     /**
+     * Synchronous FIRED row, recorded at post time by AlertService when it actually
+     * shows the zone notification. Seeds the verdict fingerprint so the next sweep
+     * dedups the steady state instead of logging a follow-up ALREADY_NOTIFIED row.
+     */
+    fun recordZoneFired(
+        threatId: String,
+        threatType: ThreatType?,
+        tier: ThreatZone,
+        night: Boolean,
+        sirenOverride: Boolean,
+        vibrationLevel: Int?,
+        distanceKm: Double?,
+        locality: String?,
+        now: Long
+    ) {
+        val entry = DebugLogEntry(
+            now, DebugLogKind.ZONE_ENTER, night, sirenOverride, vibrationLevel,
+            true, DebugLogReason.FIRED, threatId, threatType, tier, distanceKm, locality
+        )
+        synchronized(verdictsLock) { verdicts[threatId] = fingerprintOf(entry) }
+        record(entry)
+    }
+
+    /**
      * Per-tick verdict sweep over every threat in the active region (within the type's
      * reach of the focus point, or in the focus oblast). Logs each threat's lifecycle on
-     * transition only: entering a zone (fired / coalesced / bell muted / already notified),
+     * transition only: entering a zone (coalesced / bell muted / already notified),
      * being in the region but outside the zones (or excluded: stale / advisory / type off),
-     * and leaving the region. Uses the service's own computed maps ([DebugLogContext]) —
-     * never re-derives decision formulas.
+     * and leaving the region. FIRED rows are never produced here — they are recorded
+     * synchronously at post time via [recordZoneFired]. Uses the service's own computed
+     * maps ([DebugLogContext]) — never re-derives decision formulas.
      */
     fun sweep(ctx: DebugLogContext) {
         val newEntries = synchronized(verdictsLock) {
@@ -193,7 +222,6 @@ object DebugLog {
     internal fun zoneEntry(
         t: NormalizedThreat,
         spatial: ThreatZone,
-        focus: LatLng,
         distKm: Double,
         ctx: DebugLogContext
     ): DebugLogEntry {
@@ -205,13 +233,21 @@ object DebugLog {
                 notified = false
                 reason = DebugLogReason.BELL_MUTED
             }
-            // FIRED must win over ALREADY_NOTIFIED: AlertService marks the id known BEFORE the
-            // sweep runs, so a just-posted siren arrives here with knownZones already updated.
-            ctx.postedId == t.id -> {
+            ctx.verdicts[t.id]?.kind == VerdictKind.SOUND -> {
+                // Already recorded synchronously at post time; the shared SIREN
+                // fingerprint dedups this, so it never double-logs.
                 notified = true
                 reason = DebugLogReason.FIRED
             }
-            ctx.knownZones[t.id] == effective -> {
+            ctx.verdicts[t.id]?.kind == VerdictKind.SUPPRESS -> {
+                notified = false
+                reason = when (ctx.verdicts[t.id]?.reason) {
+                    PolicyReason.RATE_LIMITED -> DebugLogReason.RATE_LIMITED
+                    PolicyReason.ONCE_PER_TYPE -> DebugLogReason.ONCE_PER_TYPE
+                    else -> DebugLogReason.ONCE_PER_THREAT
+                }
+            }
+            ctx.winnerId == t.id -> {
                 notified = false
                 reason = DebugLogReason.ALREADY_NOTIFIED
             }
@@ -250,13 +286,15 @@ object DebugLog {
     }
 
     /**
-     * Two different reasons can represent the same audible steady state — FIRED and
-     * ALREADY_NOTIFIED both mean "siren up for this tier" — so they share a fingerprint
-     * and don't spam a duplicate row the tick after they fire.
+     * Zone rows that differ only by who-won-the-tick share one fingerprint: FIRED
+     * (recorded at post time), COALESCED (lost the tick) and ALREADY_NOTIFIED (steady)
+     * all mean "in zone, handled" — so a new threat logs once and the steady state
+     * stays silent. Tier/night changes still log. BELL_MUTED stays distinct (actionable).
      */
     internal fun fingerprintOf(entry: DebugLogEntry): String {
         val state = when (entry.reason) {
-            DebugLogReason.FIRED, DebugLogReason.ALREADY_NOTIFIED -> "SIREN"
+            DebugLogReason.FIRED, DebugLogReason.ALREADY_NOTIFIED, DebugLogReason.COALESCED,
+            DebugLogReason.RATE_LIMITED, DebugLogReason.ONCE_PER_THREAT, DebugLogReason.ONCE_PER_TYPE -> "SIREN"
             else -> entry.reason.name
         }
         return "${entry.kind.name}|${entry.tier?.name}|$state|${entry.night}"
@@ -312,7 +350,7 @@ internal fun computeSweep(
         ) continue
         regionIds.add(t.id)
 
-        val entry = ctx.zoneThreats[t.id]?.let { DebugLog.zoneEntry(t, it, focus, distKm, ctx) }
+        val entry = ctx.zoneThreats[t.id]?.let { DebugLog.zoneEntry(t, it, distKm, ctx) }
             ?: DebugLog.regionEntry(t, distKm, ctx)
         val fingerprint = DebugLog.fingerprintOf(entry)
         if (nextVerdicts[t.id] == fingerprint) continue

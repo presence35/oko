@@ -527,6 +527,207 @@ internal fun AlertRegionModeRow(
     }
 }
 
+/** Notification frequency preset picker: four full-width rows, each with title,
+ *  description and the what-if retrospective over the last 24h of Decisions. */
+@Composable
+internal fun NotifyPolicyRow(
+    title: String,
+    description: String,
+    selected: ZonePolicy,
+    whatIf: Map<ZonePolicy, Int>,
+    onChange: (ZonePolicy) -> Unit,
+    s: Strings.StringSet
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
+    ) {
+        Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(3.dp))
+        Text(
+            description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(10.dp))
+        val actual = whatIf[ZonePolicy.EVERY_CHANGE]
+        ZonePolicy.values().forEach { policy ->
+            val isSel = policy == selected
+            val sub = when (policy) {
+                ZonePolicy.EVERY_CHANGE ->
+                    actual?.let { String.format(s.policyWhatIfActualFormat, it) }
+                else -> whatIf[policy]?.let { String.format(s.policyWhatIfEstimateFormat, it) }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(
+                        width = if (isSel) 2.dp else 1.dp,
+                        color = if (isSel) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outlineVariant,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .hapticClickable { onChange(policy) }
+                    .padding(horizontal = 12.dp, vertical = 9.dp)
+            ) {
+                Column {
+                    Text(
+                        text = policyTitle(policy, s),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
+                    )
+                    Text(
+                        text = policyDesc(policy, s),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    sub?.let {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+private fun policyTitle(policy: ZonePolicy, s: Strings.StringSet): String = when (policy) {
+    ZonePolicy.EVERY_CHANGE -> s.policyEveryChangeTitle
+    ZonePolicy.ONCE_PER_THREAT -> s.policyOncePerThreatTitle
+    ZonePolicy.ONCE_PER_TYPE -> s.policyOncePerTypeTitle
+    ZonePolicy.DIGEST -> s.policyDigestTitle
+}
+
+private fun policyDesc(policy: ZonePolicy, s: Strings.StringSet): String = when (policy) {
+    ZonePolicy.EVERY_CHANGE -> s.policyEveryChangeDesc
+    ZonePolicy.ONCE_PER_THREAT -> s.policyOncePerThreatDesc
+    ZonePolicy.ONCE_PER_TYPE -> s.policyOncePerTypeDesc
+    ZonePolicy.DIGEST -> s.policyDigestDesc
+}
+
+/** Digest knobs, shown only under the Digest preset: max sounds stepper (1-10),
+ *  window chips (off / minutes / per alarm sitting) and counting scope. */
+@Composable
+internal fun DigestControlsRow(
+    max: Int,
+    onMaxChange: (Int) -> Unit,
+    window: DigestWindow,
+    onWindowChange: (DigestWindow) -> Unit,
+    perType: Boolean,
+    onPerTypeChange: (Boolean) -> Unit,
+    s: Strings.StringSet
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                s.digestMaxLabel,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(
+                onClick = { onMaxChange((max - 1).coerceAtLeast(1)) },
+                enabled = max > 1,
+                interactionSource = rememberHapticInteractionSource(),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+            ) { Text("−") }
+            Text(
+                "$max",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            TextButton(
+                onClick = { onMaxChange((max + 1).coerceAtMost(10)) },
+                enabled = max < 10,
+                interactionSource = rememberHapticInteractionSource(),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+            ) { Text("+") }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            s.digestWindowLabel,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DigestChip(s.digestWindowOff, window == DigestWindow.OFF, Modifier.weight(1f)) {
+                onWindowChange(DigestWindow.OFF)
+            }
+            listOf(2, 10, 60).forEach { min ->
+                val w = when (min) {
+                    2 -> DigestWindow.MIN_2
+                    10 -> DigestWindow.MIN_10
+                    else -> DigestWindow.MIN_60
+                }
+                DigestChip(
+                    String.format(s.digestWindowMinFormat, min),
+                    window == w,
+                    Modifier.weight(1f)
+                ) { onWindowChange(w) }
+            }
+            DigestChip(s.digestWindowEpisode, window == DigestWindow.EPISODE, Modifier.weight(1f)) {
+                onWindowChange(DigestWindow.EPISODE)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            s.digestScopeLabel,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DigestChip(s.digestScopePerType, perType, Modifier.weight(1f)) { onPerTypeChange(true) }
+            DigestChip(s.digestScopeAny, !perType, Modifier.weight(1f)) { onPerTypeChange(false) }
+        }
+    }
+}
+
+@Composable
+private fun DigestChip(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        border = BorderStroke(
+            1.dp,
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
+        modifier = modifier.hapticClickable(onClick = onClick)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()
+        )
+    }
+}
+
 /** ON = vivid primary pill with dark content; OFF = muted grey pill — the two states
  *  can't be confused in the dark theme. */
 @Composable

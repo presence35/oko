@@ -47,7 +47,7 @@ class OrbitMotionTest {
         resolveThreatBehavior(
             engine,
             t,
-            listOf(OrbitBehavior(redKm = 20, yellowKm = 50), StaleDriftBehavior),
+            listOf(OrbitBehavior(redKm = 20, yellowKm = 50)),
             now
         )
 

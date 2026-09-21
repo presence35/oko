@@ -131,14 +131,16 @@ internal fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
         SettingsSection.ALERTS to kw(
             "alert", "alerts", "siren", "sirens", "sound", "official", "notification",
             "vibration", "vibrate", "volume", "chime", "boot", "reboot", "restart", "monitoring",
+            "policy", "frequency", "often", "repeat", "repeats", "digest", "rate", "limit", "quiet",
             "оповіщення", "сповіщення", "сирена", "звук", "офіційн", "офіційна",
-            "офіційні", "вібрація", "вібро", "гучність", "перезавантаження", "моніторинг"
+            "офіційні", "вібрація", "вібро", "гучність", "перезавантаження", "моніторинг",
+            "частота", "часто", "повтор", "повтори", "тихо", "обмеження"
         ),
         SettingsSection.FLOURISH to kw(
             "morale", "brave", "bravery", "spirit", "heart", "fun", "animation", "bullet", "death", "flourish", "shoot", "tally", "neutralized",
-            "calm", "icon", "icons", "icon set", "glory", "honor",
+            "calm", "icon", "icons", "icon set", "glory", "honor", "voice", "voices", "personality", "random", "babusia", "slang",
             "мораль", "хоробрість", "дух", "серце", "розваг", "анімація", "куля", "збиття", "загибель", "лічильник", "знешкоджен", "загроза",
-            "заспокійлив", "іконка", "іконки", "набір іконок", "слава"
+            "заспокійлив", "іконка", "іконки", "набір іконок", "слава", "голос", "бабуся", "сленг", "випадково"
         ),
         SettingsSection.SHELTERS to kw(
             "shelter", "shelters", "directory", "укриття", "сховище", "бомбосховище", "каталог"

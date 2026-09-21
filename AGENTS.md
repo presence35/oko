@@ -22,6 +22,7 @@ Only when the user says **"release it"**, perform a full release:
 - Version numbers: `versionCode` is a monotonic integer; `versionName` is human-readable. Keep both bumped together (the `bumpVersion` task does this).
 - **EN-only strings during normal work.** Do NOT translate strings to UA — write only the
   EN text, and put it in the UA slot too as a placeholder so `Strings` compiles).
+- Reply with short, concise, only-needed! No long explanations
 
 ## Development conventions
 

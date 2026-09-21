@@ -396,6 +396,7 @@ fun NeptunMapView(
     onCountdownChange: (Int?) -> Unit = {},
     onAutoStrikeActiveChange: (Boolean) -> Unit = {},
     onStrikeTypeChange: (ThreatType?) -> Unit = {},
+    onStrikeAnchorChange: (LatLng?) -> Unit = {},
     onPendingStrikeCountChange: (Int) -> Unit = {},
     onCancelRequestTick: Int = 0,
     modifier: Modifier = Modifier
@@ -615,7 +616,8 @@ fun NeptunMapView(
         val center = uiState.centerRequest
         if (center != null && center.tick != lastCenterTick.value) {
             lastCenterTick.value = center.tick
-            camera.animateTo(bridge, center.lat, center.lon, NORMAL_MAX_ZOOM)
+            val placed = threatOutcomes[center.id]
+            camera.animateTo(bridge, placed?.lat ?: center.lat, placed?.lon ?: center.lon, NORMAL_MAX_ZOOM)
         }
     }
 
@@ -645,8 +647,9 @@ fun NeptunMapView(
             lastRevealTick.value = reveal.tick
             newRingState.value = NewRingState(reveal.id, System.currentTimeMillis() + NEW_RING_MS)
             val focus = uiState.focusLocation
+            val placed = reveal.id?.let { threatOutcomes[it] }
             camera.armFit(
-                reveal.id, reveal.lat, reveal.lon,
+                reveal.id, placed?.lat ?: reveal.lat, placed?.lon ?: reveal.lon,
                 focus?.lat ?: Double.NaN, focus?.lon ?: Double.NaN,
                 reveal.tick.toLong()
             )
@@ -734,7 +737,8 @@ LaunchedEffect(selectedId) {
             resolveRotation = { r ->
                 val outcome = threatOutcomes[r.id]
                 val base = IconCatalog.baseDeg(r.type, iconSetState)
-                outcome?.headingDeg ?: ((r.courseDeg.toFloat() - base + 360f) % 360f)
+                outcome?.let { threatMarkerRotation(it.headingDeg, base) }
+                    ?: ((r.courseDeg.toFloat() - base + 360f) % 360f)
             }
         )
     }
@@ -750,7 +754,7 @@ LaunchedEffect(selectedId) {
                 showToast(String.format(strings.flourishDisabledToastFormat, strings.deathAnimationTitle))
                 DebugLog.recordFlourish(DebugLogReason.TOGGLE_OFF, now = System.currentTimeMillis())
             } else {
-                deathFx.startReplay(flourishShow.records)
+                deathFx.startReplay(focusLocationState, flourishShow.records)
             }
         }
     }
@@ -769,6 +773,7 @@ LaunchedEffect(selectedId) {
     LaunchedEffect(Unit) { deathFx.countdown.collect { c -> onCountdownChange(c) } }
     LaunchedEffect(Unit) { deathFx.autoStrikeActive.collect { active -> onAutoStrikeActiveChange(active) } }
     LaunchedEffect(Unit) { deathFx.strikeType.collect { type -> onStrikeTypeChange(type) } }
+    LaunchedEffect(Unit) { deathFx.strikeAnchor.collect { anchor -> onStrikeAnchorChange(anchor) } }
     LaunchedEffect(Unit) { deathFx.pendingStrikeCount.collect { n -> onPendingStrikeCountChange(n) } }
 
     LaunchedEffect(onCancelRequestTick) {
@@ -824,8 +829,7 @@ LaunchedEffect(selectedId) {
             }
             val now = System.currentTimeMillis()
             val behaviors = listOf<ThreatBehavior>(
-                OrbitBehavior(slowRedKmState, slowYellowKmState),
-                StaleDriftBehavior
+                OrbitBehavior(slowRedKmState, slowYellowKmState)
             )
             var moving = false
             val currentIds = mapThreatsState.map { it.id }.toSet()

@@ -79,8 +79,8 @@ class DebugLogTest {
         threats: Map<String, NormalizedThreat>,
         zoneThreats: Map<String, ThreatZone> = emptyMap(),
         alertable: Map<String, ThreatZone> = emptyMap(),
-        knownZones: Map<String, ThreatZone> = emptyMap(),
-        postedId: String? = null,
+        verdicts: Map<String, PluginVerdict> = emptyMap(),
+        winnerId: String? = null,
         enabled: Set<ThreatType> = ThreatTypeCatalog.INFO.keys,
         now: Long = 1_000_000L
     ) = DebugLogContext(
@@ -90,8 +90,8 @@ class DebugLogTest {
         enabledTypes = enabled,
         zoneThreats = zoneThreats,
         alertable = alertable,
-        knownZones = knownZones,
-        postedId = postedId,
+        verdicts = verdicts,
+        winnerId = winnerId,
         night = true,
         sirenOverride = false,
         fastVibrationLevel = 3,
@@ -99,20 +99,33 @@ class DebugLogTest {
         now = now
     )
 
+    private fun soundVerdict() = PluginVerdict(VerdictKind.SOUND)
+    private fun silentVerdict() = PluginVerdict(VerdictKind.SILENT)
+    private fun suppressVerdict(reason: PolicyReason) = PluginVerdict(VerdictKind.SUPPRESS, reason)
+
     @Test
-    fun `sweep logs zone entry fired when the posted threat was armed and new`() {
+    fun `recordZoneFired writes a notified row and seeds the sweep verdict`() {
+        DebugLog.clear()
+        val now = System.currentTimeMillis()
+        DebugLog.recordZoneFired(
+            threatId = "t1", threatType = ThreatType.SHAHED, tier = ThreatZone.INNER,
+            night = true, sirenOverride = false, vibrationLevel = 3,
+            distanceKm = 12.5, locality = "Одеса", now = now
+        )
+        val recorded = DebugLog.entries.value.last()
+        assertEquals(DebugLogKind.ZONE_ENTER, recorded.kind)
+        assertEquals(ThreatZone.INNER, recorded.tier)
+        assertEquals(true, recorded.notified)
+        assertEquals(DebugLogReason.FIRED, recorded.reason)
         val t = threat(id = "t1", lat = 46.48, lon = 30.73)
         val (entries, _) = computeSweep(
             ctx(mapOf("t1" to t), zoneThreats = mapOf("t1" to ThreatZone.INNER),
-                alertable = mapOf("t1" to ThreatZone.INNER), postedId = "t1"),
-            emptyMap()
+                alertable = mapOf("t1" to ThreatZone.INNER),
+                verdicts = mapOf("t1" to soundVerdict())),
+            mapOf("t1" to DebugLog.fingerprintOf(recorded))
         )
-        assertEquals(1, entries.size)
-        val e = entries.first()
-        assertEquals(DebugLogKind.ZONE_ENTER, e.kind)
-        assertEquals(ThreatZone.INNER, e.tier)
-        assertEquals(true, e.notified)
-        assertEquals(DebugLogReason.FIRED, e.reason)
+        assertTrue(entries.isEmpty())
+        DebugLog.clear()
     }
 
     @Test
@@ -130,31 +143,16 @@ class DebugLogTest {
     }
 
     @Test
-    fun `sweep reports coalesced for a new armed threat that did not win the post`() {
+    fun `sweep reports coalesced for a new armed threat (fires are recorded at post time)`() {
         val t = threat(id = "t1", lat = 46.48, lon = 30.73)
         val (entries, _) = computeSweep(
             ctx(mapOf("t1" to t), zoneThreats = mapOf("t1" to ThreatZone.INNER),
-                alertable = mapOf("t1" to ThreatZone.INNER), postedId = "t2"),
+                alertable = mapOf("t1" to ThreatZone.INNER)),
             emptyMap()
         )
         assertEquals(1, entries.size)
         assertEquals(false, entries.first().notified)
         assertEquals(DebugLogReason.COALESCED, entries.first().reason)
-    }
-
-    @Test
-    fun `just-posted siren is fired even though the service marked the id known this tick`() {
-        val t = threat(id = "t1", lat = 46.48, lon = 30.73)
-        val (entries, _) = computeSweep(
-            ctx(mapOf("t1" to t), zoneThreats = mapOf("t1" to ThreatZone.INNER),
-                alertable = mapOf("t1" to ThreatZone.INNER),
-                knownZones = mapOf("t1" to ThreatZone.INNER),
-                postedId = "t1"),
-            emptyMap()
-        )
-        assertEquals(1, entries.size)
-        assertEquals(true, entries.first().notified)
-        assertEquals(DebugLogReason.FIRED, entries.first().reason)
     }
 
     @Test
@@ -164,31 +162,90 @@ class DebugLogTest {
             mapOf("t1" to t),
             zoneThreats = mapOf("t1" to ThreatZone.INNER),
             alertable = mapOf("t1" to ThreatZone.INNER),
-            postedId = "t1"
+            verdicts = mapOf("t1" to silentVerdict()),
+            winnerId = "t1"
         )
         val (first, verdicts) = computeSweep(base, emptyMap())
         assertEquals(1, first.size)
-        // Next tick: same threat, already known (dedup) — no new row, FIRED/ALREADY share "SIREN".
-        val (second, _) = computeSweep(base.copy(knownZones = mapOf("t1" to ThreatZone.INNER), postedId = null), verdicts)
+        assertEquals(DebugLogReason.ALREADY_NOTIFIED, first.first().reason)
+        // Next tick: same verdict, same fingerprint — no new row.
+        val (second, _) = computeSweep(base, verdicts)
         assertEquals(0, second.size)
     }
 
     @Test
-    fun `tier escalation from yellow to red logs a new entry`() {
+    fun `sound verdict is logged fired and dedups against the post-time row`() {
+        val t = threat(id = "t1", lat = 46.48, lon = 30.73)
+        val (entries, fp) = computeSweep(
+            ctx(mapOf("t1" to t), zoneThreats = mapOf("t1" to ThreatZone.INNER),
+                alertable = mapOf("t1" to ThreatZone.INNER),
+                verdicts = mapOf("t1" to soundVerdict()), winnerId = "t1"),
+            emptyMap()
+        )
+        assertEquals(1, entries.size)
+        assertEquals(true, entries.first().notified)
+        assertEquals(DebugLogReason.FIRED, entries.first().reason)
+        // Same tick's sweep after the synchronous record: silent.
+        val (second, _) = computeSweep(
+            ctx(mapOf("t1" to t), zoneThreats = mapOf("t1" to ThreatZone.INNER),
+                alertable = mapOf("t1" to ThreatZone.INNER),
+                verdicts = mapOf("t1" to soundVerdict()), winnerId = "t1"),
+            fp
+        )
+        assertTrue(second.isEmpty())
+    }
+
+    @Test
+    fun `suppressed verdicts log their policy reason without notified`() {
+        val t = threat(id = "t1", lat = 46.48, lon = 30.73)
+        val cases = mapOf(
+            PolicyReason.RATE_LIMITED to DebugLogReason.RATE_LIMITED,
+            PolicyReason.ONCE_PER_THREAT to DebugLogReason.ONCE_PER_THREAT,
+            PolicyReason.ONCE_PER_TYPE to DebugLogReason.ONCE_PER_TYPE
+        )
+        for ((policy, expected) in cases) {
+            val (entries, _) = computeSweep(
+                ctx(mapOf("t1" to t), zoneThreats = mapOf("t1" to ThreatZone.INNER),
+                    alertable = mapOf("t1" to ThreatZone.INNER),
+                    verdicts = mapOf("t1" to suppressVerdict(policy)), winnerId = "t1"),
+                emptyMap()
+            )
+            assertEquals(1, entries.size)
+            assertEquals(false, entries.first().notified)
+            assertEquals(expected, entries.first().reason)
+        }
+    }
+
+    @Test
+    fun `non-winning steady threat is coalesced`() {
+        val a = threat(id = "a", lat = 46.48, lon = 30.73)
+        val b = threat(id = "b", lat = 46.49, lon = 30.74)
+        val (entries, _) = computeSweep(
+            ctx(mapOf("a" to a, "b" to b),
+                zoneThreats = mapOf("a" to ThreatZone.INNER, "b" to ThreatZone.INNER),
+                alertable = mapOf("a" to ThreatZone.INNER, "b" to ThreatZone.INNER),
+                verdicts = mapOf("a" to soundVerdict(), "b" to silentVerdict()), winnerId = "a"),
+            emptyMap()
+        )
+        assertEquals(DebugLogReason.FIRED, entries.first { it.threatId == "a" }.reason)
+        assertEquals(DebugLogReason.COALESCED, entries.first { it.threatId == "b" }.reason)
+    }
+
+    @Test
+    fun `tier escalation from yellow to red logs a transition entry`() {
         val t = threat(id = "t1", lat = 46.48, lon = 30.73)
         val yellow = ctx(
             mapOf("t1" to t),
             zoneThreats = mapOf("t1" to ThreatZone.OUTER),
-            alertable = mapOf("t1" to ThreatZone.OUTER),
-            postedId = "t1"
+            alertable = mapOf("t1" to ThreatZone.OUTER)
         )
         val (first, verdicts) = computeSweep(yellow, emptyMap())
         assertEquals(ThreatZone.OUTER, first.first().tier)
         val red = yellow.copy(
             zoneThreats = mapOf("t1" to ThreatZone.INNER),
             alertable = mapOf("t1" to ThreatZone.INNER),
-            knownZones = mapOf("t1" to ThreatZone.OUTER),
-            postedId = "t1"
+            verdicts = mapOf("t1" to soundVerdict()),
+            winnerId = "t1"
         )
         val (second, _) = computeSweep(red, verdicts)
         assertEquals(1, second.size)
@@ -202,8 +259,7 @@ class DebugLogTest {
         val base = ctx(
             mapOf("t1" to t),
             zoneThreats = mapOf("t1" to ThreatZone.INNER),
-            alertable = mapOf("t1" to ThreatZone.INNER),
-            postedId = "t1"
+            alertable = mapOf("t1" to ThreatZone.INNER)
         )
         val (_, verdicts) = computeSweep(base, emptyMap())
         // Threat resolves / vanishes: no longer in the candidate map.

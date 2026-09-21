@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Zone notifications are now logged as notified at the moment they fire / Zone notifications are now logged as notified at the moment they fire 09-21_09:09:19
+- Decisions log always shows the last 4 digits of the threat ID, and notifications include it when the threat-ID toggle is on / Decisions log always shows the last 4 digits of the threat ID, and notifications include it when the threat-ID toggle is on 09-21_09:46:36
+- Zone sirens now follow a frequency preset (every change, once per threat, once per type, or digest) with red always sounding first, plus boundary hysteresis so edge-hovering threats stop re-sirening / Zone sirens now follow a frequency preset (every change, once per threat, once per type, or digest) with red always sounding first, plus boundary hysteresis so edge-hovering threats stop re-sirening 09-21_13:57:29
+- Stale threats now stay parked on their last fix while dimmed / Stale threats now stay parked on their last fix while dimmed 09-21_12:02:47
+- Locate and card pan now land on the marker live position / Locate and card pan now land on the marker live position 09-21_12:02:47
+- Shot-down threats now glide nose-first along their course / Shot-down threats now glide nose-first along their course 09-21_12:02:47
+
+- Smoother fast scrolling in Settings: the list no longer rebuilds on every threat and location update / Smoother fast scrolling in Settings: the list no longer rebuilds on every threat and location update 09-20_23:23:56
 - Falling debris advisory is now wired up: 0-10 min slider in Settings drives the all-clear countdown in the notification and footer / Falling debris advisory is now wired up: 0-10 min slider in Settings drives the all-clear countdown in the notification and footer 09-20_12:00:00
 - Threat cards are no longer forced to fill the full available width; hover buttons are left-aligned side by side / Threat cards are no longer forced to fill the full available width; hover buttons are left-aligned side by side 09-20_12:00:00
 - Morale settings now share a single source: wizard and Settings use the same toggles (including HD explosions and alarm summary) / Morale settings now share a single source: wizard and Settings use the same toggles (including HD explosions and alarm summary) 09-21_01:07:00

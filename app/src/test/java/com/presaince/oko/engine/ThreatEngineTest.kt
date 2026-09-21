@@ -101,6 +101,48 @@ class ThreatEngineTest {
     }
 
     @Test
+    fun `holdTier - upgrades pass through immediately`() {
+        val props = NEPTUN_TYPES["shahed"]!!
+        assertEquals(ThreatZone.INNER, engine.holdTier(ThreatZone.INNER, ThreatZone.OUTER, props, 10.0, 180.0, params))
+        assertEquals(ThreatZone.INNER, engine.holdTier(ThreatZone.INNER, null, props, 10.0, 180.0, params))
+        assertEquals(ThreatZone.OUTER, engine.holdTier(ThreatZone.OUTER, null, props, 30.0, 180.0, params))
+    }
+
+    @Test
+    fun `holdTier - inner holds within the margin, releases beyond`() {
+        val props = NEPTUN_TYPES["shahed"]!!
+        // Red 15 km, margin 10% → holds through 16.5 km.
+        assertEquals(ThreatZone.INNER, engine.holdTier(ThreatZone.OUTER, ThreatZone.INNER, props, 15.75, 180.0, params))
+        assertEquals(ThreatZone.INNER, engine.holdTier(null, ThreatZone.INNER, props, 16.0, 180.0, params))
+        assertEquals(ThreatZone.OUTER, engine.holdTier(ThreatZone.OUTER, ThreatZone.INNER, props, 18.0, 180.0, params))
+        assertNull(engine.holdTier(null, ThreatZone.INNER, props, 18.0, 180.0, params))
+    }
+
+    @Test
+    fun `holdTier - outer holds within the margin, releases beyond`() {
+        val props = NEPTUN_TYPES["shahed"]!!
+        // Yellow 40 km, margin 10% → holds through 44 km.
+        assertEquals(ThreatZone.OUTER, engine.holdTier(null, ThreatZone.OUTER, props, 42.0, 180.0, params))
+        assertNull(engine.holdTier(null, ThreatZone.OUTER, props, 46.0, 180.0, params))
+        // Upgrades still immediate.
+        assertEquals(ThreatZone.INNER, engine.holdTier(ThreatZone.INNER, ThreatZone.OUTER, props, 10.0, 180.0, params))
+    }
+
+    @Test
+    fun `holdTier - beyond reach always exits`() {
+        val props = NEPTUN_TYPES["aviation"]!!
+        assertNull(engine.holdTier(null, ThreatZone.INNER, props, 10_000.0, 900.0, params))
+    }
+
+    @Test
+    fun `holdTier - fast threat holds on ETA margin`() {
+        val props = NEPTUN_TYPES["ballistic"]!!
+        // fastRedMin=2 → holds INNER through 2.2 min ETA; 150 km at 3300 km/h ≈ 2.73 min.
+        assertEquals(ThreatZone.INNER, engine.holdTier(ThreatZone.OUTER, ThreatZone.INNER, props, 110.0, 3300.0, params))
+        assertEquals(ThreatZone.OUTER, engine.holdTier(ThreatZone.OUTER, ThreatZone.INNER, props, 150.0, 3300.0, params))
+    }
+
+    @Test
     fun `predictPosition - no course returns null`() {
         val threat = makeThreat(bearingDeg = null, confirmedAtMillis = System.currentTimeMillis() - 60_000)
         val props = NEPTUN_TYPES["shahed"]!!

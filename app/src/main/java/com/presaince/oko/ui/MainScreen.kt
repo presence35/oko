@@ -2,7 +2,10 @@ package com.presaince.oko
 import com.presaince.oko.theme.AppPalette
 import com.presaince.oko.engine.NormalizedThreat
 import com.presaince.oko.engine.LatLng
+import kotlin.math.roundToInt
 import com.presaince.oko.engine.ThreatZone
+import com.presaince.oko.DigestWindow
+import com.presaince.oko.ZonePolicy
 import com.presaince.oko.engine.AlertLevel
 import com.presaince.oko.engine.toThreatType
 import com.presaince.oko.engine.distanceFlat
@@ -122,6 +125,7 @@ private val AlertRed = Color(AppPalette.AlertRed)
 fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     val settingsState by viewModel.settingsState.collectAsState()
+    val policyWhatIf by viewModel.policyWhatIf.collectAsState()
     val context = LocalContext.current
 
     var screen by remember { mutableStateOf(Screen.MAP) }
@@ -334,7 +338,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             BackHandler { screen = Screen.MAP }
             SettingsScreen(
                 state = settingsState,
-                uiState = uiState,
+                hapticsEnabled = uiState.hapticsEnabled,
+                updateState = uiState.update,
+                latestVersion = uiState.latestVersion,
+                nightActive = uiState.nightActive,
                 listState = settingsListState,
                 collapse = settingsCollapse,
                 onCollapseChange = { settingsCollapse = it },
@@ -398,6 +405,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                     }
                 },
                 onJustFunMasterChange = remember { { viewModel.setJustFunEnabled(it) } },
+                onMoraleVoiceChange = remember { { viewModel.setMoraleVoice(it) } },
                 onDeathAnimationChange = remember { { viewModel.setDeathAnimationEnabled(it) } },
                 onFlybyAnimationChange = remember { { viewModel.setFlybyAnimationEnabled(it) } },
                 onFollowBulletChange = remember { { viewModel.setFollowBullet(it) } },
@@ -429,7 +437,16 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                     }
                 },
                 showThreatIdsOnMap = settingsState.showThreatIdsOnMap,
-                onShowThreatIdsOnMapChange = remember { { viewModel.setShowThreatIdsOnMap(it) } }
+                onShowThreatIdsOnMapChange = remember { { viewModel.setShowThreatIdsOnMap(it) } },
+                zonePolicy = settingsState.zonePolicy,
+                onZonePolicyChange = remember { { viewModel.setZonePolicy(it) } },
+                digestMax = settingsState.digestMax,
+                onDigestMaxChange = remember { { viewModel.setDigestMax(it) } },
+                digestWindow = settingsState.digestWindow,
+                onDigestWindowChange = remember { { viewModel.setDigestWindow(it) } },
+                digestPerType = settingsState.digestPerType,
+                onDigestPerTypeChange = remember { { viewModel.setDigestPerType(it) } },
+                policyWhatIf = policyWhatIf
             )
         }
         if (screen == Screen.GUIDE) {
@@ -527,6 +544,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
             fastYellowArmed = uiState.fastYellowArmed,
             sheltersEnabled = uiState.sheltersEnabled,
             justFun = uiState.justFunMasterEnabled,
+            moraleVoice = uiState.moraleVoice,
             calmMessagesEnabled = uiState.calmMessagesEnabled,
             flybyAnimationEnabled = uiState.flybyAnimationEnabled,
             deathAnimationEnabled = uiState.deathAnimationEnabled,
@@ -541,6 +559,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
             onFollowMeChange = { viewModel.setFollowMe(it) },
             onPinnedCityChange = { viewModel.setPinnedCity(it) },
             onJustFunChange = { viewModel.setJustFunEnabled(it) },
+            onMoraleVoiceChange = { viewModel.setMoraleVoice(it) },
             onCalmMessagesChange = { viewModel.setCalmMessagesEnabled(it) },
             onFlybyAnimationChange = { viewModel.setFlybyAnimationEnabled(it) },
             onDeathAnimationChange = { viewModel.setDeathAnimationEnabled(it) },
@@ -676,6 +695,7 @@ private fun MapScreen(
     var countdown by remember { mutableStateOf<Int?>(null) }
     var autoStrikeActive by remember { mutableStateOf(false) }
     var strikeType by remember { mutableStateOf<ThreatType?>(null) }
+    var strikeAnchor by remember { mutableStateOf<LatLng?>(null) }
     var pendingStrikeCount by remember { mutableStateOf(0) }
     var cancelTick by remember { mutableStateOf(0) }
     val flourishActive = countdown != null || autoStrikeActive || deathActive ||
@@ -940,6 +960,7 @@ private fun MapScreen(
                         onCountdownChange = { countdown = it },
                         onAutoStrikeActiveChange = { autoStrikeActive = it },
                         onStrikeTypeChange = { strikeType = it },
+                        onStrikeAnchorChange = { strikeAnchor = it },
                         onPendingStrikeCountChange = { pendingStrikeCount = it },
                         onCancelRequestTick = cancelTick,
                         modifier = Modifier.fillMaxSize()
@@ -1065,8 +1086,8 @@ private fun MapScreen(
                             silencedTypes = uiState.silencedTypes,
                             focusLocation = uiState.focusLocation,
                             iconSet = uiState.iconSet,
-                            calmMessage = remember(uiState.language, uiState.calmMessagesEnabled) {
-                                noThreatsMessage(uiState.language, uiState.calmMessagesEnabled)
+                            calmMessage = remember(uiState.language, uiState.calmMessagesEnabled, uiState.moraleVoice) {
+                                noThreatsMessage(uiState.language, uiState.calmMessagesEnabled, uiState.moraleVoice)
                             },
                             debrisText = debrisFooterText(s),
                             onThreatStripTap = onThreatStripTap
@@ -1086,7 +1107,7 @@ private fun MapScreen(
                 if (landscape && (alertsOff || notifsDisabled)) {
                     Box(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
                             .padding(start = 20.dp, end = 20.dp, bottom = FOOTER_BAND_DP + 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1104,7 +1125,16 @@ private fun MapScreen(
                 replayProgress = replayProgress,
                 strikeType = strikeType,
                 pendingStrikeCount = pendingStrikeCount,
-                message = if (autoStrikeActive || deathActive) s.neutralizingLabel else null,
+                message = if (autoStrikeActive || deathActive) {
+                    strikeType?.let { t ->
+                        val info = ThreatTypeCatalog.INFO.getValue(t)
+                        val label = if (uiState.language == AppLanguage.UA) info.labelUa else info.labelEn
+                        val distKm: Double? = strikeAnchor?.let { a -> uiState.focusLocation?.let { f -> distanceFlat(f.lat, f.lon, a.lat, a.lon) / 1000.0 } }
+                        val km: Int? = distKm?.roundToInt()
+                        val suffix = km?.let { flourishDistanceSuffix(it, uiState.language) }.orEmpty()
+                        "${s.flourishNeutralizingVerb} $label$suffix"
+                    } ?: s.neutralizingLabel
+                } else null,
                 stopLabel = s.stopReplayLabel,
                 language = uiState.language,
                 onStop = stopAll

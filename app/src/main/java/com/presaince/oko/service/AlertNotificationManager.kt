@@ -278,10 +278,16 @@ class AlertNotificationManager(private val context: Context) {
             sirenOverride -> CHANNEL_ALERTS_OUTER_ALARM
             else -> CHANNEL_ALERTS_OUTER
         }
+        val idSuffix = revealThreat?.let { t ->
+            val show = runBlocking(Dispatchers.IO) {
+                UserPrefs(context).preferences.first().showThreatIdsOnMap
+            }
+            if (show) " · #${t.id.takeLast(4)}" else ""
+        }.orEmpty()
         val notif = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
-            .setContentText(body)
+            .setContentText(body + idSuffix)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setVibrate(vibrationPattern(vibrationLevel))

@@ -463,6 +463,13 @@ internal fun FallingDebrisDelayRow(
             .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 4.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                painter = painterResource(R.drawable.ic_falling_debris),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurfaceVariant),
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     title,
@@ -475,6 +482,25 @@ internal fun FallingDebrisDelayRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(
+                onClick = { local = 0f; onCommit(0) },
+                enabled = minutes != 0,
+                interactionSource = rememberHapticInteractionSource(),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+            ) {
+                Text(offLabel)
+            }
+            Slider(
+                value = local,
+                onValueChange = { local = it },
+                valueRange = 0f..10f,
+                steps = 9,
+                onValueChangeFinished = { onCommit(minutes * 60) },
+                interactionSource = rememberHapticInteractionSource(),
+                modifier = Modifier.weight(1f)
+            )
             Spacer(Modifier.width(12.dp))
             Text(
                 if (minutes == 0) offLabel else "$minutes min",
@@ -483,15 +509,6 @@ internal fun FallingDebrisDelayRow(
                 color = MaterialTheme.colorScheme.primary
             )
         }
-        Slider(
-            value = local,
-            onValueChange = { local = it },
-            valueRange = 0f..10f,
-            steps = 9,
-            onValueChangeFinished = { onCommit(minutes * 60) },
-            interactionSource = rememberHapticInteractionSource(),
-            modifier = Modifier.fillMaxWidth()
-        )
     }
 }
 

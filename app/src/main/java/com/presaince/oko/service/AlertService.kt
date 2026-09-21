@@ -132,10 +132,18 @@ class AlertService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var monitoringJob: Job? = null
     private var lastShownId: String? = null
+    /** Frequency policy: the service feeds it per-tick facts and executes verdicts. */
+    private val notifyPlugin = NotifyPlugin()
+    /** Previous tick's engine tiers — the hysteresis band input. */
+    private var lastZoneTiers: Map<String, ThreatZone> = emptyMap()
+    private var lastNotifyPrefs: NotifyPrefs? = null
+    private var lastPersistedPresence = ""
+    /** Cold start with restored presence: re-post the ongoing alert silently once. */
+    private var coldStartRepostDone = false
+    private var restoredPresence = false
     /** Announced official episode for ANY level (red/yellow share it): LEVEL|token|since|city.
      *  Persisted pre-level as token|since|city — adopted silently on upgrade (see restore). */
     private var lastOfficialEpisode: String? = null
-    private var knownZones: Map<String, ThreatZone> = emptyMap()
     private var lastChannelLang: AppLanguage? = null
     private var emptySince: Long? = null
 
@@ -235,7 +243,11 @@ class AlertService : Service() {
         val focusLocation: LatLng?,
         val gpsFixMissing: Boolean = false,
         val nightActive: Boolean,
-        val enabled: Set<ThreatType>
+        val enabled: Set<ThreatType>,
+        val zonePolicy: ZonePolicy,
+        val digestMax: Int,
+        val digestWindow: DigestWindow,
+        val digestPerType: Boolean
     ) {
         /** Derived summary of the two sub-channels — the master toggle. Mirrors the UI so the
          *  all-clear gate and the OFF log key on the same red||yellow fact the row shows. */
@@ -401,7 +413,8 @@ class AlertService : Service() {
                 lastOfficialEpisode = "$_annToken|$_annSince|$_annCity"
             }
 
-            // Restore active zone alerts across service restarts (Check 7 fix)
+            // Restore open plugin episodes across restarts: ongoing threats stay
+            // handled (no re-siren) and the cold-start repost makes them visible.
             val savedZonesJson = svcState.activeZoneAlerts().first()
             if (savedZonesJson.isNotBlank()) {
                 runCatching {
@@ -412,7 +425,10 @@ class AlertService : Service() {
                             restored[k] = ThreatZone.valueOf(obj.getString(k))
                         }
                     }
-                    knownZones = restored
+                    if (restored.isNotEmpty()) {
+                        notifyPlugin.seedKnown(restored)
+                        restoredPresence = true
+                    }
                 }
             }
 
@@ -531,7 +547,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 val zoneThreats = if (focusLoc != null && !registry.isThreatDataStale(Monotonic.now())) {
                     val threatList = threats.values.toList()
                     val engineFocus = LatLng(focusLoc.lat, focusLoc.lon)
-                    engine.evaluate(threatList, engineFocus, params, emptySet(), emptySet(), now).zoneThreats
+                    engine.evaluate(threatList, engineFocus, params, emptySet(), emptySet(), now, prevTiers = lastZoneTiers).zoneThreats
                 } else {
                     emptyMap()
                 }
@@ -576,15 +592,19 @@ fastYellowArmed = p.fastYellowArmed,
                     focusLocation = focusLoc,
                     gpsFixMissing = gpsFixMissing,
                     nightActive = nightActive,
-                    enabled = enabled
+                    enabled = enabled,
+                    zonePolicy = p.zonePolicy,
+                    digestMax = p.digestMax,
+                    digestWindow = p.digestWindow,
+                    digestPerType = p.digestPerType
                 ) to now
             }.collect { (state, now) ->
-                handleState(state, now)
+                handleState(state, now, engine)
             }
         }
     }
 
-    private fun handleState(state: MonitorState, now: Long) {
+    private fun handleState(state: MonitorState, now: Long, engine: ThreatEngine) {
         val s = Strings.get(state.lang)
 
         if (state.lang != lastChannelLang) {
@@ -681,12 +701,38 @@ fastYellowArmed = p.fastYellowArmed,
             .mapNotNull { (id, spatial) -> alertTier(id, spatial)?.let { id to it } }
             .toMap()
 
-        val droppedZoneIds = knownZones.keys.filterNot { id ->
-            id in state.zoneThreats.keys || AppSources.registry.wasUserShotRecently(id)
+        // Frequency policy: the plugin owns episodes and verdicts; the service only
+        // feeds facts and executes. A preset switch is a fresh start; digest tweaks
+        // clear only the rate buckets (never the episodes — no surprise re-siren).
+        val notifyPrefs = NotifyPrefs(state.zonePolicy, state.digestMax, state.digestWindow, state.digestPerType)
+        val lastPrefs = lastNotifyPrefs
+        if (lastPrefs == null || lastPrefs.preset != notifyPrefs.preset) notifyPlugin.reset()
+        else if (lastPrefs != notifyPrefs) notifyPlugin.clearBuckets()
+        lastNotifyPrefs = notifyPrefs
+        val pluginInputs = all.values.map { t ->
+            val live = t.status != "resolved" && !t.areaOnly &&
+                !engine.isStale(t, engine.propsFor(t.type), now)
+            PluginInput(
+                id = t.id,
+                tier = state.zoneThreats[t.id],
+                alertTier = alertable[t.id],
+                type = t.type.toThreatType(),
+                live = live
+            )
+        } + notifyPlugin.snapshot().keys.filterNot { it in all }.mapNotNull { id ->
+            // Shot-down id in its grace window: keep the episode frozen so the
+            // same-id respawn reads as the same kill, never a new onset.
+            if (AppSources.registry.wasUserShotRecently(id)) {
+                PluginInput(id, null, null, ThreatType.UNKNOWN, live = true, shotGrace = true)
+            } else null
         }
-        if (droppedZoneIds.isNotEmpty()) {
-            knownZones = knownZones.filterKeys { it !in droppedZoneIds }
-            persistKnownZones()
+        val verdicts = notifyPlugin.tick(pluginInputs, notifyPrefs, now)
+        val presence = JSONObject().apply {
+            for ((k, v) in notifyPlugin.snapshot()) put(k, v.name)
+        }.toString()
+        if (presence != lastPersistedPresence) {
+            lastPersistedPresence = presence
+            persistPresence(presence)
         }
 
         /** Desired end-state for NOTIF_ALERT. null = nothing should be showing. */
@@ -731,8 +777,7 @@ fastYellowArmed = p.fastYellowArmed,
                     revealThreat = t,
                     silent = false,
                     vibration = t?.let { if (isFastType(it.type.toThreatType(), typeCatalog)) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
-                    isOnset = knownZones[id] == null ||
-                        (knownZones[id] == ThreatZone.OUTER && zone == ThreatZone.INNER),
+                    isOnset = verdicts[id]?.kind == VerdictKind.SOUND,
                     zone = zone, level = if (zone == ThreatZone.INNER) "red" else "yellow"
                 )
             }
@@ -874,9 +919,6 @@ fastYellowArmed = p.fastYellowArmed,
                             (lastShownId?.startsWith("red|") == true || lastShownId?.startsWith("yellow|") == true) &&
                                 state.focusOblastRawLevel != AlertLevel.NONE && state.officialAlertsEnabled
                         if (!shownOfficialStillLive) {
-                            if (knownZones.isEmpty() && state.zoneThreats.isEmpty() && !state.focusOblastAlertActive && !state.focusOblastYellowAlertActive) {
-                                knownZones = emptyMap(); persistKnownZones()
-                            }
                             cancelAlert()
                         }
                     }
@@ -890,6 +932,21 @@ fastYellowArmed = p.fastYellowArmed,
                         postAlert(primary.zone, primary.level, primary.title, primary.body,
                             state.zoneSirenOverride ?: state.officialSirenOverride,
                             revealThreat = primary.revealThreat, vibrationLevel = primary.vibration)
+                        if (primary.zone != null) {
+                            primary.revealThreat?.let { t ->
+                                DebugLog.recordZoneFired(
+                                    threatId = t.id,
+                                    threatType = t.type.toThreatType(),
+                                    tier = primary.zone,
+                                    night = state.nightActive,
+                                    sirenOverride = state.zoneSirenOverride,
+                                    vibrationLevel = primary.vibration,
+                                    distanceKm = distanceFromFocusKm(t, state),
+                                    locality = t.locality ?: t.district ?: t.region,
+                                    now = System.currentTimeMillis()
+                                )
+                            }
+                        }
                     }
                     alertNotificationShowing() -> {
                         postAlert(primary.zone, primary.level, primary.title, primary.body,
@@ -902,18 +959,22 @@ fastYellowArmed = p.fastYellowArmed,
             }
         }
 
-        // Invoke the reconcile pipeline
+        // Invoke the reconcile pipeline. Verdicts (plugin-owned) already decided
+        // sound/silent/suppress above; below only executes. Official paths untouched.
         val primary = buildPrimary(state, all)
-        val postedId = if (primary?.zone != null && primary.isOnset) primary.identity.substringAfter("zone|").substringBefore('|') else null
-        // Mirror knownZones to reality every tick. buildPrimary already read the OLD
-        // map to compute isOnset above, so updating here keeps onset/escalation
-        // detection correct while letting downgrades (INNER->OUTER) and lateral
-        // moves update state silently instead of re-firing as a fresh onset.
-        val knownBefore = knownZones
-        alertable.forEach { (id, zone) -> knownZones = knownZones + (id to zone) }
-        if (knownZones != knownBefore) persistKnownZones()
         reconcileEpisode(primary, state, all)
         reconcileNotif(primary, state)
+        // Cold start with restored presence: the ongoing alert has no visible
+        // notification (nothing was re-raised). Re-post it silently once. Retried
+        // until it fires — a loud onset in between claims lastShownId first and
+        // wins, which is the correct outcome for a genuinely new threat.
+        if (!coldStartRepostDone && lastShownId == null && restoredPresence && primary != null) {
+            coldStartRepostDone = true
+            postAlert(primary.zone, primary.level, primary.title, primary.body,
+                state.zoneSirenOverride ?: state.officialSirenOverride,
+                revealThreat = primary.revealThreat, silent = true, vibrationLevel = primary.vibration)
+            lastShownId = primary.identity
+        }
 
         // Morale-only episode window: scoped official level (red or yellow, no type
         // gate), tracked even when official notifications are off so the summary
@@ -928,7 +989,9 @@ fastYellowArmed = p.fastYellowArmed,
         }
 
         val nowForSweep = System.currentTimeMillis()
-        if (nowForSweep - lastSweepAtMs >= SWEEP_THROTTLE_MS) {
+        val hasNewZone = state.zoneThreats.keys.any { it !in lastZoneTiers }
+        lastZoneTiers = state.zoneThreats
+        if (hasNewZone || nowForSweep - lastSweepAtMs >= SWEEP_THROTTLE_MS) {
             lastSweepAtMs = nowForSweep
             DebugLog.sweep(
                 DebugLogContext(
@@ -938,8 +1001,8 @@ fastYellowArmed = p.fastYellowArmed,
                     enabledTypes = state.enabled,
                     zoneThreats = state.zoneThreats,
                     alertable = alertable,
-                    knownZones = knownBefore,
-                    postedId = postedId,
+                    verdicts = verdicts,
+                    winnerId = primary?.zone?.let { primary.revealThreat?.id },
                     night = state.nightActive,
                     sirenOverride = state.zoneSirenOverride,
                     fastVibrationLevel = state.fastVibrationLevel,
@@ -957,8 +1020,6 @@ fastYellowArmed = p.fastYellowArmed,
             } else if (System.currentTimeMillis() - since >= ALL_CLEAR_GRACE_MS) {
                 emptySince = null
                 cancelAlert()
-                knownZones = emptyMap()
-                persistKnownZones()
             }
         } else {
             emptySince = null
@@ -966,13 +1027,9 @@ fastYellowArmed = p.fastYellowArmed,
 
     }
 
-    private fun persistKnownZones() {
+    private fun persistPresence(json: String) {
         scope.launch {
-            val obj = JSONObject()
-            for ((k, v) in knownZones) {
-                obj.put(k, v.name)
-            }
-            ServiceState(applicationContext).setActiveZoneAlerts(obj.toString())
+            ServiceState(applicationContext).setActiveZoneAlerts(json)
         }
     }
 

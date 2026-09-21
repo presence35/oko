@@ -59,14 +59,19 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.presaince.oko.City
+import com.presaince.oko.DigestWindow
 import com.presaince.oko.ThreatType
+import com.presaince.oko.ZonePolicy
 import com.presaince.oko.theme.AppPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     state: SettingsState,
-    uiState: UiState,
+    hapticsEnabled: Boolean,
+    updateState: UpdateState,
+    latestVersion: String?,
+    nightActive: Boolean,
     listState: LazyListState,
     collapse: SettingsCollapseState,
     onCollapseChange: (SettingsCollapseState) -> Unit,
@@ -125,6 +130,7 @@ fun SettingsScreen(
     onSheltersEnabledChange: (Boolean) -> Unit,
     onOpenShelterList: () -> Unit = {},
     onJustFunMasterChange: (Boolean) -> Unit,
+    onMoraleVoiceChange: (MoraleVoice) -> Unit,
     onDeathAnimationChange: (Boolean) -> Unit,
     onFlybyAnimationChange: (Boolean) -> Unit,
     onFollowBulletChange: (Boolean) -> Unit,
@@ -137,6 +143,15 @@ fun SettingsScreen(
     onSlowGroupCollapse: (Boolean) -> Unit,
     showThreatIdsOnMap: Boolean,
     onShowThreatIdsOnMapChange: (Boolean) -> Unit,
+    zonePolicy: ZonePolicy,
+    onZonePolicyChange: (ZonePolicy) -> Unit,
+    digestMax: Int,
+    onDigestMaxChange: (Int) -> Unit,
+    digestWindow: DigestWindow,
+    onDigestWindowChange: (DigestWindow) -> Unit,
+    digestPerType: Boolean,
+    onDigestPerTypeChange: (Boolean) -> Unit,
+    policyWhatIf: Map<ZonePolicy, Int>,
     onExit: () -> Unit,
     onCheckUpdate: () -> Unit,
     onOpenGuide: () -> Unit,
@@ -189,7 +204,6 @@ fun SettingsScreen(
     val sheltersEnabled = state.sheltersEnabled
     val periodicGps = state.periodicGps
     val calmMessagesEnabled = state.calmMessagesEnabled
-    val hapticsEnabled = uiState.hapticsEnabled
     val deathAnimationEnabled = state.deathAnimationEnabled
     val flybyAnimationEnabled = state.flybyAnimationEnabled
     val followBullet = state.followBullet
@@ -201,12 +215,16 @@ fun SettingsScreen(
     val fastGroupCollapsed = state.fastGroupCollapsed
     val slowGroupCollapsed = state.slowGroupCollapsed
     val showThreatIdsOnMap = state.showThreatIdsOnMap
+    val zonePolicy = state.zonePolicy
+    val digestMax = state.digestMax
+    val digestWindow = state.digestWindow
+    val digestPerType = state.digestPerType
     val overlapMode = state.overlapMode
     val justFunMasterEnabled = state.justFunMasterEnabled
+    val moraleVoice = state.moraleVoice
     val bootRestartEnabled = state.bootRestartEnabled
-    val isChecking = uiState.update is UpdateState.Checking
-    val latestVersion = uiState.latestVersion
-    val scrollToNightMode = uiState.nightActive
+    val isChecking = updateState is UpdateState.Checking
+    val scrollToNightMode = nightActive
     val s = Strings.get(lang)
 
     // Search box: filters sections + standalone actions by curated keywords, surfaces suggestion
@@ -413,7 +431,7 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
 
-            item {
+            item(key = "disclaimer", contentType = "disclaimer") {
                 // "Official signals come first" — first, default expanded, needs two taps to collapse.
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -460,7 +478,7 @@ fun SettingsScreen(
             }
 
             if (searching.not() || SettingsSection.LOCATION in matchedSections) {
-            item {
+            item(key = "section_location", contentType = "section") {
                 CollapsibleSectionCard(
                     title = s.locationSectionTitle,
                     icon = rememberVectorPainter(Icons.Default.LocationOn),
@@ -509,7 +527,7 @@ fun SettingsScreen(
 
             }
             if (searching.not() || SettingsSection.ALERTS in matchedSections) {
-            item {
+            item(key = "section_alerts", contentType = "section") {
                 CollapsibleSectionCard(
                     title = s.alertsLabel,
                     icon = rememberVectorPainter(Icons.Default.Notifications),
@@ -623,6 +641,29 @@ fun SettingsScreen(
                         flash = flashId == "sirenOverride"
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    NotifyPolicyRow(
+                        title = s.notifyPolicyTitle,
+                        description = s.notifyPolicyDesc,
+                        selected = zonePolicy,
+                        whatIf = policyWhatIf,
+                        onChange = onZonePolicyChange,
+                        s = s
+                    )
+                    AnimatedVisibility(visible = zonePolicy == ZonePolicy.DIGEST) {
+                        Column {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            DigestControlsRow(
+                                max = digestMax,
+                                onMaxChange = onDigestMaxChange,
+                                window = digestWindow,
+                                onWindowChange = onDigestWindowChange,
+                                perType = digestPerType,
+                                onPerTypeChange = onDigestPerTypeChange,
+                                s = s
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     FallingDebrisDelayRow(
                         seconds = fallingDebrisDelaySec,
                         title = s.fallingDebrisDelayTitle,
@@ -717,7 +758,7 @@ fun SettingsScreen(
             }
 
             if (searching.not() || SettingsSection.NIGHT in matchedSections) {
-            item {
+            item(key = "section_night", contentType = "section") {
                 CollapsibleSectionCard(
                     title = s.nightModeLabel,
                     icon = painterResource(R.drawable.ic_moon),
@@ -783,7 +824,7 @@ fun SettingsScreen(
 
             }
             if (searching.not() || SettingsSection.SHELTERS in matchedSections) {
-            item {
+            item(key = "section_shelters", contentType = "section") {
                 CollapsibleSectionCard(
                     title = s.shelterSectionTitle,
                     icon = remember {
@@ -863,7 +904,7 @@ fun SettingsScreen(
 
             }
             if (searching.not() || SettingsSection.THREATS in matchedSections) {
-            item {
+            item(key = "section_threats", contentType = "section") {
                 CollapsibleSectionCard(
                     title = s.threatsLabel,
                     icon = rememberVectorPainter(Icons.Default.Warning),
@@ -959,7 +1000,7 @@ fun SettingsScreen(
 
             }
             if (searching.not() || SettingsSection.SYSTEM in matchedSections) {
-            item {
+            item(key = "section_system", contentType = "section") {
                 CollapsibleSectionCard(
                     title = s.systemSectionTitle,
                     icon = painterResource(id = R.drawable.ic_language),
@@ -1182,7 +1223,7 @@ fun SettingsScreen(
             }
 
             if (searching.not() || SettingsSection.FLOURISH in matchedSections) {
-            item {
+            item(key = "section_flourish", contentType = "section") {
                 CollapsibleSectionCard(
                     title = s.moraleSectionTitle,
                     icon = painterResource(R.drawable.ic_morale),
@@ -1201,6 +1242,8 @@ fun SettingsScreen(
                     AnimatedVisibility(visible = justFunMasterEnabled) {
                         MoraleToggles(
                             s = s,
+                            voice = moraleVoice,
+                            onVoiceChange = onMoraleVoiceChange,
                             calmMessagesEnabled = calmMessagesEnabled,
                             flybyAnimationEnabled = flybyAnimationEnabled,
                             deathAnimationEnabled = deathAnimationEnabled,
@@ -1221,7 +1264,9 @@ fun SettingsScreen(
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Text(
-                        s.moraleNote,
+                        remember(lang, moraleVoice) {
+                            moraleVoicePack(lang, resolveMoraleVoice(moraleVoice)).note
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
@@ -1231,7 +1276,7 @@ fun SettingsScreen(
 
             }
             if (noSearchResults) {
-                item {
+                item(key = "no_results", contentType = "message") {
                     Text(
                         s.settingsNoResults,
                         modifier = Modifier
@@ -1244,7 +1289,7 @@ fun SettingsScreen(
                 }
             }
             if (searching.not() || StandaloneSetting.RELAUNCH in matchedStandalone) {
-            item {
+            item(key = "action_relaunch", contentType = "action") {
                 OutlinedButton(
                     onClick = onRelaunchSetup,
                     interactionSource = rememberHapticInteractionSource(),
@@ -1262,7 +1307,7 @@ fun SettingsScreen(
 
             }
             if (searching.not() || StandaloneSetting.GUIDE in matchedStandalone) {
-            item {
+            item(key = "action_guide", contentType = "action") {
                 OutlinedButton(
                     onClick = onOpenGuide,
                     interactionSource = rememberHapticInteractionSource(),
@@ -1273,12 +1318,12 @@ fun SettingsScreen(
             }
 
             }
-            item {
+            item(key = "divider", contentType = "divider") {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
 
             if (searching.not() || StandaloneSetting.UPDATE in matchedStandalone) {
-            item {
+            item(key = "action_update", contentType = "action") {
                 if (isChecking) {
                     Button(
                         onClick = onCheckUpdate,
@@ -1329,7 +1374,7 @@ fun SettingsScreen(
 
             }
             if (searching.not() || StandaloneSetting.EXIT in matchedStandalone) {
-            item {
+            item(key = "action_exit", contentType = "action") {
                 Button(
                     onClick = onExit,
                     interactionSource = rememberHapticInteractionSource(),
@@ -1344,7 +1389,7 @@ fun SettingsScreen(
             }
 
             }
-            item {
+            item(key = "footer", contentType = "footer") {
                 val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
                 val telegramUrl = "https://t.me/odesaplay_bot"
                 Column(

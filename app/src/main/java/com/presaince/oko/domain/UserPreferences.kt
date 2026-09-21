@@ -15,6 +15,10 @@ enum class OverlapMode { DEFAULT, GRID, SPREAD, COUNT }
 /** How official-alert regions are visualized on the map. */
 enum class AlertRegionMode { CITY_LABELS, FILL, BORDER }
 
+/** Personality voice for the Morale section copy. RANDOM resolves to a deterministic
+ *  voice-of-day (pure function of date — no stored state, no timers). */
+enum class MoraleVoice { RANDOM, PLAIN, WARM, SPICY, SLANG, VIYSKO, BABUSIA }
+
 @Immutable
 data class UserPreferences(
     val language: AppLanguage = AppLanguage.UA,
@@ -28,6 +32,10 @@ data class UserPreferences(
     val slowYellowArmed: Boolean = true,
     val fastRedArmed: Boolean = true,
     val fastYellowArmed: Boolean = true,
+    val zonePolicy: ZonePolicy = ZonePolicy.ONCE_PER_THREAT,
+    val digestMax: Int = 10,
+    val digestWindow: DigestWindow = DigestWindow.EPISODE,
+    val digestPerType: Boolean = false,
     val officialRedAlertsEnabled: Boolean = true,
     val yellowAlertsEnabled: Boolean = true,
     val sirenOverride: Boolean = false,
@@ -81,6 +89,7 @@ data class UserPreferences(
     val hapticsEnabled: Boolean? = true,
     val officialAlertCityScope: Boolean = false,
     val moraleMasterEnabled: Boolean = false,
+    val moraleVoice: MoraleVoice = MoraleVoice.RANDOM,
     val bootRestartEnabled: Boolean = true,
     val alertRegionMode: AlertRegionMode = AlertRegionMode.CITY_LABELS,
     val showBorders: Boolean = true,

@@ -50,32 +50,6 @@ class OrbitBehavior(
     }
 }
 
-object StaleDriftBehavior : ThreatBehavior {
-    override fun apply(
-        t: NormalizedThreat,
-        engine: ThreatEngine,
-        now: Long
-    ): BehaviorOutcome? {
-        val props = engine.propsFor(t.type)
-        if (props.isFast || engine.canDrift(t, props, now) || t.areaOnly || t.status == "resolved" || (t.bearingDeg == null && t.heading == null)) return null
-
-        val anchor = t.updatedAtMillis ?: t.confirmedAtMillis ?: return null
-        val heading = t.bearingDeg ?: t.heading ?: return null
-        val speed = engine.speedCache.estimate(t.id, t, props) ?: return null
-        if (speed <= 0.0 || props.horizonSec <= 0.0) return null
-
-        val elapsedSec = ((now - anchor) / 1000.0).mod(props.horizonSec)
-        val distance = minOf(speed * elapsedSec, 5_000.0)
-        val position = destinationPoint(t.lat, t.lon, distance, heading)
-        return BehaviorOutcome(
-            position.lat,
-            position.lon,
-            heading.toFloat(),
-            moving = true
-        )
-    }
-}
-
 fun resolveThreatBehavior(
     engine: ThreatEngine,
     t: NormalizedThreat,

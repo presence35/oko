@@ -939,6 +939,9 @@ private fun DebugLogReason.label(s: Strings.StringSet): String = when (this) {
     DebugLogReason.STALE -> s.debugReasonStale
     DebugLogReason.OUTSIDE_ZONES -> s.debugReasonOutsideZones
     DebugLogReason.TOGGLE_OFF -> s.debugReasonToggleOff
+    DebugLogReason.RATE_LIMITED -> s.debugReasonRateLimited
+    DebugLogReason.ONCE_PER_THREAT -> s.debugReasonOncePerThreat
+    DebugLogReason.ONCE_PER_TYPE -> s.debugReasonOncePerType
     DebugLogReason.FIRED -> ""
 }
 
@@ -964,7 +967,8 @@ private fun DecisionCard(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    entry.kind.label(entry.threatType, entry.locality, lang, s),
+                    entry.kind.label(entry.threatType, entry.locality, lang, s) +
+                        entry.threatId?.let { " · #${it.takeLast(4)}" }.orEmpty(),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = accent,

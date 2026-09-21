@@ -27,6 +27,17 @@ import androidx.compose.ui.unit.dp
  */
 internal val FOOTER_BAND_DP = 60.dp
 
+private fun replayLine(rp: ReplayProgress, language: AppLanguage): String {
+    val s = Strings.get(language)
+    val suffix = rp.distanceKm?.let { flourishDistanceSuffix(it, language) }.orEmpty()
+    val subject = rp.groupType?.let { t ->
+        val info = ThreatTypeCatalog.INFO.getValue(t)
+        val label = if (language == AppLanguage.UA) info.labelUa else info.labelEn
+        "${s.flourishResolvingVerb} $label"
+    } ?: resolvingThreatsPhrase(rp.groupSize, language)
+    return subject + suffix
+}
+
 @Composable
 private fun StopPill(label: String) {
     Surface(
@@ -84,11 +95,12 @@ fun BoxScope.FlourishFooter(
         ) {
             StopPill(stopLabel)
             Spacer(Modifier.width(12.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (isCountdown) {
+            if (isCountdown) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -120,47 +132,52 @@ fun BoxScope.FlourishFooter(
                         Text(
                             text = "$typeLabel · $pendingStrikeCount",
                             color = Color.White.copy(alpha = 0.75f),
-                            style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.padding(top = 2.dp)
+                            style = MaterialTheme.typography.labelMedium
                         )
                     }
-                } else if (replayProgress != null) {
-                    val rp = replayProgress!!
-                    val fraction by animateFloatAsState(
-                        targetValue = rp.fraction,
-                        animationSpec = tween(250),
-                        label = "flourishProgress"
-                    )
+                }
+            } else if (replayProgress != null) {
+                val rp = replayProgress
+                val fraction by animateFloatAsState(
+                    targetValue = rp.fraction,
+                    animationSpec = tween(250),
+                    label = "flourishProgress"
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
-                        resolvingThreatsPhrase(rp.groupSize, language),
+                        text = replayLine(rp, language),
                         style = MaterialTheme.typography.bodyMedium,
                         color = amber,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(8.dp))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(3.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f))
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(Color.White.copy(alpha = 0.14f))
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(fraction.coerceIn(0f, 1f))
                                 .fillMaxHeight()
-                                .clip(RoundedCornerShape(2.dp))
+                                .clip(RoundedCornerShape(999.dp))
                                 .background(amber)
                         )
                     }
-                } else if (message != null) {
-                    Text(
-                        message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = amber,
-                        textAlign = TextAlign.Center
-                    )
                 }
+            } else if (message != null) {
+                Text(
+                    message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = amber,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }

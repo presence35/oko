@@ -47,6 +47,7 @@ class UserPrefs(private val context: Context) {
     private val threatCardSizeKey = stringPreferencesKey("threat_card_size")
     private val threatIconSetKey = stringPreferencesKey("threat_icon_set")
     private val overlapModeKey = stringPreferencesKey("threat_overlap_mode")
+    private val moraleVoiceKey = stringPreferencesKey("morale_voice")
     private val showMapScaleKey = booleanPreferencesKey("show_map_scale")
     private val showMediumCitiesKey = booleanPreferencesKey("show_medium_cities")
     private val showSmallCitiesKey = booleanPreferencesKey("show_small_cities")
@@ -93,6 +94,10 @@ class UserPrefs(private val context: Context) {
     private val showRegionBordersKey = booleanPreferencesKey("show_region_borders")
     private val showLargeCitiesKey = booleanPreferencesKey("show_large_cities")
     private val showThreatIdsOnMapKey = booleanPreferencesKey("show_threat_ids_on_map")
+    private val zonePolicyKey = stringPreferencesKey("zone_policy")
+    private val digestMaxKey = intPreferencesKey("digest_max")
+    private val digestWindowKey = stringPreferencesKey("digest_window")
+    private val digestPerTypeKey = booleanPreferencesKey("digest_per_type")
 
     val preferences: Flow<UserPreferences> = context.dataStore.data.map { it.toUserPreferences() }.distinctUntilChanged()
 
@@ -111,6 +116,15 @@ class UserPrefs(private val context: Context) {
         val overlap = this[overlapModeKey]?.let { stored ->
             OverlapMode.values().firstOrNull { it.name == stored }
         } ?: OverlapMode.DEFAULT
+        val moraleVoice = this[moraleVoiceKey]?.let { stored ->
+            MoraleVoice.values().firstOrNull { it.name == stored }
+        } ?: MoraleVoice.RANDOM
+        val zonePolicy = this[zonePolicyKey]?.let { stored ->
+            ZonePolicy.values().firstOrNull { it.name == stored }
+        } ?: ZonePolicy.ONCE_PER_THREAT
+        val digestWindow = this[digestWindowKey]?.let { stored ->
+            DigestWindow.values().firstOrNull { it.name == stored }
+        } ?: DigestWindow.EPISODE
         val alertRegionMode = when (val stored = this[alertRegionModeKey]) {
             null -> this[fillAlertRegionsKey]?.let { if (it) AlertRegionMode.FILL else AlertRegionMode.CITY_LABELS }
                 ?: AlertRegionMode.CITY_LABELS
@@ -135,6 +149,10 @@ class UserPrefs(private val context: Context) {
             slowYellowArmed = this[slowYellowArmedKey] ?: true,
             fastRedArmed = this[fastRedArmedKey] ?: true,
             fastYellowArmed = this[fastYellowArmedKey] ?: true,
+            zonePolicy = zonePolicy,
+            digestMax = (this[digestMaxKey] ?: 10).coerceIn(1, 10),
+            digestWindow = digestWindow,
+            digestPerType = this[digestPerTypeKey] ?: false,
             officialRedAlertsEnabled = this[officialRedAlertsKey] ?: true,
             yellowAlertsEnabled = this[yellowAlertsKey] ?: true,
             sirenOverride = this[sirenOverrideKey] ?: false,
@@ -148,6 +166,7 @@ class UserPrefs(private val context: Context) {
             threatCardSize = cardSize,
             threatIconSet = iconSet,
             overlapMode = overlap,
+            moraleVoice = moraleVoice,
             showMapScale = this[showMapScaleKey] ?: true,
             showMediumCities = this[showMediumCitiesKey] ?: true,
             showSmallCities = this[showSmallCitiesKey] ?: false,
@@ -370,6 +389,10 @@ class UserPrefs(private val context: Context) {
         context.dataStore.edit { it[overlapModeKey] = mode.name }
     }
 
+    suspend fun setMoraleVoice(voice: MoraleVoice) {
+        context.dataStore.edit { it[moraleVoiceKey] = voice.name }
+    }
+
     suspend fun setShowMapScale(show: Boolean) {
         context.dataStore.edit { it[showMapScaleKey] = show }
     }
@@ -433,6 +456,22 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setShowLargeCities(show: Boolean) {
         context.dataStore.edit { it[showLargeCitiesKey] = show }
+    }
+
+    suspend fun setZonePolicy(policy: ZonePolicy) {
+        context.dataStore.edit { it[zonePolicyKey] = policy.name }
+    }
+
+    suspend fun setDigestMax(max: Int) {
+        context.dataStore.edit { it[digestMaxKey] = max.coerceIn(1, 10) }
+    }
+
+    suspend fun setDigestWindow(window: DigestWindow) {
+        context.dataStore.edit { it[digestWindowKey] = window.name }
+    }
+
+    suspend fun setDigestPerType(perType: Boolean) {
+        context.dataStore.edit { it[digestPerTypeKey] = perType }
     }
 
     suspend fun setShowThreatIdsOnMap(show: Boolean) {

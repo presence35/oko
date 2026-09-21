@@ -10,6 +10,12 @@ import kotlin.math.*
 
 enum class ThreatZone { INNER, OUTER }
 
+/** Spatial hysteresis margin for zone tiers: upgrades apply immediately (safety),
+ *  but a downgrade/exit only applies beyond threshold × (1 + margin). No clocks —
+ *  a threat hovering on a boundary keeps its tier instead of flapping. Shared by
+ *  the map and the notification service, so markers and sirens never disagree. */
+const val ZONE_HYSTERESIS_MARGIN = 0.10
+
 data class ThreatEvaluationResult(
     val threatsInner: List<NormalizedThreat> = emptyList(),
     val threatsOuter: List<NormalizedThreat> = emptyList(),
@@ -60,7 +66,11 @@ class ThreatEngine(
         focusToken: String? = null,
         focusCityUa: String? = null,
         cityScope: Boolean = false,
-        lang: AppLanguage = AppLanguage.EN
+        lang: AppLanguage = AppLanguage.EN,
+        /** Previous tick's tiers (threat-id → tier). Makes downgrades/exits hold through
+         *  [ZONE_HYSTERESIS_MARGIN]; pass empty to evaluate statelessly. Explicit input,
+         *  same convention as [now] — keeps evaluation pure and deterministic. */
+        prevTiers: Map<String, ThreatZone> = emptyMap()
     ): ThreatEvaluationResult {
         val inInner = mutableListOf<NormalizedThreat>()
         val inOuter = mutableListOf<NormalizedThreat>()
@@ -89,7 +99,7 @@ class ThreatEngine(
 
             val distKm = distanceHaversine(focus.lat, focus.lon, predicted.lat, predicted.lon) / 1000.0
             val speedKmh = speed?.times(3.6)
-            val tier = zoneTier(props, distKm, speedKmh, params)
+            val tier = holdTier(zoneTier(props, distKm, speedKmh, params), prevTiers[t.id], props, distKm, speedKmh, params)
 
             if (tier != null) {
                 val eta = etaMinutes(distKm, speedKmh)
@@ -281,6 +291,43 @@ class ThreatEngine(
             distKm <= params.slowYellowKm -> ThreatZone.OUTER
             else -> null
         }
+    }
+
+    /**
+     * Asymmetric tier hold: upgrades pass through untouched, downgrades/exits hold the
+     * previous tier while still within its threshold × (1 + [ZONE_HYSTERESIS_MARGIN]).
+     * Beyond-reach always exits (no hold past the type's range). Pure, unit-tested.
+     */
+    internal fun holdTier(
+        raw: ThreatZone?,
+        prev: ThreatZone?,
+        props: ThreatProps,
+        distKm: Double,
+        speedKmh: Double?,
+        params: ZoneParams
+    ): ThreatZone? {
+        if (raw == ThreatZone.INNER || prev == null) return raw
+        if (distKm > props.reachKm) return raw
+        return when (prev) {
+            ThreatZone.INNER -> if (withinRedMargin(props, distKm, speedKmh, params)) ThreatZone.INNER else raw
+            ThreatZone.OUTER -> if (raw == null && withinYellowMargin(props, distKm, speedKmh, params)) ThreatZone.OUTER else raw
+        }
+    }
+
+    private fun withinRedMargin(props: ThreatProps, distKm: Double, speedKmh: Double?, params: ZoneParams): Boolean {
+        if (props.isFast) {
+            val eta = etaMinutes(distKm, speedKmh) ?: return false
+            return eta <= params.fastRedMin * (1 + ZONE_HYSTERESIS_MARGIN)
+        }
+        return distKm <= params.slowRedKm * (1 + ZONE_HYSTERESIS_MARGIN)
+    }
+
+    private fun withinYellowMargin(props: ThreatProps, distKm: Double, speedKmh: Double?, params: ZoneParams): Boolean {
+        if (props.isFast) {
+            val eta = etaMinutes(distKm, speedKmh) ?: return false
+            return eta <= params.fastYellowMin * (1 + ZONE_HYSTERESIS_MARGIN)
+        }
+        return distKm <= params.slowYellowKm * (1 + ZONE_HYSTERESIS_MARGIN)
     }
 
     /** Whether a threat may be dead-reckoned between server fixes: it must be fresh (not stale)
