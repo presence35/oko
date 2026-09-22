@@ -31,7 +31,7 @@ enum class ThreatCardSize { SMALL, LARGE }
 enum class ThreatIconSet { PHOTO, ARMY, COMIC, RUSSIAN }
 
 /** How same-coordinate threats render on the map. */
-enum class OverlapMode { DEFAULT, GRID, SPREAD, COUNT }
+enum class OverlapMode { DEFAULT, COUNT }
 
 /** How official-alert regions are visualized on the map. */
 enum class AlertRegionMode { CITY_LABELS, FILL, BORDER }
@@ -52,7 +52,7 @@ data class UserPreferences(
     val slowRedArmed: Boolean = true,
     val slowYellowArmed: Boolean = true,
     val fastRedArmed: Boolean = true,
-    val fastYellowArmed: Boolean = true,
+    val fastYellowArmed: Boolean = false,
     val notifyPolicyEnabled: Boolean = false,
     val zonePolicy: ZonePolicy = ZonePolicy.ONCE_PER_THREAT,
     val digestMax: Int = 10,
@@ -86,6 +86,7 @@ data class UserPreferences(
     val fastGroupCollapsed: Boolean = false,
     val slowGroupCollapsed: Boolean = false,
     val batteryOnboardShown: Boolean = false,
+    val serviceResurrected: Boolean = false,
     val permissionPromptDeferred: Boolean = false,
     val nightEnabled: Boolean = true,
     val nightStartMin: Int = 22 * 60,
@@ -98,7 +99,7 @@ data class UserPreferences(
     val nightSlowRedArmed: Boolean = true,
     val nightSlowYellowArmed: Boolean = true,
     val nightFastRedArmed: Boolean = true,
-    val nightFastYellowArmed: Boolean = true,
+    val nightFastYellowArmed: Boolean = false,
     val nightZoneSirenOverride: Boolean = false,
     val nightOfficialSirenOverride: Boolean = false,
     val nightOfficialAlertCityScope: Boolean = false,
@@ -126,4 +127,8 @@ data class UserPreferences(
     val iconSet: ThreatIconSet get() = threatIconSet
     val sheltersWithKids: Boolean get() = sheltersWithKidsEnabled
     val cardSize: ThreatCardSize get() = threatCardSize
+
+    companion object {
+        val DEFAULT = UserPreferences()
+    }
 }

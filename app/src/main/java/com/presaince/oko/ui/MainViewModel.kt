@@ -76,35 +76,40 @@ data class UiState(
     val userLocation: LatLng? = null,
     val gpsFixAvailable: Boolean = false,         // a GPS/cell fix has arrived at least once
     val gpsFixMissing: Boolean = false,           // followMe on, no fix ever → persistent warning
-    val slowRedKm: Int = 20,      // slow threats: distance to the red (inner) zone, km
-    val slowYellowKm: Int = 50,  // slow threats: distance to the yellow (outer) zone, km
-    val fastRedMin: Int = 5,     // fast threats: ETA to the red (inner) zone, minutes
-    val fastYellowMin: Int = 20,  // fast threats: ETA to the yellow (outer) zone, minutes
-    val slowRedArmed: Boolean = true,
-    val slowYellowArmed: Boolean = true,
-    val fastRedArmed: Boolean = true,
-    val fastYellowArmed: Boolean = true,
-    val activeZoneParams: ZoneParams = ZoneParams(20, 50, 5, 20), // effective (night-aware) thresholds
-    val activeSlowRedArmed: Boolean = true,
-    val activeSlowYellowArmed: Boolean = true,
-    val activeFastRedArmed: Boolean = true,
-    val activeFastYellowArmed: Boolean = true,
+    val slowRedKm: Int = UserPreferences.DEFAULT.slowRedKm,      // slow threats: distance to the red (inner) zone, km
+    val slowYellowKm: Int = UserPreferences.DEFAULT.slowYellowKm,  // slow threats: distance to the yellow (outer) zone, km
+    val fastRedMin: Int = UserPreferences.DEFAULT.fastRedMin,     // fast threats: ETA to the red (inner) zone, minutes
+    val fastYellowMin: Int = UserPreferences.DEFAULT.fastYellowMin,  // fast threats: ETA to the yellow (outer) zone, minutes
+    val slowRedArmed: Boolean = UserPreferences.DEFAULT.slowRedArmed,
+    val slowYellowArmed: Boolean = UserPreferences.DEFAULT.slowYellowArmed,
+    val fastRedArmed: Boolean = UserPreferences.DEFAULT.fastRedArmed,
+    val fastYellowArmed: Boolean = UserPreferences.DEFAULT.fastYellowArmed,
+    val activeZoneParams: ZoneParams = ZoneParams(
+        UserPreferences.DEFAULT.slowRedKm,
+        UserPreferences.DEFAULT.slowYellowKm,
+        UserPreferences.DEFAULT.fastRedMin,
+        UserPreferences.DEFAULT.fastYellowMin
+    ), // effective (night-aware) thresholds
+    val activeSlowRedArmed: Boolean = UserPreferences.DEFAULT.slowRedArmed,
+    val activeSlowYellowArmed: Boolean = UserPreferences.DEFAULT.slowYellowArmed,
+    val activeFastRedArmed: Boolean = UserPreferences.DEFAULT.fastRedArmed,
+    val activeFastYellowArmed: Boolean = UserPreferences.DEFAULT.fastYellowArmed,
     val nightActive: Boolean = false,                    // night window currently in effect
     val nightWindowText: String = "",                    // localized "22:00–07:00" when configured
-    val nightEnabled: Boolean = true,
-    val nightStartMin: Int = 22 * 60,
-    val nightEndMin: Int = 7 * 60,
-    val nightUseCustomZones: Boolean = false,
-    val nightSlowRedKm: Int = 20,
-    val nightSlowYellowKm: Int = 50,
-    val nightFastRedMin: Int = 5,
-    val nightFastYellowMin: Int = 20,
-    val nightSlowRedArmed: Boolean = true,
-    val nightSlowYellowArmed: Boolean = true,
-    val nightFastRedArmed: Boolean = true,
-    val nightFastYellowArmed: Boolean = true,
-    val nightZoneSirenOverride: Boolean = false,
-    val nightOfficialSirenOverride: Boolean = false,
+    val nightEnabled: Boolean = UserPreferences.DEFAULT.nightEnabled,
+    val nightStartMin: Int = UserPreferences.DEFAULT.nightStartMin,
+    val nightEndMin: Int = UserPreferences.DEFAULT.nightEndMin,
+    val nightUseCustomZones: Boolean = UserPreferences.DEFAULT.nightUseCustomZones,
+    val nightSlowRedKm: Int = UserPreferences.DEFAULT.nightSlowRedKm,
+    val nightSlowYellowKm: Int = UserPreferences.DEFAULT.nightSlowYellowKm,
+    val nightFastRedMin: Int = UserPreferences.DEFAULT.nightFastRedMin,
+    val nightFastYellowMin: Int = UserPreferences.DEFAULT.nightFastYellowMin,
+    val nightSlowRedArmed: Boolean = UserPreferences.DEFAULT.nightSlowRedArmed,
+    val nightSlowYellowArmed: Boolean = UserPreferences.DEFAULT.nightSlowYellowArmed,
+    val nightFastRedArmed: Boolean = UserPreferences.DEFAULT.nightFastRedArmed,
+    val nightFastYellowArmed: Boolean = UserPreferences.DEFAULT.nightFastYellowArmed,
+    val nightZoneSirenOverride: Boolean = UserPreferences.DEFAULT.nightZoneSirenOverride,
+    val nightOfficialSirenOverride: Boolean = UserPreferences.DEFAULT.nightOfficialSirenOverride,
     val officialRedAlertsEnabled: Boolean = true,
     val officialYellowAlertsEnabled: Boolean = true,
      val officialAlertCityScope: Boolean = false,
@@ -135,6 +140,7 @@ data class UiState(
     val latestVersion: String? = null,
     val wizardCompleted: Boolean? = null,   // null = prefs not loaded yet (never gate UI on that)
     val batteryOnboardShown: Boolean = false,
+    val serviceResurrected: Boolean = false,
     val threatCardSize: ThreatCardSize = ThreatCardSize.LARGE,
     val iconSet: ThreatIconSet = ThreatIconSet.PHOTO,
     val overlapMode: OverlapMode = OverlapMode.DEFAULT,
@@ -502,6 +508,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val pinnedCity: String?,
         val wizardCompleted: Boolean?,
         val batteryOnboardShown: Boolean,
+        val serviceResurrected: Boolean,
         val cardSize: ThreatCardSize,
         val iconSet: ThreatIconSet,
         val overlapMode: OverlapMode,
@@ -605,6 +612,7 @@ val fastGroupCollapsed: Boolean,
             pinnedCity = pinnedCity,
             wizardCompleted = wizardCompleted,
             batteryOnboardShown = batteryOnboardShown,
+            serviceResurrected = serviceResurrected,
             cardSize = threatCardSize,
             iconSet = threatIconSet,
             overlapMode = overlapMode,
@@ -784,6 +792,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             nightOfficialSirenOverride = prefs.night.zones.officialSirenOverride,
             wizardCompleted = prefs.wizardCompleted,
             batteryOnboardShown = prefs.batteryOnboardShown,
+            serviceResurrected = prefs.serviceResurrected,
             threatCardSize = prefs.cardSize,
             iconSet = prefs.iconSet,
             overlapMode = prefs.overlapMode,
@@ -1208,6 +1217,15 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setBatteryOnboardShown(shown) }
     }
 
+    fun clearServiceResurrected() {
+        viewModelScope.launch { prefs.setServiceResurrected(false) }
+    }
+
+    /** The welcome shootdown finished playing: drop it so onboarding-adjacent prompts may show. */
+    fun consumeWelcomeShootdown() {
+        welcomeShootdownFlow.value = null
+    }
+
     fun setNightEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setNightEnabled(enabled) }
     }
@@ -1561,6 +1579,7 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch {
             prefs.setWizardCompleted(true)
             prefs.setBatteryOnboardShown(true)
+            prefs.setServiceResurrected(false)
             prefs.setPermissionPromptDeferred(true)
             maybeTriggerWelcomeShootdown()
         }
@@ -1574,6 +1593,7 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch {
             prefs.setWizardCompleted(false)
             prefs.setBatteryOnboardShown(false)
+            prefs.setServiceResurrected(false)
             prefs.setPermissionPromptDeferred(false)
         }
     }

@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import androidx.work.*
 import com.presaince.oko.AlertService
+import com.presaince.oko.UserPrefs
 import com.presaince.oko.engine.MonitorCoreImpl
 import java.util.concurrent.TimeUnit
 
@@ -45,6 +46,11 @@ class EmergencyResurrectionWorker(
         if (!isServiceRunning) {
             try {
                 AlertService.start(applicationContext)
+                // Kill evidence: the OS stopped background monitoring, so arm the one-shot
+                // battery-exemption prompt for the next foreground session.
+                try {
+                    UserPrefs(applicationContext).setServiceResurrected(true)
+                } catch (_: Exception) {}
             } catch (_: Exception) {}
         }
         return Result.success()

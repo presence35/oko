@@ -1100,8 +1100,6 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             OverlapModeChip(OverlapMode.DEFAULT, s.overlapDefaultLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.DEFAULT) }
-                            OverlapModeChip(OverlapMode.GRID, s.overlapGridLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.GRID) }
-                            OverlapModeChip(OverlapMode.SPREAD, s.overlapSpreadLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.SPREAD) }
                             OverlapModeChip(OverlapMode.COUNT, s.overlapCountLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.COUNT) }
                         }
                     }

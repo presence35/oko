@@ -45,7 +45,6 @@ object Strings {
         val wizardShelterDesc: String,
         val wizardMoraleTitle: String,
         val wizardMoraleDesc: String,
-        val wizardMoraleDescGearSuffix: String,
         val wizardNeptunStatus: String,
         val settingsSearchHint: String,
         val settingsSearchClear: String,
@@ -96,11 +95,9 @@ object Strings {
         val digestScopeLabel: String,
         val digestScopePerType: String,
         val digestScopeAny: String,
-        val digestWindowOff: String,
         val digestWindowEpisode: String,
         val digestWindowMinFormat: String,
-        val policyWhatIfActualFormat: String,
-        val policyWhatIfEstimateFormat: String,
+        val policyWhatIfFormat: String,
         val fallingDebrisDelayTitle: String,
         val fallingDebrisDelayDesc: String,
         val fallingDebrisOffLabel: String,
@@ -445,8 +442,6 @@ val nightSoundLabel: String,
         val overlapModeTitle: String,
         val overlapModeDesc: String,
         val overlapDefaultLabel: String,
-        val overlapGridLabel: String,
-        val overlapSpreadLabel: String,
         val overlapCountLabel: String,
         val iconSetPhotoLabel: String,
         val iconSetArmyLabel: String,
@@ -714,7 +709,6 @@ val nightSoundLabel: String,
         val wizardShelterDesc: String get() = onboarding.wizardShelterDesc
         val wizardMoraleTitle: String get() = onboarding.wizardMoraleTitle
         val wizardMoraleDesc: String get() = onboarding.wizardMoraleDesc
-        val wizardMoraleDescGearSuffix: String get() = onboarding.wizardMoraleDescGearSuffix
         val wizardNeptunStatus: String get() = onboarding.wizardNeptunStatus
         val fitMapLabel: String get() = onboarding.fitMapLabel
         val dayZonesTitle: String get() = settings.dayZonesTitle
@@ -757,11 +751,9 @@ val nightSoundLabel: String,
         val digestScopeLabel: String get() = settings.digestScopeLabel
         val digestScopePerType: String get() = settings.digestScopePerType
         val digestScopeAny: String get() = settings.digestScopeAny
-        val digestWindowOff: String get() = settings.digestWindowOff
         val digestWindowEpisode: String get() = settings.digestWindowEpisode
         val digestWindowMinFormat: String get() = settings.digestWindowMinFormat
-        val policyWhatIfActualFormat: String get() = settings.policyWhatIfActualFormat
-        val policyWhatIfEstimateFormat: String get() = settings.policyWhatIfEstimateFormat
+        val policyWhatIfFormat: String get() = settings.policyWhatIfFormat
         val fallingDebrisDelayTitle: String get() = settings.fallingDebrisDelayTitle
         val fallingDebrisDelayDesc: String get() = settings.fallingDebrisDelayDesc
         val fallingDebrisOffLabel: String get() = settings.fallingDebrisOffLabel
@@ -1157,8 +1149,6 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val overlapModeTitle: String get() = misc.overlapModeTitle
         val overlapModeDesc: String get() = misc.overlapModeDesc
         val overlapDefaultLabel: String get() = misc.overlapDefaultLabel
-        val overlapGridLabel: String get() = misc.overlapGridLabel
-        val overlapSpreadLabel: String get() = misc.overlapSpreadLabel
         val overlapCountLabel: String get() = misc.overlapCountLabel
     val iconSetPhotoLabel: String get() = misc.iconSetPhotoLabel
         val iconSetArmyLabel: String get() = misc.iconSetArmyLabel

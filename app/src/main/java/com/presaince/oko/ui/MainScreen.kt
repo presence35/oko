@@ -328,6 +328,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onHeaderHeightChange = { headerHeightPx = it },
             onReactivateMonitoring = { viewModel.reactivateMonitoring() },
             welcomeShootdown = welcomeShootdown,
+            onWelcomeFinished = { viewModel.consumeWelcomeShootdown() },
             onShelterTipAdvance = {
                 val next = (shelterTipStage + 1).coerceAtMost(6)
                 shelterTipStage = next
@@ -546,30 +547,10 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
             fastYellowArmed = uiState.fastYellowArmed,
             sheltersEnabled = uiState.sheltersEnabled,
             morale = uiState.moraleMasterEnabled,
-            moraleVoice = uiState.moraleVoice,
-            calmMessagesEnabled = uiState.calmMessagesEnabled,
-            flybyAnimationEnabled = uiState.flybyAnimationEnabled,
-            deathAnimationEnabled = uiState.deathAnimationEnabled,
-            followBullet = uiState.followBullet,
-            highQualityExplosions = uiState.highQualityExplosions,
-            neutralizedTallyEnabled = uiState.neutralizedTallyEnabled,
-            neutralizedTallyAllUkraine = uiState.neutralizedTallyAllUkraine,
-            alarmEpisodeTallyEnabled = uiState.alarmEpisodeTallyEnabled,
-            iconSetForFun = uiState.iconSet,
             onThreatEnabledToggle = { type, enabled -> viewModel.setThreatEnabled(type, enabled) },
             onFollowMeChange = { viewModel.setFollowMe(it) },
             onPinnedCityChange = { viewModel.setPinnedCity(it) },
             onMoraleChange = { viewModel.setMoraleEnabled(it) },
-            onMoraleVoiceChange = { viewModel.setMoraleVoice(it) },
-            onCalmMessagesChange = { viewModel.setCalmMessagesEnabled(it) },
-            onFlybyAnimationChange = { viewModel.setFlybyAnimationEnabled(it) },
-            onDeathAnimationChange = { viewModel.setDeathAnimationEnabled(it) },
-            onFollowBulletChange = { viewModel.setFollowBullet(it) },
-            onHighQualityExplosionsChange = { viewModel.setHighQualityExplosions(it) },
-            onNeutralizedTallyChange = { viewModel.setNeutralizedTallyEnabled(it) },
-            onNeutralizedTallyAllUkraineChange = { viewModel.setNeutralizedTallyAllUkraine(it) },
-            onAlarmEpisodeTallyChange = { viewModel.setAlarmEpisodeTallyEnabled(it) },
-            onIconSetChangeForFun = { viewModel.setThreatIconSet(it) },
             onSlowRedChange = { viewModel.setSlowRedKm(it) },
             onSlowYellowChange = { viewModel.setSlowYellowKm(it) },
             onSlowRedArmedChange = { armOrRequestPermission(it) { v -> viewModel.setSlowRedArmed(v) } },
@@ -591,29 +572,39 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
         )
     }
 
-    // Battery prompt: kept but not immediately after first launch. Shown only after the
-    // wizard has been completed for a while, so first-run isn't a wall of system dialogs.
-    val batteryExempt = remember { BatteryOptimization.isIgnoringBatteryOptimizations(context) }
-    var batteryDeferDone by remember { mutableStateOf(false) }
-    LaunchedEffect(uiState.wizardCompleted) {
-        if (uiState.wizardCompleted == true) {
-            delay(120_000)
-            batteryDeferDone = true
+    // Battery prompt: contextual, never on a timer. It appears only after the OS actually
+    // killed background monitoring (the resurrection worker had to restart it), and only in a
+    // calm window: map visible, welcome greeting done, no flourish, alert, sheet, or update.
+    val batteryExemptNow = { BatteryOptimization.isIgnoringBatteryOptimizations(context) }
+    var batteryExempt by remember { mutableStateOf(batteryExemptNow()) }
+    DisposableEffect(lifecycleOwner) {
+        val batteryObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) batteryExempt = batteryExemptNow()
         }
+        lifecycleOwner.lifecycle.addObserver(batteryObserver)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(batteryObserver) }
     }
-    LaunchedEffect(uiState.wizardCompleted, uiState.batteryOnboardShown, batteryExempt) {
-        if (uiState.wizardCompleted == true && !uiState.batteryOnboardShown && batteryExempt) {
+    LaunchedEffect(uiState.serviceResurrected, uiState.batteryOnboardShown) {
+        if (uiState.serviceResurrected && !uiState.batteryOnboardShown && batteryExemptNow()) {
             viewModel.setBatteryOnboardShown(true)
+            viewModel.clearServiceResurrected()
         }
     }
-    if (batteryDeferDone && uiState.wizardCompleted == true && !uiState.batteryOnboardShown && !batteryExempt) {
+    val batteryCalmWindow = screen == Screen.MAP && !wizardShown && welcomeShootdown == null &&
+        uiState.flourish == null && uiState.flyby == null && uiState.update is UpdateState.Idle &&
+        !uiState.alertActive && !showZonesSheet && !showNearbyShelters
+    if (uiState.serviceResurrected && !uiState.batteryOnboardShown && !batteryExempt && batteryCalmWindow) {
         BatteryOnboardingDialog(
             s = Strings.get(uiState.language),
             onAllow = {
                 viewModel.setBatteryOnboardShown(true)
+                viewModel.clearServiceResurrected()
                 BatteryOptimization.requestExemption(context)
             },
-            onLater = { viewModel.setBatteryOnboardShown(true) }
+            onLater = {
+                viewModel.setBatteryOnboardShown(true)
+                viewModel.clearServiceResurrected()
+            }
         )
     }
     }
@@ -661,7 +652,8 @@ private fun MapScreen(
     settingsHintRemaining: Int = 0,
     onHeaderHeightChange: (Int) -> Unit = {},
     onReactivateMonitoring: () -> Unit = {},
-    welcomeShootdown: WelcomeShootdown? = null
+    welcomeShootdown: WelcomeShootdown? = null,
+    onWelcomeFinished: () -> Unit = {}
 ) {
     val s = Strings.get(uiState.language)
     val context = LocalContext.current
@@ -964,6 +956,7 @@ private fun MapScreen(
                         onPendingStrikeCountChange = { pendingStrikeCount = it },
                         onCancelRequestTick = cancelTick,
                         welcomeShootdown = welcomeShootdown,
+                        onWelcomeFinished = onWelcomeFinished,
                         modifier = Modifier.fillMaxSize()
                     )
                     uiState.flyby?.let { show ->

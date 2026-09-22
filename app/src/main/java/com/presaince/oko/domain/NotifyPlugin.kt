@@ -12,7 +12,7 @@ import com.presaince.oko.engine.ThreatZone
  */
 enum class ZonePolicy { EVERY_CHANGE, ONCE_PER_THREAT, ONCE_PER_TYPE, DIGEST }
 
-enum class DigestWindow { OFF, MIN_2, MIN_10, MIN_60, EPISODE }
+enum class DigestWindow { MIN_2, MIN_10, MIN_60, EPISODE }
 
 enum class DigestScope { PER_TYPE, ANY }
 
@@ -201,7 +201,6 @@ class NotifyPlugin {
     }
 
     private fun bucketAllows(inp: PluginInput, prefs: NotifyPrefs, now: Long): Boolean {
-        if (prefs.digestWindow == DigestWindow.OFF) return true
         val q = buckets[bucketKey(inp, prefs)] ?: return true
         if (prefs.digestWindow == DigestWindow.EPISODE) return q.size < prefs.digestMax
         val window = windowMs(prefs)
@@ -209,15 +208,10 @@ class NotifyPlugin {
     }
 
     private fun recordBucket(inp: PluginInput, prefs: NotifyPrefs, now: Long) {
-        if (prefs.digestWindow == DigestWindow.OFF) return
         buckets.getOrPut(bucketKey(inp, prefs)) { ArrayDeque() }.addLast(now)
     }
 
     private fun pruneBuckets(prefs: NotifyPrefs, now: Long) {
-        if (prefs.digestWindow == DigestWindow.OFF) {
-            buckets.clear()
-            return
-        }
         if (prefs.digestWindow == DigestWindow.EPISODE) {
             if (episodes.isEmpty()) {
                 buckets.clear()
@@ -241,7 +235,6 @@ class NotifyPlugin {
             val byId = fired.mapNotNull { it.threatId }.toSet()
             val byType = fired.mapNotNull { it.threatType }.toSet()
             val digest = when (prefs.digestWindow) {
-                DigestWindow.OFF -> fired.size
                 DigestWindow.EPISODE ->
                     if (prefs.digestPerType) {
                         fired.mapNotNull { e -> e.threatId?.let { it to e.threatType } }.toSet().size

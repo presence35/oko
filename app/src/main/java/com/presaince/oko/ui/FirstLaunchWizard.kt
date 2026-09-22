@@ -13,7 +13,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -72,30 +71,10 @@ internal fun FirstLaunchWizard(
     fastYellowArmed: Boolean,
     sheltersEnabled: Boolean,
     morale: Boolean,
-    moraleVoice: MoraleVoice,
-    calmMessagesEnabled: Boolean,
-    flybyAnimationEnabled: Boolean,
-    deathAnimationEnabled: Boolean,
-    followBullet: Boolean,
-    highQualityExplosions: Boolean,
-    neutralizedTallyEnabled: Boolean,
-    neutralizedTallyAllUkraine: Boolean,
-    alarmEpisodeTallyEnabled: Boolean,
-    iconSetForFun: ThreatIconSet,
     onThreatEnabledToggle: (ThreatType, Boolean) -> Unit,
     onFollowMeChange: (Boolean) -> Unit,
     onPinnedCityChange: (City?) -> Unit,
     onMoraleChange: (Boolean) -> Unit,
-    onCalmMessagesChange: (Boolean) -> Unit,
-    onMoraleVoiceChange: (MoraleVoice) -> Unit,
-    onFlybyAnimationChange: (Boolean) -> Unit,
-    onDeathAnimationChange: (Boolean) -> Unit,
-    onFollowBulletChange: (Boolean) -> Unit,
-    onHighQualityExplosionsChange: (Boolean) -> Unit,
-    onNeutralizedTallyChange: (Boolean) -> Unit,
-    onNeutralizedTallyAllUkraineChange: (Boolean) -> Unit,
-    onAlarmEpisodeTallyChange: (Boolean) -> Unit,
-    onIconSetChangeForFun: (ThreatIconSet) -> Unit,
     onSlowRedChange: (Int) -> Unit,
     onSlowYellowChange: (Int) -> Unit,
     onSlowRedArmedChange: (Boolean) -> Unit,
@@ -251,29 +230,8 @@ internal fun FirstLaunchWizard(
                     )
                     else -> SetupFeaturesStep(
                         s = s,
-                        lang = current,
                         morale = morale,
-                        moraleVoice = moraleVoice,
-                        calmMessagesEnabled = calmMessagesEnabled,
-                        flybyAnimationEnabled = flybyAnimationEnabled,
-                        deathAnimationEnabled = deathAnimationEnabled,
-                        followBullet = followBullet,
-                        highQualityExplosions = highQualityExplosions,
-                        neutralizedTallyEnabled = neutralizedTallyEnabled,
-                        neutralizedTallyAllUkraine = neutralizedTallyAllUkraine,
-                        alarmEpisodeTallyEnabled = alarmEpisodeTallyEnabled,
-                        iconSet = iconSetForFun,
-                        onMoraleChange = onMoraleChange,
-                        onMoraleVoiceChange = onMoraleVoiceChange,
-                        onCalmMessagesChange = onCalmMessagesChange,
-                        onFlybyAnimationChange = onFlybyAnimationChange,
-                        onDeathAnimationChange = onDeathAnimationChange,
-                        onFollowBulletChange = onFollowBulletChange,
-                        onHighQualityExplosionsChange = onHighQualityExplosionsChange,
-                        onNeutralizedTallyChange = onNeutralizedTallyChange,
-                        onNeutralizedTallyAllUkraineChange = onNeutralizedTallyAllUkraineChange,
-                        onAlarmEpisodeTallyChange = onAlarmEpisodeTallyChange,
-                        onIconSetChange = onIconSetChangeForFun
+                        onMoraleChange = onMoraleChange
                     )
                 }
             }
@@ -283,7 +241,7 @@ internal fun FirstLaunchWizard(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                val backInteraction = remember { MutableInteractionSource() }
+                val backInteraction = rememberHapticInteractionSource()
                 if (step > 0) {
                     IconButton(
                         onClick = { step-- },
@@ -304,7 +262,7 @@ internal fun FirstLaunchWizard(
                     1 -> locationReady
                     else -> true
                 }
-                val nextInteraction = remember { MutableInteractionSource() }
+                val nextInteraction = rememberHapticInteractionSource()
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -422,7 +380,7 @@ private fun WizardThreatGrid(
                             val label = info.shortLabel(lang)
                             val onColor = MaterialTheme.colorScheme.onSurface
                             val offColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            val cellInteraction = remember { MutableInteractionSource() }
+                            val cellInteraction = rememberHapticInteractionSource()
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier
@@ -550,7 +508,7 @@ private fun WizardLocationCard(
     title: String,
     desc: String
 ) {
-    val cardInteraction = remember { MutableInteractionSource() }
+    val cardInteraction = rememberHapticInteractionSource()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -851,29 +809,8 @@ private fun WizardZoneSliderRow(
 @Composable
 private fun SetupFeaturesStep(
     s: Strings.StringSet,
-    lang: AppLanguage,
     morale: Boolean,
-    moraleVoice: MoraleVoice,
-    calmMessagesEnabled: Boolean,
-    flybyAnimationEnabled: Boolean,
-    deathAnimationEnabled: Boolean,
-    followBullet: Boolean,
-    highQualityExplosions: Boolean,
-    neutralizedTallyEnabled: Boolean,
-    neutralizedTallyAllUkraine: Boolean,
-    alarmEpisodeTallyEnabled: Boolean,
-    iconSet: ThreatIconSet,
-    onMoraleChange: (Boolean) -> Unit,
-    onMoraleVoiceChange: (MoraleVoice) -> Unit,
-    onCalmMessagesChange: (Boolean) -> Unit,
-    onFlybyAnimationChange: (Boolean) -> Unit,
-    onDeathAnimationChange: (Boolean) -> Unit,
-    onFollowBulletChange: (Boolean) -> Unit,
-    onHighQualityExplosionsChange: (Boolean) -> Unit,
-    onNeutralizedTallyChange: (Boolean) -> Unit,
-    onNeutralizedTallyAllUkraineChange: (Boolean) -> Unit,
-    onAlarmEpisodeTallyChange: (Boolean) -> Unit,
-    onIconSetChange: (ThreatIconSet) -> Unit
+    onMoraleChange: (Boolean) -> Unit
 ) {
     val features = remember(s) {
         guideFeatures(s).filter { it.id in setOf("live", "zones", "night", "shelter") }
@@ -909,102 +846,57 @@ private fun SetupFeaturesStep(
         }
         Spacer(Modifier.height(6.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_morale),
-                contentDescription = null,
-                tint = Color.Unspecified,
-                modifier = Modifier
-                    .padding(end = 12.dp)
-                    .size(24.dp)
+        WizardMoraleToggle(
+            s = s,
+            morale = morale,
+            onMoraleChange = onMoraleChange
+        )
+    }
+}
+
+@Composable
+private fun WizardMoraleToggle(
+    s: Strings.StringSet,
+    morale: Boolean,
+    onMoraleChange: (Boolean) -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_morale),
+            contentDescription = null,
+            tint = Color.Unspecified,
+            modifier = Modifier
+                .padding(end = 12.dp)
+                .size(24.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                s.wizardMoraleTitle,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
             )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    s.wizardMoraleTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(2.dp))
-                val moraleGearId = "moraleGear"
-                Text(
-                    buildAnnotatedString {
-                        append(s.wizardMoraleDesc)
-                        append(' ')
-                        appendInlineContent(moraleGearId, "[gear]")
-                        append(' ')
-                        append(s.wizardMoraleDescGearSuffix)
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    inlineContent = mapOf(
-                        moraleGearId to InlineTextContent(
-                            Placeholder(14.sp, 14.sp, PlaceholderVerticalAlign.TextCenter)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_settings_ua),
-                                contentDescription = s.settingsButton,
-                                tint = Color.Unspecified
-                            )
-                        }
-                    )
-                )
-            }
-            Switch(
-                checked = morale,
-                onCheckedChange = onMoraleChange,
-                interactionSource = rememberHapticInteractionSource()
+            Spacer(Modifier.height(2.dp))
+            Text(
+                s.wizardMoraleDesc,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        AnimatedVisibility(visible = morale) {
-            Column {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    Text(
-                        s.iconSetTitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    IconSetSelector(
-                        lang = lang,
-                        selected = iconSet,
-                        onChange = onIconSetChange
-                    )
-                }
-                MoraleToggles(
-                    s = s,
-                    voice = moraleVoice,
-                    onVoiceChange = onMoraleVoiceChange,
-                    calmMessagesEnabled = calmMessagesEnabled,
-                    flybyAnimationEnabled = flybyAnimationEnabled,
-                    deathAnimationEnabled = deathAnimationEnabled,
-                    followBullet = followBullet,
-                    highQualityExplosions = highQualityExplosions,
-                    neutralizedTallyEnabled = neutralizedTallyEnabled,
-                    neutralizedTallyAllUkraine = neutralizedTallyAllUkraine,
-                    alarmEpisodeTallyEnabled = alarmEpisodeTallyEnabled,
-                    onCalmMessagesChange = onCalmMessagesChange,
-                    onFlybyAnimationChange = onFlybyAnimationChange,
-                    onDeathAnimationChange = onDeathAnimationChange,
-                    onFollowBulletChange = onFollowBulletChange,
-                    onHighQualityExplosionsChange = onHighQualityExplosionsChange,
-                    onNeutralizedTallyChange = onNeutralizedTallyChange,
-                    onNeutralizedTallyAllUkraineChange = onNeutralizedTallyAllUkraineChange,
-                    onAlarmEpisodeTallyChange = onAlarmEpisodeTallyChange
-                )
-            }
-        }
+        Switch(
+            checked = morale,
+            onCheckedChange = onMoraleChange,
+            interactionSource = rememberHapticInteractionSource()
+        )
     }
 }
 
 /**
- * First-run battery exemption. Appears once, right after the language picker (only when the OS
- * still throttles this app), so MainActivity's deferred system permission dialogs come last.
+ * Battery-exemption prompt. Shown once, only after the OS actually killed background
+ * monitoring (resurrection-gated, calm window — see MainScreen), never during onboarding.
  * Shows OEM-specific guidance when the device manufacturer is known to restrict background apps.
  */
 @Composable

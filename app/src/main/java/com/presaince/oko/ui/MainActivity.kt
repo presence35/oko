@@ -217,8 +217,9 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Permission dialogs must never beat the first-run onboarding — ask only after the wizard
-     * and (for new users) the battery prompt have resolved. Returning users who already
-     * finished onboarding get the request immediately.
+     * resolves. The battery prompt is contextual now (only after a real service kill), so it
+     * no longer gates permissions. Returning users who already finished onboarding get the
+     * request immediately.
      */
     private fun deferPermissionRequests() {
         lifecycleScope.launch {
@@ -226,11 +227,11 @@ class MainActivity : ComponentActivity() {
             // Re-arm for this session — a previous "Later" deferral only lasts one launch.
             prefs.setPermissionPromptDeferred(false)
             val p = prefs.preferences.first()
-            val ready = if (p.wizardCompleted && p.batteryOnboardShown) {
+            val ready = if (p.wizardCompleted) {
                 !p.permissionPromptDeferred
             } else {
                 prefs.preferences
-                    .map { it.wizardCompleted && it.batteryOnboardShown && !it.permissionPromptDeferred }
+                    .map { it.wizardCompleted && !it.permissionPromptDeferred }
                     .first { it }
             }
             if (ready) requestLocationAndNotifications()

@@ -551,14 +551,9 @@ internal fun NotifyPolicyRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(10.dp))
-        val actual = whatIf[ZonePolicy.EVERY_CHANGE]
         ZonePolicy.values().forEach { policy ->
             val isSel = policy == selected
-            val sub = when (policy) {
-                ZonePolicy.EVERY_CHANGE ->
-                    actual?.let { String.format(s.policyWhatIfActualFormat, it) }
-                else -> whatIf[policy]?.let { String.format(s.policyWhatIfEstimateFormat, it) }
-            }
+            val sub = whatIf[policy]?.let { String.format(s.policyWhatIfFormat, it) }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -666,9 +661,6 @@ internal fun DigestControlsRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            DigestChip(s.digestWindowOff, window == DigestWindow.OFF, Modifier.weight(1f)) {
-                onWindowChange(DigestWindow.OFF)
-            }
             listOf(2, 10, 60).forEach { min ->
                 val w = when (min) {
                     2 -> DigestWindow.MIN_2

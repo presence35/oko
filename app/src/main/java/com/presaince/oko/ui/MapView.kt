@@ -47,6 +47,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import com.presaince.oko.engine.AlertLevel
@@ -259,23 +260,6 @@ private fun deOverlapThreats(
             continue
         }
         when (mode) {
-            OverlapMode.GRID -> {
-                val cols = kotlin.math.ceil(kotlin.math.sqrt(sorted.size.toDouble())).toInt().coerceAtLeast(1)
-                val rows = kotlin.math.ceil(sorted.size / cols.toDouble()).toInt()
-                sorted.forEachIndexed { i, (id, _, _) ->
-                    val dx = (i % cols - (cols - 1) / 2.0) * stepPx
-                    val dy = (i / cols - (rows - 1) / 2.0) * stepPx
-                    out[id] = ThreatScreenPlacement(dx.toFloat(), dy.toFloat(), null, true)
-                }
-            }
-            OverlapMode.SPREAD -> {
-                val half = stepPx * 0.75f
-                sorted.forEachIndexed { i, (id, _, _) ->
-                    val dx = (i - (sorted.size - 1) / 2.0) * half
-                    val dy = if (i % 2 == 0) -half * 0.25f else half * 0.25f
-                    out[id] = ThreatScreenPlacement(dx.toFloat(), dy.toFloat(), null, true)
-                }
-            }
             OverlapMode.COUNT -> {
                 val byType = LinkedHashMap<String, MutableList<Triple<String, LatLng, String>>>()
                 for (m in sorted) byType.getOrPut(m.third) { mutableListOf() }.add(m)
@@ -400,6 +384,7 @@ fun NeptunMapView(
     onPendingStrikeCountChange: (Int) -> Unit = {},
     onCancelRequestTick: Int = 0,
     welcomeShootdown: WelcomeShootdown? = null,
+    onWelcomeFinished: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
@@ -460,6 +445,7 @@ fun NeptunMapView(
     val showThreatIdsOnMapState by rememberUpdatedState(uiState.showThreatIdsOnMap)
     val hapticsOnState by rememberUpdatedState(LocalHapticsEnabled.current)
     val liveUiState by rememberUpdatedState(uiState)
+    val onWelcomeFinishedState by rememberUpdatedState(onWelcomeFinished)
 
     val threatOutcomes = remember { mutableStateMapOf<String, BehaviorOutcome>() }
     val threatPlacements = remember { mutableStateMapOf<String, ThreatScreenPlacement>() }
@@ -789,6 +775,16 @@ LaunchedEffect(selectedId) {
                 )) {
                     deathFx.followStrike(target)
                     deathFx.strikeHaptics()
+                    // The greeting is over once the explosion settles, so onboarding-adjacent
+                    // prompts (battery) may show afterwards. Best-effort: never blocks them
+                    // forever, the ViewModel flag is only a calm-window gate.
+                    mapScope.launch {
+                        deathFx.active.first { it }
+                        deathFx.active.first { !it }
+                        onWelcomeFinishedState()
+                    }
+                } else {
+                    onWelcomeFinishedState()
                 }
             }
         }

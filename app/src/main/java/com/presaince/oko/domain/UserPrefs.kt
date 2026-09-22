@@ -59,6 +59,7 @@ class UserPrefs(private val context: Context) {
     private val fastGroupCollapsedKey = booleanPreferencesKey("fast_group_collapsed")
     private val slowGroupCollapsedKey = booleanPreferencesKey("slow_group_collapsed")
     private val batteryOnboardShownKey = booleanPreferencesKey("battery_onboard_shown")
+    private val serviceResurrectedKey = booleanPreferencesKey("service_resurrected")
     private val permissionPromptDeferredKey = booleanPreferencesKey("permission_prompt_deferred")
     private val nightEnabledKey = booleanPreferencesKey("night_enabled")
     private val nightStartMinKey = intPreferencesKey("night_start_min")
@@ -103,114 +104,116 @@ class UserPrefs(private val context: Context) {
     private fun Preferences.toUserPreferences(): UserPreferences {
         // No stored override: the language is the phone locale, resolved fresh on every startup.
         val lang = systemLanguage()
+        val d = UserPreferences.DEFAULT
         val cardSize = this[threatCardSizeKey]?.let { stored ->
             ThreatCardSize.values().firstOrNull { it.name == stored }
-        } ?: ThreatCardSize.LARGE
+        } ?: d.threatCardSize
         val iconSet = this[threatIconSetKey]?.let { stored ->
             ThreatIconSet.values().firstOrNull { it.name == stored }
-        } ?: ThreatIconSet.PHOTO
+        } ?: d.threatIconSet
         val overlap = this[overlapModeKey]?.let { stored ->
             OverlapMode.values().firstOrNull { it.name == stored }
-        } ?: OverlapMode.DEFAULT
+        } ?: d.overlapMode
         val moraleVoice = this[moraleVoiceKey]?.let { stored ->
             MoraleVoice.values().firstOrNull { it.name == stored }
-        } ?: MoraleVoice.RANDOM
+        } ?: d.moraleVoice
         val zonePolicy = this[zonePolicyKey]?.let { stored ->
             ZonePolicy.values().firstOrNull { it.name == stored }
-        } ?: ZonePolicy.ONCE_PER_THREAT
+        } ?: d.zonePolicy
         val digestWindow = this[digestWindowKey]?.let { stored ->
             DigestWindow.values().firstOrNull { it.name == stored }
-        } ?: DigestWindow.EPISODE
+        } ?: d.digestWindow
         val alertRegionMode = when (val stored = this[alertRegionModeKey]) {
             null -> this[fillAlertRegionsKey]?.let { if (it) AlertRegionMode.FILL else AlertRegionMode.CITY_LABELS }
-                ?: AlertRegionMode.CITY_LABELS
-            else -> AlertRegionMode.values().firstOrNull { it.name == stored } ?: AlertRegionMode.CITY_LABELS
+                ?: d.alertRegionMode
+            else -> AlertRegionMode.values().firstOrNull { it.name == stored } ?: d.alertRegionMode
         }
         val mapVisible = ThreatType.values().filter { type ->
-            this[cachedBooleanKey("threat_map_${type.name}")] ?: true
+            this[cachedBooleanKey("threat_map_${type.name}")] ?: d.mapVisibleTypes.contains(type)
         }.toSet()
         val alertEnabled = ThreatType.values().filter { type ->
-            this[cachedBooleanKey("threat_alert_${type.name}")] ?: true
+            this[cachedBooleanKey("threat_alert_${type.name}")] ?: d.alertEnabledTypes.contains(type)
         }.toSet()
 
         return UserPreferences(
             language = lang,
-            wizardCompleted = this[wizardCompletedKey] ?: false,
-            welcomeShootdownPlayed = this[welcomeShootdownPlayedKey] ?: false,
-            slowRedKm = this[slowRedKmKey] ?: 20,
-            slowYellowKm = this[slowYellowKmKey] ?: 50,
-            fastRedMin = this[fastRedMinKey] ?: 5,
-            fastYellowMin = this[fastYellowMinKey] ?: 20,
-            slowRedArmed = this[slowRedArmedKey] ?: true,
-            slowYellowArmed = this[slowYellowArmedKey] ?: true,
-            fastRedArmed = this[fastRedArmedKey] ?: true,
-            fastYellowArmed = this[fastYellowArmedKey] ?: true,
-            notifyPolicyEnabled = this[notifyPolicyEnabledKey] ?: false,
+            wizardCompleted = this[wizardCompletedKey] ?: d.wizardCompleted,
+            welcomeShootdownPlayed = this[welcomeShootdownPlayedKey] ?: d.welcomeShootdownPlayed,
+            slowRedKm = this[slowRedKmKey] ?: d.slowRedKm,
+            slowYellowKm = this[slowYellowKmKey] ?: d.slowYellowKm,
+            fastRedMin = this[fastRedMinKey] ?: d.fastRedMin,
+            fastYellowMin = this[fastYellowMinKey] ?: d.fastYellowMin,
+            slowRedArmed = this[slowRedArmedKey] ?: d.slowRedArmed,
+            slowYellowArmed = this[slowYellowArmedKey] ?: d.slowYellowArmed,
+            fastRedArmed = this[fastRedArmedKey] ?: d.fastRedArmed,
+            fastYellowArmed = this[fastYellowArmedKey] ?: d.fastYellowArmed,
+            notifyPolicyEnabled = this[notifyPolicyEnabledKey] ?: d.notifyPolicyEnabled,
             zonePolicy = zonePolicy,
-            digestMax = (this[digestMaxKey] ?: 10).coerceIn(1, 10),
+            digestMax = (this[digestMaxKey] ?: d.digestMax).coerceIn(1, 10),
             digestWindow = digestWindow,
-            digestPerType = this[digestPerTypeKey] ?: false,
-            officialRedAlertsEnabled = this[officialRedAlertsKey] ?: true,
-            yellowAlertsEnabled = this[yellowAlertsKey] ?: true,
-            sirenOverride = this[sirenOverrideKey] ?: false,
-            fallingDebrisDelaySec = this[fallingDebrisDelaySecKey] ?: 0,
-            disclaimerCollapsed = this[disclaimerCollapsedKey] ?: false,
-            disclaimerReadCount = this[disclaimerReadCountKey] ?: 0,
-            followMe = this[followMeKey] ?: true,
+            digestPerType = this[digestPerTypeKey] ?: d.digestPerType,
+            officialRedAlertsEnabled = this[officialRedAlertsKey] ?: d.officialRedAlertsEnabled,
+            yellowAlertsEnabled = this[yellowAlertsKey] ?: d.yellowAlertsEnabled,
+            sirenOverride = this[sirenOverrideKey] ?: d.sirenOverride,
+            fallingDebrisDelaySec = this[fallingDebrisDelaySecKey] ?: d.fallingDebrisDelaySec,
+            disclaimerCollapsed = this[disclaimerCollapsedKey] ?: d.disclaimerCollapsed,
+            disclaimerReadCount = this[disclaimerReadCountKey] ?: d.disclaimerReadCount,
+            followMe = this[followMeKey] ?: d.followMe,
             pinnedCity = this[pinnedCityKey],
-            criticalOfflineOverride = this[criticalOfflineOverrideKey] ?: true,
-            criticalOfflineBypassSilent = this[criticalOfflineBypassSilentKey] ?: false,
+            criticalOfflineOverride = this[criticalOfflineOverrideKey] ?: d.criticalOfflineOverride,
+            criticalOfflineBypassSilent = this[criticalOfflineBypassSilentKey] ?: d.criticalOfflineBypassSilent,
             threatCardSize = cardSize,
             threatIconSet = iconSet,
             overlapMode = overlap,
             moraleVoice = moraleVoice,
-            showMapScale = this[showMapScaleKey] ?: true,
-            showMediumCities = this[showMediumCitiesKey] ?: true,
-            showSmallCities = this[showSmallCitiesKey] ?: false,
-            showLargeCities = this[showLargeCitiesKey] ?: true,
-            showThreatIdsOnMap = this[showThreatIdsOnMapKey] ?: false,
-            highQualityExplosions = this[highQualityExplosionsKey] ?: true,
-            deathAnimationEnabled = this[deathAnimationEnabledKey] ?: true,
-            followBullet = this[followBulletKey] ?: true,
-            neutralizedTallyEnabled = this[neutralizedTallyEnabledKey] ?: true,
-            neutralizedTallyAllUkraine = this[neutralizedTallyAllUkraineKey] ?: false,
-            alarmEpisodeTallyEnabled = this[alarmEpisodeTallyEnabledKey] ?: true,
-            legacyCacheCleaned = this[legacyCacheCleanedKey] ?: false,
-            fastGroupCollapsed = this[fastGroupCollapsedKey] ?: false,
-            slowGroupCollapsed = this[slowGroupCollapsedKey] ?: false,
-            batteryOnboardShown = this[batteryOnboardShownKey] ?: false,
-            permissionPromptDeferred = this[permissionPromptDeferredKey] ?: false,
-            nightEnabled = this[nightEnabledKey] ?: true,
-            nightStartMin = this[nightStartMinKey] ?: (22 * 60),
-            nightEndMin = this[nightEndMinKey] ?: (7 * 60),
-            nightUseCustomZones = this[nightUseCustomZonesKey] ?: false,
-            nightSlowRedKm = this[nightSlowRedKmKey] ?: 20,
-            nightSlowYellowKm = this[nightSlowYellowKmKey] ?: 50,
-            nightFastRedMin = this[nightFastRedMinKey] ?: 5,
-            nightFastYellowMin = this[nightFastYellowMinKey] ?: 20,
-            nightSlowRedArmed = this[nightSlowRedArmedKey] ?: true,
-            nightSlowYellowArmed = this[nightSlowYellowArmedKey] ?: true,
-            nightFastRedArmed = this[nightFastRedArmedKey] ?: true,
-            nightFastYellowArmed = this[nightFastYellowArmedKey] ?: true,
-            nightZoneSirenOverride = this[nightZoneSirenOverrideKey] ?: false,
-            nightOfficialSirenOverride = this[nightOfficialSirenOverrideKey] ?: false,
-            nightOfficialAlertCityScope = this[nightOfficialAlertCityScopeKey] ?: false,
-            flybyAnimationEnabled = this[flybyAnimationEnabledKey] ?: true,
-            threatIconZoom = this[threatIconZoomKey] ?: true,
-            sheltersEnabled = this[sheltersEnabledKey] ?: true,
-            sheltersWithKidsEnabled = this[sheltersWithKidsEnabledKey] ?: true,
-            periodicGps = this[periodicGpsKey] ?: false,
-            calmMessagesEnabled = this[calmMessagesEnabledKey] ?: true,
-            hapticsEnabled = this[hapticsEnabledKey] ?: true,
-            officialAlertCityScope = this[officialAlertCityScopeKey] ?: false,
-            moraleMasterEnabled = this[moraleMasterEnabledKey] ?: true,
-            bootRestartEnabled = this[bootRestartEnabledKey] ?: true,
+            showMapScale = this[showMapScaleKey] ?: d.showMapScale,
+            showMediumCities = this[showMediumCitiesKey] ?: d.showMediumCities,
+            showSmallCities = this[showSmallCitiesKey] ?: d.showSmallCities,
+            showLargeCities = this[showLargeCitiesKey] ?: d.showLargeCities,
+            showThreatIdsOnMap = this[showThreatIdsOnMapKey] ?: d.showThreatIdsOnMap,
+            highQualityExplosions = this[highQualityExplosionsKey] ?: d.highQualityExplosions,
+            deathAnimationEnabled = this[deathAnimationEnabledKey] ?: d.deathAnimationEnabled,
+            followBullet = this[followBulletKey] ?: d.followBullet,
+            neutralizedTallyEnabled = this[neutralizedTallyEnabledKey] ?: d.neutralizedTallyEnabled,
+            neutralizedTallyAllUkraine = this[neutralizedTallyAllUkraineKey] ?: d.neutralizedTallyAllUkraine,
+            alarmEpisodeTallyEnabled = this[alarmEpisodeTallyEnabledKey] ?: d.alarmEpisodeTallyEnabled,
+            legacyCacheCleaned = this[legacyCacheCleanedKey] ?: d.legacyCacheCleaned,
+            fastGroupCollapsed = this[fastGroupCollapsedKey] ?: d.fastGroupCollapsed,
+            slowGroupCollapsed = this[slowGroupCollapsedKey] ?: d.slowGroupCollapsed,
+            batteryOnboardShown = this[batteryOnboardShownKey] ?: d.batteryOnboardShown,
+            serviceResurrected = this[serviceResurrectedKey] ?: d.serviceResurrected,
+            permissionPromptDeferred = this[permissionPromptDeferredKey] ?: d.permissionPromptDeferred,
+            nightEnabled = this[nightEnabledKey] ?: d.nightEnabled,
+            nightStartMin = this[nightStartMinKey] ?: d.nightStartMin,
+            nightEndMin = this[nightEndMinKey] ?: d.nightEndMin,
+            nightUseCustomZones = this[nightUseCustomZonesKey] ?: d.nightUseCustomZones,
+            nightSlowRedKm = this[nightSlowRedKmKey] ?: d.nightSlowRedKm,
+            nightSlowYellowKm = this[nightSlowYellowKmKey] ?: d.nightSlowYellowKm,
+            nightFastRedMin = this[nightFastRedMinKey] ?: d.nightFastRedMin,
+            nightFastYellowMin = this[nightFastYellowMinKey] ?: d.nightFastYellowMin,
+            nightSlowRedArmed = this[nightSlowRedArmedKey] ?: d.nightSlowRedArmed,
+            nightSlowYellowArmed = this[nightSlowYellowArmedKey] ?: d.nightSlowYellowArmed,
+            nightFastRedArmed = this[nightFastRedArmedKey] ?: d.nightFastRedArmed,
+            nightFastYellowArmed = this[nightFastYellowArmedKey] ?: d.nightFastYellowArmed,
+            nightZoneSirenOverride = this[nightZoneSirenOverrideKey] ?: d.nightZoneSirenOverride,
+            nightOfficialSirenOverride = this[nightOfficialSirenOverrideKey] ?: d.nightOfficialSirenOverride,
+            nightOfficialAlertCityScope = this[nightOfficialAlertCityScopeKey] ?: d.nightOfficialAlertCityScope,
+            flybyAnimationEnabled = this[flybyAnimationEnabledKey] ?: d.flybyAnimationEnabled,
+            threatIconZoom = this[threatIconZoomKey] ?: d.threatIconZoom,
+            sheltersEnabled = this[sheltersEnabledKey] ?: d.sheltersEnabled,
+            sheltersWithKidsEnabled = this[sheltersWithKidsEnabledKey] ?: d.sheltersWithKidsEnabled,
+            periodicGps = this[periodicGpsKey] ?: d.periodicGps,
+            calmMessagesEnabled = this[calmMessagesEnabledKey] ?: d.calmMessagesEnabled,
+            hapticsEnabled = this[hapticsEnabledKey] ?: d.hapticsEnabled,
+            officialAlertCityScope = this[officialAlertCityScopeKey] ?: d.officialAlertCityScope,
+            moraleMasterEnabled = this[moraleMasterEnabledKey] ?: d.moraleMasterEnabled,
+            bootRestartEnabled = this[bootRestartEnabledKey] ?: d.bootRestartEnabled,
             alertRegionMode = alertRegionMode,
-            showBorders = this[showBordersKey] ?: true,
-            showRegionBorders = this[showRegionBordersKey] ?: false,
-            settingsHintRemaining = this[settingsHintRemainingKey] ?: 3,
-            threatToggleHintRemaining = this[threatToggleHintRemainingKey] ?: 3,
-            shelterTipStage = (this[shelterTipRemainingKey] ?: 0).coerceIn(0, 6),
+            showBorders = this[showBordersKey] ?: d.showBorders,
+            showRegionBorders = this[showRegionBordersKey] ?: d.showRegionBorders,
+            settingsHintRemaining = this[settingsHintRemainingKey] ?: d.settingsHintRemaining,
+            threatToggleHintRemaining = this[threatToggleHintRemainingKey] ?: d.threatToggleHintRemaining,
+            shelterTipStage = (this[shelterTipRemainingKey] ?: d.shelterTipStage).coerceIn(0, 6),
             mapVisibleTypes = mapVisible,
             alertEnabledTypes = alertEnabled
         )
@@ -219,15 +222,15 @@ class UserPrefs(private val context: Context) {
     suspend fun setSlowRedKm(km: Int) {
         context.dataStore.edit { prefs ->
             prefs[slowRedKmKey] = km.coerceIn(1, 20)
-            val red = prefs[slowRedKmKey] ?: 20
-            val yellow = prefs[slowYellowKmKey] ?: 50
+            val red = prefs[slowRedKmKey] ?: UserPreferences.DEFAULT.slowRedKm
+            val yellow = prefs[slowYellowKmKey] ?: UserPreferences.DEFAULT.slowYellowKm
             prefs[slowYellowKmKey] = yellow.coerceIn(red + 2, 50)
         }
     }
 
     suspend fun setSlowYellowKm(km: Int) {
         context.dataStore.edit { prefs ->
-            val red = prefs[slowRedKmKey] ?: 20
+            val red = prefs[slowRedKmKey] ?: UserPreferences.DEFAULT.slowRedKm
             prefs[slowYellowKmKey] = km.coerceIn(red + 2, 50)
         }
     }
@@ -235,15 +238,15 @@ class UserPrefs(private val context: Context) {
     suspend fun setFastRedMin(min: Int) {
         context.dataStore.edit { prefs ->
             prefs[fastRedMinKey] = min.coerceIn(1, 5)
-            val red = prefs[fastRedMinKey] ?: 5
-            val yellow = prefs[fastYellowMinKey] ?: 20
+            val red = prefs[fastRedMinKey] ?: UserPreferences.DEFAULT.fastRedMin
+            val yellow = prefs[fastYellowMinKey] ?: UserPreferences.DEFAULT.fastYellowMin
             prefs[fastYellowMinKey] = yellow.coerceIn(red + 2, 20)
         }
     }
 
     suspend fun setFastYellowMin(min: Int) {
         context.dataStore.edit { prefs ->
-            val red = prefs[fastRedMinKey] ?: 5
+            val red = prefs[fastRedMinKey] ?: UserPreferences.DEFAULT.fastRedMin
             prefs[fastYellowMinKey] = min.coerceIn(red + 2, 20)
         }
     }
@@ -516,6 +519,10 @@ class UserPrefs(private val context: Context) {
         context.dataStore.edit { it[batteryOnboardShownKey] = shown }
     }
 
+    suspend fun setServiceResurrected(resurrected: Boolean) {
+        context.dataStore.edit { it[serviceResurrectedKey] = resurrected }
+    }
+
     suspend fun setPermissionPromptDeferred(deferred: Boolean) {
         context.dataStore.edit { it[permissionPromptDeferredKey] = deferred }
     }
@@ -539,15 +546,15 @@ class UserPrefs(private val context: Context) {
     suspend fun setNightSlowRedKm(km: Int) {
         context.dataStore.edit { prefs ->
             prefs[nightSlowRedKmKey] = km.coerceIn(1, 20)
-            val red = prefs[nightSlowRedKmKey] ?: 20
-            val yellow = prefs[nightSlowYellowKmKey] ?: 50
+            val red = prefs[nightSlowRedKmKey] ?: UserPreferences.DEFAULT.nightSlowRedKm
+            val yellow = prefs[nightSlowYellowKmKey] ?: UserPreferences.DEFAULT.nightSlowYellowKm
             prefs[nightSlowYellowKmKey] = yellow.coerceIn(red + 2, 50)
         }
     }
 
     suspend fun setNightSlowYellowKm(km: Int) {
         context.dataStore.edit { prefs ->
-            val red = prefs[nightSlowRedKmKey] ?: 20
+            val red = prefs[nightSlowRedKmKey] ?: UserPreferences.DEFAULT.nightSlowRedKm
             prefs[nightSlowYellowKmKey] = km.coerceIn(red + 2, 50)
         }
     }
@@ -555,15 +562,15 @@ class UserPrefs(private val context: Context) {
     suspend fun setNightFastRedMin(min: Int) {
         context.dataStore.edit { prefs ->
             prefs[nightFastRedMinKey] = min.coerceIn(1, 5)
-            val red = prefs[nightFastRedMinKey] ?: 5
-            val yellow = prefs[nightFastYellowMinKey] ?: 20
+            val red = prefs[nightFastRedMinKey] ?: UserPreferences.DEFAULT.nightFastRedMin
+            val yellow = prefs[nightFastYellowMinKey] ?: UserPreferences.DEFAULT.nightFastYellowMin
             prefs[nightFastYellowMinKey] = yellow.coerceIn(red + 2, 20)
         }
     }
 
     suspend fun setNightFastYellowMin(min: Int) {
         context.dataStore.edit { prefs ->
-            val red = prefs[nightFastRedMinKey] ?: 5
+            val red = prefs[nightFastRedMinKey] ?: UserPreferences.DEFAULT.nightFastRedMin
             prefs[nightFastYellowMinKey] = min.coerceIn(red + 2, 20)
         }
     }
