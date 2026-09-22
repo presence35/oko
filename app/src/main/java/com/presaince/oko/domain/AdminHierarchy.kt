@@ -25,6 +25,8 @@ object AdminHierarchy {
     ) {
         val location: LatLng get() = LatLng(lat, lon)
 
+        fun name(lang: AppLanguage): String = lang.pick(nameUa, nameEn, nameEn)
+
         /** Boundary polygon of the enclosing raion (if known), normalized to [LatLng]. */
         fun raionPolygon(): List<List<LatLng>>? =
             raionName?.let { getRaion(it, oblastStem)?.polygon() }
@@ -40,6 +42,7 @@ object AdminHierarchy {
         val nameEn: String,
         val oblastStem: String
     ) {
+        fun name(lang: AppLanguage): String = lang.pick(nameUa, nameEn, nameEn)
         /** Boundary polygon rings for this raion in normalized [LatLng] order (lat, lon). */
         fun polygon(): List<List<LatLng>>? {
             val polygon = CompactRaionBoundaries.forKey(oblastStem, key) ?: return null
@@ -56,6 +59,7 @@ object AdminHierarchy {
         val nameUa: String,
         val nameEn: String
     ) {
+        fun name(lang: AppLanguage): String = lang.pick(nameUa, nameEn, nameEn)
         /** Boundary polygon rings for this oblast in normalized [LatLng] order (lat, lon). */
         fun polygon(): List<List<LatLng>>? {
             val polygon = CompactOblastBoundaries.get(stem) ?: return null

@@ -4,6 +4,7 @@ object Strings {
     fun get(lang: AppLanguage): StringSet = when (lang) {
         AppLanguage.UA -> Ukrainian
         AppLanguage.EN -> English
+        AppLanguage.RU -> Russian
     }
 
     data class Onboarding(
@@ -78,6 +79,8 @@ object Strings {
         val officialAlertScopeDesc: String,
         val sirenOverrideTitle: String,
         val sirenOverrideDesc: String,
+        val notifyPolicyEnabledTitle: String,
+        val notifyPolicyEnabledDesc: String,
         val notifyPolicyTitle: String,
         val notifyPolicyDesc: String,
         val policyEveryChangeTitle: String,
@@ -579,11 +582,6 @@ val nightSoundLabel: String,
         val guideCardReadD1: String,
         val guideCardReadD2: String,
         val guideCardReadD3: String,
-        val guideLangTitle: String,
-        val guideLangSummary: String,
-        val guideLangD1: String,
-        val guideLangD2: String,
-        val guideLangD3: String,
         val guideTogglesTitle: String,
         val guideTogglesSummary: String,
         val guideTogglesD1: String,
@@ -717,9 +715,6 @@ val nightSoundLabel: String,
         val wizardMoraleTitle: String get() = onboarding.wizardMoraleTitle
         val wizardMoraleDesc: String get() = onboarding.wizardMoraleDesc
         val wizardMoraleDescGearSuffix: String get() = onboarding.wizardMoraleDescGearSuffix
-        val wizardJustFunTitle: String get() = wizardMoraleTitle
-        val wizardJustFunDesc: String get() = wizardMoraleDesc
-        val wizardJustFunDescGearSuffix: String get() = wizardMoraleDescGearSuffix
         val wizardNeptunStatus: String get() = onboarding.wizardNeptunStatus
         val fitMapLabel: String get() = onboarding.fitMapLabel
         val dayZonesTitle: String get() = settings.dayZonesTitle
@@ -745,6 +740,8 @@ val nightSoundLabel: String,
         val officialAlertScopeDesc: String get() = settings.officialAlertScopeDesc
         val sirenOverrideTitle: String get() = settings.sirenOverrideTitle
         val sirenOverrideDesc: String get() = settings.sirenOverrideDesc
+        val notifyPolicyEnabledTitle: String get() = settings.notifyPolicyEnabledTitle
+        val notifyPolicyEnabledDesc: String get() = settings.notifyPolicyEnabledDesc
         val notifyPolicyTitle: String get() = settings.notifyPolicyTitle
         val notifyPolicyDesc: String get() = settings.notifyPolicyDesc
         val policyEveryChangeTitle: String get() = settings.policyEveryChangeTitle
@@ -806,7 +803,6 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val systemSectionTitle: String get() = settings.systemSectionTitle
         val locationSectionTitle: String get() = settings.locationSectionTitle
         val moraleSectionTitle: String get() = settings.moraleSectionTitle
-        val justFunSectionTitle: String get() = moraleSectionTitle
         val flybyAnimationLabel: String get() = settings.flybyAnimationLabel
         val flybyAnimationDesc: String get() = settings.flybyAnimationDesc
         val cardSizeSmallLabel: String get() = settings.cardSizeSmallLabel
@@ -850,8 +846,6 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
             }
             return parts.joinToString(" · ")
         }
-
-        fun justFunSubtitle(animation: Boolean, tally: Boolean): String = moraleSubtitle(animation, tally)
 
         fun sheltersSubtitle(enabled: Boolean): String =
             subtitles.sheltersPrefix + (if (enabled) subtitles.onWord else subtitles.offWord)
@@ -1152,7 +1146,6 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val neutralizedTallyTitle: String get() = misc.neutralizedTallyTitle
         val neutralizedTallyDesc: String get() = misc.neutralizedTallyDesc
         val moraleNote: String get() = misc.moraleNote
-        val justFunNote: String get() = moraleNote
         val neutralizedTallyAllUkraineTitle: String get() = misc.neutralizedTallyAllUkraineTitle
         val neutralizedTallyAllUkraineDesc: String get() = misc.neutralizedTallyAllUkraineDesc
         val alarmEpisodeTallyTitle: String get() = misc.alarmEpisodeTallyTitle
@@ -1286,11 +1279,6 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val guideCardReadD1: String get() = guide.guideCardReadD1
         val guideCardReadD2: String get() = guide.guideCardReadD2
         val guideCardReadD3: String get() = guide.guideCardReadD3
-        val guideLangTitle: String get() = guide.guideLangTitle
-        val guideLangSummary: String get() = guide.guideLangSummary
-        val guideLangD1: String get() = guide.guideLangD1
-        val guideLangD2: String get() = guide.guideLangD2
-        val guideLangD3: String get() = guide.guideLangD3
         val guideTogglesTitle: String get() = guide.guideTogglesTitle
         val guideTogglesSummary: String get() = guide.guideTogglesSummary
         val guideTogglesD1: String get() = guide.guideTogglesD1
@@ -1333,7 +1321,8 @@ val iconSetTitle: String get() = misc.iconSetTitle
 
 private fun pluralIndex(count: Int, lang: AppLanguage): Int = when (lang) {
     AppLanguage.EN -> if (count == 1) 0 else 1
-    AppLanguage.UA -> {
+    // UA and RU share the same 3-form Slavic plural rule.
+    AppLanguage.UA, AppLanguage.RU -> {
         val n10 = count % 10
         val n100 = count % 100
         when {
@@ -1430,11 +1419,12 @@ fun formatAlertAge(nowMillis: Long, atMillis: Long, s: Strings.StringSet): Strin
 
 /**
  * Absolute timestamp rendered per the selected app language, not the device locale — the single
- * site-wide datetime formatter (Logs screen). UA: "17.08, 14:30", EN: "Aug 17, 14:30".
+ * site-wide datetime formatter (Logs screen). UA: "17.08, 14:30", EN: "Aug 17, 14:30",
+ * RU: "17 авг., 14:30".
  */
 fun formatDateTime(lang: AppLanguage, millis: Long): String {
     val zoned = java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault())
-    val pattern = if (lang == AppLanguage.UA) "dd.MM, HH:mm" else "MMM d, HH:mm"
-    val locale = if (lang == AppLanguage.UA) java.util.Locale("uk") else java.util.Locale.ENGLISH
+    val pattern = lang.pick("dd.MM, HH:mm", "MMM d, HH:mm", "d MMM, HH:mm")
+    val locale = lang.pick(java.util.Locale("uk"), java.util.Locale.ENGLISH, java.util.Locale("ru"))
     return zoned.format(java.time.format.DateTimeFormatter.ofPattern(pattern, locale))
 }

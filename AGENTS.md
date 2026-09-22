@@ -17,11 +17,11 @@ Only when the user says **"release it"**, perform a full release:
 - Never look at more files than you need to, esp if I tell you specifically what to touch. Skip verify for pure-docs/string-only edits"
 - Always find elegant solutions, not the easy code!
 - Append user-visible changes to `CHANGELOG.md` under `## [Unreleased]` as you go, so any session can release them. Be highly brief. Add mm-dd_h:m:s.
-- Changelog entries are short one-liners: `- EN text / UA text`. Each line is split on the first ` / ` to produce the release notes for `version.json`. No multi-paragraph essays. never use '/' inside a half of an entry.
+- Changelog entries are short one-liners: `- EN text / UA text / RU text`. Each line is split on ` / ` to produce the release notes for `version.json` (`ru` falls back to `en` when the third part is blank). No multi-paragraph essays. never use '/' inside a half of an entry.
 - The server `version.json` is generated from `app/version.properties` (versionCode/versionName) plus the `## [Unreleased]` entries in `CHANGELOG.md` (auto-derived at release time). FTP creds live in `app/upload.properties` (git-ignored).
 - Version numbers: `versionCode` is a monotonic integer; `versionName` is human-readable. Keep both bumped together (the `bumpVersion` task does this).
-- **EN-only strings during normal work.** Do NOT translate strings to UA — write only the
-  EN text, and put it in the UA slot too as a placeholder so `Strings` compiles).
+- **EN-only strings during normal work.** Do NOT translate strings to UA/RU — write only the
+  EN text, and put it in the UA and RU slots too as placeholders so `Strings` compiles).
 - Reply with short, concise, only-needed! No long explanations
 
 ## Development conventions

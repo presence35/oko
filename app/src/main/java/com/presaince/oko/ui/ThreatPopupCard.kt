@@ -178,7 +178,7 @@ fun ThreatPopupCard(
 ) {
     val s = Strings.get(lang)
     val typeInfo = threatTypeInfoByString(threat.type) ?: ThreatTypeCatalog.INFO.getValue(ThreatType.UNKNOWN)
-    val typeLabel = if (lang == AppLanguage.UA) typeInfo.labelUa else typeInfo.labelEn
+    val typeLabel = typeInfo.label(lang)
     // Wave count (group size) prefixes the title when the server reports it (>1 only).
     val titleLabel = if (threat.count > 1) "${threat.count}x $typeLabel" else typeLabel
 
@@ -195,11 +195,8 @@ fun ThreatPopupCard(
     // romanized, never semantically translated — the romanization is all an EN reader needs).
     // The national MiG carries descriptors, not places — show the fixed EN text instead.
     val displayRegion = remember(regionText, threat.type, threat.locality, threat.district, threat.region, lang) {
-        when {
-            lang == AppLanguage.EN && isNationalMig(threat) -> nationalMigWhereText()
-            lang == AppLanguage.EN -> Transliteration.transliterate(regionText)
-            else -> regionText
-        }
+        if (isNationalMig(threat)) lang.pick(regionText, nationalMigWhereText(), nationalMigWhereText())
+        else lang.pick(regionText, Transliteration.transliterate(regionText), Transliteration.transliterate(regionText))
     }
 
     val confirmations = threat.confirmations.takeIf { it > 0 }
@@ -283,7 +280,7 @@ fun ThreatPopupCard(
             ThreatCardSize.SMALL -> {
                 val distUser = proximity?.distToUserKm
                 val etaMin = proximity?.etaToUserMin
-                val cityName = pinnedCity?.let { if (lang == AppLanguage.UA) it.nameUa else it.nameEn }
+                val cityName = pinnedCity?.name(lang)
                 val distCd = if (cityName != null && distUser != null) {
                     String.format(s.pillDistanceCd, cityName, distUser.roundToInt())
                 } else null
@@ -745,7 +742,7 @@ private fun SummaryPills(
         )
         return
     }
-    val cityName = pinnedCity?.let { if (lang == AppLanguage.UA) it.nameUa else it.nameEn }
+    val cityName = pinnedCity?.name(lang)
     val distCd = if (cityName != null) {
         String.format(s.pillDistanceCd, cityName, distUser.roundToInt())
     } else null

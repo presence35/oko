@@ -2,9 +2,18 @@
 
 ## [Unreleased]
 
+- Tapping the all-clear notification now replays the alarm's shoot-down show, and watching one replay no longer wipes the other tally / Tapping the all-clear notification now replays the alarm's shoot-down show, and watching one replay no longer wipes the other tally 09-22_12:12:07
+- Welcome shootdown now lands on the pinned city when one is selected, with live focus and Kyiv only as fallbacks / Welcome shootdown now lands on the pinned city when one is selected, with live focus and Kyiv only as fallbacks 09-22_11:54:02
+- Fixed wizard trapping you on the threat step with a disabled Next after skipping the location choice: the location gate now guards the location step itself / Fixed wizard trapping you on the threat step with a disabled Next after skipping the location choice: the location gate now guards the location step itself 09-22_11:54:02
+
+- Russian language support: the app follows the phone locale with no manual switch / Підтримка російської мови: застосунок слідує за мовою телефона без ручного перемикання / Russian language support: the app follows the phone locale with no manual switch 09-22_11:31:08
+- Morale is now the only name (all Just Fun leftovers renamed) and it is on by default / Morale is now the only name (all Just Fun leftovers renamed) and it is on by default 09-21_17:06:03
+- After the first-run wizard the app greets you with one fake SHAHED shootdown near your focus, once per install / After the first-run wizard the app greets you with one fake SHAHED shootdown near your focus, once per install 09-21_17:06:03
+
 - Zone notifications are now logged as notified at the moment they fire / Zone notifications are now logged as notified at the moment they fire 09-21_09:09:19
 - Decisions log always shows the last 4 digits of the threat ID, and notifications include it when the threat-ID toggle is on / Decisions log always shows the last 4 digits of the threat ID, and notifications include it when the threat-ID toggle is on 09-21_09:46:36
 - Zone sirens now follow a frequency preset (every change, once per threat, once per type, or digest) with red always sounding first, plus boundary hysteresis so edge-hovering threats stop re-sirening / Zone sirens now follow a frequency preset (every change, once per threat, once per type, or digest) with red always sounding first, plus boundary hysteresis so edge-hovering threats stop re-sirening 09-21_13:57:29
+- Repeat-sound limiting is now behind a master toggle (off by default, meaning every change sounds) / Repeat-sound limiting is now behind a master toggle (off by default, meaning every change sounds) 09-22_09:01:51
 - Stale threats now stay parked on their last fix while dimmed / Stale threats now stay parked on their last fix while dimmed 09-21_12:02:47
 - Locate and card pan now land on the marker live position / Locate and card pan now land on the marker live position 09-21_12:02:47
 - Shot-down threats now glide nose-first along their course / Shot-down threats now glide nose-first along their course 09-21_12:02:47

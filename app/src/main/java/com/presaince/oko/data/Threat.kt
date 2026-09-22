@@ -45,7 +45,16 @@ data class ThreatTypeInfo(
     val shortLabelEn: String? = null,
     val jokeUa: String = "",
     val jokeEn: String = ""
-)
+) {
+    /** Display strings per language — the only sanctioned read path (see [AppLanguage.pick]). */
+    fun label(lang: AppLanguage): String = lang.pick(labelUa, labelEn, labelEn)
+    fun description(lang: AppLanguage): String = lang.pick(descriptionUa, descriptionEn, descriptionEn)
+    fun details(lang: AppLanguage): String = lang.pick(detailsUa, detailsEn, detailsEn)
+    fun joke(lang: AppLanguage): String = lang.pick(jokeUa, jokeEn, jokeEn)
+    fun shortLabel(lang: AppLanguage): String = lang.pick(
+        shortLabelUa ?: labelUa, shortLabelEn ?: labelEn, shortLabelEn ?: labelEn
+    )
+}
 
 object ThreatTypeCatalog {
     val INFO: Map<ThreatType, ThreatTypeInfo> = mapOf(
@@ -295,7 +304,9 @@ fun nationalMigCourseText(): String =
  */
 fun translateCourseAssessment(text: String?, lang: AppLanguage): String? {
     if (text.isNullOrBlank()) return null
-    if (lang == AppLanguage.UA) return text
+    // UA reads NEPTUN verbatim; EN and RU (EN text until a real RU translation lands)
+    // go through the EN rendering pipeline.
+    if (lang.pick(true, false, false)) return text
     val t = text.trim()
     if (NATIONAL_MIG_TOKEN.containsMatchIn(t)) return nationalMigCourseText()
     for ((pattern, template) in COURSE_PATTERNS) {

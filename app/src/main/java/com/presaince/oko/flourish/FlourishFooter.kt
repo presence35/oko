@@ -32,7 +32,7 @@ private fun replayLine(rp: ReplayProgress, language: AppLanguage): String {
     val suffix = rp.distanceKm?.let { flourishDistanceSuffix(it, language) }.orEmpty()
     val subject = rp.groupType?.let { t ->
         val info = ThreatTypeCatalog.INFO.getValue(t)
-        val label = if (language == AppLanguage.UA) info.labelUa else info.labelEn
+        val label = info.label(language)
         "${s.flourishResolvingVerb} $label"
     } ?: resolvingThreatsPhrase(rp.groupSize, language)
     return subject + suffix
@@ -126,7 +126,7 @@ fun BoxScope.FlourishFooter(
                     }
                     val typeLabel = strikeType?.let { t ->
                         val info = ThreatTypeCatalog.INFO.getValue(t)
-                        if (language == AppLanguage.UA) info.labelUa else info.labelEn
+                        info.label(language)
                     }
                     if (typeLabel != null) {
                         Text(

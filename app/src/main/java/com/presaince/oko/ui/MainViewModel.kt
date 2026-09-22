@@ -151,7 +151,7 @@ data class UiState(
     val alertYellowOblastIds: Set<String> = emptySet(),
     val alertYellowRaionKeys: Set<Pair<String, String>> = emptySet(),
     val alertingOblastCount: Int = 0,
-    val justFunMasterEnabled: Boolean = false,
+    val moraleMasterEnabled: Boolean = false,
     val moraleVoice: MoraleVoice = MoraleVoice.RANDOM,
     val deathAnimationEnabled: Boolean = true,
     val flybyAnimationEnabled: Boolean = true,
@@ -201,6 +201,7 @@ data class SettingsState(
     val slowYellowArmed: Boolean get() = prefs.slowYellowArmed
     val fastRedArmed: Boolean get() = prefs.fastRedArmed
     val fastYellowArmed: Boolean get() = prefs.fastYellowArmed
+    val notifyPolicyEnabled: Boolean get() = prefs.notifyPolicyEnabled
     val zonePolicy: ZonePolicy get() = prefs.zonePolicy
     val digestMax: Int get() = prefs.digestMax
     val digestWindow: DigestWindow get() = prefs.digestWindow
@@ -233,7 +234,7 @@ data class SettingsState(
     val pinnedCity: City? get() = prefs.pinnedCity?.let { Cities.byUa[it] }
     val pinnedCityName: String? get() = prefs.pinnedCity
     val periodicGps: Boolean get() = prefs.periodicGps
-    val calmMessagesEnabled: Boolean get() = prefs.justFunMasterEnabled && prefs.calmMessagesEnabled
+    val calmMessagesEnabled: Boolean get() = prefs.moraleMasterEnabled && prefs.calmMessagesEnabled
     val hapticsEnabled: Boolean get() = prefs.hapticsEnabled ?: true
     val disclaimerCollapsed: Boolean get() = prefs.disclaimerCollapsed
     val disclaimerReadCount: Int get() = prefs.disclaimerReadCount
@@ -249,7 +250,7 @@ data class SettingsState(
     val showRegionBorders: Boolean get() = prefs.showRegionBorders
     val sheltersEnabled: Boolean get() = prefs.sheltersEnabled
     val sheltersWithKids: Boolean get() = prefs.sheltersWithKidsEnabled
-    val justFunMasterEnabled: Boolean get() = prefs.justFunMasterEnabled
+    val moraleMasterEnabled: Boolean get() = prefs.moraleMasterEnabled
     val moraleVoice: MoraleVoice get() = prefs.moraleVoice
     val deathAnimationEnabled: Boolean get() = prefs.deathAnimationEnabled
     val highQualityExplosions: Boolean get() = prefs.highQualityExplosions
@@ -384,6 +385,10 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     /** Tally-tap replay: remembered resolved threats to shoot down on the map (flourish only). */
     private val flourishFlow = MutableStateFlow<FlourishShow?>(null)
     private var flourishTick = 0
+    /** Fake post-wizard greeting shot: a synthetic SHAHED near the focus (flourish only). */
+    private val welcomeShootdownFlow = MutableStateFlow<WelcomeShootdown?>(null)
+    val welcomeShootdown: StateFlow<WelcomeShootdown?> get() = welcomeShootdownFlow
+    private var welcomeShootdownTick = 0
     /** MiG-31K takeoff flyby — one full-size pass across the viewport per new INNER aviation. */
     private val flybyFlow = MutableStateFlow<AviationFlybyShow?>(null)
     private var flybyTick = 0L
@@ -508,7 +513,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val alertRegionMode: AlertRegionMode,
         val showBorders: Boolean,
         val showRegionBorders: Boolean,
-        val justFunMasterEnabled: Boolean,
+        val moraleMasterEnabled: Boolean,
         val moraleVoice: MoraleVoice,
         val deathAnimationEnabled: Boolean,
         val flybyAnimationEnabled: Boolean,
@@ -611,7 +616,7 @@ val fastGroupCollapsed: Boolean,
             alertRegionMode = alertRegionMode,
             showBorders = showBorders,
             showRegionBorders = showRegionBorders,
-            justFunMasterEnabled = justFunMasterEnabled,
+            moraleMasterEnabled = moraleMasterEnabled,
             moraleVoice = moraleVoice,
             deathAnimationEnabled = deathAnimationEnabled,
             flybyAnimationEnabled = flybyAnimationEnabled,
@@ -790,7 +795,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             alertRegionMode = prefs.alertRegionMode,
 showBorders = prefs.showBorders,
             showRegionBorders = prefs.showRegionBorders,
-            justFunMasterEnabled = prefs.justFunMasterEnabled,
+            moraleMasterEnabled = prefs.moraleMasterEnabled,
             moraleVoice = prefs.moraleVoice,
             deathAnimationEnabled = prefs.deathAnimationEnabled,
             flybyAnimationEnabled = prefs.flybyAnimationEnabled,
@@ -805,7 +810,7 @@ showBorders = prefs.showBorders,
             sheltersEnabled = prefs.sheltersEnabled,
             sheltersWithKids = prefs.sheltersWithKids,
             periodicGps = prefs.periodicGps,
-            calmMessagesEnabled = prefs.justFunMasterEnabled && prefs.calmMessagesEnabled,
+            calmMessagesEnabled = prefs.moraleMasterEnabled && prefs.calmMessagesEnabled,
             hapticsEnabled = resolveHaptics(prefs.hapticsEnabled),
             shelterIndex = shelterIndex,
             shelterOverlayUp = live.shelterModeActive,
@@ -832,7 +837,7 @@ showBorders = prefs.showBorders,
         val autoFlyby = AviationFlyby.nextShow(
             uiState.threatsInner, flybyPlayedIds,
             live.mapVisible && appForegroundFlow.value,
-            prefs.justFunMasterEnabled, prefs.flybyAnimationEnabled,
+            prefs.moraleMasterEnabled, prefs.flybyAnimationEnabled,
             flybyTick + 1
         )
         if (autoFlyby != null) {
@@ -1003,9 +1008,8 @@ showBorders = prefs.showBorders,
         val focusLocation = focus.location
         val attribution = focus.attribution
         val focusToken = attribution.token
-        val focusBannerCity = (
-            if (language == AppLanguage.UA) attribution.bannerCityUa else attribution.bannerCityEn
-        ).ifBlank { Strings.get(language).unknownLocation }
+        val focusBannerCity = attribution.bannerCity(language)
+            .ifBlank { Strings.get(language).unknownLocation }
         // Distinct oblasts under ANY official alert (whole-oblast or region) — the Logs header count.
         val alertingOblastCount = Cities.cityOblast.values.toSet()
             .count { citiesToken -> alerts.any { it.inOblast(citiesToken) } }
@@ -1448,6 +1452,10 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setShowThreatIdsOnMap(show) }
     }
 
+    fun setNotifyPolicyEnabled(enabled: Boolean) {
+        viewModelScope.launch { prefs.setNotifyPolicyEnabled(enabled) }
+    }
+
     fun setZonePolicy(policy: ZonePolicy) {
         viewModelScope.launch { prefs.setZonePolicy(policy) }
     }
@@ -1514,8 +1522,6 @@ fun setAlertsArmed(armed: Boolean) {
         }
     }
 
-    fun setJustFunEnabled(enabled: Boolean) = setMoraleEnabled(enabled)
-
     fun setFlybyAnimationEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setFlybyAnimationEnabled(enabled) }
     }
@@ -1540,39 +1546,57 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setThreatIconZoom(enabled) }
     }
 
-    fun setLanguage(lang: AppLanguage) {
-        viewModelScope.launch { prefs.setLanguage(lang) }
-    }
-
-    /** Wizard finished (Done or Skip): language picked, setup complete. */
-    fun skipLanguageChoose() {
+    /** Wizard finished (Done): setup complete. */
+    fun completeWizard() {
         viewModelScope.launch {
-            prefs.setLanguageChosen(true)
             prefs.setWizardCompleted(true)
+            maybeTriggerWelcomeShootdown()
         }
     }
 
     /** Tapped "Later" on the first-run wizard — exit all setup chrome for this session:
      *  mark setup complete, skip the battery prompt, and defer the location/notification
      *  permission requests until the next cold start. */
-    fun laterLanguageChoose() {
+    fun deferWizard() {
         viewModelScope.launch {
-            prefs.setLanguageChosen(true)
             prefs.setWizardCompleted(true)
             prefs.setBatteryOnboardShown(true)
             prefs.setPermissionPromptDeferred(true)
+            maybeTriggerWelcomeShootdown()
         }
     }
 
-    /** Re-open the first-run setup (language, icon pack, alert groups, feature tour + battery
+    /** Re-open the first-run setup (threat care, location, zones, feature tour + battery
      *  prompt). Only flips the onboarding-completed flags — no setting is reset. Clears only
-     *  wizard_completed so a kill mid-replay doesn't resurrect the wizard on every cold start. */
+     *  wizard_completed so a kill mid-replay doesn't resurrect the wizard on every cold start.
+     *  Never clears welcome_shootdown_played: the greeting shot is once per install. */
     fun relaunchSetup() {
         viewModelScope.launch {
             prefs.setWizardCompleted(false)
             prefs.setBatteryOnboardShown(false)
             prefs.setPermissionPromptDeferred(false)
         }
+    }
+
+    /** Fire the one-shot fake welcome shootdown after the wizard — once per install, gated
+     *  only on the Morale master. The flag is marked even when the gate is closed so a
+     *  Morale-off install never replays it later. */
+    private suspend fun maybeTriggerWelcomeShootdown() {
+        val p = prefs.preferences.first()
+        prefs.setWelcomeShootdownPlayed(true)
+        if (p.welcomeShootdownPlayed || !p.moraleMasterEnabled) return
+        // Pin-first: prefs are transactional (all wizard writes have landed), while
+        // uiState.focusLocation can lag a frame or be null with no GPS fix yet.
+        val pinned = p.pinnedCity?.let { Cities.byUa[it] }
+        val focus = uiState.value.focusLocation
+        val (lat, lon) = when {
+            !p.followMe && pinned != null -> pinned.lat to pinned.lon
+            focus != null -> focus.lat to focus.lon
+            pinned != null -> pinned.lat to pinned.lon
+            else -> 50.4501 to 30.5234
+        }
+        welcomeShootdownTick++
+        welcomeShootdownFlow.value = WelcomeShootdown(welcomeShootdownTick, lat, lon)
     }
 
     fun resetAllTips() {
@@ -1649,7 +1673,7 @@ fun setAlertsArmed(armed: Boolean) {
         if (aviation && id != null && threat != null) {
             val s = uiState.value
             val show = AviationFlyby.tapShow(
-                justFunEnabled = s.justFunMasterEnabled,
+                moraleEnabled = s.moraleMasterEnabled,
                 flybyEnabled = s.flybyAnimationEnabled,
                 tick = flybyTick + 1,
                 threatId = id,

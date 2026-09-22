@@ -49,6 +49,15 @@ class CitiesTest {
     }
 
     @Test
+    fun `name accessor routes UA to raw and EN plus RU to transliterated`() {
+        for (c in Cities.ALL) {
+            assertEquals(c.nameUa, c.name(AppLanguage.UA))
+            assertEquals(c.nameEn, c.name(AppLanguage.EN))
+            assertEquals(c.nameEn, c.name(AppLanguage.RU))
+        }
+    }
+
+    @Test
     fun `progressive major reveal has exactly five overview and eight mid majors`() {
         val overview = Cities.ALL.filter { it.reveal == MajorReveal.OVERVIEW }
         val mid = Cities.ALL.filter { it.reveal == MajorReveal.MID }

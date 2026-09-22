@@ -47,7 +47,7 @@ android {
         ndk {
             abiFilters.addAll(listOf("arm64-v8a"))
         }
-        resourceConfigurations += listOf("en", "uk")
+        resourceConfigurations += listOf("en", "uk", "ru")
     }
 
     signingConfigs {
@@ -209,7 +209,7 @@ tasks.register("uploadRelease") {
         val vProps = Properties().apply { versionPropsFile.inputStream().use { load(it) } }
         val vc = vProps.getProperty("versionCode") ?: "0"
         val vn = vProps.getProperty("versionName") ?: "0.0.0"
-        val (notesEn, notesUa) = buildNotesFromChangelog()
+        val (notesEn, notesUa, notesRu) = buildNotesFromChangelog()
 
         val versionJson = buildString {
             appendLine("{")
@@ -218,7 +218,8 @@ tasks.register("uploadRelease") {
             append("  \"apkUrl\": \"https://").append(host).append("/other_apps/ukrainedrones/app-release.apk\",").appendLine()
             appendLine("  \"notes\": {")
             append("    \"en\": \"").append(escapeJson(notesEn)).appendLine("\",")
-            append("    \"ua\": \"").append(escapeJson(notesUa)).appendLine("\"")
+            append("    \"ua\": \"").append(escapeJson(notesUa)).appendLine("\",")
+            append("    \"ru\": \"").append(escapeJson(notesRu)).appendLine("\"")
             appendLine("  }")
             appendLine("}")
         }
@@ -263,7 +264,7 @@ private fun escapeJson(s: String): String = buildString {
     }
 }
 
-private fun buildNotesFromChangelog(): Pair<String, String> {
+private fun buildNotesFromChangelog(): Triple<String, String, String> {
     // The changelog lives at the repo root; this script runs in the :app project dir,
     // so a bare file("CHANGELOG.md") would resolve to app/CHANGELOG.md (absent) and
     // silently fall back to empty notes on every release.
@@ -277,22 +278,22 @@ private fun buildNotesFromChangelog(): Pair<String, String> {
         .filter { it.startsWith("- ") }
     val en = mutableListOf<String>()
     val ua = mutableListOf<String>()
+    val ru = mutableListOf<String>()
     for (bullet in bullets) {
         val text = bullet.removePrefix("- ").trim()
-        val sepIdx = text.indexOf(" / ")
-        if (sepIdx >= 0) {
-            en += text.substring(0, sepIdx).trim()
-            ua += text.substring(sepIdx + 3).trim()
-        } else {
-            en += text
-        }
+        val parts = text.split(" / ")
+        en += parts.getOrElse(0) { "" }.trim()
+        ua += parts.getOrElse(1) { "" }.trim()
+        // RU reuses EN until a real RU translation lands.
+        ru += parts.getOrElse(2) { parts.getOrElse(0) { "" } }.trim().ifBlank { parts.getOrElse(0) { "" }.trim() }
     }
-    return if (en.isNotEmpty())
-        Pair(en.joinToString("\n"), ua.joinToString("\n"))
+    return if (en.isNotEmpty() && en.any { it.isNotBlank() })
+        Triple(en.joinToString("\n"), ua.joinToString("\n"), ru.joinToString("\n"))
     else fallbackNotes()
 }
 
-private fun fallbackNotes(): Pair<String, String> = Pair(
+private fun fallbackNotes(): Triple<String, String, String> = Triple(
     file("notes_en.txt").takeIf { it.exists() }?.readText(Charsets.UTF_8)?.trim().orEmpty(),
-    file("notes_ua.txt").takeIf { it.exists() }?.readText(Charsets.UTF_8)?.trim().orEmpty()
+    file("notes_ua.txt").takeIf { it.exists() }?.readText(Charsets.UTF_8)?.trim().orEmpty(),
+    file("notes_ru.txt").takeIf { it.exists() }?.readText(Charsets.UTF_8)?.trim().orEmpty()
 )

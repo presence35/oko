@@ -138,35 +138,29 @@ class MainActivity : ComponentActivity() {
         val lons = intent.getDoubleArrayExtra(NeutralizedTally.EXTRA_FLOURISH_LONS) ?: return
         val types = intent.getStringArrayExtra(NeutralizedTally.EXTRA_FLOURISH_TYPES) ?: return
         val regions = intent.getStringArrayExtra(NeutralizedTally.EXTRA_FLOURISH_REGIONS)
-        val n = minOf(lats.size, lons.size, types.size)
-        if (n == 0) return
-        val records = buildList {
-            for (i in 0 until n) {
-                val lat = lats[i]
-                val lon = lons[i]
-                if (!lat.isFinite() || !lon.isFinite() ||
-                    lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0
-                ) continue
-                val type = runCatching { ThreatType.valueOf(types[i]) }.getOrNull() ?: continue
-                add(FlourishRecord(lat, lon, type, regions?.getOrNull(i)))
-            }
-        }
+        val source = intent.getStringExtra(NeutralizedTally.EXTRA_FLOURISH_SOURCE)
+        val records = parseFlourishRecords(lats, lons, types, regions)
         if (records.isNotEmpty()) {
             viewModel.navigateToMap()
             viewModel.setShelterModeActive(false)
             viewModel.triggerFlourish(records)
         }
-        // Reset the tally now that the show was replayed — same reset as swiping it away.
-        // Both tallies share the replay extras, so reset both; the untouched one is a no-op.
+        // Reset only the store whose show was consumed — watching one replay must not
+        // wipe the other's unwatched memory. Both tallies share the replay extras, and an
+        // untagged (legacy) notification resets both, as before.
         runCatching {
-            startService(
-                Intent(this, AlertService::class.java)
-                    .setAction(NeutralizedTally.ACTION_NEUTRALIZED_DISMISS)
-            )
-            startService(
-                Intent(this, AlertService::class.java)
-                    .setAction(AlarmEpisodeTally.ACTION_ALARM_EPISODE_DISMISS)
-            )
+            if (flourishResetTally(source)) {
+                startService(
+                    Intent(this, AlertService::class.java)
+                        .setAction(NeutralizedTally.ACTION_NEUTRALIZED_DISMISS)
+                )
+            }
+            if (flourishResetEpisode(source)) {
+                startService(
+                    Intent(this, AlertService::class.java)
+                        .setAction(AlarmEpisodeTally.ACTION_ALARM_EPISODE_DISMISS)
+                )
+            }
         }
     }
 

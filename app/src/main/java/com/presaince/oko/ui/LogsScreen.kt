@@ -803,7 +803,7 @@ private fun GroupHeader(group: LogGroupSpec, s: Strings.StringSet) {
 private fun TypeSubHeader(sub: TypeSubGroup, lang: AppLanguage, iconSet: ThreatIconSet) {
     val type = sub.type ?: return
     val info = ThreatTypeCatalog.INFO.getValue(type)
-    val label = if (lang == AppLanguage.UA) info.labelUa else info.labelEn
+    val label = info.label(lang)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -901,7 +901,7 @@ private fun DebugLogKind.label(
     }
     DebugLogKind.ZONE_ENTER -> {        val typeLabel = threatType?.let {
             val info = ThreatTypeCatalog.INFO.getValue(it)
-            if (lang == AppLanguage.UA) info.labelUa else info.labelEn
+            info.label(lang)
         }
         val loc = localityText(locality, lang)
         when {
@@ -914,7 +914,7 @@ private fun DebugLogKind.label(
     DebugLogKind.REGION_THREAT -> {
         val typeLabel = threatType?.let {
             val info = ThreatTypeCatalog.INFO.getValue(it)
-            if (lang == AppLanguage.UA) info.labelUa else info.labelEn
+            info.label(lang)
         }
         val loc = localityText(locality, lang)
         when {
@@ -928,7 +928,10 @@ private fun DebugLogKind.label(
 }
 
 private fun localityText(locality: String?, lang: AppLanguage): String? =
-    locality?.let { if (lang == AppLanguage.UA) it else Cities.byUa[it]?.nameEn ?: Transliteration.transliterate(it) }
+    locality?.let {
+        val en = Cities.byUa[it]?.nameEn ?: Transliteration.transliterate(it)
+        lang.pick(it, en, en)
+    }
 
 private fun DebugLogReason.label(s: Strings.StringSet): String = when (this) {
     DebugLogReason.BELL_MUTED -> s.debugReasonBellMuted
@@ -1055,7 +1058,7 @@ private fun DecisionLeadingIcon(entry: DebugLogEntry, accent: Color, lang: AppLa
     }
     entry.threatType?.let { type ->
         val info = ThreatTypeCatalog.INFO.getValue(type)
-        val label = if (lang == AppLanguage.UA) info.labelUa else info.labelEn
+        val label = info.label(lang)
         ThreatIcon(type = type, set = iconSet, size = 22.dp, contentDescription = label)
         return
     }
@@ -1492,7 +1495,7 @@ private fun SourceDataCard(
             grouped.entries.sortedByDescending { it.value.size }.forEach { (typeStr, list) ->
                 val type = typeStr.toThreatType()
                 val info = ThreatTypeCatalog.INFO.getValue(type)
-                val label = if (lang == AppLanguage.UA) info.labelUa else info.labelEn
+                val label = info.label(lang)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     ThreatIcon(type = type, set = iconSet, size = 16.dp, contentDescription = label)
                     Spacer(Modifier.width(6.dp))

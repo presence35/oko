@@ -34,7 +34,7 @@ data class City(
     /** Attribution/banner/pin-picker eligibility — always MAJOR-only (see [Cities.nearestCity]). */
     val major: Boolean get() = tier == CityTier.MAJOR
 
-    fun name(lang: AppLanguage): String = if (lang == AppLanguage.UA) nameUa else nameEn
+    fun name(lang: AppLanguage): String = lang.pick(nameUa, nameEn, nameEn)
 }
 
 /**
@@ -643,7 +643,9 @@ data class FocusAttribution(
     val token: String?,
     val bannerCityUa: String,
     val bannerCityEn: String
-)
+) {
+    fun bannerCity(lang: AppLanguage): String = lang.pick(bannerCityUa, bannerCityEn, bannerCityEn)
+}
 
 /** Nothing to attribute to: no pinned city and no GPS fix. Country-wide, no oblast claimed. */
 private val COUNTRY_WIDE_ATTRIBUTION =
@@ -733,7 +735,7 @@ class CityLabelOverlay(
         textAlign = Paint.Align.CENTER
     }
 
-    private fun name(c: City) = if (lang == AppLanguage.UA) c.nameUa else c.nameEn
+    private fun name(c: City) = c.name(lang)
 
     fun draw(
         canvas: Canvas,

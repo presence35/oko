@@ -14,7 +14,7 @@ behavior here, update the implementation in the same change.
 | Zone params | `ZoneParams` (day/night variants) | User thresholds + armed bells |
 | Type gates | `hiddenTypes: Set<String>`, `silencedTypes: Set<String>` | Per-source filtering |
 | Night config | `NightConfig` | Window + overrides |
-| Language | `AppLanguage` | UA/EN for reason text |
+| Language | `AppLanguage` | UA/EN/RU for reason text |
 | `now` | `Long` | Explicit timestamp (deterministic evaluation, testable) |
 
 ## Outputs
@@ -372,9 +372,10 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 - Tiers carry a 10% spatial hysteresis band (`ZONE_HYSTERESIS_MARGIN`): upgrades immediate, downgrades/exits hold. Shared by map + service.
 - An episode opens on first zone sighting and closes only when the track dies (stale / resolved / gone). Flicker ticks never close it, so they never re-sound. A user-shot same-id respawn inside the grace is the same kill, never a new onset.
 - Floor (inside every preset, never a service bypass): the first INNER sighting of an episode always sounds, as does any escalation to INNER. Presets only quiet repeats.
-- Presets: Every change (entries + re-entries + escalations sound) / Once per threat (default) / Once per type (until the sky is clear of it) / Digest (max N sounds per window: off, 2/10/60 min, or per alarm sitting; counted per type or across all; default 10/sitting/all).
+- Presets: Every change (entries + re-entries + escalations sound) / Once per threat / Once per type (until the sky is clear of it) / Digest (max N sounds per window: off, 2/10/60 min, or per alarm sitting; counted per type or across all; default 10/sitting/all). The master toggle gates the whole policy: off = Every change (the default), presets only apply while on.
 - Every swallowed sound is logged with its policy reason (RATE_LIMITED / ONCE_PER_THREAT / ONCE_PER_TYPE). Preset switch = fresh start; digest tweaks clear only rate buckets.
 - Official alerts keep onset-always semantics outside the presets (byte-for-byte prior behavior).
+- Boundary rule (load-bearing): the service transports policy inputs and executes verdicts — it never interprets them. Every user-facing pref (including meta-switches like "policy off") is mapped to plugin semantics inside plugin-owned code (`NotifyPrefs.from`), never with an `if` in `AlertService`. Test for violations: a behavior change that requires touching `AlertService` means the boundary is wrong — move the judgment into the plugin. The gated file list and the exception process live under "Core gate" in `ARCHITECTURE.md` key invariants.
 
 ### UI
 

@@ -22,7 +22,23 @@ data class NotifyPrefs(
     val digestMax: Int = 10,
     val digestWindow: DigestWindow = DigestWindow.EPISODE,
     val digestPerType: Boolean = false
-)
+) {
+    companion object {
+        /**
+         * The single mapping from raw user prefs to plugin semantics. The service
+         * calls this and passes the result blindly: master toggle off means every
+         * entry and escalation sounds, knobs preserved. Toggle meaning lives here,
+         * tested — never an `if` in the service (boundary rule).
+         */
+        fun from(
+            enabled: Boolean,
+            preset: ZonePolicy,
+            max: Int,
+            window: DigestWindow,
+            perType: Boolean
+        ) = NotifyPrefs(if (enabled) preset else ZonePolicy.EVERY_CHANGE, max, window, perType)
+    }
+}
 
 enum class VerdictKind { SOUND, SILENT, SUPPRESS }
 

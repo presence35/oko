@@ -297,14 +297,21 @@ class AlertNotificationManager(private val context: Context) {
         safeNotify(NOTIF_ALERT, notif)
     }
 
-    fun postAllClearNotification(title: String, body: String, silent: Boolean = false) {
+    fun postAllClearNotification(
+        title: String,
+        body: String,
+        silent: Boolean = false,
+        replay: List<FlourishRecord> = emptyList()
+    ) {
+        val tap = if (replay.isEmpty()) openAppIntent()
+        else NeutralizedTally.flourishTapIntent(context, 7, replay, NeutralizedTally.SOURCE_ALLCLEAR)
         val notif = NotificationCompat.Builder(context, CHANNEL_ALL_CLEAR)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(openAppIntent())
+            .setContentIntent(tap)
             .setDeleteIntent(allClearDeleteIntent())
             .setOnlyAlertOnce(silent)
             .build()

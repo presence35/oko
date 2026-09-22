@@ -191,7 +191,7 @@ private fun SlimTypeRow(
 ) {
     val s = Strings.get(lang)
     val info = ThreatTypeCatalog.INFO.getValue(type)
-    val label = if (lang == AppLanguage.UA) info.labelUa else info.labelEn
+    val label = info.label(lang)
     val onMap = type !in hiddenTypes
     val onAlerts = type !in silencedTypes
     Row(

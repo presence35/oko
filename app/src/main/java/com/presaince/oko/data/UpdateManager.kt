@@ -25,8 +25,11 @@ data class UpdateInfo(
     val apkUrl: String,
     val notesEn: String,
     val notesUa: String,
+    val notesRu: String = "",
     val sha256: String? = null
-)
+) {
+    fun notes(lang: AppLanguage): String = lang.pick(notesUa, notesEn, notesRu.ifBlank { notesEn })
+}
 
 sealed interface UpdateState {
     object Idle : UpdateState
@@ -77,6 +80,7 @@ class UpdateManager(private val context: Context) {
                     apkUrl = json.getString("apkUrl"),
                     notesEn = notes?.optString("en").orEmpty(),
                     notesUa = notes?.optString("ua").orEmpty(),
+                    notesRu = notes?.optString("ru").orEmpty(),
                     sha256 = sha256Val
                 )
                 if (latest.versionCode > BuildConfig.VERSION_CODE ||

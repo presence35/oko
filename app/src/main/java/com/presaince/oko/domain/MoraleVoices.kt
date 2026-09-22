@@ -38,25 +38,25 @@ fun moraleVoicePack(lang: AppLanguage, voice: MoraleVoice): MoraleVoicePack {
             calm = s.calmMessages
         )
     }
-    return if (lang == AppLanguage.UA) ukrainianPack(voice) else englishPack(voice)
+    // RU reads the EN packs until a real RU translation lands (see [AppLanguage.pick]).
+    return lang.pick(ukrainianPack(voice), englishPack(voice), englishPack(voice))
 }
 
 fun MoraleVoice.label(lang: AppLanguage): String = when (this) {
-    MoraleVoice.RANDOM -> if (lang == AppLanguage.UA) "Випадково" else "Random"
-    MoraleVoice.PLAIN -> if (lang == AppLanguage.UA) "Просто" else "Plain"
-    MoraleVoice.WARM -> if (lang == AppLanguage.UA) "Тепло" else "Warm"
-    MoraleVoice.SPICY -> if (lang == AppLanguage.UA) "З перцем" else "Spicy"
-    MoraleVoice.SLANG -> if (lang == AppLanguage.UA) "Сленг" else "Slang"
-    MoraleVoice.VIYSKO -> if (lang == AppLanguage.UA) "Військо" else "Viysko"
-    MoraleVoice.BABUSIA -> if (lang == AppLanguage.UA) "Бабуся" else "Babusia"
+    MoraleVoice.RANDOM -> lang.pick("Випадково", "Random", "Random")
+    MoraleVoice.PLAIN -> lang.pick("Просто", "Plain", "Plain")
+    MoraleVoice.WARM -> lang.pick("Тепло", "Warm", "Warm")
+    MoraleVoice.SPICY -> lang.pick("З перцем", "Spicy", "Spicy")
+    MoraleVoice.SLANG -> lang.pick("Сленг", "Slang", "Slang")
+    MoraleVoice.VIYSKO -> lang.pick("Військо", "Viysko", "Viysko")
+    MoraleVoice.BABUSIA -> lang.pick("Бабуся", "Babusia", "Babusia")
 }
 
 fun moraleVoiceSectionTitle(lang: AppLanguage): String =
-    if (lang == AppLanguage.UA) "Голос" else "Voice"
+    lang.pick("Голос", "Voice", "Voice")
 
 fun randomTodayLabel(lang: AppLanguage, voiceLabel: String): String =
-    if (lang == AppLanguage.UA) "Випадково · сьогодні: $voiceLabel"
-    else "Random · today: $voiceLabel"
+    lang.pick("Випадково · сьогодні: $voiceLabel", "Random · today: $voiceLabel", "Random · today: $voiceLabel")
 
 private fun englishPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
     MoraleVoice.WARM -> MoraleVoicePack(

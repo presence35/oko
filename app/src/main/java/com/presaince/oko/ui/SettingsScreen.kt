@@ -81,7 +81,6 @@ fun SettingsScreen(
     onExplainerChange: (Explainer?) -> Unit,
     versionName: String,
     onBack: () -> Unit,
-    onLanguageChange: (AppLanguage) -> Unit,
     onThreatMapToggle: (ThreatType, Boolean) -> Unit,
     onThreatAlertToggle: (ThreatType, Boolean) -> Unit,
     onThreatMapToggleAll: (Set<ThreatType>, Boolean) -> Unit,
@@ -129,7 +128,7 @@ fun SettingsScreen(
     onShowRegionBordersChange: (Boolean) -> Unit,
     onSheltersEnabledChange: (Boolean) -> Unit,
     onOpenShelterList: () -> Unit = {},
-    onJustFunMasterChange: (Boolean) -> Unit,
+    onMoraleMasterChange: (Boolean) -> Unit,
     onMoraleVoiceChange: (MoraleVoice) -> Unit,
     onDeathAnimationChange: (Boolean) -> Unit,
     onFlybyAnimationChange: (Boolean) -> Unit,
@@ -151,6 +150,7 @@ fun SettingsScreen(
     onDigestWindowChange: (DigestWindow) -> Unit,
     digestPerType: Boolean,
     onDigestPerTypeChange: (Boolean) -> Unit,
+    onNotifyPolicyEnabledChange: (Boolean) -> Unit,
     policyWhatIf: Map<ZonePolicy, Int>,
     onExit: () -> Unit,
     onCheckUpdate: () -> Unit,
@@ -215,12 +215,13 @@ fun SettingsScreen(
     val fastGroupCollapsed = state.fastGroupCollapsed
     val slowGroupCollapsed = state.slowGroupCollapsed
     val showThreatIdsOnMap = state.showThreatIdsOnMap
+    val notifyPolicyEnabled = state.notifyPolicyEnabled
     val zonePolicy = state.zonePolicy
     val digestMax = state.digestMax
     val digestWindow = state.digestWindow
     val digestPerType = state.digestPerType
     val overlapMode = state.overlapMode
-    val justFunMasterEnabled = state.justFunMasterEnabled
+    val moraleMasterEnabled = state.moraleMasterEnabled
     val moraleVoice = state.moraleVoice
     val bootRestartEnabled = state.bootRestartEnabled
     val isChecking = updateState is UpdateState.Checking
@@ -561,7 +562,7 @@ fun SettingsScreen(
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        if (lang == AppLanguage.UA) "Сповіщення вимкнено" else "Notifications disabled",
+                                        lang.pick("Сповіщення вимкнено", "Notifications disabled", "Notifications disabled"),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onErrorContainer
@@ -569,10 +570,11 @@ fun SettingsScreen(
                                 }
                                 Spacer(Modifier.height(6.dp))
                                 Text(
-                                    if (lang == AppLanguage.UA)
-                                        "Додаток не зможе показувати тривоги та сирени. Увімкніть сповіщення в налаштуваннях системи."
-                                    else
+                                    lang.pick(
+                                        "Додаток не зможе показувати тривоги та сирени. Увімкніть сповіщення в налаштуваннях системи.",
                                         "The app cannot deliver sirens or alert notifications. Enable notifications in system settings.",
+                                        "The app cannot deliver sirens or alert notifications. Enable notifications in system settings."
+                                    ),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
                                 )
@@ -592,7 +594,7 @@ fun SettingsScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        if (lang == AppLanguage.UA) "Увімкнути сповіщення" else "Enable notifications",
+                                        lang.pick("Увімкнути сповіщення", "Enable notifications", "Enable notifications"),
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
@@ -641,26 +643,37 @@ fun SettingsScreen(
                         flash = flashId == "sirenOverride"
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    NotifyPolicyRow(
-                        title = s.notifyPolicyTitle,
-                        description = s.notifyPolicyDesc,
-                        selected = zonePolicy,
-                        whatIf = policyWhatIf,
-                        onChange = onZonePolicyChange,
-                        s = s
+                    AlertToggleRow(
+                        title = s.notifyPolicyEnabledTitle,
+                        description = s.notifyPolicyEnabledDesc,
+                        checked = notifyPolicyEnabled,
+                        onCheckedChange = onNotifyPolicyEnabledChange
                     )
-                    AnimatedVisibility(visible = zonePolicy == ZonePolicy.DIGEST) {
+                    AnimatedVisibility(visible = notifyPolicyEnabled) {
                         Column {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            DigestControlsRow(
-                                max = digestMax,
-                                onMaxChange = onDigestMaxChange,
-                                window = digestWindow,
-                                onWindowChange = onDigestWindowChange,
-                                perType = digestPerType,
-                                onPerTypeChange = onDigestPerTypeChange,
+                            NotifyPolicyRow(
+                                title = s.notifyPolicyTitle,
+                                description = s.notifyPolicyDesc,
+                                selected = zonePolicy,
+                                whatIf = policyWhatIf,
+                                onChange = onZonePolicyChange,
                                 s = s
                             )
+                            AnimatedVisibility(visible = zonePolicy == ZonePolicy.DIGEST) {
+                                Column {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    DigestControlsRow(
+                                        max = digestMax,
+                                        onMaxChange = onDigestMaxChange,
+                                        window = digestWindow,
+                                        onWindowChange = onDigestWindowChange,
+                                        perType = digestPerType,
+                                        onPerTypeChange = onDigestPerTypeChange,
+                                        s = s
+                                    )
+                                }
+                            }
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1008,27 +1021,6 @@ fun SettingsScreen(
                     subtitle = s.systemSubtitle(threatCardSize, iconSet),
                     onToggle = { onCollapseChange(collapse.copy(system = !collapse.system)) }
                 ) {
-                    // Language Switcher
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        LanguageFlag(
-                            emoji = "\uD83C\uDDFA\uD83C\uDDE6",
-                            active = lang == AppLanguage.UA,
-                            onClick = { onLanguageChange(AppLanguage.UA) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        LanguageFlag(
-                            emoji = "\uD83C\uDDE8\uD83C\uDDE6",
-                            active = lang == AppLanguage.EN,
-                            onClick = { onLanguageChange(AppLanguage.EN) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Card Size & Detail
                     Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp).explainerFlash(flashId == "cardSize")) {
                         Text(
@@ -1073,7 +1065,7 @@ fun SettingsScreen(
                         )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    // Icon packs — always available (a display setting, not gated by Just Fun).
+                    // Icon packs — always available (a display setting, not gated by Morale).
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text(
                             s.iconSetTitle,
@@ -1233,13 +1225,13 @@ fun SettingsScreen(
                     onToggle = { onCollapseChange(collapse.copy(flourish = !collapse.flourish)) },
                     trailing = {
                         Switch(
-                            checked = justFunMasterEnabled,
-                            onCheckedChange = onJustFunMasterChange,
+                            checked = moraleMasterEnabled,
+                            onCheckedChange = onMoraleMasterChange,
                             interactionSource = rememberHapticInteractionSource()
                         )
                     }
                 ) {
-                    AnimatedVisibility(visible = justFunMasterEnabled) {
+                    AnimatedVisibility(visible = moraleMasterEnabled) {
                         MoraleToggles(
                             s = s,
                             voice = moraleVoice,

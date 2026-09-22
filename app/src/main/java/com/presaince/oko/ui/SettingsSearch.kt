@@ -50,8 +50,8 @@ internal data class SearchChip(
     val queryUa: String,
     val queryEn: String
 ) {
-    fun label(lang: AppLanguage): String = if (lang == AppLanguage.UA) labelUa else labelEn
-    fun query(lang: AppLanguage): String = if (lang == AppLanguage.UA) queryUa else queryEn
+    fun label(lang: AppLanguage): String = lang.pick(labelUa, labelEn, labelEn)
+    fun query(lang: AppLanguage): String = lang.pick(queryUa, queryEn, queryEn)
 }
 
 /** A related concept: alternative words a user might type (synonyms, intent words, other

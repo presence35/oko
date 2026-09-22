@@ -34,9 +34,9 @@ internal fun CityChipGrid(
 ) {
     val cities = remember(lang) {
         Cities.ALL.filter { it.major }
-            .sortedBy { if (lang == AppLanguage.UA) it.nameUa else it.nameEn }
+            .sortedBy { it.name(lang) }
     }
-    val label: (City) -> String = { c -> if (lang == AppLanguage.UA) c.nameUa else c.nameEn }
+    val label: (City) -> String = { c -> c.name(lang) }
     FlowRow(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),

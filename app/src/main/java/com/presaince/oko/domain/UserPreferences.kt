@@ -3,7 +3,28 @@ package com.presaince.oko
 import androidx.compose.runtime.Immutable
 import com.presaince.oko.ThreatType
 
-enum class AppLanguage { UA, EN }
+enum class AppLanguage { UA, EN, RU }
+
+/**
+ * The single sanctioned language branch. Content selection anywhere in the app goes
+ * through this — never `==`/`when` on [AppLanguage] directly, so adding a language
+ * touches the lang tables, not the call sites.
+ */
+fun <T> AppLanguage.pick(ua: T, en: T, ru: T): T = when (this) {
+    AppLanguage.UA -> ua
+    AppLanguage.EN -> en
+    AppLanguage.RU -> ru
+}
+
+/**
+ * Phone locale → app language, resolved fresh on every startup. No stored override,
+ * no in-app switcher. Unknown locales fall back to EN.
+ */
+fun systemLanguage(): AppLanguage = when (java.util.Locale.getDefault().language) {
+    "uk" -> AppLanguage.UA
+    "ru" -> AppLanguage.RU
+    else -> AppLanguage.EN
+}
 
 enum class ThreatCardSize { SMALL, LARGE }
 
@@ -21,9 +42,9 @@ enum class MoraleVoice { RANDOM, PLAIN, WARM, SPICY, SLANG, VIYSKO, BABUSIA }
 
 @Immutable
 data class UserPreferences(
-    val language: AppLanguage = AppLanguage.UA,
-    val languageChosen: Boolean = false,
+    val language: AppLanguage = AppLanguage.EN,
     val wizardCompleted: Boolean = false,
+    val welcomeShootdownPlayed: Boolean = false,
     val slowRedKm: Int = 20,
     val slowYellowKm: Int = 50,
     val fastRedMin: Int = 5,
@@ -32,6 +53,7 @@ data class UserPreferences(
     val slowYellowArmed: Boolean = true,
     val fastRedArmed: Boolean = true,
     val fastYellowArmed: Boolean = true,
+    val notifyPolicyEnabled: Boolean = false,
     val zonePolicy: ZonePolicy = ZonePolicy.ONCE_PER_THREAT,
     val digestMax: Int = 10,
     val digestWindow: DigestWindow = DigestWindow.EPISODE,
@@ -88,7 +110,7 @@ data class UserPreferences(
     val calmMessagesEnabled: Boolean = true,
     val hapticsEnabled: Boolean? = true,
     val officialAlertCityScope: Boolean = false,
-    val moraleMasterEnabled: Boolean = false,
+    val moraleMasterEnabled: Boolean = true,
     val moraleVoice: MoraleVoice = MoraleVoice.RANDOM,
     val bootRestartEnabled: Boolean = true,
     val alertRegionMode: AlertRegionMode = AlertRegionMode.CITY_LABELS,
@@ -100,7 +122,6 @@ data class UserPreferences(
     val mapVisibleTypes: Set<ThreatType> = ThreatType.values().toSet(),
     val alertEnabledTypes: Set<ThreatType> = ThreatType.values().toSet()
 ) {
-    val justFunMasterEnabled: Boolean get() = moraleMasterEnabled
     val officialYellowAlertsEnabled: Boolean get() = yellowAlertsEnabled
     val iconSet: ThreatIconSet get() = threatIconSet
     val sheltersWithKids: Boolean get() = sheltersWithKidsEnabled

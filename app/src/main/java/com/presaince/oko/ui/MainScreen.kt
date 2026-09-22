@@ -131,6 +131,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     var screen by remember { mutableStateOf(Screen.MAP) }
     // Notification tap: navigate to the map screen regardless of current tab.
     val navigateToMapTick by viewModel.navigateToMapTick.collectAsState()
+    val welcomeShootdown by viewModel.welcomeShootdown.collectAsState()
     LaunchedEffect(navigateToMapTick) {
         if (navigateToMapTick > 0) screen = Screen.MAP
     }
@@ -326,6 +327,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             settingsHintRemaining = settingsHintRemaining,
             onHeaderHeightChange = { headerHeightPx = it },
             onReactivateMonitoring = { viewModel.reactivateMonitoring() },
+            welcomeShootdown = welcomeShootdown,
             onShelterTipAdvance = {
                 val next = (shelterTipStage + 1).coerceAtMost(6)
                 shelterTipStage = next
@@ -351,7 +353,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 onExplainerChange = remember { { activeExplainer = it } },
                 versionName = BuildConfig.VERSION_NAME,
                 onBack = remember { { screen = Screen.MAP } },
-                onLanguageChange = remember { { viewModel.setLanguage(it) } },
                 onThreatMapToggle = remember<(ThreatType, Boolean) -> Unit> { { type, visible -> viewModel.setThreatMapVisible(type, visible) } },
                 onThreatAlertToggle = remember<(ThreatType, Boolean) -> Unit> { { type, enabled -> viewModel.setThreatAlertsEnabled(type, enabled) } },
                 onThreatMapToggleAll = remember<(Set<ThreatType>, Boolean) -> Unit> { { types, visible -> viewModel.setGroupThreatMapVisible(types, visible) } },
@@ -404,7 +405,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                         screen = Screen.SHELTERS
                     }
                 },
-                onJustFunMasterChange = remember { { viewModel.setJustFunEnabled(it) } },
+                onMoraleMasterChange = remember { { viewModel.setMoraleEnabled(it) } },
                 onMoraleVoiceChange = remember { { viewModel.setMoraleVoice(it) } },
                 onDeathAnimationChange = remember { { viewModel.setDeathAnimationEnabled(it) } },
                 onFlybyAnimationChange = remember { { viewModel.setFlybyAnimationEnabled(it) } },
@@ -440,6 +441,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onShowThreatIdsOnMapChange = remember { { viewModel.setShowThreatIdsOnMap(it) } },
                 zonePolicy = settingsState.zonePolicy,
                 onZonePolicyChange = remember { { viewModel.setZonePolicy(it) } },
+                onNotifyPolicyEnabledChange = remember { { viewModel.setNotifyPolicyEnabled(it) } },
                 digestMax = settingsState.digestMax,
                 onDigestMaxChange = remember { { viewModel.setDigestMax(it) } },
                 digestWindow = settingsState.digestWindow,
@@ -525,8 +527,8 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
         onOpenSettings = { viewModel.openInstallPermissionSettings() }
     )
 
-    // First-install: a full-screen wizard — language (+tips), icon pack, which threats matter,
-    // then a feature preview. Alerts are delivered as notifications/toasts while the wizard
+    // First-install: a full-screen wizard — tips, which threats matter, location,
+    // then zone controls and a feature preview. Alerts are delivered as notifications/toasts while the wizard
     // is up, but the wizard no longer ejects — the user finishes onboarding first.
     if (wizardShown) {
         FirstLaunchWizard(
@@ -543,7 +545,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
             fastRedArmed = uiState.fastRedArmed,
             fastYellowArmed = uiState.fastYellowArmed,
             sheltersEnabled = uiState.sheltersEnabled,
-            justFun = uiState.justFunMasterEnabled,
+            morale = uiState.moraleMasterEnabled,
             moraleVoice = uiState.moraleVoice,
             calmMessagesEnabled = uiState.calmMessagesEnabled,
             flybyAnimationEnabled = uiState.flybyAnimationEnabled,
@@ -554,11 +556,10 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
             neutralizedTallyAllUkraine = uiState.neutralizedTallyAllUkraine,
             alarmEpisodeTallyEnabled = uiState.alarmEpisodeTallyEnabled,
             iconSetForFun = uiState.iconSet,
-            onChoose = { viewModel.setLanguage(it) },
             onThreatEnabledToggle = { type, enabled -> viewModel.setThreatEnabled(type, enabled) },
             onFollowMeChange = { viewModel.setFollowMe(it) },
             onPinnedCityChange = { viewModel.setPinnedCity(it) },
-            onJustFunChange = { viewModel.setJustFunEnabled(it) },
+            onMoraleChange = { viewModel.setMoraleEnabled(it) },
             onMoraleVoiceChange = { viewModel.setMoraleVoice(it) },
             onCalmMessagesChange = { viewModel.setCalmMessagesEnabled(it) },
             onFlybyAnimationChange = { viewModel.setFlybyAnimationEnabled(it) },
@@ -574,14 +575,14 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
             onSlowRedArmedChange = { armOrRequestPermission(it) { v -> viewModel.setSlowRedArmed(v) } },
             onSlowYellowArmedChange = { armOrRequestPermission(it) { v -> viewModel.setSlowYellowArmed(v) } },
             onComplete = {
-                viewModel.skipLanguageChoose()
+                viewModel.completeWizard()
                 if (wizardFromSettings) {
                     wizardFromSettings = false
                     screen = Screen.MAP
                 }
             },
             onLater = {
-                viewModel.laterLanguageChoose()
+                viewModel.deferWizard()
                 if (wizardFromSettings) {
                     wizardFromSettings = false
                     screen = Screen.MAP
@@ -659,7 +660,8 @@ private fun MapScreen(
     onShelterTipAdvance: () -> Unit,
     settingsHintRemaining: Int = 0,
     onHeaderHeightChange: (Int) -> Unit = {},
-    onReactivateMonitoring: () -> Unit = {}
+    onReactivateMonitoring: () -> Unit = {},
+    welcomeShootdown: WelcomeShootdown? = null
 ) {
     val s = Strings.get(uiState.language)
     val context = LocalContext.current
@@ -798,9 +800,7 @@ private fun MapScreen(
                 ThreatZone.OUTER -> Color(AppPalette.AlertYellow)
                 null -> Color.Transparent
             }
-            val pinnedCityName = if (uiState.followMe) null else uiState.pinnedCity?.let {
-                if (uiState.language == AppLanguage.UA) it.nameUa else it.nameEn
-            }
+            val pinnedCityName = if (uiState.followMe) null else uiState.pinnedCity?.name(uiState.language)
             val alertText = when (activeZone) {
                 ThreatZone.INNER -> s.redZoneAlert
                 ThreatZone.OUTER -> s.yellowZoneAlert
@@ -963,6 +963,7 @@ private fun MapScreen(
                         onStrikeAnchorChange = { strikeAnchor = it },
                         onPendingStrikeCountChange = { pendingStrikeCount = it },
                         onCancelRequestTick = cancelTick,
+                        welcomeShootdown = welcomeShootdown,
                         modifier = Modifier.fillMaxSize()
                     )
                     uiState.flyby?.let { show ->
@@ -1128,7 +1129,7 @@ private fun MapScreen(
                 message = if (autoStrikeActive || deathActive) {
                     strikeType?.let { t ->
                         val info = ThreatTypeCatalog.INFO.getValue(t)
-                        val label = if (uiState.language == AppLanguage.UA) info.labelUa else info.labelEn
+                        val label = info.label(uiState.language)
                         val distKm: Double? = strikeAnchor?.let { a -> uiState.focusLocation?.let { f -> distanceFlat(f.lat, f.lon, a.lat, a.lon) / 1000.0 } }
                         val km: Int? = distKm?.roundToInt()
                         val suffix = km?.let { flourishDistanceSuffix(it, uiState.language) }.orEmpty()
@@ -1931,7 +1932,7 @@ private fun UpdateDialog(
     val s = Strings.get(lang)
     when (state) {
         is UpdateState.Available -> {
-            val notes = if (lang == AppLanguage.UA) state.info.notesUa else state.info.notesEn
+            val notes = state.info.notes(lang)
             AlertDialog(
                 onDismissRequest = onLater,
                 title = { Text(s.updateAvailableTitle) },

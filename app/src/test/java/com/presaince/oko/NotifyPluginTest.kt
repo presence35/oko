@@ -198,6 +198,37 @@ class NotifyPluginTest {
     }
 
     @Test
+    fun `disabled master toggle behaves as every change under any preset`() {
+        for (preset in ZonePolicy.values()) {
+            val p = NotifyPlugin()
+            val pr = NotifyPrefs.from(
+                enabled = false, preset = preset, max = 1,
+                window = DigestWindow.MIN_2, perType = true
+            )
+            assertEquals(ZonePolicy.EVERY_CHANGE, pr.preset)
+            assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!.kind)
+            p.tick(listOf(inp("a", null, live = true)), pr, now)
+            assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!.kind)
+        }
+    }
+
+    @Test
+    fun `enabled master toggle preserves the preset`() {
+        val pr = NotifyPrefs.from(
+            enabled = true, preset = ZonePolicy.ONCE_PER_THREAT, max = 10,
+            window = DigestWindow.EPISODE, perType = false
+        )
+        assertEquals(ZonePolicy.ONCE_PER_THREAT, pr.preset)
+        assertEquals(10, pr.digestMax)
+        val p = NotifyPlugin()
+        assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!.kind)
+        p.tick(listOf(inp("a", null, live = true)), pr, now)
+        val re = p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!
+        assertEquals(VerdictKind.SUPPRESS, re.kind)
+        assertEquals(PolicyReason.ONCE_PER_THREAT, re.reason)
+    }
+
+    @Test
     fun `whatIf counts actual and estimated sounds`() {
         fun fired(id: String, type: ThreatType, at: Long) = DebugLogEntry(
             at, DebugLogKind.ZONE_ENTER, false, false, 3, true,

@@ -183,3 +183,34 @@ fun officialYellowAlertActiveFor(
     cityUa: String?,
     scope: Boolean
 ): Boolean = alerts.officialStateFor(token, cityUa, scope).level == AlertLevel.YELLOW
+
+data class LatchedEpisode(
+    val level: AlertLevel,
+    val token: String,
+    val since: String?,
+    val city: String
+) {
+    fun isRawActive(alerts: List<OblastAlert>): Boolean =
+        alerts.officialStateFor(token, null, false).level != AlertLevel.NONE
+
+    companion object {
+        fun parse(s: String?): LatchedEpisode? {
+            if (s.isNullOrBlank()) return null
+            val parts = s.split('|')
+            return when {
+                parts.size >= 4 -> {
+                    val lvl = try { AlertLevel.valueOf(parts[0].uppercase()) } catch (_: Exception) { return null }
+                    val token = parts[1].trim()
+                    if (token.isEmpty()) return null
+                    LatchedEpisode(lvl, token, parts[2].ifBlank { null }, parts[3])
+                }
+                parts.size == 3 -> {
+                    val token = parts[0].trim()
+                    if (token.isEmpty()) return null
+                    LatchedEpisode(AlertLevel.RED, token, parts[1].ifBlank { null }, parts[2])
+                }
+                else -> null
+            }
+        }
+    }
+}

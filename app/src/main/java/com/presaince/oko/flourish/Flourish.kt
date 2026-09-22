@@ -24,6 +24,15 @@ data class FlourishShow(
     val records: List<FlourishRecord>
 )
 
+/** One-shot fake shootdown greeting the user right after the first-run wizard: a synthetic
+ *  SHAHED near the focus, never tied to a real threat. Pure flourish, once per install. */
+@Immutable
+data class WelcomeShootdown(
+    val tick: Int,
+    val lat: Double,
+    val lon: Double
+)
+
 /** Gap between consecutive bullets in the tally-tap replay flourish. */
 const val FLOURISH_STAGGER_MS = 420L
 
@@ -173,8 +182,7 @@ internal fun flourishGroupDistanceKm(group: List<FlourishRecord>, focus: LatLng?
     return group.map { distanceFlat(focus.lat, focus.lon, it.lat, it.lon) / 1000.0 }.average().roundToInt()
 }
 
-/** When a selected threat vanishes it shows the compact "shot-down" card and drops the
- *  selection only while the death animation is on and the map is the visible screen —
+/** When a selected threat vanishes it shows the compact "shot-down" card and drops the *  selection only while the death animation is on and the map is the visible screen —
  *  shelters no longer block morale (see plan: full removal). */
 object FlourishPolicy {
     /** The selection should be dropped (card self-destructs) once the threat is gone and the
@@ -196,3 +204,38 @@ object FlourishPolicy {
         @Suppress("UNUSED_PARAMETER") shelterModeActive: Boolean
     ): Boolean = showNeutralizedCard(selectedGone, animOn, mapVisible)
 }
+
+/**
+ * Decode a flourish tap's baked extras back into replay records. Pure (no Intent) so it
+ * unit-tests without Robolectric; MainActivity calls it after pulling the raw arrays out.
+ */
+internal fun parseFlourishRecords(
+    lats: DoubleArray,
+    lons: DoubleArray,
+    types: Array<String>,
+    regions: Array<out String?>?
+): List<FlourishRecord> {
+    val n = minOf(lats.size, lons.size, types.size)
+    return buildList {
+        for (i in 0 until n) {
+            val lat = lats[i]
+            val lon = lons[i]
+            if (!lat.isFinite() || !lon.isFinite() ||
+                lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0
+            ) continue
+            val type = runCatching { ThreatType.valueOf(types[i]) }.getOrNull() ?: continue
+            add(FlourishRecord(lat, lon, type, regions?.getOrNull(i)))
+        }
+    }
+}
+
+/**
+ * Selective reset routing for a consumed flourish tap: only the store whose show was watched
+ * is cleared, so watching the running tally never wipes the episode memory and vice versa.
+ * A missing source (notifications posted before this tag existed) resets both, as before.
+ */
+internal fun flourishResetTally(source: String?): Boolean =
+    source != NeutralizedTally.SOURCE_EPISODE && source != NeutralizedTally.SOURCE_ALLCLEAR
+
+internal fun flourishResetEpisode(source: String?): Boolean =
+    source != NeutralizedTally.SOURCE_TALLY

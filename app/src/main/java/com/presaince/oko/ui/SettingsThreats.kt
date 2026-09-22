@@ -40,10 +40,10 @@ internal fun ThreatSettingsCard(
 ) {
     val s = Strings.get(lang)
     val info = ThreatTypeCatalog.INFO.getValue(type)
-    val label = if (lang == AppLanguage.UA) info.labelUa else info.labelEn
-    val description = if (lang == AppLanguage.UA) info.descriptionUa else info.descriptionEn
-    val details = if (lang == AppLanguage.UA) info.detailsUa else info.detailsEn
-    val joke = if (lang == AppLanguage.UA) info.jokeUa else info.jokeEn
+    val label = info.label(lang)
+    val description = info.description(lang)
+    val details = info.details(lang)
+    val joke = info.joke(lang)
     val onMap = type !in hiddenTypes
     val onAlerts = type !in silencedTypes
     val typeCatalog by AppSources.registry.typeCatalog.collectAsState()

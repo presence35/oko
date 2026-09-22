@@ -16,11 +16,22 @@ class StringsFormatTest {
 
         val ua = formatDateTime(AppLanguage.UA, millis)
         val en = formatDateTime(AppLanguage.EN, millis)
+        val ru = formatDateTime(AppLanguage.RU, millis)
 
         assertTrue("UA was: $ua", ua.startsWith("%02d.%02d,".format(zoned.dayOfMonth, zoned.monthValue)))
         assertTrue("UA was: $ua", ua.endsWith(hhmm))
         assertTrue("EN was: $en", en.startsWith("Aug ${zoned.dayOfMonth},"))
         assertTrue("EN was: $en", en.endsWith(hhmm))
+        assertTrue("RU was: $ru", ru.startsWith("${zoned.dayOfMonth} "))
+        assertTrue("RU was: $ru", ru.endsWith(hhmm))
+    }
+
+    @Test
+    fun `pick routes each language to its own branch`() {
+        assertEquals("ua", AppLanguage.UA.pick("ua", "en", "ru"))
+        assertEquals("en", AppLanguage.EN.pick("ua", "en", "ru"))
+        assertEquals("ru", AppLanguage.RU.pick("ua", "en", "ru"))
+        assertEquals(AppLanguage.RU, Strings.get(AppLanguage.RU).language)
     }
 
     @Test
@@ -81,5 +92,9 @@ class StringsFormatTest {
         assertEquals("Знешкоджуємо 11 загроз", resolvingThreatsPhrase(11, AppLanguage.UA))
         assertEquals("Знешкоджуємо 21 загрозу", resolvingThreatsPhrase(21, AppLanguage.UA))
         assertEquals("Знешкоджуємо 22 загрози", resolvingThreatsPhrase(22, AppLanguage.UA))
+        // RU tables hold EN copies for now, but the Slavic 3-form index still selects per RU rules.
+        assertEquals("Resolving 1 threat", resolvingThreatsPhrase(1, AppLanguage.RU))
+        assertEquals("Resolving 5 threats", resolvingThreatsPhrase(5, AppLanguage.RU))
+        assertEquals("Precise GPS: 1 min ago", preciseGpsAgePhrase(1, AppLanguage.RU))
     }
 }

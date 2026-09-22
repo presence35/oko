@@ -399,6 +399,7 @@ fun NeptunMapView(
     onStrikeAnchorChange: (LatLng?) -> Unit = {},
     onPendingStrikeCountChange: (Int) -> Unit = {},
     onCancelRequestTick: Int = 0,
+    welcomeShootdown: WelcomeShootdown? = null,
     modifier: Modifier = Modifier
 ) {
     val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
@@ -431,6 +432,8 @@ fun NeptunMapView(
     val lastZonesCoverPx = remember { mutableStateOf(0) }
     val lastFlourishTick = remember { mutableStateOf(-1) }
     val flourishRetryTick = remember { mutableStateOf(0) }
+    val lastWelcomeTick = remember { mutableStateOf(-1) }
+    val welcomeJob = remember { mutableStateOf<Job?>(null) }
     val newRingState = remember { mutableStateOf<NewRingState?>(null) }
     val didDefaultFit = remember { mutableStateOf(false) }
     val lastPinnedCity = remember { mutableStateOf<String?>(null) }
@@ -755,6 +758,38 @@ LaunchedEffect(selectedId) {
                 DebugLog.recordFlourish(DebugLogReason.TOGGLE_OFF, now = System.currentTimeMillis())
             } else {
                 deathFx.startReplay(focusLocationState, flourishShow.records)
+            }
+        }
+    }
+
+    // Post-wizard greeting: one fake SHAHED shootdown near the focus. Synthetic id, never
+    // touching threats/registry/tally — pure overlay flourish, once per install (the
+    // ViewModel marks it played at emit; the tick only advances past transient blockers).
+    val welcomeShow = welcomeShootdown
+    if (welcomeShow != null && welcomeShow.tick != lastWelcomeTick.value) {
+        val playable = bridgeState.value != null && (flourishRetryTick.value >= 0) &&
+            mapIsUserFocus(pausedState, mapVisibleState, showNearbySheltersState, lifecycle.currentState)
+        if (playable) {
+            lastWelcomeTick.value = welcomeShow.tick
+            welcomeJob.value?.cancel()
+            welcomeJob.value = mapScope.launch {
+                delay(700)
+                if (!mapIsUserFocus(pausedState, mapVisibleState, showNearbySheltersState, lifecycle.currentState)) return@launch
+                val target = LatLng(welcomeShow.lat, welcomeShow.lon)
+                val icon = threatIconFor(context, ThreatType.SHAHED, iconSetState)
+                val base = IconCatalog.baseDeg(ThreatType.SHAHED, iconSetState)
+                if (deathFx.strike(
+                    id = "welcome-demo",
+                    geo = target,
+                    startGeo = LatLng(target.lat - 0.07, target.lon),
+                    icon = icon,
+                    rotationDeg = threatMarkerRotation(0f, base),
+                    alpha = 1f,
+                    type = ThreatType.SHAHED
+                )) {
+                    deathFx.followStrike(target)
+                    deathFx.strikeHaptics()
+                }
             }
         }
     }

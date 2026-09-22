@@ -71,7 +71,7 @@ internal fun FirstLaunchWizard(
     fastRedArmed: Boolean,
     fastYellowArmed: Boolean,
     sheltersEnabled: Boolean,
-    justFun: Boolean,
+    morale: Boolean,
     moraleVoice: MoraleVoice,
     calmMessagesEnabled: Boolean,
     flybyAnimationEnabled: Boolean,
@@ -82,11 +82,10 @@ internal fun FirstLaunchWizard(
     neutralizedTallyAllUkraine: Boolean,
     alarmEpisodeTallyEnabled: Boolean,
     iconSetForFun: ThreatIconSet,
-    onChoose: (AppLanguage) -> Unit,
     onThreatEnabledToggle: (ThreatType, Boolean) -> Unit,
     onFollowMeChange: (Boolean) -> Unit,
     onPinnedCityChange: (City?) -> Unit,
-    onJustFunChange: (Boolean) -> Unit,
+    onMoraleChange: (Boolean) -> Unit,
     onCalmMessagesChange: (Boolean) -> Unit,
     onMoraleVoiceChange: (MoraleVoice) -> Unit,
     onFlybyAnimationChange: (Boolean) -> Unit,
@@ -105,7 +104,6 @@ internal fun FirstLaunchWizard(
     onLater: () -> Unit
 ) {
     val s = Strings.get(current)
-    val other = if (current == AppLanguage.UA) AppLanguage.EN else AppLanguage.UA
     val totalSteps = 5
     var step by remember { mutableStateOf(0) }
     var tipsRevealed by remember { mutableStateOf(false) }
@@ -126,7 +124,7 @@ internal fun FirstLaunchWizard(
     }
     BackHandler(enabled = step > 0) { step-- }
     val stepTitle = when (step) {
-        0 -> Strings.get(other).languageChooseTitle
+        0 -> s.onboardingTipsTitle
         1 -> s.wizardLocationTitle
         2 -> s.wizardCareTitle
         3 -> s.wizardZonesTitle
@@ -161,8 +159,6 @@ internal fun FirstLaunchWizard(
             ) {
                 when (step) {
                     0 -> {
-                        SetupLanguageStep(current, onChoose)
-                        Spacer(Modifier.height(24.dp))
                         Text(
                             s.onboardingIntro,
                             style = MaterialTheme.typography.bodyLarge,
@@ -256,7 +252,7 @@ internal fun FirstLaunchWizard(
                     else -> SetupFeaturesStep(
                         s = s,
                         lang = current,
-                        justFun = justFun,
+                        morale = morale,
                         moraleVoice = moraleVoice,
                         calmMessagesEnabled = calmMessagesEnabled,
                         flybyAnimationEnabled = flybyAnimationEnabled,
@@ -267,7 +263,7 @@ internal fun FirstLaunchWizard(
                         neutralizedTallyAllUkraine = neutralizedTallyAllUkraine,
                         alarmEpisodeTallyEnabled = alarmEpisodeTallyEnabled,
                         iconSet = iconSetForFun,
-                        onJustFunChange = onJustFunChange,
+                        onMoraleChange = onMoraleChange,
                         onMoraleVoiceChange = onMoraleVoiceChange,
                         onCalmMessagesChange = onCalmMessagesChange,
                         onFlybyAnimationChange = onFlybyAnimationChange,
@@ -305,7 +301,7 @@ internal fun FirstLaunchWizard(
                 val progressFrac = if (step == 0 && !tipsRevealed) 0f else (step + 1) / totalSteps.toFloat()
                 val nextEnabled = when (step) {
                     0 -> tipsRevealed
-                    2 -> locationReady
+                    1 -> locationReady
                     else -> true
                 }
                 val nextInteraction = remember { MutableInteractionSource() }
@@ -358,29 +354,6 @@ internal fun FirstLaunchWizard(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun SetupLanguageStep(current: AppLanguage, onChoose: (AppLanguage) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        LanguageFlag(
-            emoji = "\uD83C\uDDFA\uD83C\uDDE6",
-            label = "Українська",
-            active = current == AppLanguage.UA,
-            onClick = { onChoose(AppLanguage.UA) },
-            modifier = Modifier.weight(1f)
-        )
-        LanguageFlag(
-            emoji = "\uD83C\uDDE8\uD83C\uDDE6",
-            label = "English",
-            active = current == AppLanguage.EN,
-            onClick = { onChoose(AppLanguage.EN) },
-            modifier = Modifier.weight(1f)
-        )
     }
 }
 
@@ -446,11 +419,7 @@ private fun WizardThreatGrid(
                         types.forEach { type ->
                             val on = type !in hiddenTypes && type !in silencedTypes
                             val info = ThreatTypeCatalog.INFO.getValue(type)
-                            val label = if (lang == AppLanguage.UA) {
-                                info.shortLabelUa ?: info.labelUa
-                            } else {
-                                info.shortLabelEn ?: info.labelEn
-                            }
+                            val label = info.shortLabel(lang)
                             val onColor = MaterialTheme.colorScheme.onSurface
                             val offColor = MaterialTheme.colorScheme.onSurfaceVariant
                             val cellInteraction = remember { MutableInteractionSource() }
@@ -883,7 +852,7 @@ private fun WizardZoneSliderRow(
 private fun SetupFeaturesStep(
     s: Strings.StringSet,
     lang: AppLanguage,
-    justFun: Boolean,
+    morale: Boolean,
     moraleVoice: MoraleVoice,
     calmMessagesEnabled: Boolean,
     flybyAnimationEnabled: Boolean,
@@ -894,7 +863,7 @@ private fun SetupFeaturesStep(
     neutralizedTallyAllUkraine: Boolean,
     alarmEpisodeTallyEnabled: Boolean,
     iconSet: ThreatIconSet,
-    onJustFunChange: (Boolean) -> Unit,
+    onMoraleChange: (Boolean) -> Unit,
     onMoraleVoiceChange: (MoraleVoice) -> Unit,
     onCalmMessagesChange: (Boolean) -> Unit,
     onFlybyAnimationChange: (Boolean) -> Unit,
@@ -960,19 +929,19 @@ private fun SetupFeaturesStep(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(2.dp))
-                val justFunGearId = "justFunGear"
+                val moraleGearId = "moraleGear"
                 Text(
                     buildAnnotatedString {
                         append(s.wizardMoraleDesc)
                         append(' ')
-                        appendInlineContent(justFunGearId, "[gear]")
+                        appendInlineContent(moraleGearId, "[gear]")
                         append(' ')
                         append(s.wizardMoraleDescGearSuffix)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     inlineContent = mapOf(
-                        justFunGearId to InlineTextContent(
+                        moraleGearId to InlineTextContent(
                             Placeholder(14.sp, 14.sp, PlaceholderVerticalAlign.TextCenter)
                         ) {
                             Icon(
@@ -985,12 +954,12 @@ private fun SetupFeaturesStep(
                 )
             }
             Switch(
-                checked = justFun,
-                onCheckedChange = onJustFunChange,
+                checked = morale,
+                onCheckedChange = onMoraleChange,
                 interactionSource = rememberHapticInteractionSource()
             )
         }
-        AnimatedVisibility(visible = justFun) {
+        AnimatedVisibility(visible = morale) {
             Column {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {

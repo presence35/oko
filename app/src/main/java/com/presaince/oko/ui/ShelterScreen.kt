@@ -412,7 +412,7 @@ private fun ShelterCard(
     withKids: Boolean,
     onOpenInMaps: () -> Unit
 ) {
-    val name = if (lang == AppLanguage.EN) shelterNameEn(row.shelter.name) else row.shelter.name
+    val name = lang.pick(row.shelter.name, shelterNameEn(row.shelter.name), shelterNameEn(row.shelter.name))
     val type = row.shelter.type
     val typeColor = when (type) {
         ShelterType.MOBILE -> androidx.compose.ui.graphics.Color(AppPalette.ShelterMobile)

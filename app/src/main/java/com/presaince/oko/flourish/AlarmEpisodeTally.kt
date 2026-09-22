@@ -34,16 +34,16 @@ class AlarmEpisodeTally(
     private var episodeCity: String? = null
     private var episodeStartMs: Long = 0L
 
-    private val justFunEnabled = MutableStateFlow(false)
+    private val moraleEnabled = MutableStateFlow(false)
     private val episodeEnabled = MutableStateFlow(false)
 
     init {
         scope.launch {
             UserPrefs(context).preferences
-                .map { it.justFunMasterEnabled }
+                .map { it.moraleMasterEnabled }
                 .distinctUntilChanged()
                 .collect { enabled ->
-                    justFunEnabled.value = enabled
+                    moraleEnabled.value = enabled
                     if (!enabled) reset()
                 }
         }
@@ -92,7 +92,7 @@ class AlarmEpisodeTally(
 
     /** Buffer a resolution into the open window. Never notifies — [finish] owns that. */
     fun onResolved(removed: ThreatRemoved) {
-        if (!justFunEnabled.value || !episodeEnabled.value) return
+        if (!moraleEnabled.value || !episodeEnabled.value) return
         synchronized(tallyLock) {
             if (seenRemovalIds.contains(removed.id)) return
             seenRemovalIds.addLast(removed.id)
@@ -105,7 +105,7 @@ class AlarmEpisodeTally(
 
     /** The alarm window closed: post the one summary for it, replacing any previous window. */
     fun finish(currentCity: String, lang: AppLanguage, officialAlertsEnabled: Boolean, nowMs: Long = System.currentTimeMillis()) {
-        if (!justFunEnabled.value || !episodeEnabled.value) {
+        if (!moraleEnabled.value || !episodeEnabled.value) {
             synchronized(tallyLock) {
                 episodeCount = 0
                 perTypeCounts.clear()
@@ -142,6 +142,14 @@ class AlarmEpisodeTally(
         } catch (_: SecurityException) {}
     }
 
+    /** Synchronous read of the window's buffered records for the official all-clear tap,
+     *  so it replays the same show as this summary. */
+    fun snapshot(): List<FlourishRecord> {
+        synchronized(tallyLock) {
+            return episodeMemory.map { FlourishRecord(it.lat, it.lon, it.type, it.region) }
+        }
+    }
+
     private fun postSummary(snapshot: EpisodeSnapshot, city: String, lang: AppLanguage, durationMin: Int) {
         scope.launch {
             val s = Strings.get(lang)
@@ -149,7 +157,7 @@ class AlarmEpisodeTally(
                 .sortedWith(compareByDescending<Map.Entry<ThreatType, Int>> { it.value }.thenBy { it.key.ordinal })
                 .joinToString(" · ") { (type, count) ->
                     val info = ThreatTypeCatalog.INFO[type]
-                    val label = if (info != null && lang == AppLanguage.UA) info.labelUa else info?.labelEn ?: type.name
+                    val label = info?.label(lang) ?: type.name
                     "$label $count"
                 }
             val title = if (durationMin > 0) String.format(s.alarmEpisodeTitleFormat, city, durationMin) else String.format("%1\$s: alarm summary", city)
@@ -177,6 +185,7 @@ class AlarmEpisodeTally(
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setSilent(true)
                 .setAutoCancel(true)
+                .setContentIntent(quietOpenIntent())
                 .setDeleteIntent(episodeDismissPendingIntent())
             safeNotify(NOTIF_ALARM_EPISODE, builder.build())
         }
@@ -197,17 +206,23 @@ class AlarmEpisodeTally(
      * flourish extra keys so MainActivity's existing replay parser picks them up as-is.
      */
     private fun episodeTapPendingIntent(memory: List<ResolvedRecord>): PendingIntent {
+        return NeutralizedTally.flourishTapIntent(
+            context, 6,
+            memory.map { FlourishRecord(it.lat, it.lon, it.type, it.region) },
+            NeutralizedTally.SOURCE_EPISODE
+        )
+    }
+
+    /** Zero-count summary has no show to replay — its tap just opens the map. */
+    private fun quietOpenIntent(): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or
                 Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra(NeutralizedTally.EXTRA_FLOURISH_LATS, memory.map { it.lat }.toDoubleArray())
-            putExtra(NeutralizedTally.EXTRA_FLOURISH_LONS, memory.map { it.lon }.toDoubleArray())
-            putExtra(NeutralizedTally.EXTRA_FLOURISH_TYPES, memory.map { it.type.name }.toTypedArray())
-            putExtra(NeutralizedTally.EXTRA_FLOURISH_REGIONS, memory.map { it.region }.toTypedArray())
+            putExtra(AlertNotificationManager.EXTRA_SHOW_MAP, true)
         }
         return PendingIntent.getActivity(
-            context, 6, intent,
+            context, 9, intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
     }

@@ -35,7 +35,7 @@ fun ShelterPopupCard(
 ) {
     val s = Strings.get(lang)
     val context = LocalContext.current
-    val name = if (lang == AppLanguage.EN) shelterNameEn(shelter.shelter.name) else shelter.shelter.name
+    val name = lang.pick(shelter.shelter.name, shelterNameEn(shelter.shelter.name), shelterNameEn(shelter.shelter.name))
     val type = shelter.shelter.type
 
     val typeColor = when (type) {

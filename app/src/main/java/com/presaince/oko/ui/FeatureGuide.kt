@@ -60,8 +60,6 @@ fun guideFeatures(s: Strings.StringSet): List<GuideFeature> = listOf(
         listOf(s.guideCardReadD1, s.guideCardReadD2, s.guideCardReadD3), GuideDiagram.CARD_READ),
     GuideFeature("widget", s.guideCategoryWidget, s.guideWidgetTitle, s.guideWidgetSummary,
         listOf(s.guideWidgetD1, s.guideWidgetD2, s.guideWidgetD3), GuideDiagram.WIDGET),
-    GuideFeature("lang", s.guideCategorySettings, s.guideLangTitle, s.guideLangSummary,
-        listOf(s.guideLangD1, s.guideLangD2, s.guideLangD3), GuideDiagram.LANG),
     GuideFeature("toggles", s.guideCategorySettings, s.guideTogglesTitle, s.guideTogglesSummary,
         listOf(s.guideTogglesD1, s.guideTogglesD2, s.guideTogglesD3), GuideDiagram.THREAT_TOGGLES),
     GuideFeature("update", s.guideCategorySettings, s.guideUpdateTitle, s.guideUpdateSummary,

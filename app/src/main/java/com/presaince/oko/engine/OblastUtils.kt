@@ -1,6 +1,7 @@
 package com.presaince.oko.engine
 
 import com.presaince.oko.AppLanguage
+import com.presaince.oko.pick
 import com.presaince.oko.Cities
 import com.presaince.oko.CityRaions
 import com.presaince.oko.ThreatType
@@ -28,23 +29,26 @@ fun inFocusOblast(t: NormalizedThreat, token: String?): Boolean {
 
 fun threatBody(t: NormalizedThreat, lang: AppLanguage): String {
     val info = threatTypeInfoByString(t.type) ?: ThreatTypeCatalog.INFO.getValue(ThreatType.UNKNOWN)
-    val label = if (lang == AppLanguage.UA) info.labelUa else info.labelEn
+    val label = info.label(lang)
     // The national MiG carries descriptors, not places — never transliterate them as a city.
-    if (lang == AppLanguage.EN && isNationalMig(t)) return "$label — ${nationalMigWhereText()}"
+    // UA shows the plain label; EN and RU (EN text for now) show the fixed descriptor.
+    if (lang.pick(false, true, true) && isNationalMig(t)) return "$label — ${nationalMigWhereText()}"
     val where = t.locality ?: t.district ?: t.region
-    val whereText = if (where == null) null else if (lang == AppLanguage.UA) where
-    else Cities.byUa[where]?.nameEn ?: Transliteration.transliterate(where)
+    val whereText = where?.let { w ->
+        val en = Cities.byUa[w]?.nameEn ?: Transliteration.transliterate(w)
+        lang.pick(w, en, en)
+    }
     return if (whereText != null) "$label — $whereText" else label
 }
 
-/** The alert's region name in the given language: UA keeps the raw server text; EN
- *  transliterates (КМУ №55) so an oblast alert never leaks Cyrillic into the EN path, and
+/** The alert's region name in the given language: UA keeps the raw server text; EN/RU
+ *  transliterate (КМУ №55) so an oblast alert never leaks Cyrillic into the EN path, and
  *  "район" is TRANSLATED to "district" rather than transliterated to "raion". */
 fun alertRegionName(alert: OblastAlert, lang: AppLanguage): String {
     val raw = alert.name.ifBlank { alert.oblast }.ifBlank { alert.key }
-    if (lang == AppLanguage.UA) return raw
     val base = Cities.byUa[raw]?.nameEn ?: Transliteration.transliterate(raw)
-    return base.replace("район", "district").replace("Raion", "district").replace("raion", "district")
+    val en = base.replace("район", "district").replace("Raion", "district").replace("raion", "district")
+    return lang.pick(raw, en, en)
 }
 
 fun matchOblast(lat: Double, lon: Double): OblastMatch? {

@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import com.presaince.oko.AppLanguage
+import com.presaince.oko.pick
 import com.presaince.oko.resolveFocus
 import com.presaince.oko.connection.ConnectionMilestone
 import com.presaince.oko.connection.ConnEventKind
@@ -37,6 +38,7 @@ import com.presaince.oko.engine.NormalizedThreat
 import com.presaince.oko.engine.LatLng
 import com.presaince.oko.engine.OblastAlert
 import com.presaince.oko.engine.AlertLevel
+import com.presaince.oko.engine.LatchedEpisode
 import com.presaince.oko.engine.officialStateFor
 import com.presaince.oko.Transliteration
 import com.presaince.oko.ThreatType
@@ -173,7 +175,7 @@ class AlertService : Service() {
                 if (!allClearSwipedAway && notificationManager.isAllClearNotificationActive()) {
                     lastCleanAllClearCity?.let { city ->
                         val s = Strings.get(lastChannelLang ?: AppLanguage.EN)
-                        postAllClear(s, city, debrisSeconds = sec, silent = true)
+                        postAllClear(s, city, debrisSeconds = sec, silent = true, replay = lastEpisodeReplay)
                     }
                 }
             },
@@ -181,7 +183,7 @@ class AlertService : Service() {
                 if (!allClearSwipedAway && notificationManager.isAllClearNotificationActive()) {
                     lastCleanAllClearCity?.let { city ->
                         val s = Strings.get(lastChannelLang ?: AppLanguage.EN)
-                        postAllClear(s, city, debrisSeconds = 0, silent = true)
+                        postAllClear(s, city, debrisSeconds = 0, silent = true, replay = lastEpisodeReplay)
                     }
                     audioAlarmDispatcher.dispatchSmallVibration()
                 }
@@ -189,6 +191,7 @@ class AlertService : Service() {
         )
     }
     @Volatile private var lastCleanAllClearCity: String? = null
+    @Volatile private var lastEpisodeReplay: List<FlourishRecord> = emptyList()
 
     private var lastSweepAtMs = 0L
 
@@ -244,6 +247,7 @@ class AlertService : Service() {
         val gpsFixMissing: Boolean = false,
         val nightActive: Boolean,
         val enabled: Set<ThreatType>,
+        val notifyPolicyEnabled: Boolean,
         val zonePolicy: ZonePolicy,
         val digestMax: Int,
         val digestWindow: DigestWindow,
@@ -506,12 +510,12 @@ val mappedThreats = registry.allThreats.map { list ->
 
                 val focus = resolveFocus(p.followMe, gps, LocationTracker.isFresh(now), p.pinnedCity)
                 val focusLoc = focus.location
-                val focusBannerCity =
-                    if (p.language == AppLanguage.UA) focus.attribution.bannerCityUa else focus.attribution.bannerCityEn
+                val focusBannerCity = focus.attribution.bannerCity(p.language)
                 val focusCityUa = focus.attribution.bannerCityUa
-                val focusRegion =
-                    if (p.language == AppLanguage.UA) focus.attribution.bannerCityUa
-                    else focus.attribution.bannerCityEn.ifBlank { Transliteration.transliterate(focus.attribution.bannerCityUa) }
+                val focusRegion = focus.attribution.bannerCityUa.let { ua ->
+                    val en = focus.attribution.bannerCityEn.ifBlank { Transliteration.transliterate(ua) }
+                    p.language.pick(ua, en, en)
+                }
                 val focusPinned = focus.pinned
                 val gpsFixMissing = focus.gpsFixMissing
                 val focusToken = focus.attribution.token
@@ -593,6 +597,7 @@ fastYellowArmed = p.fastYellowArmed,
                     gpsFixMissing = gpsFixMissing,
                     nightActive = nightActive,
                     enabled = enabled,
+                    notifyPolicyEnabled = p.notifyPolicyEnabled,
                     zonePolicy = p.zonePolicy,
                     digestMax = p.digestMax,
                     digestWindow = p.digestWindow,
@@ -611,6 +616,10 @@ fastYellowArmed = p.fastYellowArmed,
             lastChannelLang = state.lang
             notificationManager.updateChannels(s)
         }
+
+        val latchedEarly = LatchedEpisode.parse(lastOfficialEpisode)
+        val latchedAliveEarly = latchedEarly?.isRawActive(state.alerts) == true
+        val effLevelEarly = if (latchedAliveEarly) latchedEarly!!.level else state.focusOblastLevel
 
         val registry = AppSources.registry
         val typeCatalog = registry.typeCatalog.value
@@ -651,7 +660,7 @@ fastYellowArmed = p.fastYellowArmed,
             retryLabel = if (isOfflineNow) s.offlineRetryAction else null,
             progressMax = if (isOfflineNow) 20 else null,
             progressNow = if (isOfflineNow) offlineMinutes else null,
-            ignoreLabel = if (isOfflineNow) s.offlineIgnoreAction else null,
+            ignoreLabel = if (isOfflineNow && System.currentTimeMillis() >= notifMuteUntilMs) s.offlineIgnoreAction else null,
             alertLevel = monitorAlertLevel
         )
 
@@ -660,7 +669,7 @@ fastYellowArmed = p.fastYellowArmed,
         // the episode's degraded-since stamp (nulled by the registry on recovery), so there
         // is no reset branch to misfire on transient Connecting states.
         val criticalThresholdMin =
-            if (state.focusOblastLevel != AlertLevel.NONE) CRITICAL_OFFLINE_ALARM_MIN
+            if (effLevelEarly != AlertLevel.NONE) CRITICAL_OFFLINE_ALARM_MIN
             else CRITICAL_OFFLINE_MIN
         val episode = offlineSince
         if (isOfflineNow && episode != null && state.criticalOfflineOverride &&
@@ -687,6 +696,20 @@ fastYellowArmed = p.fastYellowArmed,
 
         val all = state.threats
 
+        val latched = latchedEarly
+        val latchedAlive = latchedAliveEarly
+        val effLevel = if (latchedAlive) latched!!.level else state.focusOblastLevel
+        val effToken = if (latchedAlive) latched!!.token else state.focusToken
+        val effCity = if (latchedAlive) latched!!.city else state.focusBannerCity
+        val effSince = if (latchedAlive) latched!!.since else state.focusOblastAlertSince
+        val effAlert = if (latchedAlive) state.alerts.officialStateFor(latched!!.token, null, false).alert else null
+        val (effReason, effReasonId) = if (latchedAlive && effAlert != null) {
+            engine.deriveOfficialAlertReason(effAlert, all.values.toList(), state.focusLocation, state.params, state.lang, now)
+        } else {
+            state.officialReason to state.officialReasonThreatId
+        }
+        val effRegion = if (latchedAlive) effAlert?.let { alertRegionName(it, state.lang) } ?: state.officialRegion else state.officialRegion
+
         fun alertTier(id: String, spatial: ThreatZone): ThreatZone? {
             val fast = all[id]?.let { isFastType(it.type.toThreatType(), typeCatalog) } ?: false
             val red = if (fast) state.fastRedArmed else state.slowRedArmed
@@ -704,7 +727,12 @@ fastYellowArmed = p.fastYellowArmed,
         // Frequency policy: the plugin owns episodes and verdicts; the service only
         // feeds facts and executes. A preset switch is a fresh start; digest tweaks
         // clear only the rate buckets (never the episodes — no surprise re-siren).
-        val notifyPrefs = NotifyPrefs(state.zonePolicy, state.digestMax, state.digestWindow, state.digestPerType)
+        // Raw user prefs go through the plugin-owned factory; the toggle's meaning
+        // (off = every change) is defined there, never here.
+        val notifyPrefs = NotifyPrefs.from(
+            state.notifyPolicyEnabled, state.zonePolicy,
+            state.digestMax, state.digestWindow, state.digestPerType
+        )
         val lastPrefs = lastNotifyPrefs
         if (lastPrefs == null || lastPrefs.preset != notifyPrefs.preset) notifyPlugin.reset()
         else if (lastPrefs != notifyPrefs) notifyPlugin.clearBuckets()
@@ -783,28 +811,30 @@ fastYellowArmed = p.fastYellowArmed,
             }
             // Official is official: one branch for any level. Only the toggle gate,
             // copy and sound differ per level — the episode latch is shared.
-            if (state.focusOblastLevel != AlertLevel.NONE) {
-                val announced = if (state.focusOblastLevel == AlertLevel.RED) state.officialRedAlertsEnabled
+            // Region-latched: while the announced oblast is still raw-active, the
+            // effective official is the latched one, not the current focus (pinned -> follow-me).
+            if (effLevel != AlertLevel.NONE) {
+                val announced = if (effLevel == AlertLevel.RED) state.officialRedAlertsEnabled
                 else state.yellowAlertsEnabled
                 if (announced) {
                     val onset = isNewEpisode(state)
-                    if (state.focusOblastLevel == AlertLevel.RED) {
-                        val reasonThreat = state.officialReasonThreatId?.let { all[it] }
+                    if (effLevel == AlertLevel.RED) {
+                        val reasonThreat = effReasonId?.let { all[it] }
                         return Primary(
-                            identity = "red|${state.focusToken}|${state.focusOblastAlertSince}|${state.focusBannerCity}|${state.officialReasonThreatId}",
-                            title = String.format(s.alertBannerFormat, state.focusBannerCity),
-                            body = (state.officialReason ?: state.officialRegion ?: state.focusRegion) + etaSuffix(reasonThreat, state),
+                            identity = "red|$effToken|$effSince|$effCity|$effReasonId",
+                            title = String.format(s.alertBannerFormat, effCity),
+                            body = (effReason ?: effRegion ?: state.focusRegion) + etaSuffix(reasonThreat, state),
                             revealThreat = reasonThreat,
                             silent = !onset,
                             vibration = reasonThreat?.let { if (isFastType(it.type.toThreatType(), typeCatalog)) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
                             isOnset = onset,
-                            zone = null, level = state.focusOblastLevel.name.lowercase()
+                            zone = null, level = effLevel.name.lowercase()
                         )
                     }
                     return Primary(
-                        identity = "yellow|${state.focusToken}|${state.focusOblastAlertSince}|${state.focusBannerCity}",
-                        title = String.format(s.alertYellowBannerFormat, state.focusBannerCity),
-                        body = state.officialReason ?: state.officialRegion ?: state.focusRegion,
+                        identity = "yellow|$effToken|$effSince|$effCity",
+                        title = String.format(s.alertYellowBannerFormat, effCity),
+                        body = effReason ?: effRegion ?: state.focusRegion,
                         revealThreat = null, silent = !onset, vibration = VIBRATION_STRONG,
                         isOnset = onset,
                         zone = null, level = "yellow"
@@ -869,18 +899,20 @@ fastYellowArmed = p.fastYellowArmed,
                 }
                 lastOfficialEpisode = boundary
             }
-            if (lastOfficialEpisode != null && state.focusOblastRawLevel == AlertLevel.NONE && state.officialAlertsEnabled) {
+            if (latched != null && !latchedAlive && state.officialAlertsEnabled) {
                 if (alertable.isEmpty()) cancelAlert()
                 allClearSwipedAway = false
-                lastCleanAllClearCity = state.focusBannerCity
+                val allClearCity = latched.city
+                lastCleanAllClearCity = allClearCity
                 lastChannelLang = state.lang
                 val s = Strings.get(state.lang)
                 val delay = state.fallingDebrisDelaySec.coerceIn(0, 600)
+                lastEpisodeReplay = episodeTally.snapshot()
                 if (delay > 0) {
-                    postAllClear(s, state.focusBannerCity, debrisSeconds = delay, silent = true)
+                    postAllClear(s, state.focusBannerCity, debrisSeconds = delay, silent = true, replay = lastEpisodeReplay)
                     debrisBuffer.start(durationSeconds = delay)
                 } else {
-                    postAllClear(s, state.focusBannerCity, debrisSeconds = 0, silent = true)
+                    postAllClear(s, state.focusBannerCity, debrisSeconds = 0, silent = true, replay = lastEpisodeReplay)
                     audioAlarmDispatcher.dispatchAllClearChime()
                 }
                 DebugLog.recordOfficial(
@@ -888,14 +920,14 @@ fastYellowArmed = p.fastYellowArmed,
                     sirenOverride = state.officialSirenOverride, vibrationLevel = null,
                     notified = true, reason = DebugLogReason.FIRED,
                     threatId = null, threatType = null,
-                    locality = state.officialRegion ?: state.focusCityUa, distanceKm = null,
+                    locality = effRegion ?: allClearCity, distanceKm = null,
                     now = System.currentTimeMillis()
                 )
                 lastOfficialEpisode = null
             }
             val shownOfficial = lastShownId?.startsWith("red|") == true || lastShownId?.startsWith("yellow|") == true
             if (shownOfficial && primary == null &&
-                state.focusOblastRawLevel != AlertLevel.NONE && state.officialAlertsEnabled
+                latchedAlive && state.officialAlertsEnabled
             ) {
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
@@ -914,10 +946,10 @@ fastYellowArmed = p.fastYellowArmed,
                 when {
                     primary == null -> {
                         // Don't tear down a live official notification on a flicker tick:
-                        // any official id stays up while any official level is live upstream.
+                        // any official id stays up while the latched oblast is still raw-active.
                         val shownOfficialStillLive =
                             (lastShownId?.startsWith("red|") == true || lastShownId?.startsWith("yellow|") == true) &&
-                                state.focusOblastRawLevel != AlertLevel.NONE && state.officialAlertsEnabled
+                                latchedAlive && state.officialAlertsEnabled
                         if (!shownOfficialStillLive) {
                             cancelAlert()
                         }
@@ -976,16 +1008,15 @@ fastYellowArmed = p.fastYellowArmed,
             lastShownId = primary.identity
         }
 
-        // Morale-only episode window: scoped official level (red or yellow, no type
-        // gate), tracked even when official notifications are off so the summary
-        // still fires. The official all-clear path above is untouched.
-        val alarmNowActive = state.focusOblastLevel != AlertLevel.NONE
+        // Morale-only episode window: region-latched, same gate as the all-clear.
+        val alarmNowActive = effLevel != AlertLevel.NONE
         if (alarmNowActive && !episodeActive) {
             episodeActive = true
-            episodeTally.begin(state.focusBannerCity, now)
+            episodeTally.begin(effCity, now)
         } else if (!alarmNowActive && episodeActive) {
             episodeActive = false
             episodeTally.finish(state.focusBannerCity, state.lang, state.officialAlertsEnabled, now)
+            lastEpisodeReplay = episodeTally.snapshot()
         }
 
         val nowForSweep = System.currentTimeMillis()
@@ -1013,7 +1044,7 @@ fastYellowArmed = p.fastYellowArmed,
             )
         }
 
-        if (state.zoneThreats.isEmpty() && !state.focusOblastAlertActive && !state.focusOblastYellowAlertActive) {
+        if (state.zoneThreats.isEmpty() && effLevel == AlertLevel.NONE) {
             val since = emptySince
             if (since == null) {
                 emptySince = System.currentTimeMillis()
@@ -1149,7 +1180,7 @@ fastYellowArmed = p.fastYellowArmed,
         }
     }
 
-    private fun postAllClear(s: Strings.StringSet, city: String, debrisSeconds: Int = 0, silent: Boolean = false) {
+    private fun postAllClear(s: Strings.StringSet, city: String, debrisSeconds: Int = 0, silent: Boolean = false, replay: List<FlourishRecord> = emptyList()) {
         val body = if (debrisSeconds > 0) {
             val mm = debrisSeconds / 60
             val ss = debrisSeconds % 60
@@ -1161,7 +1192,8 @@ fastYellowArmed = p.fastYellowArmed,
         notificationManager.postAllClearNotification(
             title = String.format(s.allClearTitle, city),
             body = body,
-            silent = silent
+            silent = silent,
+            replay = replay
         )
     }
 

@@ -39,7 +39,7 @@ private val Green = Color(0xFF4CAF50)
 
 enum class GuideDiagram {
     LIVE, STRIP, CONN, ZONES, EDIT_ZONES, NOTIF, TOGGLES, FOLLOW, PIN, SHELTER,
-    CARD_SIZE, CARD_READ, LANG, THREAT_TOGGLES, UPDATE, NIGHT, WIDGET, FILLS, LEGEND
+    CARD_SIZE, CARD_READ, THREAT_TOGGLES, UPDATE, NIGHT, WIDGET, FILLS, LEGEND
 }
 
 /** Animated mini-illustration for one feature-guide card. */
@@ -51,20 +51,8 @@ fun FeatureDiagram(kind: GuideDiagram, modifier: Modifier = Modifier) {
         animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse),
         label = "diagram"
     )
-    if (kind == GuideDiagram.LANG) {
-        // The real flag emojis — the same ones Settings uses for the language switcher.
-        Box(modifier = modifier.background(MapBlue), contentAlignment = Alignment.Center) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("\uD83C\uDDFA\uD83C\uDDE6", fontSize = 24.sp)
-                Spacer(Modifier.width(14.dp))
-                Text("\uD83C\uDDE8\uD83C\uDDE6", fontSize = 24.sp)
-            }
-        }
-        return
-    }
     Canvas(modifier = modifier) {
         when (kind) {
-            GuideDiagram.LANG -> Unit
             GuideDiagram.LIVE -> drawLive(t)
             GuideDiagram.STRIP -> drawStrip(t)
             GuideDiagram.CONN -> drawConn()

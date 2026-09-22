@@ -66,18 +66,18 @@ class DeathFxController(
     /** The overlay itself — added to the map's overlay list and driven per frame. */
     val overlay = ThreatDeathOverlay()
 
-    /** Master "Just Fun" gate: live mirror of the master pref. All flourish entry points
+    /** Master "Morale" gate: live mirror of the master pref. All flourish entry points
      *  no-op while it's off, and flipping it off ejects anything in flight ([clear]). */
-    private val justFunEnabled = MutableStateFlow(false)
+    private val moraleEnabled = MutableStateFlow(false)
     private val followBulletEnabled = MutableStateFlow(true)
 
     init {
         scope.launch {
             UserPrefs(context).preferences
-                .map { it.justFunMasterEnabled }
+                .map { it.moraleMasterEnabled }
                 .distinctUntilChanged()
                 .collect { enabled ->
-                    justFunEnabled.value = enabled
+                    moraleEnabled.value = enabled
                     if (!enabled) clear()
                 }
         }
@@ -213,7 +213,7 @@ class DeathFxController(
 
     /** Launch the tally-tap replay on the controller's scope, replacing any show in flight. */
     fun startReplay(focus: LatLng?, records: List<FlourishRecord>) {
-        if (!justFunEnabled.value) return
+        if (!moraleEnabled.value) return
         replayJob?.cancel()
         _replayProgress.value = null
         replayJob = scope.launch { replay(focus, records) }
@@ -229,7 +229,7 @@ class DeathFxController(
      * If follow-bullet is off and the anchor is off-screen, the strike is skipped entirely.
      */
     fun startAutoCountdown(anchor: LatLng, type: ThreatType?, onFire: () -> Unit) {
-        if (!justFunEnabled.value) return
+        if (!moraleEnabled.value) return
         if (!followBulletEnabled.value && !isOnScreen(anchor.lat, anchor.lon)) return
         countdownJob?.cancel()
         pendingAutoStrike = onFire
@@ -264,7 +264,7 @@ class DeathFxController(
 
     @Deprecated("Use anchor overload")
     fun startAutoCountdown(type: ThreatType?, onFire: () -> Unit) {
-        if (!justFunEnabled.value) return
+        if (!moraleEnabled.value) return
         countdownJob?.cancel()
         pendingAutoStrike = onFire
         _strikeType.value = type
@@ -359,7 +359,7 @@ class DeathFxController(
 
     /** User-initiated or server-driven strike: spawn the projectile + explosion. The bullet
      *  takes off from a random point on the viewport edge (clamped to Ukraine). Returns true
-     *  only when a strike actually launched — false when the Just Fun master is off, so the
+     *  only when a strike actually launched — false when the Morale master is off, so the
      *  caller can skip its side effects (marker hide, user-shot grace). */
     fun strike(
         id: String? = null,
@@ -370,7 +370,7 @@ class DeathFxController(
         alpha: Float = 1f,
         type: ThreatType = ThreatType.UNKNOWN
     ): Boolean {
-        if (!justFunEnabled.value) return false
+        if (!moraleEnabled.value) return false
         _strikeAnchor.value = geo
         overlay.spawn(id, geo, startGeo, randomEdgeOrigin(), icon, rotationDeg, alpha, type = type)
         return true
@@ -392,7 +392,7 @@ class DeathFxController(
      *  true only when a dud actually launched (master gate + a valid edge origin).
      *  Skipped when follow-bullet is off and the target is off-screen. */
     fun strikeDud(id: String?, geo: LatLng): Boolean {
-        if (!justFunEnabled.value) return false
+        if (!moraleEnabled.value) return false
         if (!followBulletEnabled.value && !isOnScreen(geo.lat, geo.lon)) return false
         val origin = randomEdgeOrigin() ?: return false
         overlay.spawnDud(id, geo, origin)
@@ -461,7 +461,7 @@ class DeathFxController(
      *  detonates. USAGE_ALARM keeps both audible as vibration even when the system "touch
      *  feedback" haptics are off. */
     fun strikeHaptics() {
-        if (!justFunEnabled.value) return
+        if (!moraleEnabled.value) return
         if (BuildConfig.DEBUG) android.util.Log.d("VibTrace", "strikeHaptics() source=flourish")
         val vibrator = vibrator ?: return
         val job = scope.launch {
@@ -482,7 +482,7 @@ class DeathFxController(
      * [startReplay]; the caller gates on visibility/alert/lifecycle before invoking.
      */
     suspend fun replay(focus: LatLng?, records: List<FlourishRecord>) {
-        if (!justFunEnabled.value) return
+        if (!moraleEnabled.value) return
         val b = bridge() ?: return
         if (records.isEmpty()) return
         // Snapshot — see followStrike; getMapCenter() hands back a live mutable point.

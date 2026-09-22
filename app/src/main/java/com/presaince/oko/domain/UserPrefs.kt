@@ -20,8 +20,6 @@ class UserPrefs(private val context: Context) {
     private fun cachedBooleanKey(name: String): Preferences.Key<Boolean> =
         keyCache.getOrPut(name) { booleanPreferencesKey(name) }
 
-    private val languageKey = stringPreferencesKey("app_language")
-    private val languageChosenKey = booleanPreferencesKey("language_chosen")
     private val wizardCompletedKey = booleanPreferencesKey("wizard_completed")
     private val slowRedKmKey = intPreferencesKey("slow_red_km")
     private val slowYellowKmKey = intPreferencesKey("slow_yellow_km")
@@ -86,7 +84,7 @@ class UserPrefs(private val context: Context) {
     private val hapticsEnabledKey = booleanPreferencesKey("haptics_enabled")
     private val officialAlertCityScopeKey = booleanPreferencesKey("official_alert_city_scope")
     private val moraleMasterEnabledKey = booleanPreferencesKey("morale_master_enabled")
-    private val legacyJustFunMasterEnabledKey = booleanPreferencesKey("just_fun_master_enabled")
+    private val welcomeShootdownPlayedKey = booleanPreferencesKey("welcome_shootdown_played")
     private val bootRestartEnabledKey = booleanPreferencesKey("boot_restart_enabled")
     private val fillAlertRegionsKey = booleanPreferencesKey("fill_alert_regions")
     private val alertRegionModeKey = stringPreferencesKey("alert_region_mode")
@@ -94,6 +92,7 @@ class UserPrefs(private val context: Context) {
     private val showRegionBordersKey = booleanPreferencesKey("show_region_borders")
     private val showLargeCitiesKey = booleanPreferencesKey("show_large_cities")
     private val showThreatIdsOnMapKey = booleanPreferencesKey("show_threat_ids_on_map")
+    private val notifyPolicyEnabledKey = booleanPreferencesKey("notify_policy_enabled")
     private val zonePolicyKey = stringPreferencesKey("zone_policy")
     private val digestMaxKey = intPreferencesKey("digest_max")
     private val digestWindowKey = stringPreferencesKey("digest_window")
@@ -102,11 +101,8 @@ class UserPrefs(private val context: Context) {
     val preferences: Flow<UserPreferences> = context.dataStore.data.map { it.toUserPreferences() }.distinctUntilChanged()
 
     private fun Preferences.toUserPreferences(): UserPreferences {
-        val lang = when (this[languageKey]) {
-            "EN" -> AppLanguage.EN
-            "UA" -> AppLanguage.UA
-            else -> if (java.util.Locale.getDefault().language == "uk") AppLanguage.UA else AppLanguage.EN
-        }
+        // No stored override: the language is the phone locale, resolved fresh on every startup.
+        val lang = systemLanguage()
         val cardSize = this[threatCardSizeKey]?.let { stored ->
             ThreatCardSize.values().firstOrNull { it.name == stored }
         } ?: ThreatCardSize.LARGE
@@ -139,8 +135,8 @@ class UserPrefs(private val context: Context) {
 
         return UserPreferences(
             language = lang,
-            languageChosen = this[languageChosenKey] ?: false,
-            wizardCompleted = this[wizardCompletedKey] ?: (this[languageChosenKey] ?: false),
+            wizardCompleted = this[wizardCompletedKey] ?: false,
+            welcomeShootdownPlayed = this[welcomeShootdownPlayedKey] ?: false,
             slowRedKm = this[slowRedKmKey] ?: 20,
             slowYellowKm = this[slowYellowKmKey] ?: 50,
             fastRedMin = this[fastRedMinKey] ?: 5,
@@ -149,6 +145,7 @@ class UserPrefs(private val context: Context) {
             slowYellowArmed = this[slowYellowArmedKey] ?: true,
             fastRedArmed = this[fastRedArmedKey] ?: true,
             fastYellowArmed = this[fastYellowArmedKey] ?: true,
+            notifyPolicyEnabled = this[notifyPolicyEnabledKey] ?: false,
             zonePolicy = zonePolicy,
             digestMax = (this[digestMaxKey] ?: 10).coerceIn(1, 10),
             digestWindow = digestWindow,
@@ -206,7 +203,7 @@ class UserPrefs(private val context: Context) {
             calmMessagesEnabled = this[calmMessagesEnabledKey] ?: true,
             hapticsEnabled = this[hapticsEnabledKey] ?: true,
             officialAlertCityScope = this[officialAlertCityScopeKey] ?: false,
-            moraleMasterEnabled = this[moraleMasterEnabledKey] ?: this[legacyJustFunMasterEnabledKey] ?: false,
+            moraleMasterEnabled = this[moraleMasterEnabledKey] ?: true,
             bootRestartEnabled = this[bootRestartEnabledKey] ?: true,
             alertRegionMode = alertRegionMode,
             showBorders = this[showBordersKey] ?: true,
@@ -351,16 +348,6 @@ class UserPrefs(private val context: Context) {
         context.dataStore.edit { it[criticalOfflineBypassSilentKey] = enabled }
     }
 
-    suspend fun setLanguage(lang: AppLanguage) {
-        context.dataStore.edit {
-            it[languageKey] = lang.name
-        }
-    }
-
-    suspend fun setLanguageChosen(chosen: Boolean) {
-        context.dataStore.edit { it[languageChosenKey] = chosen }
-    }
-
     suspend fun setWizardCompleted(done: Boolean) {
         context.dataStore.edit { it[wizardCompletedKey] = done }
     }
@@ -430,13 +417,12 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setMoraleMasterEnabled(enabled: Boolean) {
-        context.dataStore.edit {
-            it[moraleMasterEnabledKey] = enabled
-            it[legacyJustFunMasterEnabledKey] = enabled
-        }
+        context.dataStore.edit { it[moraleMasterEnabledKey] = enabled }
     }
 
-    suspend fun setJustFunMasterEnabled(enabled: Boolean) = setMoraleMasterEnabled(enabled)
+    suspend fun setWelcomeShootdownPlayed(played: Boolean) {
+        context.dataStore.edit { it[welcomeShootdownPlayedKey] = played }
+    }
 
     suspend fun setBootRestartEnabled(enabled: Boolean) {
         context.dataStore.edit { it[bootRestartEnabledKey] = enabled }
@@ -456,6 +442,10 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setShowLargeCities(show: Boolean) {
         context.dataStore.edit { it[showLargeCitiesKey] = show }
+    }
+
+    suspend fun setNotifyPolicyEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[notifyPolicyEnabledKey] = enabled }
     }
 
     suspend fun setZonePolicy(policy: ZonePolicy) {

@@ -32,25 +32,56 @@ class NeutralizedTally(
         const val EXTRA_FLOURISH_LONS = "flourish_lons"
         const val EXTRA_FLOURISH_TYPES = "flourish_types"
         const val EXTRA_FLOURISH_REGIONS = "flourish_regions"
+        const val EXTRA_FLOURISH_SOURCE = "flourish_source"
+        const val SOURCE_TALLY = "tally"
+        const val SOURCE_EPISODE = "episode"
+        const val SOURCE_ALLCLEAR = "allclear"
         const val CHANNEL_NEUTRALIZED = "neutralized"
         private const val NOTIF_NEUTRALIZED = 6
+
+        /**
+         * Shared tap target for every flourish notification (running tally, episode summary,
+         * official all-clear): opens the app straight onto the shot-down replay with the given
+         * records baked in. One builder so all three stay parseable by the same parser.
+         */
+        fun flourishTapIntent(
+            context: Context,
+            requestCode: Int,
+            records: List<FlourishRecord>,
+            source: String
+        ): PendingIntent {
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(EXTRA_FLOURISH_LATS, records.map { it.lat }.toDoubleArray())
+                putExtra(EXTRA_FLOURISH_LONS, records.map { it.lon }.toDoubleArray())
+                putExtra(EXTRA_FLOURISH_TYPES, records.map { it.type.name }.toTypedArray())
+                putExtra(EXTRA_FLOURISH_REGIONS, records.map { it.region }.toTypedArray())
+                putExtra(EXTRA_FLOURISH_SOURCE, source)
+            }
+            return PendingIntent.getActivity(
+                context, requestCode, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+        }
     }
 
     private val tallyLock = Any()
     private var neutralizedCount = 0
     private val perTypeCounts = mutableMapOf<ThreatType, Int>()
 
-    /** Master "Just Fun" gate: live mirror of the master pref. [onResolved] no-ops while it's
+    /** Master "Morale" gate: live mirror of the master pref. [onResolved] no-ops while it's
      *  off, and flipping it off resets the running tally so nothing fun survives. */
-    private val justFunEnabled = MutableStateFlow(false)
+    private val moraleEnabled = MutableStateFlow(false)
 
     init {
         scope.launch {
             UserPrefs(context).preferences
-                .map { it.justFunMasterEnabled }
+                .map { it.moraleMasterEnabled }
                 .distinctUntilChanged()
                 .collect { enabled ->
-                    justFunEnabled.value = enabled
+                    moraleEnabled.value = enabled
                     if (!enabled) reset()
                 }
         }
@@ -80,7 +111,7 @@ class NeutralizedTally(
     /** A server-driven resolution just arrived: count it into the tally and remember it for the
      *  replay.  */
     fun onResolved(removed: ThreatRemoved, lang: AppLanguage) {
-        if (!justFunEnabled.value) return
+        if (!moraleEnabled.value) return
         val snapshot = synchronized(tallyLock) {
             if (seenRemovalIds.contains(removed.id)) return
             seenRemovalIds.addLast(removed.id)
@@ -123,7 +154,7 @@ class NeutralizedTally(
                 .sortedWith(compareByDescending<Map.Entry<ThreatType, Int>> { it.value }.thenBy { it.key.ordinal })
                 .joinToString(" · ") { (type, count) ->
                     val info = ThreatTypeCatalog.INFO[type]
-                    val label = if (info != null && lang == AppLanguage.UA) info.labelUa else info?.labelEn ?: type.name
+                    val label = info?.label(lang) ?: type.name
                     "$label $count"
                 }
             val builder = NotificationCompat.Builder(context, CHANNEL_NEUTRALIZED)
@@ -153,22 +184,10 @@ class NeutralizedTally(
      * right now, so the tap always replays the latest show.
      */
     private fun neutralizedTapPendingIntent(memory: List<ResolvedRecord>): PendingIntent {
-        val latArr = memory.map { it.lat }.toDoubleArray()
-        val lonArr = memory.map { it.lon }.toDoubleArray()
-        val typeArr = memory.map { it.type.name }.toTypedArray()
-        val regionArr = memory.map { it.region }.toTypedArray()
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra(EXTRA_FLOURISH_LATS, latArr)
-            putExtra(EXTRA_FLOURISH_LONS, lonArr)
-            putExtra(EXTRA_FLOURISH_TYPES, typeArr)
-            putExtra(EXTRA_FLOURISH_REGIONS, regionArr)
-        }
-        return PendingIntent.getActivity(
-            context, 3, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        return flourishTapIntent(
+            context, 3,
+            memory.map { FlourishRecord(it.lat, it.lon, it.type, it.region) },
+            SOURCE_TALLY
         )
     }
 

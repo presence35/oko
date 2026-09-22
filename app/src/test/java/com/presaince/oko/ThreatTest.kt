@@ -40,6 +40,9 @@ class ThreatTest {
         val info = ThreatTypeCatalog.INFO[ThreatType.SHAHED]!!
         assertEquals("БпЛА", info.labelUa)
         assertEquals("Drone", info.labelEn)
+        assertEquals("БпЛА", info.label(AppLanguage.UA))
+        assertEquals("Drone", info.label(AppLanguage.EN))
+        assertEquals("Drone", info.label(AppLanguage.RU))
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -333,6 +336,14 @@ class ThreatTest {
     @Test
     fun `mig - UA course keeps raw server text`() {
         assertEquals(liveMigCourse, translateCourseAssessment(liveMigCourse, AppLanguage.UA))
+    }
+
+    @Test
+    fun `mig - RU course follows the EN pipeline until a real RU translation lands`() {
+        assertEquals(
+            nationalMigCourseText(),
+            translateCourseAssessment(liveMigCourse, AppLanguage.RU)
+        )
     }
 
     @Test
