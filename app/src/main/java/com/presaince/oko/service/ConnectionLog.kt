@@ -29,12 +29,13 @@ data class ConnLogEntry(
  * survives app/service restarts. Fed by [ConnectionSupervisor]'s StateFlow bridge. The currently
  * in-progress offline episode is kept separately (see [currentEpisode]) so the popup can show
  * a live running duration, and is committed to the log the moment the status changes again —
- * every drop is recorded, however brief (the shared grace is zero).
+ * sub-grace flaps (under [PRODUCTION_GRACE_MS]) never hit the log or disk.
  */
 object ConnectionLog {
 
     private const val MAX_ENTRIES = 50
     private const val LINE_SEP = '\n'
+    private const val PRODUCTION_GRACE_MS = 15_000L
 
     private val _entries = MutableStateFlow<List<ConnLogEntry>>(emptyList())
     val entries: StateFlow<List<ConnLogEntry>> = _entries.asStateFlow()
@@ -67,13 +68,13 @@ object ConnectionLog {
 
     /**
      * Called on every connection state transition. Commits the completed offline
-     * episode as soon as the status changes (no grace — every drop counts), bracketing it with
-     * a recovery row when it returns online.
+     * episode as soon as the status changes once it has outlasted the production grace,
+     * bracketing it with a recovery row when it returns online.
      */
     fun observe(status: ConnStatus, now: Long, activeSource: String? = null) {
         val prev = lastStatus
         lastStatus = status
-        val t = commitLogState(prev, status, now, pending, _entries.value, MAX_ENTRIES, 0L, activeSource) ?: return
+        val t = commitLogState(prev, status, now, pending, _entries.value, MAX_ENTRIES, PRODUCTION_GRACE_MS, activeSource) ?: return
         _entries.value = t.entries
         pending = t.nextPending
         if (t.persistLog) persist()

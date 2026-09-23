@@ -280,7 +280,7 @@ class SourceRegistry {
          *  treated as stale (hides the map/zone logic). */
         const val THREAT_DATA_STALE_MS = 120_000L
 
-        private const val MILESTONE_CHECK_MS = 3_000L
+        private const val MILESTONE_CHECK_MS = 15_000L
         private const val MILESTONE_3_MS = 3 * 60_000L
         private const val MILESTONE_5_MS = 5 * 60_000L
         private const val MILESTONE_6_MS = 6 * 60_000L

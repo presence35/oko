@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Connection stays up on weak cell: the socket is no longer torn down on brief signal loss, quiet-night silence kills it only after 3 min, and sub-15s flaps no longer spam the log / Connection stays up on weak cell: the socket is no longer torn down on brief signal loss, quiet-night silence kills it only after 3 min, and sub-15s flaps no longer spam the log / Connection stays up on weak cell: the socket is no longer torn down on brief signal loss, quiet-night silence kills it only after 3 min, and sub-15s flaps no longer spam the log 09-23_10:45:00
+
 - Battery exemption prompt no longer appears after first launch - it now waits until the system actually kills background monitoring, and never covers the welcome shootdown / Battery exemption prompt no longer appears after first launch - it now waits until the system actually kills background monitoring, and never covers the welcome shootdown / Battery exemption prompt no longer appears after first launch - it now waits until the system actually kills background monitoring, and never covers the welcome shootdown 09-22_12:45:18
 - Wizard morale is now a single Morale master toggle, full tuning stays in settings / Wizard morale is now a single Morale master toggle, full tuning stays in settings / Wizard morale is now a single Morale master toggle, full tuning stays in settings 09-22_12:38:06
 - Wizard threat toggles now tick with haptic feedback like the rest of the app / Wizard threat toggles now tick with haptic feedback like the rest of the app / Wizard threat toggles now tick with haptic feedback like the rest of the app 09-22_12:38:06

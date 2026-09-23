@@ -21,7 +21,7 @@ import com.presaince.oko.engine.ThreatProps
  * The NEPTUN source: powered by the resilient threat engine core.
  *
  * Architecture:
- * - [ResilientConnectionSupervisor] owns OS network gating, the 42s silence watchdog, and full-jitter backoff.
+ * - [ResilientConnectionSupervisor] owns OS network gating, the 168s silence watchdog, and full-jitter backoff.
  * - [NeptunRawDecoder] decodes frames and manages alert debouncing.
  * - [MonitorCoreImpl] manages authoritative threat/alert state and ingestion-side dead reckoning.
  */

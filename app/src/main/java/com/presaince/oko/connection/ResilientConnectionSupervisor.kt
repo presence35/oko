@@ -29,12 +29,12 @@ import kotlin.random.Random
 /**
  * Resilient Connection Supervisor.
  *
- * Combines OS-level network gating, a 42-second byte silence hardware watchdog,
+ * Combines OS-level network gating, a 168-second byte silence hardware watchdog,
  * full-jitter backoff, and monotonic clock telemetry into a single authoritative supervisor.
  *
  * Invariants:
  * 1. OS Network Gate: Does NOT spin reconnect loops while offline. Wakes immediately upon network validation.
- * 2. 42-Second Byte Silence Watchdog: Actively tears down dead sockets when no frame/ping byte arrives.
+ * 2. 168-Second Byte Silence Watchdog: Actively tears down dead sockets when no frame/ping byte arrives.
  * 3. Thread-safe, non-blocking coroutines.
  */
 class ResilientConnectionSupervisor(
@@ -46,8 +46,8 @@ class ResilientConnectionSupervisor(
 ) {
     companion object {
         const val DEFAULT_WS_URL = "wss://neptun.in.ua/api/v1/stream"
-        const val SILENCE_TIMEOUT_MS = 42_000L
-        const val DEGRADED_STALE_MS = 30_000L
+        const val DEGRADED_STALE_MS = 42_000L
+        const val SILENCE_TIMEOUT_MS = DEGRADED_STALE_MS * 4
         const val BASE_BACKOFF_MS = 1_000L
         const val MAX_BACKOFF_MS = 30_000L
         const val WATCHDOG_TICK_MS = 3_000L
@@ -130,13 +130,13 @@ class ResilientConnectionSupervisor(
             if (valid) {
                 if (isNetworkValidated.compareAndSet(false, true)) {
                     recordEvent(ConnEventKind.FALLBACK_RESTORED, detail = "Network validated")
-                    if (isRunning.get()) {
+                    if (isRunning.get() && isDownForReconnect()) {
                         reconnectAttempts.set(0)
                         triggerReconnect("Network restored")
                     }
                 }
             } else {
-                handleNetworkLost("Network capability invalidated")
+                isNetworkValidated.set(false)
             }
         }
 
@@ -221,12 +221,12 @@ class ResilientConnectionSupervisor(
 
                 if (cs.isConnected && lastByte > 0L) {
                     val silenceDuration = nowMono - lastByte
-                    // Silence watchdog: 42s without a single byte -> force tear-down
+                    // Silence watchdog: 168s without a single byte -> force tear-down
                     if (silenceDuration >= SILENCE_TIMEOUT_MS) {
-                        Log.w(TAG, "42-Second Byte Silence Watchdog expired ($silenceDuration ms) - forcing socket restart")
-                        recordEvent(ConnEventKind.CONNECTION_LOST, detail = "42s silence timeout")
+                        Log.w(TAG, "Byte Silence Watchdog expired ($silenceDuration ms) - forcing socket restart")
+                        recordEvent(ConnEventKind.CONNECTION_LOST, detail = "168s silence timeout")
                         closeCurrentSocket("Silence timeout")
-                        scheduleReconnectWithBackoff("42s silence watchdog")
+                        scheduleReconnectWithBackoff("silence watchdog")
                     } else if (silenceDuration >= DEGRADED_STALE_MS && cs !is ConnectionState.Degraded) {
                         val gen = connectionGeneration.get()
                         updateConnectionState(ConnectionState.Degraded(
@@ -277,11 +277,16 @@ class ResilientConnectionSupervisor(
         if (!valid) return
         if (isNetworkValidated.compareAndSet(false, true)) {
             recordEvent(ConnEventKind.FALLBACK_RESTORED, detail = "Network validated (poll)")
-            if (isRunning.get()) {
+            if (isRunning.get() && isDownForReconnect()) {
                 reconnectAttempts.set(0)
                 triggerReconnect("Network restored (poll)")
             }
         }
+    }
+
+    private fun isDownForReconnect(): Boolean {
+        val cs = _connectionState.value
+        return cs is ConnectionState.Offline || cs is ConnectionState.Disconnected
     }
 
     fun triggerReconnect(@Suppress("UNUSED_PARAMETER") reason: String) {
@@ -406,6 +411,7 @@ class ResilientConnectionSupervisor(
             disconnectHandledGen.set(connectionGeneration.get())
             activeWebSocket?.cancel()
             activeWebSocket = null
+            okHttpClient.dispatcher.cancelAll()
         } catch (_: Exception) {}
     }
 
