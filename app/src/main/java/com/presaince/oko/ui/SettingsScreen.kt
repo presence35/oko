@@ -649,7 +649,8 @@ fun SettingsScreen(
                         checked = notifyPolicyEnabled,
                         onCheckedChange = onNotifyPolicyEnabledChange,
                         icon = painterResource(R.drawable.ic_notifications_off),
-                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        iconBadge = "Z"
                     )
                     AnimatedVisibility(visible = notifyPolicyEnabled) {
                         Column {
@@ -693,7 +694,8 @@ fun SettingsScreen(
                         checked = criticalOfflineOverride,
                         onCheckedChange = onCriticalOfflineOverrideChange,
                         icon = painterResource(R.drawable.ic_notifications_off),
-                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        iconBadge = "Z"
                     )
                     AnimatedVisibility(visible = criticalOfflineOverride) {
                         Column(modifier = Modifier.padding(start = 40.dp)) {
@@ -1010,6 +1012,24 @@ fun SettingsScreen(
                             }
                         }
                     }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(s.iconSetTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(10.dp))
+                        IconSetSelector(lang = lang, selected = iconSet, onChange = onIconSetChange)
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(s.overlapModeTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(s.overlapModeDesc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(10.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OverlapModeChip(OverlapMode.DEFAULT, s.overlapDefaultLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.DEFAULT) }
+                            OverlapModeChip(OverlapMode.COUNT, s.overlapCountLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.COUNT) }
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AlertToggleRow(title = s.threatIconZoomTitle, description = s.threatIconZoomDesc, checked = threatIconZoom, onCheckedChange = onThreatIconZoomChange, icon = rememberVectorPainter(Icons.Default.ZoomIn), iconTint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -1066,45 +1086,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    // Icon packs — always available (a display setting, not gated by Morale).
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        Text(
-                            s.iconSetTitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        IconSetSelector(
-                            lang = lang,
-                            selected = iconSet,
-                            onChange = onIconSetChange
-                        )
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    // Overlapping-threats render mode (display setting).
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        Text(
-                            s.overlapModeTitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            s.overlapModeDesc,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OverlapModeChip(OverlapMode.DEFAULT, s.overlapDefaultLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.DEFAULT) }
-                            OverlapModeChip(OverlapMode.COUNT, s.overlapCountLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.COUNT) }
-                        }
-                    }
+
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Visual map toggles
                     AlertToggleRow(
@@ -1128,15 +1110,6 @@ fun SettingsScreen(
                         onLargeChange = onShowLargeCitiesChange,
                         onMediumChange = onShowMediumCitiesChange,
                         onSmallChange = onShowSmallCitiesChange
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    AlertToggleRow(
-                        title = s.threatIconZoomTitle,
-                        description = s.threatIconZoomDesc,
-                        checked = threatIconZoom,
-                        onCheckedChange = onThreatIconZoomChange,
-                        icon = rememberVectorPainter(Icons.Default.ZoomIn),
-                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertRegionModeRow(

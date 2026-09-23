@@ -42,15 +42,21 @@ enum class GuideDiagram {
     CARD_SIZE, CARD_READ, THREAT_TOGGLES, UPDATE, NIGHT, WIDGET, FILLS, LEGEND
 }
 
-/** Animated mini-illustration for one feature-guide card. */
+/** Animated mini-illustration for one feature-guide card. Static mid-frame when the
+ *  device renders no animations, so off-screen/ancillary cards cost zero vsync work. */
 @Composable
 fun FeatureDiagram(kind: GuideDiagram, modifier: Modifier = Modifier) {
-    val t by rememberInfiniteTransition(label = "diagram").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse),
-        label = "diagram"
-    )
+    val t = if (animationsOff()) {
+        0.5f
+    } else {
+        val animated by rememberInfiniteTransition(label = "diagram").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse),
+            label = "diagram"
+        )
+        animated
+    }
     Canvas(modifier = modifier) {
         when (kind) {
             GuideDiagram.LIVE -> drawLive(t)

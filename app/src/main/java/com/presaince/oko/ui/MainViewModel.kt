@@ -445,7 +445,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     private var isChecking = false
     private val zonesFlow = prefs.preferences.map {
         ZoneParams(it.slowRedKm, it.slowYellowKm, it.fastRedMin, it.fastYellowMin)
-    }
+    }.distinctUntilChanged()
 
     init {
         AppSources.init(getApplication())
@@ -588,7 +588,7 @@ val fastGroupCollapsed: Boolean,
             radii.slowRedKm, radii.slowYellowKm, radii.fastRedMin, radii.fastYellowMin,
             location, lastFix != null, reveal, flourish, mapVisible, shelterModeActive
         ).copy(centerRequest = center)
-    }
+    }.distinctUntilChanged()
 
     private fun UserPreferences.toPrefsSnapshot(): PrefsSnapshot {
         return PrefsSnapshot(
@@ -861,6 +861,7 @@ showBorders = prefs.showBorders,
         }
         uiState.copy(flyby = flyby, centerRequest = live.centerRequest)
     }
+        .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
         .stateIn(
             viewModelScope,
@@ -1154,10 +1155,7 @@ showBorders = prefs.showBorders,
     /** Master alarm switch: arms or silences all four zone bells together. */
 fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch {
-            prefs.setSlowRedZoneArmed(armed)
-            prefs.setSlowYellowZoneArmed(armed)
-            prefs.setFastRedZoneArmed(armed)
-            prefs.setFastYellowZoneArmed(armed)
+            prefs.setAlertsArmed(armed)
             if (armed) AlertService.start(app)
         }
     }
@@ -1167,8 +1165,7 @@ fun setAlertsArmed(armed: Boolean) {
         // disabling it disarms both. No separate stored preference — it can never be ON
         // while red and yellow are both OFF.
         viewModelScope.launch {
-            prefs.setOfficialRedAlertsEnabled(enabled)
-            prefs.setYellowAlertsEnabled(enabled)
+            prefs.setOfficialAlertsEnabled(enabled)
         }
     }
 
@@ -1368,8 +1365,7 @@ fun setAlertsArmed(armed: Boolean) {
     /** Pin the map to a city. Pinning auto-disables follow-me so the pin takes effect. */
     fun setPinnedCity(city: City?) {
         viewModelScope.launch {
-            prefs.setPinnedCity(city?.nameUa)
-            if (city != null) prefs.setFollowMe(false)
+            prefs.setPinnedCityWithFollow(city?.nameUa)
         }
     }
 
@@ -1575,10 +1571,7 @@ fun setAlertsArmed(armed: Boolean) {
      *  permission requests until the next cold start. */
     fun deferWizard() {
         viewModelScope.launch {
-            prefs.setWizardCompleted(true)
-            prefs.setBatteryOnboardShown(true)
-            prefs.setServiceResurrected(false)
-            prefs.setPermissionPromptDeferred(true)
+            prefs.setWizardDeferred(true)
             maybeTriggerWelcomeShootdown()
         }
     }
@@ -1589,10 +1582,7 @@ fun setAlertsArmed(armed: Boolean) {
      *  Never clears welcome_shootdown_played: the greeting shot is once per install. */
     fun relaunchSetup() {
         viewModelScope.launch {
-            prefs.setWizardCompleted(false)
-            prefs.setBatteryOnboardShown(false)
-            prefs.setServiceResurrected(false)
-            prefs.setPermissionPromptDeferred(false)
+            prefs.setWizardDeferred(false)
         }
     }
 

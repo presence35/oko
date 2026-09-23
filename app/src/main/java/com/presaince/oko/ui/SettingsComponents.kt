@@ -16,6 +16,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -106,7 +107,7 @@ internal fun AlertToggleRow(
     flash: Boolean = false,
     enabled: Boolean = true
 ) {
-    val interactionSource = rememberHapticInteractionSource()
+    val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     Row(
         modifier = Modifier
@@ -333,7 +334,7 @@ internal fun CollapsibleSectionCard(
     trailing: @Composable (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val interactionSource = rememberHapticInteractionSource()
+    val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val chevronAngle = animateFloatAsState(
         targetValue = if (expanded) 0f else 180f,

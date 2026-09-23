@@ -663,16 +663,19 @@ private fun MapScreen(
     // reads as "loading"). Infinite transition = always animating, so the value is continuously
     // observed; the pulse is only applied while the hint counter is still positive.
     val gearHintActive = settingsHintRemaining > 0
-    val gearPulseTransition = rememberInfiniteTransition(label = "gearPulse")
-    val gearPulse by gearPulseTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "gearPulse"
-    )
+    val gearPulse = if (gearHintActive) {
+        val gearPulseTransition = rememberInfiniteTransition(label = "gearPulse")
+        val pulse by gearPulseTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "gearPulse"
+        )
+        pulse
+    } else 0f
     var fitUkraineTick by remember { mutableStateOf(0) }
     val scaleState = remember { ScaleState() }
     var zoomZone by remember { mutableStateOf<ThreatZone?>(null) }

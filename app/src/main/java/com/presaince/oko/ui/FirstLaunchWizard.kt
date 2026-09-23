@@ -13,6 +13,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -241,7 +242,7 @@ internal fun FirstLaunchWizard(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                val backInteraction = rememberHapticInteractionSource()
+                val backInteraction = remember { MutableInteractionSource() }
                 if (step > 0) {
                     IconButton(
                         onClick = { step-- },
@@ -262,7 +263,7 @@ internal fun FirstLaunchWizard(
                     1 -> locationReady
                     else -> true
                 }
-                val nextInteraction = rememberHapticInteractionSource()
+                val nextInteraction = remember { MutableInteractionSource() }
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -380,7 +381,7 @@ private fun WizardThreatGrid(
                             val label = info.shortLabel(lang)
                             val onColor = MaterialTheme.colorScheme.onSurface
                             val offColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            val cellInteraction = rememberHapticInteractionSource()
+                            val cellInteraction = remember { MutableInteractionSource() }
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier
@@ -508,7 +509,7 @@ private fun WizardLocationCard(
     title: String,
     desc: String
 ) {
-    val cardInteraction = rememberHapticInteractionSource()
+    val cardInteraction = remember { MutableInteractionSource() }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -767,6 +768,8 @@ private fun WizardZoneSliderRow(
     onKmChange: (Int) -> Unit,
     kmUnit: String
 ) {
+    var local by remember { mutableStateOf(km.toFloat()) }
+    LaunchedEffect(km) { local = km.toFloat() }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             imageVector = Icons.Filled.Notifications,
@@ -786,8 +789,9 @@ private fun WizardZoneSliderRow(
         )
         Spacer(Modifier.width(8.dp))
         Slider(
-            value = km.toFloat(),
-            onValueChange = { onKmChange(it.roundToInt()) },
+            value = local,
+            onValueChange = { local = it },
+            onValueChangeFinished = { onKmChange(local.roundToInt()) },
             valueRange = 1f..20f,
             enabled = armed,
             colors = SliderDefaults.colors(

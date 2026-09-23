@@ -309,11 +309,8 @@ Spacer(Modifier.width(8.dp))
         ) {
             Slider(
                 value = local,
-                onValueChange = {
-                    val v = it.roundToInt()
-                    local = v.toFloat()
-                    onCommit(v)
-                },
+                onValueChange = { local = it },
+                onValueChangeFinished = { onCommit(local.roundToInt()) },
                 valueRange = range,
                 steps = 0,
                 colors = SliderDefaults.colors(

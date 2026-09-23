@@ -155,12 +155,12 @@ internal fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
             "літак", "recon", "reconnaissance", "розвідка", "розвідувальний", "unknown", "невідомий"
         ) + threatTerms),
         SettingsSection.SYSTEM to kw(
-            "system", "display", "interface", "language", "ukrainian", "english", "icon", "icons",
+            "system", "display", "interface", "language", "ukrainian", "english",
             "card", "cards", "size", "scale", "battery", "exempt",
             "fill", "region", "regions", "oblast", "oblasts", "alert fill", "region fill",
             "border", "borders", "outline", "boundaries",
             "region", "raion", "district", "large", "big", "city labels",
-            "система", "інтерфейс", "дисплей", "мова", "українськ", "англійськ", "іконка", "іконки",
+            "система", "інтерфейс", "дисплей", "мова", "українськ", "англійськ",
             "картка", "картки", "розмір", "масштаб", "батарея",
             "заливка", "область", "області", "заливка областей", "заливка регіонів",
             "кордон", "кордони", "межа", "межі", "контури",

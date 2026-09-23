@@ -14,6 +14,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -105,6 +107,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -190,14 +193,27 @@ fun LogsDropDownSheet(
     val connEvents by registry.connEvents.collectAsState()
     val scope = rememberCoroutineScope()
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    var visibleCount by remember { mutableIntStateOf(VISIBLE_INITIAL) }
     var filter by rememberSaveable { mutableStateOf(LogsFilter.DECISIONS) }
+    val tabFilters = remember { listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES) }
+    val pagerState = rememberPagerState(pageCount = { tabFilters.size })
+    // Single truth: pager -> filter. Tab taps animate the pager; swipes flow back here.
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect {
+            val f = tabFilters[it]
+            if (f != filter) { filter = f; visibleCount = VISIBLE_INITIAL }
+        }
+    }
+    LaunchedEffect(filter) {
+        val i = tabFilters.indexOf(filter)
+        if (i != pagerState.currentPage) pagerState.scrollToPage(i)
+    }
     var groupBy by rememberSaveable { mutableStateOf(GroupBy.TIMELINE) }
     var newestFirst by rememberSaveable { mutableStateOf(true) }
     var proximitySort by rememberSaveable { mutableStateOf(ProximitySort.DISTANCE) }
     var shownOnly by rememberSaveable { mutableStateOf(false) }
     var showFlourish by rememberSaveable { mutableStateOf(false) }
     var legendExpanded by rememberSaveable { mutableStateOf(false) }
-    var visibleCount by remember { mutableIntStateOf(VISIBLE_INITIAL) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -207,14 +223,6 @@ fun LogsDropDownSheet(
     }
 
     val window = entries.filter { now - it.atMillis < DebugLog.AUTO_CLEAR_AGE_MS }
-    val isDecisions = filter == LogsFilter.DECISIONS
-    val isSources = filter == LogsFilter.SOURCES
-    val rows: List<LogRow> = if (isSources) emptyList() else
-        buildRows(window, connEntries, now, isDecisions, newestFirst, shownOnly, showFlourish)
-    val visible = rows.take(visibleCount)
-    val hasMore = visibleCount < rows.size
-    val groups = if (isDecisions) buildGroups(visible.filterIsInstance<DecisionRow>().map { it.entry }, groupBy, showFlourish, proximitySort, newestFirst) else emptyList()
-    val subtitle = if (isDecisions) String.format(s.logsSubtitleFormat, rows.size) else null
 
     val connColor = when {
         neptunDown -> Color(AppPalette.AlertRed)
@@ -279,26 +287,25 @@ fun LogsDropDownSheet(
             )
         }
 
-        // Tabs
-        val tabFilters = listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES)
+        // Tabs — taps drive the pager; swipes flow back via snapshotFlow above.
         val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources)
         ScrollableTabRow(
-            selectedTabIndex = tabFilters.indexOf(filter),
+            selectedTabIndex = pagerState.currentPage,
             containerColor = Color(AppPalette.CardAlt),
             contentColor = MaterialTheme.colorScheme.primary,
             edgePadding = 0.dp
         ) {
             tabFilters.forEachIndexed { index, f ->
                 Tab(
-                    selected = filter == f,
-                    onClick = { filter = f; visibleCount = VISIBLE_INITIAL },
+                    selected = pagerState.currentPage == index,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
                     text = { Text(tabLabels[index]) },
                     interactionSource = rememberHapticInteractionSource()
                 )
             }
         }
 
-        if (isDecisions) {
+        if (filter == LogsFilter.DECISIONS) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -309,132 +316,38 @@ fun LogsDropDownSheet(
             }
         }
 
-        // Scrollable Log Content
-        LazyColumn(
+        // Swipeable pages — each tab owns its rows so content follows the swipe.
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            if (isDecisions) {
-                item(key = "viewopts") {
-                    ViewOptionsRow(
-                        groupBy = groupBy,
-                        newestFirst = newestFirst,
-                        proximitySort = proximitySort,
-                        shownOnly = shownOnly,
-                        showFlourish = showFlourish,
-                        s = s,
-                        onGroupBy = {
-                            groupBy = it
-                            visibleCount = VISIBLE_INITIAL
-                        },
-                        onSortToggle = { newestFirst = !newestFirst },
-                        onProximitySortChange = {
-                            proximitySort = it
-                            visibleCount = VISIBLE_INITIAL
-                        },
-                        onShownOnlyChange = {
-                            shownOnly = it
-                            visibleCount = VISIBLE_INITIAL
-                        },
-                        onShowFlourishChange = {
-                            showFlourish = it
-                            visibleCount = VISIBLE_INITIAL
-                        }
-                    )
-                }
-                if (subtitle != null) {
-                    item(key = "subtitle") {
-                        Text(
-                            subtitle,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)
-                        )
-                    }
-                }
-            }
-            if (filter == LogsFilter.SOURCES) {
-                item(key = "sources") {
-                    SourcesList(s, now, lang, iconSet)
-                }
-            }
-            if (filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty()) {
-                item(key = "retrylog") {
-                    RetryLogCard(connEvents, connRetry, s, now) { AppSources.registry.dismissLogCard() }
-                }
-            }
-            if (visible.isEmpty() && filter != LogsFilter.SOURCES
-                && !(filter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty())) {
-                item {
-                    Text(
-                        when (filter) {
-                            LogsFilter.CONNECTIONS -> s.logsEmptyConnections
-                            else -> s.debugLogEmpty
-                        },
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 48.dp, horizontal = 24.dp)
-                    )
-                }
-            } else if (groups.isNotEmpty()) {
-                groups.forEach { group ->
-                    if (group.title != null) {
-                        item(key = "header-${group.id}") {
-                            GroupHeader(group, s)
-                        }
-                    }
-                    if (group.subTypes) {
-                        group.entries.groupBy { it.threatType ?: ThreatType.UNKNOWN }
-                            .entries
-                            .sortedBy { it.key.ordinal }
-                            .forEach { (type, subEntries) ->
-                                item(key = "sub-${group.id}-$type") {
-                                    TypeSubHeader(TypeSubGroup(type, subEntries), lang, iconSet)
-                                }
-                                itemsIndexed(subEntries, key = { index, entry -> "sub-${group.id}-$type-$index-${entry.atMillis}-${entry.threatId}-${entry.kind.name}" }) { _, entry ->
-                                    DecisionCard(entry, s, lang, now, iconSet)
-                                }
-                            }
-                    } else {
-                        itemsIndexed(group.entries, key = { index, entry -> "group-${group.id}-$index-${entry.atMillis}-${entry.threatId}-${entry.kind.name}" }) { _, entry ->
-                            DecisionCard(entry, s, lang, now, iconSet)
-                        }
-                    }
-                }
-            } else {
-                itemsIndexed(visible, key = { index, row -> "flat-$index-${row.atMillis}-${row::class.simpleName}" }) { _, row ->
-                    LogRowCard(row, s, lang, now, iconSet)
-                }
-            }
-            if (visible.isNotEmpty()) {
-                if (hasMore) {
-                    item(key = "more") {
-                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            ShowMoreButton(s) { visibleCount += VISIBLE_STEP }
-                        }
-                    }
-                }
-                if (isDecisions) {
-                    item(key = "clear") {
-                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            TextButton(
-                                onClick = { scope.launch(Dispatchers.IO) { DebugLog.clear() } },
-                                interactionSource = rememberHapticInteractionSource()
-                            ) {
-                                Text(s.debugLogClear)
-                            }
-                        }
-                    }
-                }
-            }
+            beyondViewportPageCount = 1
+        ) { page ->
+            LogsTabPage(
+                pageFilter = tabFilters[page],
+                s = s,
+                lang = lang,
+                iconSet = iconSet,
+                window = window,
+                connEntries = connEntries,
+                connEvents = connEvents,
+                connRetry = connRetry,
+                now = now,
+                groupBy = groupBy,
+                newestFirst = newestFirst,
+                proximitySort = proximitySort,
+                shownOnly = shownOnly,
+                showFlourish = showFlourish,
+                visibleCount = visibleCount,
+                onGroupBy = { groupBy = it; visibleCount = VISIBLE_INITIAL },
+                onSortToggle = { newestFirst = !newestFirst },
+                onProximitySortChange = { proximitySort = it; visibleCount = VISIBLE_INITIAL },
+                onShownOnlyChange = { shownOnly = it; visibleCount = VISIBLE_INITIAL },
+                onShowFlourishChange = { showFlourish = it; visibleCount = VISIBLE_INITIAL },
+                onShowMore = { visibleCount += VISIBLE_STEP }
+            )
         }
-
         // Swipe-up drag handle to dismiss
         val density = LocalDensity.current
         val dismissThresholdPx = with(density) { 60.dp.toPx() }
@@ -464,6 +377,155 @@ fun LogsDropDownSheet(
             contentAlignment = Alignment.Center
         ) {
             SheetDragHandle()
+        }
+    }
+}
+
+/**
+ * One swipeable Logs tab page. Each tab derives its own rows from the shared
+ * log state so content follows the pager; a new tab is one [LogsFilter] value
+ * plus one branch below — no sync logic to touch.
+ */
+@Composable
+private fun LogsTabPage(
+    pageFilter: LogsFilter,
+    s: Strings.StringSet,
+    lang: AppLanguage,
+    iconSet: ThreatIconSet,
+    window: List<DebugLogEntry>,
+    connEntries: List<ConnLogEntry>,
+    connEvents: List<ConnEvent>,
+    connRetry: ConnRetryState?,
+    now: Long,
+    groupBy: GroupBy,
+    newestFirst: Boolean,
+    proximitySort: ProximitySort,
+    shownOnly: Boolean,
+    showFlourish: Boolean,
+    visibleCount: Int,
+    onGroupBy: (GroupBy) -> Unit,
+    onSortToggle: () -> Unit,
+    onProximitySortChange: (ProximitySort) -> Unit,
+    onShownOnlyChange: (Boolean) -> Unit,
+    onShowFlourishChange: (Boolean) -> Unit,
+    onShowMore: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val isDecisions = pageFilter == LogsFilter.DECISIONS
+    val rows: List<LogRow> = if (pageFilter == LogsFilter.SOURCES) emptyList() else
+        buildRows(window, connEntries, now, isDecisions, newestFirst, shownOnly, showFlourish)
+    val visible = rows.take(visibleCount)
+    val hasMore = visibleCount < rows.size
+    val groups = if (isDecisions) buildGroups(visible.filterIsInstance<DecisionRow>().map { it.entry }, groupBy, showFlourish, proximitySort, newestFirst) else emptyList()
+    val subtitle = if (isDecisions) String.format(s.logsSubtitleFormat, rows.size) else null
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (isDecisions) {
+            item(key = "viewopts") {
+                ViewOptionsRow(
+                    groupBy = groupBy,
+                    newestFirst = newestFirst,
+                    proximitySort = proximitySort,
+                    shownOnly = shownOnly,
+                    showFlourish = showFlourish,
+                    s = s,
+                    onGroupBy = onGroupBy,
+                    onSortToggle = onSortToggle,
+                    onProximitySortChange = onProximitySortChange,
+                    onShownOnlyChange = onShownOnlyChange,
+                    onShowFlourishChange = onShowFlourishChange
+                )
+            }
+            if (subtitle != null) {
+                item(key = "subtitle") {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)
+                    )
+                }
+            }
+        }
+        if (pageFilter == LogsFilter.SOURCES) {
+            item(key = "sources") {
+                SourcesList(s, now, lang, iconSet)
+            }
+        }
+        if (pageFilter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty()) {
+            item(key = "retrylog") {
+                RetryLogCard(connEvents, connRetry, s, now) { AppSources.registry.dismissLogCard() }
+            }
+        }
+        if (visible.isEmpty() && pageFilter != LogsFilter.SOURCES
+            && !(pageFilter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty())) {
+            item {
+                Text(
+                    when (pageFilter) {
+                        LogsFilter.CONNECTIONS -> s.logsEmptyConnections
+                        else -> s.debugLogEmpty
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 48.dp, horizontal = 24.dp)
+                )
+            }
+        } else if (groups.isNotEmpty()) {
+            groups.forEach { group ->
+                if (group.title != null) {
+                    item(key = "header-${group.id}") {
+                        GroupHeader(group, s)
+                    }
+                }
+                if (group.subTypes) {
+                    group.entries.groupBy { it.threatType ?: ThreatType.UNKNOWN }
+                        .entries
+                        .sortedBy { it.key.ordinal }
+                        .forEach { (type, subEntries) ->
+                            item(key = "sub-${group.id}-$type") {
+                                TypeSubHeader(TypeSubGroup(type, subEntries), lang, iconSet)
+                            }
+                            itemsIndexed(subEntries, key = { index, entry -> "sub-${group.id}-$type-$index-${entry.atMillis}-${entry.threatId}-${entry.kind.name}" }) { _, entry ->
+                                DecisionCard(entry, s, lang, now, iconSet)
+                            }
+                        }
+                } else {
+                    itemsIndexed(group.entries, key = { index, entry -> "group-${group.id}-$index-${entry.atMillis}-${entry.threatId}-${entry.kind.name}" }) { _, entry ->
+                        DecisionCard(entry, s, lang, now, iconSet)
+                    }
+                }
+            }
+        } else {
+            itemsIndexed(visible, key = { index, row -> "flat-$index-${row.atMillis}-${row::class.simpleName}" }) { _, row ->
+                LogRowCard(row, s, lang, now, iconSet)
+            }
+        }
+        if (visible.isNotEmpty()) {
+            if (hasMore) {
+                item(key = "more") {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        ShowMoreButton(s) { onShowMore() }
+                    }
+                }
+            }
+            if (isDecisions) {
+                item(key = "clear") {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        TextButton(
+                            onClick = { scope.launch(Dispatchers.IO) { DebugLog.clear() } },
+                            interactionSource = rememberHapticInteractionSource()
+                        ) {
+                            Text(s.debugLogClear)
+                        }
+                    }
+                }
+            }
         }
     }
 }

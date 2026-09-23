@@ -267,12 +267,28 @@ class UserPrefs(private val context: Context) {
         context.dataStore.edit { it[fastYellowArmedKey] = armed }
     }
 
+    suspend fun setAlertsArmed(armed: Boolean) {
+        context.dataStore.edit {
+            it[slowRedArmedKey] = armed
+            it[slowYellowArmedKey] = armed
+            it[fastRedArmedKey] = armed
+            it[fastYellowArmedKey] = armed
+        }
+    }
+
     suspend fun setOfficialRedAlertsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[officialRedAlertsKey] = enabled }
     }
 
     suspend fun setYellowAlertsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[yellowAlertsKey] = enabled }
+    }
+
+    suspend fun setOfficialAlertsEnabled(enabled: Boolean) {
+        context.dataStore.edit {
+            it[officialRedAlertsKey] = enabled
+            it[yellowAlertsKey] = enabled
+        }
     }
 
     suspend fun setSirenOverride(override: Boolean) {
@@ -350,6 +366,13 @@ class UserPrefs(private val context: Context) {
     suspend fun setPinnedCity(nameUa: String?) {
         context.dataStore.edit {
             if (nameUa == null) it.remove(pinnedCityKey) else it[pinnedCityKey] = nameUa
+        }
+    }
+
+    suspend fun setPinnedCityWithFollow(nameUa: String?) {
+        context.dataStore.edit {
+            if (nameUa == null) it.remove(pinnedCityKey) else it[pinnedCityKey] = nameUa
+            if (nameUa != null) it[followMeKey] = false
         }
     }
 
@@ -535,6 +558,15 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setPermissionPromptDeferred(deferred: Boolean) {
         context.dataStore.edit { it[permissionPromptDeferredKey] = deferred }
+    }
+
+    suspend fun setWizardDeferred(deferred: Boolean) {
+        context.dataStore.edit {
+            it[wizardCompletedKey] = deferred
+            it[batteryOnboardShownKey] = deferred
+            it[serviceResurrectedKey] = false
+            it[permissionPromptDeferredKey] = deferred
+        }
     }
 
     suspend fun setNightEnabled(enabled: Boolean) {

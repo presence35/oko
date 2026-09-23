@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -261,7 +262,7 @@ internal fun IconSetTile(
     modifier: Modifier = Modifier,
     slot: Dp = IconTileSlot
 ) {
-    val interactionSource = rememberHapticInteractionSource()
+    val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale = animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
