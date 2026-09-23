@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Red-zone frequency now respects the policy: Once per type and Digest no longer re-sound on every new red entry — the policy gates all alerts including red. Limit repeat sounds now shows the notifications-off icon and How often to sound is a muted section label, not a second setting / Red-zone frequency now respects the policy: Once per type and Digest no longer re-sound on every new red entry — the policy gates all alerts including red. Limit repeat sounds now shows the notifications-off icon and How often to sound is a muted section label, not a second setting / Red-zone frequency now respects the policy: Once per type and Digest no longer re-sound on every new red entry — the policy gates all alerts including red. Limit repeat sounds now shows the notifications-off icon and How often to sound is a muted section label, not a second setting 09-23_14:20:00
 
 - Connection stays up on weak cell: the socket is no longer torn down on brief signal loss, quiet-night silence kills it only after 3 min, and sub-15s flaps no longer spam the log / Connection stays up on weak cell: the socket is no longer torn down on brief signal loss, quiet-night silence kills it only after 3 min, and sub-15s flaps no longer spam the log / Connection stays up on weak cell: the socket is no longer torn down on brief signal loss, quiet-night silence kills it only after 3 min, and sub-15s flaps no longer spam the log 09-23_10:45:00
 

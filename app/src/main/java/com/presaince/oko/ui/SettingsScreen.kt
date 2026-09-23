@@ -647,7 +647,9 @@ fun SettingsScreen(
                         title = s.notifyPolicyEnabledTitle,
                         description = s.notifyPolicyEnabledDesc,
                         checked = notifyPolicyEnabled,
-                        onCheckedChange = onNotifyPolicyEnabledChange
+                        onCheckedChange = onNotifyPolicyEnabledChange,
+                        icon = painterResource(R.drawable.ic_notifications_off),
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     AnimatedVisibility(visible = notifyPolicyEnabled) {
                         Column {

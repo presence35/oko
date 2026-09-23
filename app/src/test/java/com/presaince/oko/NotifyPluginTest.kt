@@ -53,16 +53,28 @@ class NotifyPluginTest {
     }
 
     @Test
-    fun `floor first red sounds past digest and type gates`() {
+    fun `digest respects gate even for first red`() {
         val p = NotifyPlugin()
         val pr = prefs(ZonePolicy.DIGEST, max = 1, window = DigestWindow.EPISODE)
         assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.OUTER)), pr, now)["a"]!!.kind)
-        // Bucket full, but first INNER always sounds.
-        assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("b", ThreatZone.INNER)), pr, now)["b"]!!.kind)
-        // Second OUTER now overflows.
+        // Bucket full — new INNER is now gated, not floored.
+        val gated = p.tick(listOf(inp("b", ThreatZone.INNER)), pr, now)["b"]!!
+        assertEquals(VerdictKind.SUPPRESS, gated.kind)
+        assertEquals(PolicyReason.RATE_LIMITED, gated.reason)
+        // Second OUTER still overflows.
         val over = p.tick(listOf(inp("c", ThreatZone.OUTER)), pr, now)["c"]!!
         assertEquals(VerdictKind.SUPPRESS, over.kind)
         assertEquals(PolicyReason.RATE_LIMITED, over.reason)
+    }
+
+    @Test
+    fun `once per type gates first red of same type`() {
+        val p = NotifyPlugin()
+        val pr = prefs(ZonePolicy.ONCE_PER_TYPE)
+        assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.OUTER)), pr, now)["a"]!!.kind)
+        val gated = p.tick(listOf(inp("a", ThreatZone.OUTER), inp("b", ThreatZone.INNER)), pr, now)["b"]!!
+        assertEquals(VerdictKind.SUPPRESS, gated.kind)
+        assertEquals(PolicyReason.ONCE_PER_TYPE, gated.reason)
     }
 
     @Test

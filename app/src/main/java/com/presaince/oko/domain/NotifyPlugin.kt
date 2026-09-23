@@ -69,8 +69,9 @@ data class PluginVerdict(val kind: VerdictKind, val reason: PolicyReason? = null
  * flicker ticks and margin crossings never close it, so they can never re-sound.
  * The engine's spatial band ([ZONE_HYSTERESIS_MARGIN]) makes "outside" meaningful.
  *
- * Floor (inside every preset, never a service bypass): the first INNER sighting of an
- * episode always sounds — presets only quiet repeats. Escalation to INNER sounds too.
+ * Policy owns every verdict, including red. Escalation to INNER is a gated
+ * opportunity: ONCE_PER_THREAT still sounds on first red (per-threat escalation),
+ * ONCE_PER_TYPE and DIGEST respect their gates.
  */
 class NotifyPlugin {
 
@@ -141,18 +142,15 @@ class NotifyPlugin {
             if (ep == null) {
                 val fresh = Episode(effective, present = true, muted = false, inp.type, sounded = false, soundedInner = false)
                 episodes[inp.id] = fresh
-                // Floor: first red sighting always sounds, past every preset and the digest.
-                out[inp.id] = if (effective == ThreatZone.INNER) sound(fresh, inp, prefs, now)
-                else decide(fresh, inp, prefs, now)
+                out[inp.id] = decide(fresh, inp, prefs, now)
             } else {
                 val wasAway = !ep.present || ep.muted
                 val escalation = !wasAway && ep.lastEffective == ThreatZone.OUTER && effective == ThreatZone.INNER
                 ep.present = true
                 ep.muted = false
                 val verdict = when {
-                    effective == ThreatZone.INNER && !ep.soundedInner ->
-                        sound(ep, inp, prefs, now) // floor: first red always sounds
-                    escalation -> sound(ep, inp, prefs, now) // re-escalation past an accepted downgrade
+                    effective == ThreatZone.INNER && !ep.soundedInner -> decide(ep, inp, prefs, now)
+                    escalation -> if (prefs.preset == ZonePolicy.ONCE_PER_THREAT) sound(ep, inp, prefs, now) else decide(ep, inp, prefs, now)
                     wasAway -> decide(ep, inp, prefs, now)
                     ep.lastEffective != effective ->
                         PluginVerdict(VerdictKind.SILENT) // downgrade / lateral: content update only
@@ -170,7 +168,7 @@ class NotifyPlugin {
         when (prefs.preset) {
         ZonePolicy.EVERY_CHANGE -> sound(ep, inp, prefs, now)
         ZonePolicy.ONCE_PER_THREAT ->
-            if (!ep.sounded) sound(ep, inp, prefs, now)
+            if (!ep.sounded || (inp.alertTier == ThreatZone.INNER && !ep.soundedInner)) sound(ep, inp, prefs, now)
             else PluginVerdict(VerdictKind.SUPPRESS, PolicyReason.ONCE_PER_THREAT)
         ZonePolicy.ONCE_PER_TYPE ->
             if (!ep.sounded && episodes.values.none { it !== ep && it.type == inp.type && it.sounded }) {
