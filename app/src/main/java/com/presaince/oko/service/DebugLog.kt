@@ -1,5 +1,5 @@
 package com.presaince.oko
-import com.presaince.oko.engine.distanceFlat
+import com.presaince.oko.engine.distanceHaversine
 
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
@@ -344,7 +344,7 @@ internal fun computeSweep(
     val regionIds = mutableSetOf<String>()
     for (t in ctx.threats.values) {
         if (t.status == "resolved" || t.areaOnly) continue
-        val distKm = distanceFlat(focus.lat, focus.lon, t.lat, t.lon) / 1000.0
+        val distKm = distanceHaversine(focus.lat, focus.lon, t.lat, t.lon) / 1000.0
         if (distKm > (ctx.typeCatalog[t.type]?.reachKm ?: 1500.0) &&
             !inOblast(t.region, t.district, t.locality, ctx.token)
         ) continue

@@ -371,7 +371,9 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 - Capability ("can it ever sound": armed bells, official toggles, per-type enables) is separate from frequency ("how often": the preset). The service executes verdicts; all judgment lives in the plugin.
 - Tiers carry a 10% spatial hysteresis band (`ZONE_HYSTERESIS_MARGIN`): upgrades immediate, downgrades/exits hold. Shared by map + service.
 - An episode opens on first zone sighting and closes only when the track dies (stale / resolved / gone). Flicker ticks never close it, so they never re-sound. A user-shot same-id respawn inside the grace is the same kill, never a new onset.
-- Floor (inside every preset, never a service bypass): the first INNER sighting of an episode always sounds, as does any escalation to INNER. Presets only quiet repeats.
+- Floor (inside every preset, never a service bypass): escalation to INNER is a gated
+  opportunity. ONCE_PER_THREAT sounds the first INNER per threat (per-threat escalation);
+  ONCE_PER_TYPE and DIGEST respect their gates (no preset-bypass re-sound).
 - Presets: Every change (entries + re-entries + escalations sound) / Once per threat / Once per type (until the sky is clear of it) / Digest (max N sounds per window: off, 2/10/60 min, or per alarm sitting; counted per type or across all; default 10/sitting/all). The master toggle gates the whole policy: off = Every change (the default), presets only apply while on.
 - Every swallowed sound is logged with its policy reason (RATE_LIMITED / ONCE_PER_THREAT / ONCE_PER_TYPE). Preset switch = fresh start; digest tweaks clear only rate buckets.
 - Official alerts keep onset-always semantics outside the presets (byte-for-byte prior behavior).

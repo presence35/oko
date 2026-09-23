@@ -330,7 +330,7 @@ Spacer(Modifier.width(6.dp))
                     style = MaterialTheme.typography.labelLarge
                 )
                 Text(
-                    "$dayLabel $reference $unit",
+                    "$dayLabel $reference",
                     color = Color(AppPalette.TextSecondary),
                     style = MaterialTheme.typography.labelSmall
                 )

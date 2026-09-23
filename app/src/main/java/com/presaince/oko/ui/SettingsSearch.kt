@@ -157,6 +157,8 @@ internal fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
         SettingsSection.SYSTEM to kw(
             "system", "display", "interface", "language", "ukrainian", "english",
             "card", "cards", "size", "scale", "battery", "exempt",
+            "overlap", "overlapping", "count", "zoom", "zoom icons",
+            "перекриття", "перекриті", "зум", "наближення",
             "fill", "region", "regions", "oblast", "oblasts", "alert fill", "region fill",
             "border", "borders", "outline", "boundaries",
             "region", "raion", "district", "large", "big", "city labels",

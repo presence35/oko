@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.presaince.oko.City
@@ -69,8 +70,8 @@ import com.presaince.oko.theme.AppPalette
 fun SettingsScreen(
     state: SettingsState,
     hapticsEnabled: Boolean,
-    updateState: UpdateState,
-    latestVersion: String?,
+    updateFlow: StateFlow<UpdateState>,
+    latestVersionFlow: StateFlow<String?>,
     nightActive: Boolean,
     listState: LazyListState,
     collapse: SettingsCollapseState,
@@ -151,7 +152,7 @@ fun SettingsScreen(
     digestPerType: Boolean,
     onDigestPerTypeChange: (Boolean) -> Unit,
     onNotifyPolicyEnabledChange: (Boolean) -> Unit,
-    policyWhatIf: Map<ZonePolicy, Int>,
+    policyWhatIfFlow: StateFlow<Map<ZonePolicy, Int>>,
     onExit: () -> Unit,
     onCheckUpdate: () -> Unit,
     onOpenGuide: () -> Unit,
@@ -224,7 +225,7 @@ fun SettingsScreen(
     val moraleMasterEnabled = state.moraleMasterEnabled
     val moraleVoice = state.moraleVoice
     val bootRestartEnabled = state.bootRestartEnabled
-    val isChecking = updateState is UpdateState.Checking
+    val isChecking = updateFlow.value is UpdateState.Checking
     val scrollToNightMode = nightActive
     val s = Strings.get(lang)
 
@@ -655,11 +656,11 @@ fun SettingsScreen(
                     AnimatedVisibility(visible = notifyPolicyEnabled) {
                         Column {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            NotifyPolicyRow(
+              NotifyPolicyRow(
                                 title = s.notifyPolicyTitle,
                                 description = s.notifyPolicyDesc,
                                 selected = zonePolicy,
-                                whatIf = policyWhatIf,
+                                whatIf = policyWhatIfFlow.value,
                                 onChange = onZonePolicyChange,
                                 s = s
                             )
@@ -935,18 +936,6 @@ fun SettingsScreen(
                         IconSetSelector(lang = lang, selected = iconSet, onChange = onIconSetChange)
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        Text(s.overlapModeTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(s.overlapModeDesc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(10.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OverlapModeChip(OverlapMode.DEFAULT, s.overlapDefaultLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.DEFAULT) }
-                            OverlapModeChip(OverlapMode.COUNT, s.overlapCountLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.COUNT) }
-                        }
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    AlertToggleRow(title = s.threatIconZoomTitle, description = s.threatIconZoomDesc, checked = threatIconZoom, onCheckedChange = onThreatIconZoomChange, icon = rememberVectorPainter(Icons.Default.ZoomIn), iconTint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
                     fastAndSlowGroups(lang, typeCatalog).forEachIndexed { index, (groupIcon, groupTitle, types) ->
                         if (index == 1) {
@@ -1160,6 +1149,18 @@ fun SettingsScreen(
                         onCheckedChange = onShowThreatIdsOnMapChange
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(s.overlapModeTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(s.overlapModeDesc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(10.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OverlapModeChip(OverlapMode.DEFAULT, s.overlapDefaultLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.DEFAULT) }
+                            OverlapModeChip(OverlapMode.COUNT, s.overlapCountLabel, overlapMode, Modifier.weight(1f)) { onOverlapModeChange(OverlapMode.COUNT) }
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AlertToggleRow(title = s.threatIconZoomTitle, description = s.threatIconZoomDesc, checked = threatIconZoom, onCheckedChange = onThreatIconZoomChange, icon = rememberVectorPainter(Icons.Default.ZoomIn), iconTint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Reset tip counters
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                         OutlinedButton(
@@ -1289,6 +1290,9 @@ fun SettingsScreen(
 
             if (searching.not() || StandaloneSetting.UPDATE in matchedStandalone) {
             item(key = "action_update", contentType = "action") {
+                val updateState by updateFlow.collectAsState()
+                val latestVersion by latestVersionFlow.collectAsState()
+                val isChecking = updateState is UpdateState.Checking
                 if (isChecking) {
                     Button(
                         onClick = onCheckUpdate,

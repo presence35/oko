@@ -125,7 +125,6 @@ private val AlertRed = Color(AppPalette.AlertRed)
 fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     val settingsState by viewModel.settingsState.collectAsState()
-    val policyWhatIf by viewModel.policyWhatIf.collectAsState()
     val context = LocalContext.current
 
     var screen by remember { mutableStateOf(Screen.MAP) }
@@ -159,6 +158,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 
     // The Settings-open update check surfaces here as a snackbar with a Download action.
     val updateReminderTick by viewModel.updateReminderTick.collectAsState()
+
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(updateReminderTick) {
         if (updateReminderTick > 0) {
@@ -342,8 +342,8 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             SettingsScreen(
                 state = settingsState,
                 hapticsEnabled = uiState.hapticsEnabled,
-                updateState = uiState.update,
-                latestVersion = uiState.latestVersion,
+                updateFlow = viewModel.updateFlow,
+                latestVersionFlow = viewModel.latestVersionState,
                 nightActive = uiState.nightActive,
                 listState = settingsListState,
                 collapse = settingsCollapse,
@@ -449,7 +449,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onDigestWindowChange = remember { { viewModel.setDigestWindow(it) } },
                 digestPerType = settingsState.digestPerType,
                 onDigestPerTypeChange = remember { { viewModel.setDigestPerType(it) } },
-                policyWhatIf = policyWhatIf
+                policyWhatIfFlow = viewModel.policyWhatIf
             )
         }
         if (screen == Screen.GUIDE) {

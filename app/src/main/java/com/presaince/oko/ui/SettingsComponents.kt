@@ -51,6 +51,7 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -99,6 +100,8 @@ internal fun AlertToggleRow(
     iconTint: Color? = null,
     iconSize: Dp = 28.dp,
     iconBadge: String? = null,
+    iconBadgeSize: TextUnit = 12.sp,
+    iconBadgeSuperscript: Boolean = false,
     emoji: String? = null,
     note: String? = null,
     noteIcon: Painter? = null,
@@ -147,8 +150,12 @@ internal fun AlertToggleRow(
                         Text(
                             text = iconBadge,
                             color = iconTint ?: MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 12.sp,
+                            fontSize = iconBadgeSize,
                             fontWeight = FontWeight.SemiBold,
+                            style = LocalTextStyle.current.copy(
+                                baselineShift = if (iconBadgeSuperscript) BaselineShift.Superscript
+                                else BaselineShift.None
+                            ),
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .offset(x = 2.dp, y = (-3).dp)

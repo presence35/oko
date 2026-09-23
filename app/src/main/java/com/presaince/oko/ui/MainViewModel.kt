@@ -408,6 +408,10 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     /** Bumped each time a Settings-open check finds an available update (remind-only or fresh). */
     private val updateReminderFlow = MutableStateFlow(0)
     val updateReminderTick: StateFlow<Int> get() = updateReminderFlow
+    /** Stable flow handles so Settings collects update state in its own leaf item instead of
+     *  re-reading uiState (which rebuilds on the live threat feed). */
+    val updateFlow: StateFlow<UpdateState> get() = updateStateFlow
+    val latestVersionState: StateFlow<String?> get() = latestVersionFlow
 
     // The plugin registry must exist before any property below reads it — property
     // initializers run before the init{} block, so init it here (idempotent; the later

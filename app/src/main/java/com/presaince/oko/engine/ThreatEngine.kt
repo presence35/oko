@@ -253,7 +253,7 @@ class ThreatEngine(
             if (t.status != "active" || t.advisory || t.areaOnly) continue
             if (isStale(t, propsFor(t.type), now)) continue
             if (!inOblast(t.region, t.district, t.locality, token)) continue
-            val distKm = distanceFlat(focus.lat, focus.lon, t.lat, t.lon) / 1000.0
+            val distKm = distanceHaversine(focus.lat, focus.lon, t.lat, t.lon) / 1000.0
             // Only threats inside the user's configured zones qualify as the "reason" — a drone
             // 100km away in the same oblast must not be announced as if it were local.
             val props = propsFor(t.type)

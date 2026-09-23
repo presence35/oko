@@ -7,7 +7,7 @@ import com.presaince.oko.engine.ZoneParams
 import com.presaince.oko.engine.LatLng
 import com.presaince.oko.engine.NormalizedThreat
 import com.presaince.oko.engine.OblastAlert
-import com.presaince.oko.engine.distanceFlat
+import com.presaince.oko.engine.distanceHaversine
 import com.presaince.oko.engine.toThreatType
 import kotlin.math.roundToInt
 
@@ -93,7 +93,7 @@ fun computeWidgetSnapshot(
         count++
         typeCounts[nt.type.toThreatType()] = (typeCounts[nt.type.toThreatType()] ?: 0) + 1
         if (focus != null) {
-            val d = distanceFlat(focus.lat, focus.lon, nt.lat, nt.lon) / 1000.0
+            val d = distanceHaversine(focus.lat, focus.lon, nt.lat, nt.lon) / 1000.0
             if (nearestKm == null || d < nearestKm) nearestKm = d
             if (d < nearestDist) {
                 nearestDist = d

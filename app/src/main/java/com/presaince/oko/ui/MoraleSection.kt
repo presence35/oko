@@ -25,6 +25,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /** Single-select chip with the standard selector styling (same as OverlapModeChip). */
 @Composable
@@ -165,7 +166,9 @@ internal fun MoraleToggles(
             checked = neutralizedTallyEnabled,
             onCheckedChange = onNeutralizedTallyChange,
             icon = rememberVectorPainter(Icons.Default.Notifications),
-            iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+            iconBadge = "1",
+            iconBadgeSize = 14.sp
         )
         if (neutralizedTallyEnabled) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -187,7 +190,8 @@ internal fun MoraleToggles(
             onCheckedChange = onAlarmEpisodeTallyChange,
             icon = rememberVectorPainter(Icons.Default.Notifications),
             iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-            iconBadge = "1"
+            iconBadge = "2",
+            iconBadgeSuperscript = true
         )
     }
 }
