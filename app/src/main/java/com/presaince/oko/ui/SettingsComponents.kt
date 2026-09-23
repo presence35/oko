@@ -147,9 +147,11 @@ internal fun AlertToggleRow(
                         Text(
                             text = iconBadge,
                             color = iconTint ?: MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 9.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.align(Alignment.BottomEnd)
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = 2.dp, y = (-3).dp)
                         )
                     }
                 }

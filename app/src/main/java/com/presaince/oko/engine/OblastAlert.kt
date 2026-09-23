@@ -184,6 +184,9 @@ fun officialYellowAlertActiveFor(
     scope: Boolean
 ): Boolean = alerts.officialStateFor(token, cityUa, scope).level == AlertLevel.YELLOW
 
+/** What a latched official episode does on a new alert snapshot: hold or end. */
+enum class EpisodeTransition { STAY, ENDED }
+
 data class LatchedEpisode(
     val level: AlertLevel,
     val token: String,
@@ -192,6 +195,13 @@ data class LatchedEpisode(
 ) {
     fun isRawActive(alerts: List<OblastAlert>): Boolean =
         alerts.officialStateFor(token, null, false).level != AlertLevel.NONE
+
+    /** Pure episode transition: an unready feed (no snapshot heard yet) holds the
+     *  episode rather than ending it, so a cold start can never synthesize an
+     *  all-clear out of the initial empty. Only a ready feed showing no raw
+     *  alert ends the episode. */
+    fun resolve(alertsReady: Boolean, alerts: List<OblastAlert>): EpisodeTransition =
+        if (!alertsReady || isRawActive(alerts)) EpisodeTransition.STAY else EpisodeTransition.ENDED
 
     companion object {
         fun parse(s: String?): LatchedEpisode? {

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -55,6 +56,12 @@ class SourceRegistry {
 
     private val _allAlerts = MutableStateFlow<List<OblastAlert>>(emptyList())
     val allAlerts: StateFlow<List<OblastAlert>> = _allAlerts.asStateFlow()
+
+    /** True once any source has delivered a real alert snapshot (even an empty all-clear).
+     *  A bare empty [allAlerts] conflates "no data yet" with "alert over" — consumers must
+     *  hold their episode state while this is false, never end it. */
+    private val _alertsReady = MutableStateFlow(false)
+    val alertsReady: StateFlow<Boolean> = _alertsReady.asStateFlow()
 
     private val _connectionState = MutableStateFlow(SourceState.DISCONNECTED)
     val connectionState: StateFlow<SourceState> = _connectionState.asStateFlow()
@@ -147,7 +154,10 @@ class SourceRegistry {
             source.threats.collect { remergeThreats() }
         }
         scope.launch {
-            source.alerts.collect { remergeAlerts() }
+            // drop(1) skips the StateFlow's current value at subscribe time — only a real
+            // snapshot delivery marks the feed ready, so a cold start never reads the
+            // initial empty as an all-clear. The current value is merged below instead.
+            source.alerts.drop(1).collect { remergeAlerts(markAlertsReady = true) }
         }
         scope.launch {
             source.connectionState.collect { recheckConnection() }
@@ -167,6 +177,8 @@ class SourceRegistry {
                 }
             }
         }
+        remergeThreats()
+        remergeAlerts()
         recheckConnection()
     }
 
@@ -220,7 +232,8 @@ class SourceRegistry {
      * With a single registered source this degenerates to a plain pass-through of that source's
      * alerts. Multi-source takeover/priority logic is deferred; this existing merge is kept.
      */
-    private fun remergeAlerts() {
+    private fun remergeAlerts(markAlertsReady: Boolean = false) {
+        if (markAlertsReady) _alertsReady.value = true
         val active = enabledSources
         val authoritative = active.filter { it.isAuthoritativeAlertSource() }
         val ordered = if (authoritative.isNotEmpty()) authoritative else _sources.value

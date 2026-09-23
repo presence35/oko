@@ -21,3 +21,8 @@ const val UA_PAN_MAX_LON = 45.0
 /** Odesa city centre — fallback camera target before the first GPS fix. */
 const val ODESA_LAT = 46.4832
 const val ODESA_LON = 30.7346
+
+/** True when a fix is usable as an app focus: finite and inside the wide Ukraine bounds. */
+fun isInsideUkraine(lat: Double, lon: Double): Boolean =
+    lat.isFinite() && lon.isFinite() &&
+        lat in UA_WIDE_MIN_LAT..UA_WIDE_MAX_LAT && lon in UA_WIDE_MIN_LON..UA_WIDE_MAX_LON

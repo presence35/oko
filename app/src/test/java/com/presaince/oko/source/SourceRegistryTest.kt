@@ -121,6 +121,20 @@ class SourceRegistryTest {
     }
 
     @Test
+    fun `alertsReady false until first snapshot then stays true`() {
+        val registry = SourceRegistry()
+        assertFalse(registry.alertsReady.value)
+        val a = FakeSource("a")
+        registry.register(a, testScope())
+        assertFalse(registry.alertsReady.value)
+        a.emitAlerts(listOf(OblastAlert("k1", "n1", "Odesa", null)))
+        assertTrue(registry.alertsReady.value)
+        a.emitAlerts(emptyList())
+        assertTrue(registry.alertsReady.value)
+        assertTrue(registry.allAlerts.value.isEmpty())
+    }
+
+    @Test
     fun `worst connection state wins`() {
         val registry = SourceRegistry()
         val a = FakeSource("a", connectionInit = SourceState.CONNECTED)

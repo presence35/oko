@@ -165,8 +165,7 @@ internal fun MoraleToggles(
             checked = neutralizedTallyEnabled,
             onCheckedChange = onNeutralizedTallyChange,
             icon = rememberVectorPainter(Icons.Default.Notifications),
-            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-            iconBadge = "21"
+            iconTint = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (neutralizedTallyEnabled) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

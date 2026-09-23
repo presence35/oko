@@ -686,7 +686,7 @@ fun resolveFocus(
             gpsFixMissing = false
         )
     }
-    val attribution = lastGps?.let { gps ->
+    val attribution = lastGps?.takeIf { isInsideUkraine(it.lat, it.lon) }?.let { gps ->
         Cities.nearestCity(gps.lat, gps.lon)?.let { city ->
             FocusAttribution(
                 token = Cities.cityOblast[city.nameUa],
@@ -695,12 +695,13 @@ fun resolveFocus(
             )
         } ?: COUNTRY_WIDE_ATTRIBUTION
     } ?: COUNTRY_WIDE_ATTRIBUTION
+    val usableGps = lastGps?.takeIf { isInsideUkraine(it.lat, it.lon) }
     return Focus(
-        location = lastGps,
+        location = usableGps,
         attribution = attribution,
         pinned = false,
         gpsFresh = gpsFresh,
-        gpsFixMissing = followMe && lastGps == null
+        gpsFixMissing = followMe && usableGps == null
     )
 }
 

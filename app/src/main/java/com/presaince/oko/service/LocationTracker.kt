@@ -355,6 +355,7 @@ object LocationTracker {
     }
 
     private fun recordFix(loc: Location) {
+        if (!isInsideUkraine(loc.latitude, loc.longitude)) return
         _location.value = LatLng(loc.latitude, loc.longitude)
         val now = System.currentTimeMillis()
         val fixTime = if (loc.time > 0L) loc.time else now
@@ -381,6 +382,7 @@ object LocationTracker {
             val fixMs = prefs.getString(KEY_FIX_MS, null)?.toLongOrNull() ?: return
             if (!lat.isFinite() || !lon.isFinite()) return
             if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return
+            if (!isInsideUkraine(lat, lon)) return
             _location.value = LatLng(lat, lon)
             _lastFixAtMs.value = fixMs
             _lastReceivedAtMs.value = fixMs
@@ -404,7 +406,9 @@ object LocationTracker {
     private fun pickLastKnown(ctx: Context): Location? {
         val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val net = runCatching { lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) }.getOrNull()
+            ?.takeIf { isInsideUkraine(it.latitude, it.longitude) }
         val gps = runCatching { lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) }.getOrNull()
+            ?.takeIf { isInsideUkraine(it.latitude, it.longitude) }
         return when {
             net == null -> gps
             gps == null -> net

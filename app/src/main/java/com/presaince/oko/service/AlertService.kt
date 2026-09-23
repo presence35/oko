@@ -39,6 +39,7 @@ import com.presaince.oko.engine.LatLng
 import com.presaince.oko.engine.OblastAlert
 import com.presaince.oko.engine.AlertLevel
 import com.presaince.oko.engine.LatchedEpisode
+import com.presaince.oko.engine.EpisodeTransition
 import com.presaince.oko.engine.officialStateFor
 import com.presaince.oko.Transliteration
 import com.presaince.oko.ThreatType
@@ -239,6 +240,7 @@ class AlertService : Service() {
         val threats: Map<String, NormalizedThreat>,
         val rawThreats: Map<String, NormalizedThreat> = emptyMap(),
         val alerts: List<OblastAlert>,
+        val alertsReady: Boolean = false,
         val criticalOfflineOverride: Boolean,
         val criticalOfflineBypassSilent: Boolean,
         val fastVibrationLevel: Int,
@@ -454,7 +456,8 @@ class AlertService : Service() {
                 val rawThreats: Map<String, NormalizedThreat>,
                 val alerts: List<OblastAlert>,
                 val gps: LatLng?,
-                val now: Long
+                val now: Long,
+                val alertsReady: Boolean
             )
 
             val registry = AppSources.registry
@@ -468,14 +471,16 @@ val mappedThreats = registry.allThreats.map { list ->
                 LocationTracker.location,
                 nowFlow,
                 registry.connectionState,
-                registry.degradedSince
+                registry.degradedSince,
+                registry.alertsReady
             ) { values: Array<Any?> ->
                 @Suppress("UNCHECKED_CAST")
                 LiveInputs(
                     rawThreats = values[0] as Map<String, NormalizedThreat>,
                     alerts = values[1] as List<OblastAlert>,
                     gps = values[2] as LatLng?,
-                    now = values[3] as Long
+                    now = values[3] as Long,
+                    alertsReady = values[6] as Boolean
                 )
             }
 
@@ -483,7 +488,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 liveFlow,
                 prefs.preferences
             ) { live, p ->
-                val (rawThreats, alerts, gps, now) = live
+                val (rawThreats, alerts, gps, now, alertsReady) = live
                 val nowMin = nowMinuteOfDay()
                 val nightActive = p.nightEnabled && isWithinNight(nowMin, p.nightStartMin, p.nightEndMin)
                 val dayParams = ZoneParams(p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin)
@@ -589,6 +594,7 @@ fastYellowArmed = p.fastYellowArmed,
                     threats = threats,
                     rawThreats = rawThreats,
                     alerts = alerts,
+                    alertsReady = alertsReady,
                     criticalOfflineOverride = p.criticalOfflineOverride,
                     criticalOfflineBypassSilent = p.criticalOfflineBypassSilent,
                     fastVibrationLevel = fastVib,
@@ -618,7 +624,9 @@ fastYellowArmed = p.fastYellowArmed,
         }
 
         val latchedEarly = LatchedEpisode.parse(lastOfficialEpisode)
-        val latchedAliveEarly = latchedEarly?.isRawActive(state.alerts) == true
+        // Unknown feed holds the episode: until the first real snapshot arrives the
+        // latch counts as alive, so no all-clear, no notif teardown, no tally close.
+        val latchedAliveEarly = latchedEarly?.resolve(state.alertsReady, state.alerts) == EpisodeTransition.STAY
         val effLevelEarly = if (latchedAliveEarly) latchedEarly!!.level else state.focusOblastLevel
 
         val registry = AppSources.registry
