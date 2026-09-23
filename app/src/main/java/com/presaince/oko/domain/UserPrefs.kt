@@ -288,7 +288,17 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setThreatAlertsEnabled(type: ThreatType, enabled: Boolean) {
-        context.dataStore.edit { it[cachedBooleanKey("threat_alert_${type.name}")] = enabled }
+        context.dataStore.edit {
+            it[cachedBooleanKey("threat_alert_${type.name}")] = enabled
+            if (enabled) it[cachedBooleanKey("threat_map_${type.name}")] = true
+        }
+    }
+
+    suspend fun setThreatEnabled(type: ThreatType, enabled: Boolean) {
+        context.dataStore.edit {
+            it[cachedBooleanKey("threat_map_${type.name}")] = enabled
+            it[cachedBooleanKey("threat_alert_${type.name}")] = enabled
+        }
     }
 
     suspend fun setThreatMapVisibleBatch(types: Set<ThreatType>, visible: Boolean) {

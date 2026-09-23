@@ -1383,7 +1383,6 @@ fun setAlertsArmed(armed: Boolean) {
     fun setThreatAlertsEnabled(type: ThreatType, enabled: Boolean) {
         viewModelScope.launch {
             prefs.setThreatAlertsEnabled(type, enabled)
-            if (enabled) prefs.setThreatMapVisible(type, true)
             maybeShowToggleHint(mapToast = false)
         }
     }
@@ -1391,8 +1390,7 @@ fun setAlertsArmed(armed: Boolean) {
     /** Wizard grid: one tap enables/disables a threat type for the map AND alerts together. */
     fun setThreatEnabled(type: ThreatType, enabled: Boolean) {
         viewModelScope.launch {
-            prefs.setThreatMapVisible(type, enabled)
-            prefs.setThreatAlertsEnabled(type, enabled)
+            prefs.setThreatEnabled(type, enabled)
         }
     }
 
