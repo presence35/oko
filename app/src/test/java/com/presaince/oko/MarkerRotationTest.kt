@@ -5,12 +5,10 @@ import org.junit.Test
 
 class MarkerRotationTest {
 
-    /** osmdroid renders `marker.rotation` negated (`Marker.draw` passes `-mBearing` into
-     *  `Canvas.rotate`, where a positive angle is clockwise on screen). So the compass bearing a
-     *  nose-up icon appears to point at is `base - rotation`. The marker rotation must satisfy
-     *  `base - rotation == course` for the icon to face its travel direction. */
+    // Android Canvas/Matrix rotates clockwise, so an icon with baked orientation `base`
+    // points along `(base + rotation) % 360`.
     private fun displayedFacing(rotation: Float, base: Float): Float {
-        val raw = base - rotation
+        val raw = base + rotation
         return (raw % 360f + 360f) % 360f
     }
 
@@ -41,9 +39,9 @@ class MarkerRotationTest {
     }
 
     @Test
-    fun `rotation is the negative of the compass offset`() {
-        assertEquals(-90f, threatMarkerRotation(90f, 0f), 0.001f)
-        assertEquals(-270f, threatMarkerRotation(90f, 180f), 0.001f)
+    fun `rotation is the clockwise compass offset from icon base`() {
+        assertEquals(90f, threatMarkerRotation(90f, 0f), 0.001f)
+        assertEquals(270f, threatMarkerRotation(90f, 180f), 0.001f)
         assertEquals(0f, threatMarkerRotation(45f, 45f), 0.001f)
     }
 }

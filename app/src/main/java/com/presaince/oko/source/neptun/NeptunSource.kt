@@ -9,10 +9,10 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import com.presaince.oko.ConnEvent
-import com.presaince.oko.ConnEventKind
-import com.presaince.oko.ConnRetryState
 import com.presaince.oko.ConnectionLog
+import com.presaince.oko.connection.ConnEvent
+import com.presaince.oko.connection.ConnEventKind
+import com.presaince.oko.connection.ConnRetryState
 import com.presaince.oko.connection.ConnectionState
 import com.presaince.oko.connection.ResilientConnectionSupervisor
 import com.presaince.oko.connection.isConnected
