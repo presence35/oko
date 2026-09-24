@@ -187,6 +187,11 @@ fun officialYellowAlertActiveFor(
 /** What a latched official episode does on a new alert snapshot: hold or end. */
 enum class EpisodeTransition { STAY, ENDED }
 
+/** What a *restored* (process-lifetime-foreign) latch does when the feed says ended:
+ *  fire the all-clear only for episodes observed live in this lifetime; otherwise
+ *  expire silently so a stale persisted latch can never chime again. */
+enum class RestoredResolution { FIRE_OFF, EXPIRE_SILENTLY, HOLD }
+
 data class LatchedEpisode(
     val level: AlertLevel,
     val token: String,
@@ -202,6 +207,16 @@ data class LatchedEpisode(
      *  alert ends the episode. */
     fun resolve(alertsReady: Boolean, alerts: List<OblastAlert>): EpisodeTransition =
         if (!alertsReady || isRawActive(alerts)) EpisodeTransition.STAY else EpisodeTransition.ENDED
+
+    /** Second gate for restores: only an episode confirmed live in this lifetime may
+     *  end loudly. A latch resurrected from persistence that was never observed live
+     *  expires without notification, chime or log — it ended while we were dead. */
+    fun resolveRestored(confirmedLive: Boolean, transition: EpisodeTransition): RestoredResolution =
+        when {
+            transition == EpisodeTransition.STAY -> RestoredResolution.HOLD
+            confirmedLive -> RestoredResolution.FIRE_OFF
+            else -> RestoredResolution.EXPIRE_SILENTLY
+        }
 
     companion object {
         fun parse(s: String?): LatchedEpisode? {

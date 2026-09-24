@@ -40,6 +40,7 @@ import com.presaince.oko.engine.OblastAlert
 import com.presaince.oko.engine.AlertLevel
 import com.presaince.oko.engine.LatchedEpisode
 import com.presaince.oko.engine.EpisodeTransition
+import com.presaince.oko.engine.RestoredResolution
 import com.presaince.oko.engine.officialStateFor
 import com.presaince.oko.Transliteration
 import com.presaince.oko.ThreatType
@@ -147,6 +148,10 @@ class AlertService : Service() {
     /** Announced official episode for ANY level (red/yellow share it): LEVEL|token|since|city.
      *  Persisted pre-level as token|since|city — adopted silently on upgrade (see restore). */
     private var lastOfficialEpisode: String? = null
+    /** True once the latched episode was observed raw-active on a ready feed in this
+     *  lifetime. A restored latch starts unconfirmed: only a confirmed episode may end
+     *  loudly; an unconfirmed one expires silently on its first inactive snapshot. */
+    private var latchedConfirmedLive = false
     private var lastChannelLang: AppLanguage? = null
     private var emptySince: Long? = null
 
@@ -627,6 +632,9 @@ fastYellowArmed = p.fastYellowArmed,
         // Unknown feed holds the episode: until the first real snapshot arrives the
         // latch counts as alive, so no all-clear, no notif teardown, no tally close.
         val latchedAliveEarly = latchedEarly?.resolve(state.alertsReady, state.alerts) == EpisodeTransition.STAY
+        if (latchedEarly != null && state.alertsReady && latchedEarly.isRawActive(state.alerts)) {
+            latchedConfirmedLive = true
+        }
         val effLevelEarly = if (latchedAliveEarly) latchedEarly!!.level else state.focusOblastLevel
 
         val registry = AppSources.registry
@@ -908,6 +916,14 @@ fastYellowArmed = p.fastYellowArmed,
                 lastOfficialEpisode = boundary
             }
             if (latched != null && !latchedAlive && state.officialAlertsEnabled) {
+                if (latched.resolveRestored(latchedConfirmedLive, EpisodeTransition.ENDED) == RestoredResolution.EXPIRE_SILENTLY) {
+                    // Resurrected latch never observed live in this lifetime: the episode
+                    // ended while we were dead. Drop it without notification, chime or log.
+                    clearOfficialAnnounced()
+                    lastOfficialEpisode = null
+                    latchedConfirmedLive = false
+                    return@reconcileEpisode
+                }
                 if (alertable.isEmpty()) cancelAlert()
                 allClearSwipedAway = false
                 val allClearCity = latched.city
@@ -932,6 +948,8 @@ fastYellowArmed = p.fastYellowArmed,
                     now = System.currentTimeMillis()
                 )
                 lastOfficialEpisode = null
+                latchedConfirmedLive = false
+                clearOfficialAnnounced()
             }
             val shownOfficial = lastShownId?.startsWith("red|") == true || lastShownId?.startsWith("yellow|") == true
             if (shownOfficial && primary == null &&
@@ -1003,28 +1021,35 @@ fastYellowArmed = p.fastYellowArmed,
         // sound/silent/suppress above; below only executes. Official paths untouched.
         val primary = buildPrimary(state, all)
         reconcileEpisode(primary, state, all)
-        reconcileNotif(primary, state)
-        // Cold start with restored presence: the ongoing alert has no visible
-        // notification (nothing was re-raised). Re-post it silently once. Retried
-        // until it fires — a loud onset in between claims lastShownId first and
-        // wins, which is the correct outcome for a genuinely new threat.
-        if (!coldStartRepostDone && lastShownId == null && restoredPresence && primary != null) {
+        // Cold start: an adopted episode (restored latch / seeded zone presence) is
+        // non-onset with lastShownId == null, which reconcileNotif would file under
+        // "dismissed, don't re-raise" — leaving the ongoing alert notification-less
+        // after every update/reboot/crash. Claim it here with one silent repost; a
+        // loud onset in between skips this (isOnset) and wins in reconcileNotif.
+        // A user swipe is never overridden: lastShownId is only null in a fresh process.
+        if (!coldStartRepostDone && lastShownId == null && primary != null && !primary.isOnset &&
+            (primary.zone == null || restoredPresence)
+        ) {
             coldStartRepostDone = true
             postAlert(primary.zone, primary.level, primary.title, primary.body,
                 state.zoneSirenOverride ?: state.officialSirenOverride,
                 revealThreat = primary.revealThreat, silent = true, vibrationLevel = primary.vibration)
             lastShownId = primary.identity
         }
-
+        reconcileNotif(primary, state)
         // Morale-only episode window: region-latched, same gate as the all-clear.
+        // An unconfirmed (never observed live) window closes silently — no summary
+        // for an episode this lifetime never owned.
         val alarmNowActive = effLevel != AlertLevel.NONE
         if (alarmNowActive && !episodeActive) {
             episodeActive = true
             episodeTally.begin(effCity, now)
         } else if (!alarmNowActive && episodeActive) {
             episodeActive = false
-            episodeTally.finish(state.focusBannerCity, state.lang, state.officialAlertsEnabled, now)
-            lastEpisodeReplay = episodeTally.snapshot()
+            if (latchedConfirmedLive) {
+                episodeTally.finish(state.focusBannerCity, state.lang, state.officialAlertsEnabled, now)
+                lastEpisodeReplay = episodeTally.snapshot()
+            }
         }
 
         val nowForSweep = System.currentTimeMillis()

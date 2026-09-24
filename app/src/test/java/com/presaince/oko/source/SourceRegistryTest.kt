@@ -135,6 +135,19 @@ class SourceRegistryTest {
     }
 
     @Test
+    fun `late prefilled snapshot merges without priming readiness`() {
+        val registry = SourceRegistry()
+        val a = FakeSource("a")
+        a.emitAlerts(listOf(OblastAlert("k1", "n1", "Odesa", null)))
+        registry.register(a, testScope())
+        assertEquals(1, registry.allAlerts.value.size)
+        assertFalse(registry.alertsReady.value)
+        a.emitAlerts(listOf(OblastAlert("k1", "n1", "Odesa", null), OblastAlert("k2", "n2", "Kyiv", null)))
+        assertTrue(registry.alertsReady.value)
+        assertEquals(2, registry.allAlerts.value.size)
+    }
+
+    @Test
     fun `worst connection state wins`() {
         val registry = SourceRegistry()
         val a = FakeSource("a", connectionInit = SourceState.CONNECTED)

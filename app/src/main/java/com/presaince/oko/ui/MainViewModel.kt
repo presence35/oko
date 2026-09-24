@@ -921,6 +921,13 @@ showBorders = prefs.showBorders,
         flow {
             val initialThreat = sel.selected?.let { s -> threatsFlow.value[s.id] ?: s }
             if (initialThreat != null) {
+                if (BuildConfig.DEBUG) { // TEMP-PERF
+                    android.util.Log.d(
+                        "PerfTrace",
+                        "shell id=${initialThreat.id} type=${initialThreat.type} sim=${initialThreat.simulated} " +
+                            "trail=${initialThreat.trail.size} courseLen=${initialThreat.explanationShort?.length} t=${System.currentTimeMillis()}"
+                    )
+                }
                 val isNeutralized = sel.selected != null && sel.selected.id == sel.neutralizedId
                 if (isNeutralized) {
                     emit(
@@ -997,6 +1004,9 @@ showBorders = prefs.showBorders,
                     fakeNeutralize = sel.fakeNeutralize
                 )
             }.distinctUntilChanged(::areSelectionUiVisuallyEqual).flowOn(Dispatchers.Default).collect { enriched ->
+                if (BuildConfig.DEBUG && enriched.selected?.id == sel.selected?.id) { // TEMP-PERF
+                    android.util.Log.d("PerfTrace", "enrich id=${enriched.selected?.id} t=${System.currentTimeMillis()}")
+                }
                 emit(enriched)
             }
         }

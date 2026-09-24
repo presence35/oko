@@ -1316,6 +1316,10 @@ private fun ThreatCardHost(
                 .onGloballyPositioned { coords ->
                     val h = coords.size.height
                     if (h != lastReportedHeight) {
+                        // TEMP-PERF: first layout = pixels on screen (composition vs layout split).
+                        if (BuildConfig.DEBUG && h > 0 && lastReportedHeight == 0) {
+                            android.util.Log.d("PerfTrace", "card laid out h=$h t=${System.currentTimeMillis()}")
+                        }
                         lastReportedHeight = h
                         onHeightChanged(h)
                     }

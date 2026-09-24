@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -154,10 +153,16 @@ class SourceRegistry {
             source.threats.collect { remergeThreats() }
         }
         scope.launch {
-            // drop(1) skips the StateFlow's current value at subscribe time — only a real
-            // snapshot delivery marks the feed ready, so a cold start never reads the
-            // initial empty as an all-clear. The current value is merged below instead.
-            source.alerts.drop(1).collect { remergeAlerts(markAlertsReady = true) }
+            // Every emission merges (even the first — a late subscriber must never drop
+            // a real snapshot). Readiness is separate: the first observed value is the
+            // baseline, only the second+ proves a live snapshot delivery, so a cold
+            // start never reads the initial empty as an all-clear.
+            var snapshotSeen = false
+            source.alerts.collect {
+                remergeAlerts()
+                if (snapshotSeen) _alertsReady.value = true
+                snapshotSeen = true
+            }
         }
         scope.launch {
             source.connectionState.collect { recheckConnection() }
@@ -232,8 +237,7 @@ class SourceRegistry {
      * With a single registered source this degenerates to a plain pass-through of that source's
      * alerts. Multi-source takeover/priority logic is deferred; this existing merge is kept.
      */
-    private fun remergeAlerts(markAlertsReady: Boolean = false) {
-        if (markAlertsReady) _alertsReady.value = true
+    private fun remergeAlerts() {
         val active = enabledSources
         val authoritative = active.filter { it.isAuthoritativeAlertSource() }
         val ordered = if (authoritative.isNotEmpty()) authoritative else _sources.value

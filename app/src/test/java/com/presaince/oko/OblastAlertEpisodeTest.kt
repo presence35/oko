@@ -4,6 +4,7 @@ import com.presaince.oko.engine.AlertLevel
 import com.presaince.oko.engine.EpisodeTransition
 import com.presaince.oko.engine.LatchedEpisode
 import com.presaince.oko.engine.OblastAlert
+import com.presaince.oko.engine.RestoredResolution
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -30,5 +31,27 @@ class OblastAlertEpisodeTest {
     @Test
     fun `unready active feed holds the episode`() {
         assertEquals(EpisodeTransition.STAY, latched.resolve(false, active))
+    }
+
+    @Test
+    fun `unconfirmed ended latch expires silently`() {
+        assertEquals(
+            RestoredResolution.EXPIRE_SILENTLY,
+            latched.resolveRestored(false, EpisodeTransition.ENDED)
+        )
+    }
+
+    @Test
+    fun `confirmed ended latch fires the all-clear`() {
+        assertEquals(
+            RestoredResolution.FIRE_OFF,
+            latched.resolveRestored(true, EpisodeTransition.ENDED)
+        )
+    }
+
+    @Test
+    fun `held latch never resolves loudly or silently`() {
+        assertEquals(RestoredResolution.HOLD, latched.resolveRestored(false, EpisodeTransition.STAY))
+        assertEquals(RestoredResolution.HOLD, latched.resolveRestored(true, EpisodeTransition.STAY))
     }
 }

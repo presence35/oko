@@ -240,6 +240,7 @@ fun ThreatPopupCard(
     // transliterated (place names are romanized, never semantically translated).
     // The national MiG carries descriptors, not places — fixed EN text instead.
     val cardText = remember(threat.id, threat.type, threat.locality, threat.district, threat.region, threat.explanationShort, lang, s.noRegion) {
+        val ct0 = if (com.presaince.oko.BuildConfig.DEBUG) System.currentTimeMillis() else 0L // TEMP-PERF
         val regionText = listOf(threat.locality, threat.district, threat.region)
             .filter { !it.isNullOrBlank() }
             .distinct()
@@ -253,6 +254,9 @@ fun ThreatPopupCard(
         val shownCourse = translateCourseAssessment(threat.explanationShort, lang)
             ?.let { firstSentence(it) }
             ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, regionText) }
+        if (com.presaince.oko.BuildConfig.DEBUG) { // TEMP-PERF
+            android.util.Log.d("PerfTrace", "cardText id=${threat.id} ms=${System.currentTimeMillis() - ct0}")
+        }
         shownCourse to shownRegion
     }
     val (shownCourse, shownRegion) = cardText
