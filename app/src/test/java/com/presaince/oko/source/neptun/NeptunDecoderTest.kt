@@ -70,7 +70,9 @@ class NeptunDecoderTest {
         assertEquals(4, NeptunDecoder.sanitizeCount(rawCount = 1, rawTitle = "Група БпЛА (4+?)"))
         assertEquals(3, NeptunDecoder.sanitizeCount(rawCount = 0, rawTitle = "Шахеди (3)"))
         // Clamp bounds for extreme markers
+        assertEquals(1, NeptunDecoder.sanitizeCount(rawCount = 0, rawTitle = "Ціль (0)"))
         assertEquals(10, NeptunDecoder.sanitizeCount(rawCount = 0, rawTitle = "Група БпЛА (25+)"))
+        assertEquals(10, NeptunDecoder.sanitizeCount(rawCount = 0, rawTitle = "Група БпЛА (99+?)"))
     }
 
     @Test

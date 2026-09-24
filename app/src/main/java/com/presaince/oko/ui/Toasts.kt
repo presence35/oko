@@ -1,4 +1,4 @@
-package com.presaince.oko.ui
+package com.presaince.oko
 
 import com.presaince.oko.theme.AppPalette
 

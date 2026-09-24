@@ -420,7 +420,7 @@ private fun LogsTabPage(
     val subtitle = if (isDecisions) String.format(s.logsSubtitleFormat, rows.size) else null
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         if (isDecisions) {
@@ -471,9 +471,9 @@ private fun LogsTabPage(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 48.dp, horizontal = 24.dp)
+modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 24.dp, horizontal = 24.dp)
                 )
             }
         } else if (groups.isNotEmpty()) {

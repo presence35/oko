@@ -1,30 +1,75 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Flat single-color tryzub for the cold-start splash slot. Same path data as ic_trident,
-  but no gradient: old-API renderers choke on gradient fills here (invisible icon on black),
-  while a solid silhouette renders identically everywhere. Gold on the black splash background.
+  Android 12+ SplashScreen requires a 1:1 square canvas (288dp x 288dp).
+  Non-square aspect ratios get squished/stretched by the splash host container.
+  Centered at (144, 144) and scaled to 0.65 (radius ~67dp) to sit safely within
+  the 160dp circular mask without clipping while preserving the Ukrainian gradient.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="165dp"
-    android:height="230.5dp"
-    android:viewportWidth="165"
-    android:viewportHeight="230.5">
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
 
-    <group android:translateX="82.5">
+    <group
+        android:translateX="144"
+        android:translateY="144">
+        <group
+            android:scaleX="0.65"
+            android:scaleY="0.65"
+            android:translateY="-115.25">
 
-        <path
-            android:pathData="M5.985561 78.82382a104.079383 104.079383 0 0 0 14.053598 56.017033 55 55 0 0 1-13.218774 70.637179A20 20 0 0 0 0 212.5a20 20 0 0 0-6.820384-7.021968 55 55 0 0 1-13.218774-70.637179A104.079383 104.079383 0 0 0-5.98556 78.82382l-1.599642-45.260519A30.103986 30.103986 0 0 1 0 12.5a30.103986 30.103986 0 0 1 7.585202 21.063301zM5 193.624749a45 45 0 0 0 6.395675-53.75496A114.079383 114.079383 0 0 1 0 112.734179a114.079383 114.079383 0 0 1-11.395675 27.13561A45 45 0 0 0-5 193.624749V162.5H5z"
-            android:fillColor="#FFD700" />
-
-        <path
-            android:pathData="M27.779818 75.17546A62.64982 62.64982 0 0 1 60 27.5v145H0l-5-10a22.5 22.5 0 0 1 17.560976-21.95122l14.634147-3.292683a10 10 0 1 0-4.427443-19.503751zm5.998315 34.353887a20 20 0 0 1-4.387889 37.482848l-14.634146 3.292683A12.5 12.5 0 0 0 5 162.5h45V48.265462a52.64982 52.64982 0 0 0-12.283879 28.037802zM42 122.5h10v10H42z"
-            android:fillColor="#FFD700" />
-
-        <group android:scaleX="-1">
             <path
-                android:pathData="M27.779818 75.17546A62.64982 62.64982 0 0 1 60 27.5v145H0l-5-10a22.5 22.5 0 0 1 17.560976-21.95122l14.634147-3.292683a10 10 0 1 0-4.427443-19.503751zm5.998315 34.353887a20 20 0 0 1-4.387889 37.482848l-14.634146 3.292683A12.5 12.5 0 0 0 5 162.5h45V48.265462a52.64982 52.64982 0 0 0-12.283879 28.037802zM42 122.5h10v10H42z"
-                android:fillColor="#FFD700" />
-        </group>
+                android:pathData="M5.985561 78.82382a104.079383 104.079383 0 0 0 14.053598 56.017033 55 55 0 0 1-13.218774 70.637179A20 20 0 0 0 0 212.5a20 20 0 0 0-6.820384-7.021968 55 55 0 0 1-13.218774-70.637179A104.079383 104.079383 0 0 0-5.98556 78.82382l-1.599642-45.260519A30.103986 30.103986 0 0 1 0 12.5a30.103986 30.103986 0 0 1 7.585202 21.063301zM5 193.624749a45 45 0 0 0 6.395675-53.75496A114.079383 114.079383 0 0 1 0 112.734179a114.079383 114.079383 0 0 1-11.395675 27.13561A45 45 0 0 0-5 193.624749V162.5H5z">
+                <aapt:attr name="android:fillColor">
+                    <gradient
+                        android:type="linear"
+                        android:startX="-82.5"
+                        android:startY="115.25"
+                        android:endX="82.5"
+                        android:endY="115.25">
+                        <item android:offset="0.0" android:color="#0057b7"/>
+                        <item android:offset="0.5" android:color="#ffd700"/>
+                        <item android:offset="1.0" android:color="#0057b7"/>
+                    </gradient>
+                </aapt:attr>
+            </path>
 
+            <path
+                android:pathData="M27.779818 75.17546A62.64982 62.64982 0 0 1 60 27.5v145H0l-5-10a22.5 22.5 0 0 1 17.560976-21.95122l14.634147-3.292683a10 10 0 1 0-4.427443-19.503751zm5.998315 34.353887a20 20 0 0 1-4.387889 37.482848l-14.634146 3.292683A12.5 12.5 0 0 0 5 162.5h45V48.265462a52.64982 52.64982 0 0 0-12.283879 28.037802zM42 122.5h10v10H42z">
+                <aapt:attr name="android:fillColor">
+                    <gradient
+                        android:type="linear"
+                        android:startX="-82.5"
+                        android:startY="115.25"
+                        android:endX="82.5"
+                        android:endY="115.25">
+                        <item android:offset="0.0" android:color="#0057b7"/>
+                        <item android:offset="0.5" android:color="#ffd700"/>
+                        <item android:offset="1.0" android:color="#0057b7"/>
+                    </gradient>
+                </aapt:attr>
+            </path>
+
+            <group android:scaleX="-1">
+                <path
+                    android:pathData="M27.779818 75.17546A62.64982 62.64982 0 0 1 60 27.5v145H0l-5-10a22.5 22.5 0 0 1 17.560976-21.95122l14.634147-3.292683a10 10 0 1 0-4.427443-19.503751zm5.998315 34.353887a20 20 0 0 1-4.387889 37.482848l-14.634146 3.292683A12.5 12.5 0 0 0 5 162.5h45V48.265462a52.64982 52.64982 0 0 0-12.283879 28.037802zM42 122.5h10v10H42z">
+                    <aapt:attr name="android:fillColor">
+                        <gradient
+                            android:type="linear"
+                            android:startX="-82.5"
+                            android:startY="115.25"
+                            android:endX="82.5"
+                            android:endY="115.25">
+                            <item android:offset="0.0" android:color="#0057b7"/>
+                            <item android:offset="0.5" android:color="#ffd700"/>
+                            <item android:offset="1.0" android:color="#0057b7"/>
+                        </gradient>
+                    </aapt:attr>
+                </path>
+            </group>
+
+        </group>
     </group>
 </vector>

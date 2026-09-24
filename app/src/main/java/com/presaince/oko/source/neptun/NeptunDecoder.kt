@@ -30,8 +30,8 @@ class NeptunDecoder(
         const val ALERT_CLEAR_CONFIRM_MS = 30_000L
         private const val TAG = "NeptunDecoder"
 
-        // Upstream formats use parentheses with optional plus and question mark for approximate counts
-        private val EXPLICIT_GROUP_COUNT_REGEX = Regex("""\((?<cnt>\d+)\+\?\)|\((?<cnt>\d+)\+\)|\((?<cnt>\d+)\)""")
+        // Factored into a single capture group to prevent ICU U_REGEX_INVALID_CAPTURE_GROUP_NAME crashes on duplicate group declarations
+        private val EXPLICIT_GROUP_COUNT_REGEX = Regex("""\((\d+)(?:\+\??)?\)""")
 
         // Group formation semantics in titles
         private val GROUP_PAIR_REGEX = Regex("""(?iu)\bпара\b""")
@@ -54,8 +54,8 @@ class NeptunDecoder(
         fun sanitizeCount(rawCount: Int, rawTitle: String): Int {
             val title = rawTitle.trim()
 
-            // Parenthetical count explicitly authored in title overrides raw field
-            EXPLICIT_GROUP_COUNT_REGEX.find(title)?.groups?.get("cnt")?.value?.toIntOrNull()?.let {
+            // Author-provided count in title is authoritative over raw upstream telemetry
+            EXPLICIT_GROUP_COUNT_REGEX.find(title)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let {
                 return it.coerceIn(1, 10)
             }
 
