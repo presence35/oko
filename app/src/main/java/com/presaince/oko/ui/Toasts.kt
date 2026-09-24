@@ -1,4 +1,5 @@
-package com.presaince.oko
+package com.presaince.oko.ui
+
 import com.presaince.oko.theme.AppPalette
 
 import androidx.compose.animation.AnimatedVisibility

@@ -1,10 +1,6 @@
 package com.presaince.oko
 
-import org.json.JSONObject
 import com.presaince.oko.engine.NormalizedThreat
-import com.presaince.oko.engine.TrailPoint
-import com.presaince.oko.engine.toEngineString
-import java.time.Instant
 
 enum class ThreatType(val apiKey: String) {
     SHAHED("shahed"),          // БпЛА — ударні (Shahed-type)
@@ -142,104 +138,6 @@ enum class Reliability { LOW, MEDIUM, HIGH, UNKNOWN;
             else -> UNKNOWN
         }
     }
-}
-
-/** NEPTUN JSON → engine [NormalizedThreat]. NEPTUN-specific parsing stays in the data layer. */
-fun normalizedThreatFromJson(o: JSONObject): NormalizedThreat? {
-    val lat = o.optDouble("lat", Double.NaN)
-    val lon = o.optDouble("lon", Double.NaN)
-    if (lat.isNaN() || lon.isNaN()) return null
-    if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return null
-    if (o.optString("id").isBlank()) return null
-
-    fun optNullable(key: String): String? =
-        o.optString(key, "").takeIf { it.isNotBlank() }
-
-    val velocity = o.optJSONObject("velocity")
-    val speedKmh = velocity?.takeIf { it.has("speedKmh") }?.optDouble("speedKmh", Double.NaN)
-        ?.takeIf { !it.isNaN() }
-    val bearingDeg = velocity?.takeIf { it.has("bearingDeg") }?.optDouble("bearingDeg", Double.NaN)
-        ?.takeIf { !it.isNaN() }
-    val uncertainty = o.optDouble("uncertaintyKm", Double.NaN)
-        .takeIf { !it.isNaN() }
-
-    val now = System.currentTimeMillis()
-    val updatedAt = optNullable("updatedAt")
-    val updatedAtMillis = runCatching { updatedAt?.let { Instant.parse(it).toEpochMilli() } }
-        .getOrNull()?.coerceAtMost(now)
-    val confirmedAt = optNullable("confirmedAt")
-    val confirmedAtMillis = runCatching { confirmedAt?.let { Instant.parse(it).toEpochMilli() } }
-        .getOrNull()?.coerceAtMost(now)
-
-    return NormalizedThreat(
-        id = o.optString("id"),
-        type = ThreatType.fromApi(if (o.has("type") && !o.isNull("type")) o.optString("type") else null).toEngineString(),
-        title = sanitizeCourse(o.optString("title", "")) ?: "",
-        region = optNullable("region"),
-        district = optNullable("district"),
-        locality = optNullable("locality"),
-        lat = lat,
-        lon = lon,
-        heading = if (o.has("heading") && !o.isNull("heading")) o.optDouble("heading") else null,
-        bearingDeg = bearingDeg,
-        status = o.optString("status", "active"),
-        advisory = o.optBoolean("advisory", false),
-        areaOnly = o.optBoolean("areaOnly", false),
-        confirmations = o.optInt("sourceCount", o.optInt("sources", o.optInt("confirmations", 0))),
-        reliability = Reliability.fromApi(
-            optNullable("confidenceLevel") ?: optNullable("reliability")
-        ).name,
-        count = o.optInt("count", 0),
-        explanationShort = sanitizeCourse(optNullable("explanationShort")),
-        speedKmh = speedKmh,
-        uncertaintyKm = uncertainty,
-        positionQuality = optNullable("positionQuality"),
-        confirmedAtMillis = confirmedAtMillis,
-        updatedAtMillis = updatedAtMillis,
-        trail = parseTrail(o)
-    )
-}
-
-/**
- * NEPTUN sometimes fills `explanationShort` with a bare confirmation count
- * (e.g. "Підтверджень: 3") that duplicates our own confirmations pill. Strip any
- * "підтвердж…" phrase and a leading bare-count ("3 джерелами: …"); drop the field
- * entirely when nothing course-relevant remains.
- */
-private fun sanitizeCourse(text: String?): String? {
-    if (text == null) return null
-    val cyr = "[А-Яа-яіїєґІЇЄҐ']"
-    var t = text.replace(Regex("(?iu)підтвердж$cyr*"), " ")
-    t = t.replace(Regex("^[\\s:.,—-]+"), "").trim()
-    t = t.replaceFirst(Regex("(?iu)^\\d+\\s*(?:джерел$cyr*|sources?)?[\\s:.,—-]*"), "").trim()
-    t = t.replace(Regex("(?iu)[\\s:.,—-]+\\d+(?:\\s*(?:джерел$cyr*|sources?|підтвердж$cyr*))?\\s*$"), "")
-    if (t.isEmpty()) return null
-    // A bare count like "3" or "3 джерела" carries no course info.
-    if (t.matches(Regex("(?iu)^\\d+(?:\\s*(?:джерел$cyr*|sources?))?\\.?$"))) return null
-    return t
-}
-
-/**
- * Best-effort trail parser; the API shape is not documented, so accept either
- * objects ({lat,lon[, t]} / {lon,lat}) or coordinate pairs. Returns empty on malformed input.
- */
-private fun parseTrail(o: JSONObject): List<TrailPoint> {
-    val arr = o.optJSONArray("trail") ?: return emptyList()
-    val now = System.currentTimeMillis()
-    val out = ArrayList<TrailPoint>(arr.length())
-    for (i in 0 until arr.length()) {
-        val item = arr.optJSONObject(i) ?: continue
-        if (item.isNull("lat") || item.isNull("lon")) continue
-        val pLat = item.optDouble("lat", Double.NaN)
-        val pLon = item.optDouble("lon", Double.NaN)
-        if (pLat.isNaN() || pLon.isNaN()) continue
-        val t = if (item.has("t") && !item.isNull("t")) {
-            runCatching { Instant.parse(item.optString("t")).toEpochMilli() }.getOrNull()
-                ?.coerceAtMost(now)
-        } else null
-        out.add(TrailPoint(pLat, pLon, t))
-    }
-    return out
 }
 
 private val COURSE_PATTERNS: List<Pair<Regex, String>> = listOf(

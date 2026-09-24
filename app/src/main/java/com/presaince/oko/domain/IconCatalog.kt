@@ -184,6 +184,24 @@ object IconCatalog {
     }
 }
 
+data class Exhaust(
+    val anchorXFrac: Float,
+    val anchorYFrac: Float,
+    val angleBiasDeg: Float = 0f
+)
+
+data class AviationGeometry(
+    val facingDeg: Float,
+    val exhausts: List<Exhaust>
+)
+
+data class IconGeometry(
+    val facingDeg: Float,
+    val anchorXFrac: Float,
+    val anchorYFrac: Float
+)
+
+
 /** Greys the photo/army/comic image itself (keeps its shape) instead of flat-tinting it. */
 private val DimmedPhotoFilter = ColorFilter.colorMatrix(
     ColorMatrix(

@@ -1,4 +1,4 @@
-package com.presaince.oko.source
+package com.presaince.oko.source.neptun
 
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
@@ -8,28 +8,37 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.presaince.oko.ConnEvent
+import com.presaince.oko.ConnEventKind
+import com.presaince.oko.ConnRetryState
 import com.presaince.oko.ConnectionLog
-import com.presaince.oko.connection.*
+import com.presaince.oko.connection.ConnectionState
+import com.presaince.oko.connection.ResilientConnectionSupervisor
+import com.presaince.oko.connection.isConnected
+import com.presaince.oko.connection.isDegraded
 import com.presaince.oko.engine.MonitorCoreImpl
 import com.presaince.oko.engine.NormalizedThreat
 import com.presaince.oko.engine.OblastAlert
 import com.presaince.oko.engine.ThreatProps
+import com.presaince.oko.source.ConnectionLogSource
+import com.presaince.oko.source.OperationalMode
+import com.presaince.oko.source.Source
+import com.presaince.oko.source.SourceState
+import com.presaince.oko.source.SourceTestResult
+import com.presaince.oko.source.SourceType
+import com.presaince.oko.source.ThreatRemoved
 
 /**
- * The NEPTUN source: powered by the resilient threat engine core.
- *
- * Architecture:
- * - [ResilientConnectionSupervisor] owns OS network gating, the 168s silence watchdog, and full-jitter backoff.
- * - [NeptunRawDecoder] decodes frames and manages alert debouncing.
- * - [MonitorCoreImpl] manages authoritative threat/alert state and ingestion-side dead reckoning.
+ * Isolated NEPTUN feed adapter.
+ * Encapsulates the network connection supervisor and the vendor-specific frame decoder,
+ * emitting sanitized domain entities to [MonitorCoreImpl].
  */
 class NeptunSource(private val context: Context) : Source, ConnectionLogSource {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val core = MonitorCoreImpl(context.applicationContext, scope)
-    private val decoder = NeptunRawDecoder(core)
+    private val decoder = NeptunDecoder(core)
 
     private val supervisor = ResilientConnectionSupervisor(
         context = context.applicationContext,
@@ -48,12 +57,10 @@ class NeptunSource(private val context: Context) : Source, ConnectionLogSource {
     override val id = "neptun"
     override val name = "NEPTUN"
     override val sourceType = SourceType.WS
+
     /**
-     * NEPTUN's per-type truth-life: how long each fix type stays alertable (staleAfterMs),
-     * map-visible (staleAfterMs + ghostCapMs), and how far it may dead-reckon. These numbers
-     * encode NEPTUN's feed behavior — they are owned here, never in the source-agnostic
-     * engine. Consumers must read them via [SourceRegistry.typeCatalog], never by
-     * importing this map.
+     * NEPTUN feed characteristics: alert persistence, radar reach, and extrapolation bounds.
+     * Owned within this adapter; consumers read merged attributes through [SourceRegistry.typeCatalog].
      */
     override val typeCatalog: Map<String, ThreatProps> = NEPTUN_TYPES
 
@@ -142,7 +149,7 @@ class NeptunSource(private val context: Context) : Source, ConnectionLogSource {
         ConnectionLog.setPendingSource(sourceId)
     }
 
-private fun mapConnectionState(state: ConnectionState): SourceState = when {
+    private fun mapConnectionState(state: ConnectionState): SourceState = when {
         state.isDegraded -> SourceState.DEGRADED
         state.isConnected -> SourceState.CONNECTED
         state is ConnectionState.Connecting -> SourceState.CONNECTING
@@ -153,11 +160,6 @@ private fun mapConnectionState(state: ConnectionState): SourceState = when {
         const val NEPTUN_DOMAIN = "neptun.in.ua"
         const val NEPTUN_SITE_URL = "https://$NEPTUN_DOMAIN/"
 
-        /**
-         * NEPTUN-owned per-type properties (see [typeCatalog]). Values as sent by NEPTUN.
-         * Only [NeptunSource] may reference this map — every other consumer goes through
-         * the merged [SourceRegistry.typeCatalog] so the engine stays source-agnostic.
-         */
         val NEPTUN_TYPES = mapOf(
             "shahed" to ThreatProps(
                 isFast = false, reachKm = 1000.0, alwaysInnerWithinReach = false,

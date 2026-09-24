@@ -6,7 +6,7 @@ import org.junit.Test
 import com.presaince.oko.Cities
 import com.presaince.oko.community.CompactOblastBoundaries
 import com.presaince.oko.community.CompactRaionBoundaries
-import com.presaince.oko.source.NeptunSource.Companion.NEPTUN_TYPES
+import com.presaince.oko.source.neptun.NeptunSource.Companion.NEPTUN_TYPES
 import com.presaince.oko.threat
 
 class ThreatEngineTest {

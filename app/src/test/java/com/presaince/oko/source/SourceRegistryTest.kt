@@ -14,7 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import com.presaince.oko.connection.Monotonic
-import com.presaince.oko.source.NeptunSource.Companion.NEPTUN_TYPES
+import com.presaince.oko.source.neptun.NeptunSource.Companion.NEPTUN_TYPES
 import com.presaince.oko.engine.NormalizedThreat
 import com.presaince.oko.engine.OblastAlert
 import com.presaince.oko.engine.ThreatProps

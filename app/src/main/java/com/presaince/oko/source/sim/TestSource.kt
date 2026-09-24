@@ -1,4 +1,4 @@
-package com.presaince.oko.source
+package com.presaince.oko.source.sim
 
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
@@ -19,6 +19,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import com.presaince.oko.LocationTracker
 import com.presaince.oko.engine.OblastAlert
+import com.presaince.oko.source.OperationalMode
+import com.presaince.oko.source.Source
+import com.presaince.oko.source.SourceState
+import com.presaince.oko.source.SourceTestResult
+import com.presaince.oko.source.SourceType
 import com.presaince.oko.UPDATE_BASE_URL
 import com.presaince.oko.UA_TIGHT_MIN_LAT
 import com.presaince.oko.UA_TIGHT_MAX_LAT

@@ -5,9 +5,35 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import com.presaince.oko.ThreatType
+import com.presaince.oko.connection.ConnEvent
+import com.presaince.oko.connection.ConnEventKind
+import com.presaince.oko.connection.ConnRetryState
 import com.presaince.oko.engine.NormalizedThreat
 import com.presaince.oko.engine.OblastAlert
 import com.presaince.oko.engine.ThreatProps
+
+/** A source's connection state, surfaced in the Logs Sources tab and the aggregate health. */
+enum class SourceState {
+    DISCONNECTED, CONNECTING, CONNECTED, DEGRADED, OFFLINE
+}
+
+/** A threat just disappeared from a source's feed (resolved or a remove frame) — drives the
+ *  map death animation and the resolved-tally. Source-agnostic removal currency. */
+data class ThreatRemoved(
+    val id: String,
+    val lat: Double,
+    val lon: Double,
+    val type: ThreatType,
+    val courseDeg: Double = 0.0,
+    val region: String? = null,
+    val district: String? = null,
+    val locality: String? = null
+)
+
+/** How long a source may re-report the same resolution before consumers treat it as a real
+ *  replay (NEPTUN re-sends a resolution within a 60s grace window) rather than a fresh strike. */
+const val RESOLVED_REPLAY_GRACE_MS = 60_000L
 
 /** How a source reaches the network. WS sources hold an always-on socket (FGS-safe,
  *  background monitoring). REST sources poll and are battery-managed (adaptive intervals,
@@ -78,4 +104,18 @@ interface Source {
     fun onAppForeground() {}
     /** Optional branding link shown in the Logs header (null = hide). */
     val siteUrl: String? get() = null
+}
+
+/**
+ * Optional capability of a [Source]: rich reconnect diagnostics (offline milestones, retry
+ * countdown, the connection-log card) surfaced through [SourceRegistry] for the Logs sheet.
+ * Only the WS transport source implements it today.
+ */
+interface ConnectionLogSource {
+    val connEvents: StateFlow<List<ConnEvent>>
+    val retryState: StateFlow<ConnRetryState?>
+    fun dismissLogCard()
+    fun annotateConnectionLog(kind: ConnEventKind, attempt: Int? = null, delayMs: Long? = null, detail: String? = null)
+    /** Mirrors which source owns the alert feed into the per-episode log entry. */
+    fun setActiveAlertSource(sourceId: String?)
 }

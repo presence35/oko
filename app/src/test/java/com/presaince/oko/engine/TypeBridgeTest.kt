@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import com.presaince.oko.ThreatType
-import com.presaince.oko.source.NeptunSource.Companion.NEPTUN_TYPES
+import com.presaince.oko.source.neptun.NeptunSource.Companion.NEPTUN_TYPES
 
 class TypeBridgeTest {
 

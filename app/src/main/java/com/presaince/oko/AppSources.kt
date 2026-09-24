@@ -7,9 +7,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import com.presaince.oko.source.NeptunSource
+import com.presaince.oko.source.neptun.NeptunSource
 import com.presaince.oko.source.SourceRegistry
-import com.presaince.oko.source.TestSource
+import com.presaince.oko.source.sim.TestSource
 
 /** App-wide source composition root: builds and owns the [SourceRegistry] with the single
  *  production source (NEPTUN) plus the peace-time Test simulator. Consumers only ever read
