@@ -848,7 +848,6 @@ LaunchedEffect(selectedId) {
 
     // Behavior update ticker
     LaunchedEffect(Unit) {
-        var lastTickMoving: Boolean? = null // TEMP-PERF
         while (true) {
             if (pausedState || !mapVisibleState) {
                 delay(150)
@@ -897,15 +896,6 @@ LaunchedEffect(selectedId) {
             val ring = newRingState.value
             if (ring != null && now >= ring.activeUntilMs) {
                 newRingState.value = null
-            }
-
-            // TEMP-PERF: ticker cadence + cost per tick (old-phone main-thread saturation check).
-            if (com.presaince.oko.BuildConfig.DEBUG) {
-                val tickMs = System.currentTimeMillis() - now
-                if (moving != lastTickMoving || tickMs > 50) {
-                    android.util.Log.d("PerfTrace", "ticker moving=$moving tickMs=$tickMs n=${mapThreatsState.size}")
-                }
-                lastTickMoving = moving
             }
 
             delay(if (moving) 33 else 1000)
@@ -1170,15 +1160,7 @@ LaunchedEffect(selectedId) {
 
                     // 2. Check threat hit if not hit shelter
                     if (!handled) {
-                        val ht0 = System.currentTimeMillis() // TEMP-PERF
                         val bestThreat = findBestThreatAt(screenPt, 4f)
-                        if (com.presaince.oko.BuildConfig.DEBUG) { // TEMP-PERF
-                            android.util.Log.d(
-                                "PerfTrace",
-                                "hitTest ms=${System.currentTimeMillis() - ht0} n=${mapThreatsState.size} " +
-                                    "hit=${bestThreat?.id} type=${bestThreat?.type} sim=${bestThreat?.simulated}"
-                            )
-                        }
                         if (bestThreat != null) {
                             if (hapticsOnState) hapticTick(context)
                             onThreatTapped(bestThreat)

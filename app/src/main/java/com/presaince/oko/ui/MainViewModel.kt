@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.FlowPreview
@@ -298,26 +297,6 @@ data class SelectionSource(val flow: StateFlow<SelectionUi>)
 // only cares at this resolution (its elapsed clock ticks on its own).
 private const val FRESHNESS_BUCKET_MS = 10_000L
 
-// TEMP-PERF: emission-rate counters (DEBUG only) — names the 60Hz driver numerically.
-internal object PerfRate {
-    private val counts = HashMap<String, Int>()
-    private var t0 = System.currentTimeMillis()
-    @Synchronized
-    fun hit(name: String) {
-        if (!BuildConfig.DEBUG) return
-        counts[name] = (counts[name] ?: 0) + 1
-        if (counts.values.sum() >= 120) {
-            val dt = (System.currentTimeMillis() - t0).coerceAtLeast(1)
-            android.util.Log.d(
-                "PerfTrace",
-                "rates over ${dt}ms " + counts.entries.joinToString(" ") { "${it.key}=${it.value}" }
-            )
-            counts.clear()
-            t0 = System.currentTimeMillis()
-        }
-    }
-}
-
 // Stabilizes card state: suppresses re-emission during 120ms tick loops unless user-visible content changes.
 internal fun areSelectionUiVisuallyEqual(old: SelectionUi, new: SelectionUi): Boolean {
     if (old === new) return true
@@ -464,7 +443,6 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     /** Previous tick's engine tiers — the hysteresis band input for the map evaluation. */
     private var lastZoneTiers: Map<String, ThreatZone> = emptyMap()
     private val threatsFlow = registry.allThreats.map { list ->
-        if (BuildConfig.DEBUG) PerfRate.hit("threats") // TEMP-PERF
         list.associate { it.id to it }
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
     private val alertsFlow = registry.allAlerts
@@ -907,7 +885,6 @@ showBorders = prefs.showBorders,
     }
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
-        .onEach { if (BuildConfig.DEBUG) PerfRate.hit("uiState") } // TEMP-PERF
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
@@ -952,13 +929,6 @@ showBorders = prefs.showBorders,
         flow {
             val initialThreat = sel.selected?.let { s -> threatsFlow.value[s.id] ?: s }
             if (initialThreat != null) {
-                if (BuildConfig.DEBUG) { // TEMP-PERF
-                    android.util.Log.d(
-                        "PerfTrace",
-                        "shell id=${initialThreat.id} type=${initialThreat.type} sim=${initialThreat.simulated} " +
-                            "trail=${initialThreat.trail.size} courseLen=${initialThreat.explanationShort?.length} t=${System.currentTimeMillis()}"
-                    )
-                }
                 // Chip state on frame 0 too: read current prefs snapshot without subscribing.
                 val shellAlertsOff = initialThreat.type.toThreatType() in uiState.value.silencedTypes
                 val isNeutralized = sel.selected != null && sel.selected.id == sel.neutralizedId
@@ -1040,14 +1010,10 @@ showBorders = prefs.showBorders,
                     fakeNeutralize = sel.fakeNeutralize
                 )
             }.distinctUntilChanged(::areSelectionUiVisuallyEqual).flowOn(Dispatchers.Default).collect { enriched ->
-                if (BuildConfig.DEBUG && enriched.selected?.id == sel.selected?.id) { // TEMP-PERF
-                    android.util.Log.d("PerfTrace", "enrich id=${enriched.selected?.id} t=${System.currentTimeMillis()}")
-                }
                 emit(enriched)
             }
         }
     }.distinctUntilChanged(::areSelectionUiVisuallyEqual)
-    .onEach { if (BuildConfig.DEBUG) PerfRate.hit("selection") } // TEMP-PERF
     .stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -1683,7 +1649,6 @@ fun setAlertsArmed(armed: Boolean) {
     }
 
     fun selectThreat(threat: NormalizedThreat?) {
-        if (BuildConfig.DEBUG) android.util.Log.d("PerfTrace", "tap selectThreat ${threat?.id} t=${System.currentTimeMillis()}")
         neutralizedFlow.value = null
         fakeNeutralizeFlow.value = false
         selectedThreatFlow.value = threat

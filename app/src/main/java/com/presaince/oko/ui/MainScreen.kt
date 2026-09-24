@@ -1111,7 +1111,6 @@ private fun MapScreen(
             // host, not the map/header/footer scopes around it. Every parameter is a stable
             // type, so feed ticks re-executing this scope stop here instead of recomposing the card.
             val hostHeight = remember(popupCoverPxState) { { h: Int -> popupCoverPxState.intValue = h } }
-            if (BuildConfig.DEBUG) SideEffect { PerfRate.hit("overlay") } // TEMP-PERF: parent-scope rate
             ThreatCardHost(
                 source = source,
                 language = uiState.language,
@@ -1304,11 +1303,6 @@ private fun ThreatCardHost(
     onHeightChanged: (Int) -> Unit = {}
 ) {
     val sel = source.flow.collectAsState().value
-    SideEffect {
-        sel.selected?.let {
-            if (BuildConfig.DEBUG) android.util.Log.d("PerfTrace", "card composed id=${it.id} t=${System.currentTimeMillis()}")
-        }
-    }
     // Back closes the popup first, then exits — fixes "back stuck on home page".
     BackHandler(enabled = sel.selected != null || sel.neutralized != null) { onDismiss() }
 
@@ -1326,10 +1320,6 @@ private fun ThreatCardHost(
                 .onGloballyPositioned { coords ->
                     val h = coords.size.height
                     if (h != lastReportedHeight) {
-                        // TEMP-PERF: first layout = pixels on screen (composition vs layout split).
-                        if (BuildConfig.DEBUG && h > 0 && lastReportedHeight == 0) {
-                            android.util.Log.d("PerfTrace", "card laid out h=$h t=${System.currentTimeMillis()}")
-                        }
                         lastReportedHeight = h
                         onHeightChanged(h)
                     }

@@ -651,7 +651,8 @@ fun SettingsScreen(
                         onCheckedChange = onNotifyPolicyEnabledChange,
                         icon = painterResource(R.drawable.ic_notifications),
                         iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        iconBadge = "Z"
+                        iconBadge = s.quietBadgeMain,
+                        iconBadgeSuperscriptSuffix = s.quietBadgeSuper
                     )
                     AnimatedVisibility(visible = notifyPolicyEnabled) {
                         Column {
@@ -1124,8 +1125,7 @@ fun SettingsScreen(
                             checked = showRegionBorders,
                             onCheckedChange = onShowRegionBordersChange,
                             icon = rememberVectorPainter(Icons.Outlined.CropFree),
-                            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            iconSize = 24.dp
+                            iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Haptic press feedback

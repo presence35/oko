@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import java.io.File
 import kotlin.math.min
@@ -38,12 +39,19 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    /** Set once the first prefs snapshot arrives — lifts the splash, (re)arms monitoring. */
+    @Volatile
+    private var splashReady = false
+
     private companion object {
         const val REQUEST_LOCATION = 1
         const val REQUEST_NOTIFICATIONS = 2
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Branded splash (trident) kept until the first prefs snapshot clears the content
+        // gate — the launch reads as "starting" instead of frozen black.
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         org.maplibre.android.MapLibre.getInstance(this)
         enableEdgeToEdge(
@@ -57,12 +65,17 @@ class MainActivity : ComponentActivity() {
         // touching AppSources.registry before init throws (immediate crash on launch).
         AppSources.ensureInit(applicationContext)
         // Monitoring is always-on: "Stop Monitoring & Exit" is a session-only stop, so a
-        // cold start (re)arms the service before the first frame — no silent dead state.
-        // Never let a failed service/worker start crash the launch itself: a freshly
-        // force-stopped app can still be background-restricted for FGS starts, and the
-        // UI banner already surfaces the dead state instead of going silent.
-        runCatching { AlertService.start(this@MainActivity) }
-        runCatching { com.presaince.oko.service.AlertWatchdog.schedule(applicationContext) }
+        // cold start (re)arms the service — but past the first frame, never ahead of it:
+        // binder + WorkManager enqueue on the critical path is what stretches black on
+        // slow phones. The UI banner already surfaces a dead state instead of going silent.
+        // The splash lifts on the same signal.
+        splashScreen.setKeepOnScreenCondition { !splashReady }
+        lifecycleScope.launch {
+            viewModel.uiState.first { it.wizardCompleted != null }
+            splashReady = true
+            runCatching { AlertService.start(this@MainActivity) }
+            runCatching { com.presaince.oko.service.AlertWatchdog.schedule(applicationContext) }
+        }
         setContent {
             // Cap the system font scale so extreme accessibility sizes can't break the layout;
             // the popup/banner still wrap and scroll up to this ceiling.

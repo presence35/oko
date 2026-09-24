@@ -80,6 +80,8 @@ object Strings {
         val sirenOverrideDesc: String,
         val notifyPolicyEnabledTitle: String,
         val notifyPolicyEnabledDesc: String,
+        val quietBadgeMain: String,
+        val quietBadgeSuper: String,
         val notifyPolicyTitle: String,
         val notifyPolicyDesc: String,
         val policyEveryChangeTitle: String,
@@ -736,6 +738,8 @@ val nightSoundLabel: String,
         val sirenOverrideDesc: String get() = settings.sirenOverrideDesc
         val notifyPolicyEnabledTitle: String get() = settings.notifyPolicyEnabledTitle
         val notifyPolicyEnabledDesc: String get() = settings.notifyPolicyEnabledDesc
+        val quietBadgeMain: String get() = settings.quietBadgeMain
+        val quietBadgeSuper: String get() = settings.quietBadgeSuper
         val notifyPolicyTitle: String get() = settings.notifyPolicyTitle
         val notifyPolicyDesc: String get() = settings.notifyPolicyDesc
         val policyEveryChangeTitle: String get() = settings.policyEveryChangeTitle

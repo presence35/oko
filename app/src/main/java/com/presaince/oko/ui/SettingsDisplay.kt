@@ -441,90 +441,52 @@ internal fun AlertRegionModeRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // 1. City labels: dark card, clean white font, centered text
-            val isCityLabels = selected == AlertRegionMode.CITY_LABELS
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(42.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(AppPalette.Card))
-                    .border(
-                        width = if (isCityLabels) 2.dp else 1.dp,
-                        color = if (isCityLabels) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                    .hapticClickable { onModeChange(AlertRegionMode.CITY_LABELS) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = cityLabelsLabel,
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isCityLabels) FontWeight.Bold else FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp)
-                )
-            }
-
-            // 2. Fill: clean red fill, white font, centered text
-            val isFill = selected == AlertRegionMode.FILL
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(42.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(AppPalette.AlertRed))
-                    .border(
-                        width = if (isFill) 2.5.dp else 0.dp,
-                        color = if (isFill) Color.White else Color.Transparent,
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                    .hapticClickable { onModeChange(AlertRegionMode.FILL) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = fillLabel,
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isFill) FontWeight.Bold else FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp)
-                )
-            }
-
-            // 3. Border: clean yellow border, white font, centered text
-            val isBorder = selected == AlertRegionMode.BORDER
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(42.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(AppPalette.Card))
-                    .border(
-                        width = if (isBorder) 2.5.dp else 1.5.dp,
-                        color = if (isBorder) Color.White else Color(AppPalette.AlertYellow),
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                    .hapticClickable { onModeChange(AlertRegionMode.BORDER) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = borderLabel,
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isBorder) FontWeight.Bold else FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp)
+            listOf(
+                AlertRegionMode.CITY_LABELS to cityLabelsLabel,
+                AlertRegionMode.FILL to fillLabel,
+                AlertRegionMode.BORDER to borderLabel
+            ).forEach { (mode, label) ->
+                AlertRegionModeChip(
+                    label = label,
+                    selected = selected == mode,
+                    onClick = { onModeChange(mode) },
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
+    }
+}
+
+@Composable
+internal fun AlertRegionModeChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .height(42.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(AppPalette.Card))
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .hapticClickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp)
+        )
     }
 }
 

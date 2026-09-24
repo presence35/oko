@@ -462,7 +462,6 @@ class DeathFxController(
      *  feedback" haptics are off. */
     fun strikeHaptics() {
         if (!moraleEnabled.value) return
-        if (BuildConfig.DEBUG) android.util.Log.d("VibTrace", "strikeHaptics() source=flourish")
         val vibrator = vibrator ?: return
         val job = scope.launch {
             vibrator.vibrateAlarm(40L)

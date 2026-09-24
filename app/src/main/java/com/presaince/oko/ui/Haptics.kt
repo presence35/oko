@@ -115,7 +115,6 @@ fun Vibrator.vibrateSafe(durationMs: Long, amplitude: Int = VibrationEffect.DEFA
 }
 
 private fun tick(context: Context) {
-    if (BuildConfig.DEBUG) android.util.Log.d("VibTrace", "tick() source=pressTick")
     val vibrator = ContextCompat.getSystemService(context, Vibrator::class.java) ?: return
     vibrator.vibrateAlarm(30L, VibrationEffect.DEFAULT_AMPLITUDE)
 }

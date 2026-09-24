@@ -2,10 +2,16 @@
     <!-- Dark-only base theme (this app never offers a light mode) -->
     <style name="Theme.Oko" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@android:color/black</item>
-        <item name="android:windowSplashScreenBackground">@android:color/black</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
+    </style>
+    <!-- Cold-start theme: branded trident splash instead of void black, kept on screen
+         until the first prefs snapshot clears the content gate (see MainActivity). -->
+    <style name="Theme.Oko.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@android:color/black</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_trident</item>
+        <item name="postSplashScreenTheme">@style/Theme.Oko</item>
     </style>
 </resources>

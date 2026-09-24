@@ -41,7 +41,6 @@ fun FlybyHaptics(
 
     val amplitude = (intensity * 255).roundToInt()
 
-    if (BuildConfig.DEBUG) android.util.Log.d("VibTrace", "flyby progress=${"%.2f".format(progress)}")
     when {
         progress < 0.3f -> {
             // Approach: steady low rumble
