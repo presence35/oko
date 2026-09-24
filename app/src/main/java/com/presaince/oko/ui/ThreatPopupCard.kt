@@ -178,6 +178,7 @@ fun ThreatPopupCard(
     onRequestSizeToggle: (() -> Unit)? = null
 ) {
     val s = Strings.get(lang)
+    if (BuildConfig.DEBUG) SideEffect { PerfRate.hit("card") } // TEMP-PERF: card-body rate
     val typeInfo = threatTypeInfoByString(threat.type) ?: ThreatTypeCatalog.INFO.getValue(ThreatType.UNKNOWN)
     val typeLabel = typeInfo.label(lang)
     // Wave count (group size) prefixes the title when the server reports it (>1 only).

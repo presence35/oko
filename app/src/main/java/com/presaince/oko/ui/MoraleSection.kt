@@ -168,7 +168,8 @@ internal fun MoraleToggles(
             icon = rememberVectorPainter(Icons.Default.Notifications),
             iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
             iconBadge = "1",
-            iconBadgeSize = 14.sp
+            iconBadgeSize = 14.sp,
+            iconBadgeSuperscriptSuffix = "2"
         )
         if (neutralizedTallyEnabled) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -190,8 +191,9 @@ internal fun MoraleToggles(
             onCheckedChange = onAlarmEpisodeTallyChange,
             icon = rememberVectorPainter(Icons.Default.Notifications),
             iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-            iconBadge = "2",
-            iconBadgeSuperscript = true
+            iconBadge = "1",
+            iconBadgeSize = 14.sp,
+            iconBadgeSuperscriptSuffix = "2"
         )
     }
 }

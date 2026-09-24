@@ -694,9 +694,8 @@ fun SettingsScreen(
                         description = s.offlineCriticalOverrideDesc,
                                 checked = criticalOfflineOverride,
                                 onCheckedChange = onCriticalOfflineOverrideChange,
-                                icon = painterResource(R.drawable.ic_notifications),
-                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        iconBadge = "Z"
+                                icon = painterResource(R.drawable.ic_wifi_off),
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     AnimatedVisibility(visible = criticalOfflineOverride) {
                         Column(modifier = Modifier.padding(start = 40.dp)) {
@@ -1119,19 +1118,15 @@ fun SettingsScreen(
                         icon = rememberVectorPainter(Icons.Outlined.CropFree),
                         iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    AnimatedVisibility(visible = showBorders) {
-                        Box(modifier = Modifier.padding(start = 40.dp)) {
-                            AlertToggleRow(
-                                title = s.showRegionBordersTitle,
-                                description = s.showRegionBordersDesc,
-                                checked = showRegionBorders,
-                                onCheckedChange = onShowRegionBordersChange,
-                                icon = rememberVectorPainter(Icons.Outlined.CropFree),
-                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                iconSize = 24.dp
-                            )
-                        }
-                    }
+                    AlertToggleRow(
+                            title = s.showRegionBordersTitle,
+                            description = s.showRegionBordersDesc,
+                            checked = showRegionBorders,
+                            onCheckedChange = onShowRegionBordersChange,
+                            icon = rememberVectorPainter(Icons.Outlined.CropFree),
+                            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            iconSize = 24.dp
+                        )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Haptic press feedback
                     AlertToggleRow(

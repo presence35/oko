@@ -556,14 +556,19 @@ private val COMMON_WORDS: Map<String, String> = mapOf(
  * unrecognised fragments untouched so the caller can transliterate the remainder. Shared by the
  * course-template slot and the fallback path — without it, a phrase like "над морем" would hit
  * the transliterator whole and come out as "nad morem" instead of "over the sea".
+ *
+ * The patterns are precompiled once (like [COURSE_PATTERNS]): compiling ~150 Unicode
+ * case-insensitive regexes per call froze old phones for over a second on every card open.
  */
-private fun replaceKnownWords(raw: String): String {
-    var out = raw
-    val dictionary = (COURSE_GLOSSARY + COMMON_WORDS.entries.map { it.key to it.value })
+private val KNOWN_WORD_PATTERNS: List<Pair<Regex, String>> =
+    (COURSE_GLOSSARY + COMMON_WORDS.entries.map { it.key to it.value })
         .distinctBy { it.first.lowercase() }
         .sortedByDescending { it.first.length }
+        .map { (ua, en) -> Regex("(?iu)(?<![\\p{L}])" + Regex.escape(ua) + "(?![\\p{L}])") to en }
 
-    for ((ua, en) in dictionary) {
+private fun replaceKnownWords(raw: String): String {
+    var out = raw
+    for ((pattern, en) in KNOWN_WORD_PATTERNS) {
         val replacement = { match: MatchResult ->
             val w = match.value
             when {
@@ -572,10 +577,7 @@ private fun replaceKnownWords(raw: String): String {
                 else -> en
             }
         }
-        out = out.replace(
-            Regex("(?iu)(?<![\\p{L}])" + Regex.escape(ua) + "(?![\\p{L}])"),
-            replacement
-        )
+        out = out.replace(pattern, replacement)
     }
     return out
 }

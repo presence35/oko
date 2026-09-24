@@ -200,7 +200,7 @@ object MapLibreLayerManager {
 
     fun updateBordersVisibility(style: Style, showBorders: Boolean, showRegionBorders: Boolean, alertRegionMode: AlertRegionMode) {
         val oblastVis = if (showBorders) Property.VISIBLE else Property.NONE
-        val raionVis = if (showBorders && showRegionBorders) Property.VISIBLE else Property.NONE
+        val raionVis = if (showRegionBorders) Property.VISIBLE else Property.NONE
         val oblastBorderLayer = style.getLayer(LAYER_OBLAST_BORDERS)
         oblastBorderLayer?.setProperties(
             visibility(oblastVis),

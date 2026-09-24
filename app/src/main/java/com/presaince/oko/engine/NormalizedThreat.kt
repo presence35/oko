@@ -26,6 +26,10 @@ data class BoundingBox(
 @Immutable
 data class TrailPoint(val lat: Double, val lon: Double, val tMillis: Long?)
 
+/** Engine threat currency. Immutable by contract: collectors never mutate instances in place
+ *  (the registry replaces them), so Compose may trust this for skippability — including the
+ *  trail list and sourceMeta map, which are built once and never modified afterwards. */
+@Immutable
 data class NormalizedThreat(
     val id: String,
     val type: String,

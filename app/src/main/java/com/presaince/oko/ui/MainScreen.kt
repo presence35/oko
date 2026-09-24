@@ -32,11 +32,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -242,6 +238,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val onDismissPopup = remember(viewModel) { { viewModel.selectThreat(null) } }
     val onCardSizeChange = remember(viewModel) { { size: ThreatCardSize -> viewModel.setThreatCardSize(size) } }
     val onLocateThreat = remember(viewModel) { { t: NormalizedThreat -> viewModel.centerOnThreat(t) } }
+    // Stable holder for the selection flow (built once): the host collects inside its own
+    // subtree, so taps never invalidate this scope — and the holder's stable type lets the
+    // host skip when its other inputs are unchanged.
+    val selectionSource = remember(viewModel) { SelectionSource(viewModel.selectionUi) }
 
     val openSettings: () -> Unit = {
         if (settingsHintRemaining > 0) {
@@ -281,7 +281,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         if (prefsLoaded && !wizardOwnsScreen) {
         MapScreen(
             uiState = uiState,
-            selection = viewModel.selectionUi,
+            source = selectionSource,
             selectedThreatId = viewModel.selectedThreatId,
             settingsOpen = screen == Screen.SETTINGS,
             mapVisible = screen == Screen.MAP && !wizardShown,
@@ -621,7 +621,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
 @Composable
 private fun MapScreen(
     uiState: UiState,
-    selection: StateFlow<SelectionUi>,
+    source: SelectionSource,
     selectedThreatId: StateFlow<String?>,
     settingsOpen: Boolean,
     mapVisible: Boolean,
@@ -665,23 +665,6 @@ private fun MapScreen(
     val context = LocalContext.current
 
     val lastPreciseFixMs by LocationTracker.lastPreciseFixAtMs.collectAsState()
-    // The settings gear pulses gently while the "open Settings" hint is active (a rotation
-    // reads as "loading"). Infinite transition = always animating, so the value is continuously
-    // observed; the pulse is only applied while the hint counter is still positive.
-    val gearHintActive = settingsHintRemaining > 0
-    val gearPulse = if (gearHintActive) {
-        val gearPulseTransition = rememberInfiniteTransition(label = "gearPulse")
-        val pulse by gearPulseTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "gearPulse"
-        )
-        pulse
-    } else 0f
     var fitUkraineTick by remember { mutableStateOf(0) }
     val scaleState = remember { ScaleState() }
     var zoomZone by remember { mutableStateOf<ThreatZone?>(null) }
@@ -693,16 +676,11 @@ private fun MapScreen(
     // of the viewport, the zones sheet the bottom — the map fits/reveals inside the visible band.
     val popupCoverPxState = remember { mutableIntStateOf(0) }
     val zonesSheetCoverPxState = remember { mutableIntStateOf(0) }
-    var deathActive by remember { mutableStateOf(false) }
-    var replayProgress by remember { mutableStateOf<ReplayProgress?>(null) }
-    var countdown by remember { mutableStateOf<Int?>(null) }
-    var autoStrikeActive by remember { mutableStateOf(false) }
-    var strikeType by remember { mutableStateOf<ThreatType?>(null) }
-    var strikeAnchor by remember { mutableStateOf<LatLng?>(null) }
-    var pendingStrikeCount by remember { mutableStateOf(0) }
+    // Death/replay footer state lives in a stable holder: per-frame writes invalidate only
+    // the footer leaf below, never this scope (and never the card subtree).
+    val flourish = remember { FlourishUiState() }
     var cancelTick by remember { mutableStateOf(0) }
-    val flourishActive = countdown != null || autoStrikeActive || deathActive ||
-        replayProgress != null || uiState.flyby != null
+    val flourishActive = flourish.active || uiState.flyby != null
     // Emergency eject: one tap cancels the countdown, ejects any in-flight death animation,
     // stops the replay, and clears the MiG flyby — back to a non-fun, safety-first map.
     val stopAll: () -> Unit = { cancelTick++; onEjectAll() }
@@ -743,7 +721,7 @@ private fun MapScreen(
             if (fixAgeMs == null || fixAgeMs >= 5 * 60_000L) {
                 showToast(
                     s.updatingPreciseGpsToast,
-                    cardVisible = selection.value.selected != null || selectedShelter != null || showZonesSheet
+                     cardVisible = source.flow.value.selected != null || selectedShelter != null || showZonesSheet
                 )
                 val hasFine = ContextCompat.checkSelfPermission(
                     context,
@@ -896,16 +874,7 @@ private fun MapScreen(
                         painter = painterResource(R.drawable.ic_settings_ua),
                         contentDescription = s.settingsButton,
                         tint = Color.Unspecified,
-                        modifier = Modifier
-                            .size(22.dp)
-                            .graphicsLayer {
-                                if (gearHintActive) {
-                                    val scale = 1f + 0.12f * gearPulse
-                                    scaleX = scale
-                                    scaleY = scale
-                                    alpha = 0.55f + 0.45f * gearPulse
-                                }
-                            }
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -956,13 +925,13 @@ private fun MapScreen(
                             onShowNearbySheltersChange(false)
                             selectedShelter = null
                         },
-                        onDeathActiveChange = { deathActive = it },
-                        onReplayProgressChange = { replayProgress = it },
-                        onCountdownChange = { countdown = it },
-                        onAutoStrikeActiveChange = { autoStrikeActive = it },
-                        onStrikeTypeChange = { strikeType = it },
-                        onStrikeAnchorChange = { strikeAnchor = it },
-                        onPendingStrikeCountChange = { pendingStrikeCount = it },
+                        onDeathActiveChange = { flourish.deathActive = it },
+                        onReplayProgressChange = { flourish.replayProgress = it },
+                        onCountdownChange = { flourish.countdown = it },
+                        onAutoStrikeActiveChange = { flourish.autoStrikeActive = it },
+                        onStrikeTypeChange = { flourish.strikeType = it },
+                        onStrikeAnchorChange = { flourish.strikeAnchor = it },
+                        onPendingStrikeCountChange = { flourish.pendingStrikeCount = it },
                         onCancelRequestTick = cancelTick,
                         welcomeShootdown = welcomeShootdown,
                         onWelcomeFinished = onWelcomeFinished,
@@ -1122,24 +1091,13 @@ private fun MapScreen(
                 }
             }
 
-            FlourishFooter(
-                active = flourishActive,
-                countdown = countdown,
-                replayProgress = replayProgress,
-                strikeType = strikeType,
-                pendingStrikeCount = pendingStrikeCount,
-                message = if (autoStrikeActive || deathActive) {
-                    strikeType?.let { t ->
-                        val info = ThreatTypeCatalog.INFO.getValue(t)
-                        val label = info.label(uiState.language)
-                        val distKm: Double? = strikeAnchor?.let { a -> uiState.focusLocation?.let { f -> distanceFlat(f.lat, f.lon, a.lat, a.lon) / 1000.0 } }
-                        val km: Int? = distKm?.roundToInt()
-                        val suffix = km?.let { flourishDistanceSuffix(it, uiState.language) }.orEmpty()
-                        "${s.flourishNeutralizingVerb} $label$suffix"
-                    } ?: s.neutralizingLabel
-                } else null,
-                stopLabel = s.stopReplayLabel,
+            FlourishFooterHost(
+                flourish = flourish,
                 language = uiState.language,
+                focusLocation = uiState.focusLocation,
+                neutralizingVerb = s.flourishNeutralizingVerb,
+                neutralizingLabel = s.neutralizingLabel,
+                stopLabel = s.stopReplayLabel,
                 onStop = stopAll
             )
 
@@ -1149,21 +1107,19 @@ private fun MapScreen(
             // The small card hugs the top-left corner and stays narrow; the large card is
             // top-centred and full-width. The measured height feeds the map so a selected or
             // struck threat is centred in the viewport left visible below the card.
-            // Scoped to its own composable collecting `selection` — a tap recomposes ONLY this
-            // host, not the map/header/footer scopes around it.
-            // Stable inputs: uiState rebuilds fresh sets/lambdas every emission — keyed remembers
-            // keep their instances across equal emissions so feed ticks skip the host entirely.
-            val hostSilenced = remember(uiState.silencedTypes) { uiState.silencedTypes }
-            val hostHeight = remember { { h: Int -> popupCoverPxState.intValue = h } }
+            // Scoped to its own composable collecting `source` — a tap recomposes ONLY this
+            // host, not the map/header/footer scopes around it. Every parameter is a stable
+            // type, so feed ticks re-executing this scope stop here instead of recomposing the card.
+            val hostHeight = remember(popupCoverPxState) { { h: Int -> popupCoverPxState.intValue = h } }
+            if (BuildConfig.DEBUG) SideEffect { PerfRate.hit("overlay") } // TEMP-PERF: parent-scope rate
             ThreatCardHost(
-                selection = selection,
+                source = source,
                 language = uiState.language,
                 iconSet = uiState.iconSet,
                 followMe = uiState.followMe,
                 pinnedCity = uiState.pinnedCity,
                 cardSize = uiState.threatCardSize,
-                silencedTypes = hostSilenced,
-                s = s,
+                cardSizeLabel = s.cardSizeLabel,
                 onDismiss = onDismissPopup,
                 onThreatCardSizeChange = onThreatCardSizeChange,
                 onLocateThreat = onLocateThreat,
@@ -1275,25 +1231,79 @@ private fun MapScreen(
 }
 
 /**
- * Threat popup host. Collects [selection] here — the ONLY reactive reader of selection in the
+ * Death/replay footer state. A @Stable holder (not seven loose vars): per-frame writes
+ * (countdown ticks, replay progress) invalidate only the scopes that read them — the footer
+ * leaf — instead of the whole map overlay. Reads of [active] flip rarely (strike on/off).
+ */
+@Stable
+class FlourishUiState {
+    var deathActive by mutableStateOf(false)
+    var replayProgress by mutableStateOf<ReplayProgress?>(null)
+    var countdown by mutableStateOf<Int?>(null)
+    var autoStrikeActive by mutableStateOf(false)
+    var strikeType by mutableStateOf<ThreatType?>(null)
+    var strikeAnchor by mutableStateOf<LatLng?>(null)
+    var pendingStrikeCount by mutableStateOf(0)
+    val active: Boolean
+        get() = countdown != null || autoStrikeActive || deathActive || replayProgress != null
+}
+
+/** Footer scope: reads the churning flourish states in one leaf so their writes never
+ *  invalidate the overlay scope (and the card subtree) above. */
+@Composable
+private fun BoxScope.FlourishFooterHost(
+    flourish: FlourishUiState,
+    language: AppLanguage,
+    focusLocation: LatLng?,
+    neutralizingVerb: String,
+    neutralizingLabel: String,
+    stopLabel: String,
+    onStop: () -> Unit
+) {
+    val message = if (flourish.autoStrikeActive || flourish.deathActive) {
+        flourish.strikeType?.let { t ->
+            val info = ThreatTypeCatalog.INFO.getValue(t)
+            val label = info.label(language)
+            val distKm: Double? = flourish.strikeAnchor?.let { a -> focusLocation?.let { f -> distanceFlat(f.lat, f.lon, a.lat, a.lon) / 1000.0 } }
+            val km: Int? = distKm?.roundToInt()
+            val suffix = km?.let { flourishDistanceSuffix(it, language) }.orEmpty()
+            "$neutralizingVerb $label$suffix"
+        } ?: neutralizingLabel
+    } else null
+    FlourishFooter(
+        active = flourish.active,
+        countdown = flourish.countdown,
+        replayProgress = flourish.replayProgress,
+        strikeType = flourish.strikeType,
+        pendingStrikeCount = flourish.pendingStrikeCount,
+        message = message,
+        stopLabel = stopLabel,
+        language = language,
+        onStop = onStop
+    )
+}
+
+/**
+ * Threat popup host. Collects [source] here — the ONLY reactive reader of selection in the
  * tree — so a tap recomposes just this scope: header, map body and footer never see it.
+ * Every parameter is a stable type, so the host is skippable: feed ticks re-executing the
+ * parent scope stop here instead of recomposing the card.
  */
 @Composable
 private fun ThreatCardHost(
-    selection: StateFlow<SelectionUi>,
+    source: SelectionSource,
     language: AppLanguage,
     iconSet: ThreatIconSet,
     followMe: Boolean,
     pinnedCity: City?,
     cardSize: ThreatCardSize,
-    silencedTypes: Set<ThreatType>,
-    s: Strings.StringSet,
+    cardSizeLabel: String,
     onDismiss: () -> Unit,
     onThreatCardSizeChange: (ThreatCardSize) -> Unit,
     onLocateThreat: (NormalizedThreat) -> Unit = {},
     onHeightChanged: (Int) -> Unit = {}
 ) {
-    val sel = selection.collectAsState().value
+    val sel = source.flow.collectAsState().value
     SideEffect {
         sel.selected?.let {
             if (BuildConfig.DEBUG) android.util.Log.d("PerfTrace", "card composed id=${it.id} t=${System.currentTimeMillis()}")
@@ -1340,7 +1350,7 @@ private fun ThreatCardHost(
                         pinnedCity = if (followMe) null else pinnedCity,
                         threatLevel = sel.cardLevel,
                         cardSize = cardSize,
-                        alertsOff = threat.type.toThreatType() in silencedTypes,
+                        alertsOff = sel.alertsOff,
                         onDismiss = onDismiss,
                         fakeNeutralize = sel.fakeNeutralize,
                         modifier = Modifier
@@ -1352,7 +1362,7 @@ private fun ThreatCardHost(
                     ) {
                         ThreatCardSizeControl(
                             current = cardSize,
-                            contentDescription = s.cardSizeLabel,
+                            contentDescription = cardSizeLabel,
                             onClick = { onThreatCardSizeChange(nextThreatCardSize(cardSize)) }
                         )
                         LocateThreatControl(

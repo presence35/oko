@@ -40,6 +40,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -102,6 +103,7 @@ internal fun AlertToggleRow(
     iconBadge: String? = null,
     iconBadgeSize: TextUnit = 12.sp,
     iconBadgeSuperscript: Boolean = false,
+    iconBadgeSuperscriptSuffix: String? = null,
     emoji: String? = null,
     note: String? = null,
     noteIcon: Painter? = null,
@@ -148,17 +150,34 @@ internal fun AlertToggleRow(
                     )
                     if (iconBadge != null) {
                         Text(
-                            text = iconBadge,
+                            text = buildAnnotatedString {
+                                append(iconBadge)
+                                if (iconBadgeSuperscriptSuffix != null) {
+                                    pushStyle(
+                                        androidx.compose.ui.text.SpanStyle(
+                                            baselineShift = BaselineShift.Superscript,
+                                            fontSize = iconBadgeSize * 0.7f
+                                        )
+                                    )
+                                    append(iconBadgeSuperscriptSuffix)
+                                    pop()
+                                }
+                            },
                             color = iconTint ?: MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = iconBadgeSize,
                             fontWeight = FontWeight.SemiBold,
                             style = LocalTextStyle.current.copy(
-                                baselineShift = if (iconBadgeSuperscript) BaselineShift.Superscript
-                                else BaselineShift.None
+                                baselineShift = if (iconBadgeSuperscript && iconBadgeSuperscriptSuffix == null) BaselineShift.Superscript
+                                else BaselineShift.None,
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = 0.9f),
+                                    offset = Offset(1f, 1f),
+                                    blurRadius = 4f
+                                )
                             ),
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .offset(x = 2.dp, y = (-3).dp)
+                                .offset(x = 7.dp, y = (-6).dp)
                         )
                     }
                 }

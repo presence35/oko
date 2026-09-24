@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.FlowPreview
@@ -282,18 +283,46 @@ data class SelectionUi(
     val proximity: ThreatProximity? = null,
     val zoneTier: ThreatZone? = null,
     val cardLevel: Double = 0.0,          // per-threat gauge score (banner aggregate never enters the card)
+    val alertsOff: Boolean = false,       // selected type silenced in Settings (chip state travels with the card)
     val neutralized: NormalizedThreat? = null,   // resolved card while the death window plays
     val fakeNeutralize: Boolean = false
 )
+
+/** Stable holder for the selection flow: StateFlow is an unstable interface, so the flow
+ *  itself can never be a skippable parameter — this trusted wrapper can. The host collects
+ *  inside its own subtree, so taps still never invalidate the parent. */
+@Immutable
+data class SelectionSource(val flow: StateFlow<SelectionUi>)
 
 // Freshness granularity for the popup: pushes bump updatedAtMillis constantly, the card
 // only cares at this resolution (its elapsed clock ticks on its own).
 private const val FRESHNESS_BUCKET_MS = 10_000L
 
+// TEMP-PERF: emission-rate counters (DEBUG only) — names the 60Hz driver numerically.
+internal object PerfRate {
+    private val counts = HashMap<String, Int>()
+    private var t0 = System.currentTimeMillis()
+    @Synchronized
+    fun hit(name: String) {
+        if (!BuildConfig.DEBUG) return
+        counts[name] = (counts[name] ?: 0) + 1
+        if (counts.values.sum() >= 120) {
+            val dt = (System.currentTimeMillis() - t0).coerceAtLeast(1)
+            android.util.Log.d(
+                "PerfTrace",
+                "rates over ${dt}ms " + counts.entries.joinToString(" ") { "${it.key}=${it.value}" }
+            )
+            counts.clear()
+            t0 = System.currentTimeMillis()
+        }
+    }
+}
+
 // Stabilizes card state: suppresses re-emission during 120ms tick loops unless user-visible content changes.
 internal fun areSelectionUiVisuallyEqual(old: SelectionUi, new: SelectionUi): Boolean {
     if (old === new) return true
     if (old.fakeNeutralize != new.fakeNeutralize) return false
+    if (old.alertsOff != new.alertsOff) return false
     if (old.zoneTier != new.zoneTier) return false
     if ((old.neutralized == null) != (new.neutralized == null)) return false
     if (old.neutralized?.id != new.neutralized?.id) return false
@@ -435,6 +464,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     /** Previous tick's engine tiers — the hysteresis band input for the map evaluation. */
     private var lastZoneTiers: Map<String, ThreatZone> = emptyMap()
     private val threatsFlow = registry.allThreats.map { list ->
+        if (BuildConfig.DEBUG) PerfRate.hit("threats") // TEMP-PERF
         list.associate { it.id to it }
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
     private val alertsFlow = registry.allAlerts
@@ -877,6 +907,7 @@ showBorders = prefs.showBorders,
     }
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
+        .onEach { if (BuildConfig.DEBUG) PerfRate.hit("uiState") } // TEMP-PERF
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
@@ -928,6 +959,8 @@ showBorders = prefs.showBorders,
                             "trail=${initialThreat.trail.size} courseLen=${initialThreat.explanationShort?.length} t=${System.currentTimeMillis()}"
                     )
                 }
+                // Chip state on frame 0 too: read current prefs snapshot without subscribing.
+                val shellAlertsOff = initialThreat.type.toThreatType() in uiState.value.silencedTypes
                 val isNeutralized = sel.selected != null && sel.selected.id == sel.neutralizedId
                 if (isNeutralized) {
                     emit(
@@ -946,6 +979,7 @@ showBorders = prefs.showBorders,
                             proximity = null,
                             zoneTier = null,
                             neutralized = null,
+                            alertsOff = shellAlertsOff,
                             fakeNeutralize = sel.fakeNeutralize
                         )
                     )
@@ -995,11 +1029,13 @@ showBorders = prefs.showBorders,
                         nowMs
                     )
                 } else 0.0
+                val alertsOff = refreshed?.let { it.type.toThreatType() in ui.silencedTypes } ?: false
                 SelectionUi(
                     selected = if (FlourishPolicy.dropSelection(selectedGone, animOn)) null else refreshed,
                     proximity = proximity,
                     zoneTier = zoneTier,
                     cardLevel = cardLevel,
+                    alertsOff = alertsOff,
                     neutralized = neutralizedThreat,
                     fakeNeutralize = sel.fakeNeutralize
                 )
@@ -1011,6 +1047,7 @@ showBorders = prefs.showBorders,
             }
         }
     }.distinctUntilChanged(::areSelectionUiVisuallyEqual)
+    .onEach { if (BuildConfig.DEBUG) PerfRate.hit("selection") } // TEMP-PERF
     .stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
