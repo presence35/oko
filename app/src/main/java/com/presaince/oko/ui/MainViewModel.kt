@@ -286,6 +286,10 @@ data class SelectionUi(
     val fakeNeutralize: Boolean = false
 )
 
+// Freshness granularity for the popup: pushes bump updatedAtMillis constantly, the card
+// only cares at this resolution (its elapsed clock ticks on its own).
+private const val FRESHNESS_BUCKET_MS = 10_000L
+
 // Stabilizes card state: suppresses re-emission during 120ms tick loops unless user-visible content changes.
 internal fun areSelectionUiVisuallyEqual(old: SelectionUi, new: SelectionUi): Boolean {
     if (old === new) return true
@@ -307,7 +311,11 @@ internal fun areSelectionUiVisuallyEqual(old: SelectionUi, new: SelectionUi): Bo
         if (oldSel.areaOnly != newSel.areaOnly) return false
         if (oldSel.reliability != newSel.reliability) return false
         if (oldSel.heading != newSel.heading || oldSel.bearingDeg != newSel.bearingDeg) return false
-        if (oldSel.updatedAtMillis != newSel.updatedAtMillis) return false
+        // Freshness is coarse: live pushes bump updatedAtMillis every frame, but the card
+        // shows elapsed time via its own 1s leaf clock — per-push re-emission would recompose
+        // the whole card at socket rate on old phones. Real field changes above still emit
+        // instantly, and selected<->neutralized flips are caught by the null checks above.
+        if ((oldSel.updatedAtMillis ?: 0L) / FRESHNESS_BUCKET_MS != (newSel.updatedAtMillis ?: 0L) / FRESHNESS_BUCKET_MS) return false
     }
 
     val oldProx = old.proximity
@@ -428,7 +436,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     private var lastZoneTiers: Map<String, ThreatZone> = emptyMap()
     private val threatsFlow = registry.allThreats.map { list ->
         list.associate { it.id to it }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
     private val alertsFlow = registry.allAlerts
     /** Sampled merged feed for UI (120ms) — bounds recomposition rate during heavy streams.
      *  AlertService still consumes the raw merged feed directly (mirror rule). */

@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Threat card no longer recomposes on every live feed push: freshness is bucketed to 10s and host inputs are stabilized so feed ticks skip the card / Threat card no longer recomposes on every live feed push: freshness is bucketed to 10s and host inputs are stabilized so feed ticks skip the card / Threat card no longer recomposes on every live feed push: freshness is bucketed to 10s and host inputs are stabilized so feed ticks skip the card 09-24_11:19:11
 - Threat card opens faster on old phones: popup math now runs off the main thread and the card memoizes its text in one pass / Threat card opens faster on old phones: popup math now runs off the main thread and the card memoizes its text in one pass / Threat card opens faster on old phones: popup math now runs off the main thread and the card memoizes its text in one pass 09-24_11:19:11
 - Threat card skull gauge is now per threat instead of the global aggregate / Threat card skull gauge is now per threat instead of the global aggregate / Threat card skull gauge is now per threat instead of the global aggregate 09-24_11:19:11
 - Cut overnight radio and CPU drain: WebSocket ping 15s → 60s and watchdog tick 3s → 30s so the LTE modem can sleep between heartbeats / Cut overnight radio and CPU drain: WebSocket ping 15s → 60s and watchdog tick 3s → 30s so the LTE modem can sleep between heartbeats / Cut overnight radio and CPU drain: WebSocket ping 15s → 60s and watchdog tick 3s → 30s so the LTE modem can sleep between heartbeats 09-24_10:45:00

@@ -162,7 +162,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(updateReminderTick) {
         if (updateReminderTick > 0) {
-            val s = Strings.get(uiState.language)
+    val s = Strings.get(uiState.language)
             val result = snackbarHostState.showSnackbar(
                 message = String.format(s.updateAvailableOnOpen, uiState.latestVersion.orEmpty()),
                 actionLabel = s.updateDownload,
@@ -237,6 +237,12 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         if (activity != null) activity.finishAffinity()
     }
 
+    // Stable callbacks: fresh instances every recomposition would dirty every downstream
+    // scope (including ThreatCardHost) on each uiState tick — these never change.
+    val onDismissPopup = remember(viewModel) { { viewModel.selectThreat(null) } }
+    val onCardSizeChange = remember(viewModel) { { size: ThreatCardSize -> viewModel.setThreatCardSize(size) } }
+    val onLocateThreat = remember(viewModel) { { t: NormalizedThreat -> viewModel.centerOnThreat(t) } }
+
     val openSettings: () -> Unit = {
         if (settingsHintRemaining > 0) {
             settingsHintRemaining--
@@ -294,7 +300,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                             else viewModel.selectThreat(it)
                         },
             onThreatStripTap = { viewModel.panToThreat(it) },
-            onDismissPopup = { viewModel.selectThreat(null) },
+            onDismissPopup = onDismissPopup,
             onMapTapped = { viewModel.selectThreat(null) },
             onSlowRedChange = { if (editingNight) viewModel.setNightSlowRedKm(it) else viewModel.setSlowRedKm(it) },
             onSlowYellowChange = { if (editingNight) viewModel.setNightSlowYellowKm(it) else viewModel.setSlowYellowKm(it) },
@@ -304,11 +310,11 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onSlowYellowArmedChange = { armOrRequestPermission(it) { v -> if (editingNight) viewModel.setNightSlowYellowArmed(v) else viewModel.setSlowYellowArmed(v) } },
             onFastRedArmedChange = { armOrRequestPermission(it) { v -> if (editingNight) viewModel.setNightFastRedArmed(v) else viewModel.setFastRedArmed(v) } },
             onFastYellowArmedChange = { armOrRequestPermission(it) { v -> if (editingNight) viewModel.setNightFastYellowArmed(v) else viewModel.setFastYellowArmed(v) } },
-            onThreatCardSizeChange = { viewModel.setThreatCardSize(it) },
+            onThreatCardSizeChange = onCardSizeChange,
             onNeutralize = { id -> viewModel.neutralizeThreat(id) },
             onFlybyFinished = { id -> viewModel.onFlybyFinished(id) },
             onEjectAll = viewModel::ejectAllFun,
-            onLocateThreat = { viewModel.centerOnThreat(it) },
+            onLocateThreat = onLocateThreat,
             showZonesSheet = showZonesSheet,
             onShowZonesSheetChange = { showZonesSheet = it },
             onOpenShelters = {
@@ -655,7 +661,7 @@ private fun MapScreen(
     welcomeShootdown: WelcomeShootdown? = null,
     onWelcomeFinished: () -> Unit = {}
 ) {
-    val s = Strings.get(uiState.language)
+    val s = remember(uiState.language) { Strings.get(uiState.language) }
     val context = LocalContext.current
 
     val lastPreciseFixMs by LocationTracker.lastPreciseFixAtMs.collectAsState()
@@ -1145,6 +1151,10 @@ private fun MapScreen(
             // struck threat is centred in the viewport left visible below the card.
             // Scoped to its own composable collecting `selection` — a tap recomposes ONLY this
             // host, not the map/header/footer scopes around it.
+            // Stable inputs: uiState rebuilds fresh sets/lambdas every emission — keyed remembers
+            // keep their instances across equal emissions so feed ticks skip the host entirely.
+            val hostSilenced = remember(uiState.silencedTypes) { uiState.silencedTypes }
+            val hostHeight = remember { { h: Int -> popupCoverPxState.intValue = h } }
             ThreatCardHost(
                 selection = selection,
                 language = uiState.language,
@@ -1152,12 +1162,12 @@ private fun MapScreen(
                 followMe = uiState.followMe,
                 pinnedCity = uiState.pinnedCity,
                 cardSize = uiState.threatCardSize,
-                silencedTypes = uiState.silencedTypes,
+                silencedTypes = hostSilenced,
                 s = s,
                 onDismiss = onDismissPopup,
                 onThreatCardSizeChange = onThreatCardSizeChange,
                 onLocateThreat = onLocateThreat,
-                onHeightChanged = { popupCoverPxState.intValue = it }
+                onHeightChanged = hostHeight
             )
 
             // Shelter info card: tapping a shelter marker on the map opens it here (the same
