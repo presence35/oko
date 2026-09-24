@@ -89,6 +89,10 @@ object IconCatalog {
         ThreatType.UNKNOWN -> null
     }
 
+    /** True when [type] has a bundled raster in any set (UNKNOWN never does). */
+    fun hasRaster(type: ThreatType): Boolean =
+        photoRes(type) != null || armyRes(type) != null || comicRes(type) != null || russianRes(type) != null
+
     /** The seven threat types that have bundled photos, in display order. */
     fun photoTypes(): List<ThreatType> = listOf(
         ThreatType.SHAHED,
@@ -206,7 +210,7 @@ fun ThreatIcon(
     dimmed: Boolean = false,
     contentDescription: String? = null
 ) {
-    if (type != ThreatType.UNKNOWN && (IconCatalog.photoRes(type) == null && IconCatalog.armyRes(type) == null && IconCatalog.comicRes(type) == null && IconCatalog.russianRes(type) == null)) {
+    if (type != ThreatType.UNKNOWN && !IconCatalog.hasRaster(type)) {
         Icon(
             painter = painterResource(id = IconCatalog.res(type, set)),
             contentDescription = contentDescription,

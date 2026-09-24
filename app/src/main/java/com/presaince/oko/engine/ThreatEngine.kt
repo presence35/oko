@@ -450,6 +450,27 @@ class ThreatEngine(
         return total.coerceIn(0.0, 10.0)
     }
 
+    /**
+     * Intrinsic per-threat danger score for the popup gauge (0–10). Unlike the banner
+     * aggregate in [evaluate], banner gates (stale/advisory/silenced) deliberately do not
+     * apply here: a silenced type is still dangerous, and the card already shows the
+     * alerts-off state via its chip. Returns 0 when there is no distance to score from.
+     */
+    fun cardLevel(
+        t: NormalizedThreat,
+        distKm: Double?,
+        etaMin: Double?,
+        params: ZoneParams,
+        now: Long
+    ): Double {
+        if (distKm == null) return 0.0
+        val props = propsFor(t.type)
+        val (redVal, yellowVal) =
+            if (props.isFast) params.fastRedMin to params.fastYellowMin
+            else params.slowRedKm to params.slowYellowKm
+        return scoreThreat(t, props, distKm, etaMin, redVal, yellowVal, now)
+    }
+
     companion object {
         /** Hard cap on dead-reckoning distance: a marker may never sit farther than this from its
          *  last confirmed fix — a "relevant distance" at the app's map scale, so drift never looks

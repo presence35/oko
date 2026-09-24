@@ -8,6 +8,7 @@ import com.presaince.oko.engine.toThreatType
 import com.presaince.oko.engine.threatTypeInfoByString
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -182,23 +183,6 @@ fun ThreatPopupCard(
     // Wave count (group size) prefixes the title when the server reports it (>1 only).
     val titleLabel = if (threat.count > 1) "${threat.count}x $typeLabel" else typeLabel
 
-    // Memoize region formatting and transliteration so card recompositions avoid redundant string operations.
-    val regionText = remember(threat.locality, threat.district, threat.region, s.noRegion) {
-        listOf(threat.locality, threat.district, threat.region)
-            .filter { !it.isNullOrBlank() }
-            .distinct()
-            .joinToString(" · ")
-            .ifBlank { s.noRegion }
-    }
-
-    // NEPTUN's locality text is Ukrainian; for the EN UI transliterate it (place names are
-    // romanized, never semantically translated — the romanization is all an EN reader needs).
-    // The national MiG carries descriptors, not places — show the fixed EN text instead.
-    val displayRegion = remember(regionText, threat.type, threat.locality, threat.district, threat.region, lang) {
-        if (isNationalMig(threat)) lang.pick(regionText, nationalMigWhereText(), nationalMigWhereText())
-        else lang.pick(regionText, Transliteration.transliterate(regionText), Transliteration.transliterate(regionText))
-    }
-
     val confirmations = threat.confirmations.takeIf { it > 0 }
 
     val bandColor = when (zoneTier) {
@@ -250,11 +234,28 @@ fun ThreatPopupCard(
         return
     }
 
-    val course = remember(threat.id, threat.explanationShort, lang, typeLabel, displayRegion) {
-        translateCourseAssessment(threat.explanationShort, lang)
+    // Region formatting, transliteration and course line, memoized as one unit so the
+    // card pays for it once per threat/lang — never on the neutralized path above,
+    // never per recomposition. NEPTUN's locality text is Ukrainian; for the EN UI it is
+    // transliterated (place names are romanized, never semantically translated).
+    // The national MiG carries descriptors, not places — fixed EN text instead.
+    val cardText = remember(threat.id, threat.type, threat.locality, threat.district, threat.region, threat.explanationShort, lang, s.noRegion) {
+        val regionText = listOf(threat.locality, threat.district, threat.region)
+            .filter { !it.isNullOrBlank() }
+            .distinct()
+            .joinToString(" · ")
+            .ifBlank { s.noRegion }
+        val shownRegion = if (isNationalMig(threat)) lang.pick(regionText, nationalMigWhereText(), nationalMigWhereText())
+        else {
+            val latin = Transliteration.transliterate(regionText)
+            lang.pick(regionText, latin, latin)
+        }
+        val shownCourse = translateCourseAssessment(threat.explanationShort, lang)
             ?.let { firstSentence(it) }
-            ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, displayRegion) }
+            ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, regionText) }
+        shownCourse to shownRegion
     }
+    val (shownCourse, shownRegion) = cardText
 
     val smallFixedWidth = 250.dp
     val cardInteraction = remember { MutableInteractionSource() }
@@ -434,7 +435,7 @@ fun ThreatPopupCard(
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        displayRegion,
+                                        shownRegion,
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = Color(AppPalette.TextTertiary),
                                         modifier = Modifier.weight(1f, fill = false)
@@ -444,7 +445,7 @@ fun ThreatPopupCard(
                         }
 
                         // NEPTUN's course assessment, e.g. "Drone heading toward Chornomorsk"
-                        course?.let {
+                        shownCourse?.let {
                             Text(it, style = MaterialTheme.typography.bodyLarge, color = Color(AppPalette.TextDetail))
                             Spacer(Modifier.height(4.dp))
                         }
@@ -530,13 +531,16 @@ private fun firstSentence(text: String): String {
     return text
 }
 
+/** Whitespace run matcher shared by [repeatsShownInfo] — hoisted so cards never recompile it. */
+private val WhitespaceRun = Regex("\\s+")
+
 /** True when the course line carries nothing beyond the type label and the place names
  *  already shown in the header: deleting those leaves no real words behind. */
 internal fun repeatsShownInfo(course: String, typeLabel: String, labelEn: String, regionText: String): Boolean {
     fun norm(s: String): String = s.lowercase()
         .map { if (it.isLetterOrDigit()) it else ' ' }
         .joinToString("")
-        .replace(Regex("\\s+"), " ")
+        .replace(WhitespaceRun, " ")
         .trim()
     var rest = " ${norm(course)} "
     val drops = (listOf(typeLabel, labelEn) +
@@ -840,33 +844,30 @@ private fun MetricPill(
             )
             if (dotColor != null) {
                 Spacer(Modifier.width(6.dp))
+                // Static halo + core + ring: the same 14dp GPS dot as before, but three
+                // cheap layers instead of a per-frame radial-gradient shader (old GPUs).
                 Box(
-                    modifier = Modifier
-                        .size(fontAware(14.dp))
-                        .drawBehind {
-                            val core = 4.2.dp.toPx()
-                            val haloR = size.minDimension / 2f
-                            drawCircle(
-                                brush = Brush.radialGradient(
-                                    colorStops = arrayOf(
-                                        0.5f to dotColor.copy(alpha = 0.14f),
-                                        1f to dotColor.copy(alpha = 0f)
-                                    ),
-                                    center = center,
-                                    radius = haloR
-                                ),
-                                radius = haloR,
-                                center = center
-                            )
-                            drawCircle(color = dotColor, radius = core, center = center)
-                            drawCircle(
-                                color = Color.White,
-                                radius = core * 0.55f,
-                                center = center,
-                                style = Stroke(width = 1.4.dp.toPx())
-                            )
-                        }
-                )
+                    modifier = Modifier.size(fontAware(14.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(dotColor.copy(alpha = 0.14f))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(dotColor)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .border(1.4.dp, Color.White, CircleShape)
+                    )
+                }
             }
         }
     }

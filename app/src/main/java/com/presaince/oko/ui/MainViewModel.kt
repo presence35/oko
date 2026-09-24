@@ -281,6 +281,7 @@ data class SelectionUi(
     val selected: NormalizedThreat? = null,
     val proximity: ThreatProximity? = null,
     val zoneTier: ThreatZone? = null,
+    val cardLevel: Double = 0.0,          // per-threat gauge score (banner aggregate never enters the card)
     val neutralized: NormalizedThreat? = null,   // resolved card while the death window plays
     val fakeNeutralize: Boolean = false
 )
@@ -325,6 +326,7 @@ internal fun areSelectionUiVisuallyEqual(old: SelectionUi, new: SelectionUi): Bo
         val newSpeed = newProx.speedKmh?.roundToInt()
         if (oldSpeed != newSpeed) return false
     }
+    if ((old.cardLevel * 10).roundToInt() != (new.cardLevel * 10).roundToInt()) return false
     return true
 }
 
@@ -969,14 +971,24 @@ showBorders = prefs.showBorders,
                     val props = engine.propsFor(refreshed.type)
                     engine.zoneTier(props, proximity.distToUserKm, proximity.speedKmh, proximity.params)
                 } else null
+                val cardLevel = if (refreshed != null) {
+                    engine.cardLevel(
+                        refreshed,
+                        proximity?.distToUserKm,
+                        proximity?.etaToUserMin,
+                        ui.activeZoneParams,
+                        nowMs
+                    )
+                } else 0.0
                 SelectionUi(
                     selected = if (FlourishPolicy.dropSelection(selectedGone, animOn)) null else refreshed,
                     proximity = proximity,
                     zoneTier = zoneTier,
+                    cardLevel = cardLevel,
                     neutralized = neutralizedThreat,
                     fakeNeutralize = sel.fakeNeutralize
                 )
-            }.distinctUntilChanged(::areSelectionUiVisuallyEqual).collect { enriched ->
+            }.distinctUntilChanged(::areSelectionUiVisuallyEqual).flowOn(Dispatchers.Default).collect { enriched ->
                 emit(enriched)
             }
         }

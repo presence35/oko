@@ -1,0 +1,26 @@
+# Battery Drain Analysis 00:00-10:00 09-24
+# Logcat: D:\Desktop\oko\logcat.txt (856 lines overnight, kernel only, no PowerManager tags)
+# Batterystats: D:\Desktop\oko\batterystats.txt
+
+## Summary: 80% drain confirmed
+- 22:00 09-23 74% -> 09:59 09-24 22% = 52% over 12h
+- 01:34 98% (end of intermittent charging) -> 09:59 22% = 76% over 8h25m (~9%/h) screen-off
+
+## Top offenders (Estimated power 2904mAh computed)
+1. com.presaince.oko (u0a471) 600 mAh - mobile_radio 533 bg (8h background radio)
+2. org.mozilla.firefox (u0a287) 583 mAh - audio 552 cached
+3. com.tradingview.tradingviewapp (u0a289) 349 mAh
+4. com.github.libretube (u0a365) 290 mAh - audio 14.2 8h22m bg + wakelock 276 7h49m screen-off/doze
+5. com.google.android.gms (u0a152) 187 mAh
+
+## Global screen-off/doze (8h26m cpu, 8h18m audio, 7h49m wakelock)
+- audio 623mAh 8h18m, wakelock 279mAh 7h49m, mobile_radio 1366mAh - device never entered deep Doze
+
+## Intermittent charging 00:24-01:34
+- batterystats history shows 20+ status=charging/not-charging flaps: 00:24:16 plug ac, 00:24:20 not-charging, 00:55:28 charging, etc. temp 269->348
+- Faulty cable/port caused inefficient charging and heat, then rapid discharge after 01:34:17 discharging
+
+## Evidence lines
+- 09-24 00:53:05.391 084 +running +wake_lock +audio +screen fg=com.github.libretube
+- 09-24 01:34:17.038 098 status=discharging (start of drain)
+- UID blocks at batterystats.txt:148400+

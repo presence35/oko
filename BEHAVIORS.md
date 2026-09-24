@@ -370,7 +370,7 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 
 - Capability ("can it ever sound": armed bells, official toggles, per-type enables) is separate from frequency ("how often": the preset). The service executes verdicts; all judgment lives in the plugin.
 - Tiers carry a 10% spatial hysteresis band (`ZONE_HYSTERESIS_MARGIN`): upgrades immediate, downgrades/exits hold. Shared by map + service.
-- An episode opens on first zone sighting and closes only when the track dies (stale / resolved / gone). Flicker ticks never close it, so they never re-sound. A user-shot same-id respawn inside the grace is the same kill, never a new onset.
+- An episode opens on first zone sighting and closes only when the track dies (stale / resolved / gone). Flicker ticks never close it, so they never re-sound. A user-shot same-id respawn inside the grace is the same kill, never a new onset. ONCE_PER_TYPE memory is per-type per sitting on top of this: a sounded type stays gated across id flicker/re-keys and re-arms only when no live threat of that type remains.
 - Floor (inside every preset, never a service bypass): escalation to INNER is a gated
   opportunity. ONCE_PER_THREAT sounds the first INNER per threat (per-threat escalation);
   ONCE_PER_TYPE and DIGEST respect their gates (no preset-bypass re-sound).

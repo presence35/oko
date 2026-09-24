@@ -1,0 +1,856 @@
+09-24 00:04:12.407     0     0 I trusty  : [GF_TA][I][gf_tee_storage][trusty_file_open] 0 LHBM_auth_att.so 0
+09-24 00:08:37.071     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 0, need_dec_gain_due_to_als: 0, expo mode:0
+09-24 00:08:37.072     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=0
+09-24 00:08:37.072     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=1
+09-24 00:08:37.072     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x00ff
+09-24 00:08:37.072     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=0, expo_time=77.939704, gain=0x41
+09-24 00:08:37.072     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 00:08:37.072     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][sensor_calculate_mask] cal sensor mask cost=0
+09-24 00:08:37.072     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode_poll_data] pre_dummy_time*100=1000, time_cost=0, expo=77, want delay = 67 
+09-24 00:08:37.176     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] pre_dummy_count = ***, tail=***, valid=***, expected=***
+09-24 00:08:37.176     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] read image end, err=0
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 00:08:37.180     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 00:08:37.183     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 00:08:37.183     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 00:08:37.183     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 00:08:37.183     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 00:08:37.183     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 00:08:37.183     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 00:08:37.183     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 00:08:37.183     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 00:08:37.183     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 00:08:37.183     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 00:08:37.183     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 00:08:37.183     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 00:08:37.184     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 00:08:37.188     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process_img2mats] do fp_AntiPeepG5 flag:0
+09-24 00:08:37.188     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 00:08:37.188     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 1, need_dec_gain_due_to_als: 0, expo mode:3
+09-24 00:08:37.188     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] capture sub image mode=0x0602
+09-24 00:08:37.188     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] retry1_valid_sg_mask=0x0006
+09-24 00:08:37.188     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=3
+09-24 00:08:37.188     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=0
+09-24 00:08:37.188     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x0006
+09-24 00:08:37.188     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=3, expo_time=100.205329, gain=0x41
+09-24 00:08:37.188     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 00:08:37.205     0     0 I trusty  : [GF_TA][E][gf_fake_detect_param][gf_get_fake_detect_param] use default fake params for G7
+09-24 00:08:37.205     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_expo] real_expo = 77.939704
+09-24 00:08:37.205     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_gain] real_gain = 1.390660
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV1Arr[1] :1
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[37] :***
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[38] :***
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[39] :***
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log1: 1
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log2: ***
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log3: 467
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log4: 262
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] No film has been detected
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] XY-shift value: 12
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_get_fake_version] af for g7 opt7.X
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:0 rawdata_mean_value:1751
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:1 rawdata_mean_value:1701
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:2 rawdata_mean_value:1561
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:3 rawdata_mean_value:1587
+09-24 00:08:37.210     0     0 I trusty  : [GF_TA][I][gf_fpcore_common][handle_event] timestamp:***.
+09-24 00:08:37.363     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 1 time = 30ms
+09-24 00:08:37.364     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_InitFlocculeDetectionTemplate] floc_base_update=0 frame_num=68
+09-24 00:08:37.402     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_UpdataCaliInfoForFusion] update_base_flag=0xf
+09-24 00:08:37.402     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 2 time = 36ms
+09-24 00:08:37.402     0     0 I trusty  : [GF_TA][I][gf_cali][cali_handle_event] auth_save_autocali_count=9 post_auth_save_flag=0.
+09-24 00:08:37.402     0     0 I trusty  : [GF_TA][I][gf_cali][cali_handle_event] auth_save_extra_feature_count=9 save_extra_feature_flag=0.
+09-24 00:08:37.402     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 3 time = 0ms
+09-24 00:08:37.402     0     0 I trusty  : [GF_TA][E][gf_algo_auth][gf_algo_do_post_authenticate] skip stage=4
+09-24 00:08:37.402     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 4 time = 0ms
+09-24 00:08:37.403     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time = 1ms
+09-24 00:08:37.403     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time + total study time = 67ms
+09-24 00:08:37.411     0     0 I trusty  : [GF_TA][I][gf_algo_usr_portrait][gf_portrait_detect_finger_status] rty:0, pemResult:4 finger status: 1
+09-24 00:08:37.413     0     0 I trusty  : [GF_TA][E][gf_algo_customized][gf_customized_algo_cmd_entry]GF_DUMP_BIG_DATA_CMD, bd_cmd->big_data_type=1
+09-24 00:08:37.413     0     0 I trusty  : [GF_TA][I][gf_algo_customized][fill_auth_big_data] continuous_update_flag:0x0f
+09-24 00:08:38.173     0     0 I trusty  : logging.cc: 91: ***: :244: Command Received: TzResetLockout
+09-24 00:08:38.173     0     0 I trusty  : logging.cc: 91: ***"faceauth": :188: Session finished, current heap footprint: 16384, maximum footprint: 16384
+09-24 01:24:33.927     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 0, need_dec_gain_due_to_als: 0, expo mode:0
+09-24 01:24:33.927     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=0
+09-24 01:24:33.927     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=1
+09-24 01:24:33.927     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x00ff
+09-24 01:24:33.927     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=0, expo_time=77.939704, gain=0x41
+09-24 01:24:33.927     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 01:24:33.927     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][sensor_calculate_mask] cal sensor mask cost=0
+09-24 01:24:33.927     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode_poll_data] pre_dummy_time*100=1000, time_cost=0, expo=77, want delay = 67 
+09-24 01:24:34.029     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] pre_dummy_count = ***, tail=***, valid=***, expected=***
+09-24 01:24:34.029     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] read image end, err=0
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:24:34.032     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:24:34.035     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 01:24:34.039     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process_img2mats] do fp_AntiPeepG5 flag:0
+09-24 01:24:34.039     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 01:24:34.039     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 1, need_dec_gain_due_to_als: 0, expo mode:3
+09-24 01:24:34.039     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] capture sub image mode=0x0502
+09-24 01:24:34.039     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] retry1_valid_sg_mask=0x0003
+09-24 01:24:34.039     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=3
+09-24 01:24:34.039     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=0
+09-24 01:24:34.039     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x0003
+09-24 01:24:34.039     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=3, expo_time=100.205329, gain=0x41
+09-24 01:24:34.039     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 01:24:34.060     0     0 I trusty  : [GF_TA][E][gf_fake_detect_param][gf_get_fake_detect_param] use default fake params for G7
+09-24 01:24:34.060     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_expo] real_expo = 77.939704
+09-24 01:24:34.060     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_gain] real_gain = 1.390660
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV1Arr[1] :1
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[37] :***
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[38] :***
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[39] :***
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log1: 1
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log2: ***
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log3: 705
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log4: 150
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] No film has been detected
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] XY-shift value: 14
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_get_fake_version] af for g7 opt7.X
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:0 rawdata_mean_value:1876
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:1 rawdata_mean_value:1819
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:2 rawdata_mean_value:1660
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:3 rawdata_mean_value:1716
+09-24 01:24:34.069     0     0 I trusty  : [GF_TA][I][gf_fpcore_common][handle_event] timestamp:***.
+09-24 01:24:34.118     0     0 I trusty  : logging.cc: 91: ***: :244: Command Received: TzResetLockout
+09-24 01:24:34.118     0     0 I trusty  : logging.cc: 91: ***"faceauth": :188: Session finished, current heap footprint: 16384, maximum footprint: 16384
+09-24 01:24:34.227     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 1 time = 33ms
+09-24 01:24:34.228     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_InitFlocculeDetectionTemplate] floc_base_update=0 frame_num=69
+09-24 01:24:34.267     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_UpdataCaliInfoForFusion] update_base_flag=0xf
+09-24 01:24:34.267     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 2 time = 39ms
+09-24 01:24:34.268     0     0 I trusty  : [GF_TA][I][gf_cali][cali_handle_event] auth_save_autocali_count=10 post_auth_save_flag=0.
+09-24 01:24:34.268     0     0 I trusty  : [GF_TA][I][gf_cali][cali_handle_event] auth_save_extra_feature_count=0 save_extra_feature_flag=1.
+09-24 01:24:34.268     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][gf_algo_save_extra_feature] save extra feature
+09-24 01:24:34.274     0     0 I trusty  : [GF_TA][I][gf_tee_storage][trusty_file_open] 1 LHBM_gf_extra_feature.so 0
+09-24 01:24:35.025     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 3 time = 0ms
+09-24 01:24:35.027     0     0 I trusty  : [GF_TA][E][gf_algo_auth][gf_algo_do_post_authenticate] skip stage=4
+09-24 01:24:35.027     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 4 time = 0ms
+09-24 01:24:35.029     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time = 1ms
+09-24 01:24:35.029     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time + total study time = 73ms
+09-24 01:24:35.037     0     0 I trusty  : [GF_TA][I][gf_algo_usr_portrait][gf_portrait_detect_finger_status] rty:0, pemResult:4 finger status: 1
+09-24 01:24:35.041     0     0 I trusty  : [GF_TA][E][gf_algo_customized][gf_customized_algo_cmd_entry]GF_DUMP_BIG_DATA_CMD, bd_cmd->big_data_type=1
+09-24 01:24:35.041     0     0 I trusty  : [GF_TA][I][gf_algo_customized][fill_auth_big_data] continuous_update_flag:0x0f
+09-24 01:31:45.859     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 0, need_dec_gain_due_to_als: 0, expo mode:0
+09-24 01:31:45.859     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=0
+09-24 01:31:45.859     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=1
+09-24 01:31:45.859     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x00ff
+09-24 01:31:45.859     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=0, expo_time=77.939704, gain=0x41
+09-24 01:31:45.859     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 01:31:45.859     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][sensor_calculate_mask] cal sensor mask cost=0
+09-24 01:31:45.859     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode_poll_data] pre_dummy_time*100=1000, time_cost=0, expo=77, want delay = 67 
+09-24 01:31:45.960     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] pre_dummy_count = ***, tail=***, valid=***, expected=***
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] read image end, err=0
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 01:31:45.961     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 01:31:45.962     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 01:31:45.962     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 01:31:45.962     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 01:31:45.962     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 01:31:45.962     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 01:31:45.962     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:31:45.962     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:31:45.962     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:31:45.970     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:31:45.970     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:31:45.970     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:31:45.970     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:31:45.970     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:31:45.970     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:31:45.970     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:31:45.970     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:31:45.970     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:31:45.970     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 01:31:45.970     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 01:31:45.970     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 01:31:45.971     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 01:31:45.971     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process_img2mats] do fp_AntiPeepG5 flag:0
+09-24 01:31:45.971     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 01:31:45.971     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 1, need_dec_gain_due_to_als: 0, expo mode:3
+09-24 01:31:45.971     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] capture sub image mode=0x0a02
+09-24 01:31:45.971     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] retry1_valid_sg_mask=0x000c
+09-24 01:31:45.971     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=3
+09-24 01:31:45.971     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=0
+09-24 01:31:45.974     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x000c
+09-24 01:31:45.974     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=3, expo_time=100.205329, gain=0x41
+09-24 01:31:45.974     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 01:31:46.111     0     0 I trusty  : [GF_TA][E][gf_algo_auth][gf_algo_do_authenticate] no finger match ri:0
+09-24 01:31:46.111     0     0 I trusty  : [GF_TA][E][gf_fake_detect_param][gf_get_fake_detect_param] use default fake params for G7
+09-24 01:31:46.111     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_expo] real_expo = 77.939704
+09-24 01:31:46.111     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_gain] real_gain = 1.390660
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV1Arr[1] :1
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[37] :***
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[38] :***
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[39] :***
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log1: 1
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log2: ***
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log3: 740
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log4: 136
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] No film has been detected
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] XY-shift value: 13
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 01:31:46.120     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 01:31:46.159     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_get_fake_version] af for g7 opt7.X
+09-24 01:31:46.159     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:0 rawdata_mean_value:1876
+09-24 01:31:46.159     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:1 rawdata_mean_value:1824
+09-24 01:31:46.159     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:2 rawdata_mean_value:1650
+09-24 01:31:46.159     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:3 rawdata_mean_value:1713
+09-24 01:31:46.159     0     0 I trusty  : [GF_TA][I][gf_fpcore_common][handle_event] timestamp:***.
+09-24 01:31:46.202     0     0 I trusty  : logging.cc: 91: ***: :244: Command Received: TzResetLockout
+09-24 01:31:46.202     0     0 I trusty  : logging.cc: 91: ***"faceauth": :188: Session finished, current heap footprint: 16384, maximum footprint: 16384
+09-24 01:31:46.293     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_UpdataCaliInfoForFusion] update_base_flag=0xf
+09-24 01:31:46.294     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 1 time = 18ms
+09-24 01:31:46.296     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 2 time = 0ms
+09-24 01:31:46.296     0     0 I trusty  : [GF_TA][I][gf_cali][cali_handle_event] auth_save_autocali_count=11 post_auth_save_flag=0.
+09-24 01:31:46.296     0     0 I trusty  : [GF_TA][I][gf_cali][cali_handle_event] auth_save_extra_feature_count=1 save_extra_feature_flag=0.
+09-24 01:31:46.296     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 3 time = 0ms
+09-24 01:31:46.296     0     0 I trusty  : [GF_TA][E][gf_algo_auth][gf_algo_do_post_authenticate] skip stage=4
+09-24 01:31:46.296     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 4 time = 0ms
+09-24 01:31:46.301     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_InitFlocculeDetectionTemplate] floc_base_update=0 frame_num=71
+09-24 01:31:46.301     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time = 2ms
+09-24 01:31:46.301     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time + total study time = 20ms
+09-24 01:31:46.301     0     0 I trusty  : [GF_TA][I][gf_algo_usr_portrait][gf_portrait_detect_finger_status] rty:0, pemResult:4 finger status: 1
+09-24 01:31:46.306     0     0 I trusty  : [GF_TA][E][gf_algo_customized][gf_customized_algo_cmd_entry]GF_DUMP_BIG_DATA_CMD, bd_cmd->big_data_type=1
+09-24 01:31:46.306     0     0 I trusty  : [GF_TA][I][gf_algo_customized][fill_auth_big_data] continuous_update_flag:0x0f
+09-24 04:44:08.758     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 0, need_dec_gain_due_to_als: 0, expo mode:0
+09-24 04:44:08.758     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=0
+09-24 04:44:08.758     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=1
+09-24 04:44:08.758     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x00ff
+09-24 04:44:08.758     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=0, expo_time=77.939704, gain=0x41
+09-24 04:44:08.758     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 04:44:08.758     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][sensor_calculate_mask] cal sensor mask cost=0
+09-24 04:44:08.758     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode_poll_data] pre_dummy_time*100=1000, time_cost=0, expo=77, want delay = 67 
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] pre_dummy_count = ***, tail=***, valid=***, expected=***
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] read image end, err=0
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:08.863     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:08.864     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:08.868     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:08.868     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:08.868     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:08.868     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:08.868     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:08.868     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:08.868     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:08.868     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:08.868     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:08.868     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:08.868     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:08.868     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:08.872     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:08.874     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process_img2mats] do fp_AntiPeepG5 flag:0
+09-24 04:44:08.874     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:08.874     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 1, need_dec_gain_due_to_als: 0, expo mode:3
+09-24 04:44:08.874     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] capture sub image mode=0x0502
+09-24 04:44:08.874     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] retry1_valid_sg_mask=0x0003
+09-24 04:44:08.874     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=3
+09-24 04:44:08.874     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=0
+09-24 04:44:08.874     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x0003
+09-24 04:44:08.874     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=3, expo_time=100.205329, gain=0x41
+09-24 04:44:08.874     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 04:44:08.987     0     0 I trusty  : [GF_TA][E][gf_algo_auth][gf_algo_do_authenticate] no finger match ri:0
+09-24 04:44:08.987     0     0 I trusty  : [GF_TA][E][gf_fake_detect_param][gf_get_fake_detect_param] use default fake params for G7
+09-24 04:44:08.987     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_expo] real_expo = 77.939704
+09-24 04:44:08.987     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_gain] real_gain = 1.390660
+09-24 04:44:08.994     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV1Arr[1] :1
+09-24 04:44:08.994     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[37] :***
+09-24 04:44:08.994     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[38] :***
+09-24 04:44:08.994     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[39] :***
+09-24 04:44:08.994     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log1: 1
+09-24 04:44:08.994     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log2: ***
+09-24 04:44:08.994     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log3: 567
+09-24 04:44:08.994     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log4: 146
+09-24 04:44:08.994     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] No film has been detected
+09-24 04:44:08.994     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] XY-shift value: 14
+09-24 04:44:08.994     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:08.994     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:08.997     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:08.997     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:09.040     0     0 I trusty  : [GF_TA][E][gf_algo_auth][gf_algo_do_authenticate] no finger match ri:0
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_UpdataCaliInfoForFusion] update_base_flag=0x3
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_get_fake_version] af for g7 opt7.X
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:0 rawdata_mean_value:1762
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:1 rawdata_mean_value:1629
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:2 rawdata_mean_value:1557
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:3 rawdata_mean_value:1518
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][E][gf_delmar_algo][algo_do_authenticate] exit. err=GF_ERROR_NOT_MATCH, errno=1008
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][E][gf_algo_common][gf_algo_authenticate] exit. err=GF_ERROR_NOT_MATCH, errno=1008
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][E][gf_algo_common][gf_algo_cmd_entry] exit. err=GF_ERROR_NOT_MATCH, errno=1008
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][E][gf_algo_module][cmd_entry_point] exit. err=GF_ERROR_NOT_MATCH, errno=1008
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][E][gf_modules][gf_modules_cmd_entry_point] exit. err=GF_ERROR_NOT_MATCH, errno=1008
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][E][gf_ta_entry][ta_handle_cmd] handle command failed.
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][E][gf_ta_entry][ta_handle_cmd] exit. err=GF_ERROR_NOT_MATCH, errno=1008
+09-24 04:44:09.043     0     0 I trusty  : [GF_TA][E][gf_main][handle_in_cmd] Error handle cmd 1008
+09-24 04:44:09.056     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] pre_dummy_count = 0, tail=0, valid=***, expected=***
+09-24 04:44:09.056     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] read image end, err=0
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.072     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.074     0     0 I trusty  : [GF_TA][E][gf_algo_adapter][gf_adt_fp_preprocessCaliFusion1] fp_preprocess_PartA1_X err:0x***
+09-24 04:44:09.074     0     0 I trusty  : [GF_TA][E][gf_algo_adapter][gf_adt_fp_preprocessCaliFusion1] fp_preprocess_PartA1_X err:0x***
+09-24 04:44:09.076     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.076     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.076     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.076     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.076     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.076     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.076     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.076     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.076     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.076     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.076     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.076     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.080     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process_img2mats] do fp_AntiPeepG5 flag:0
+09-24 04:44:09.080     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][E][gf_algo_auth][gf_algo_do_authenticate] no finger match ri:1
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][E][gf_fake_detect_param][gf_get_fake_detect_param] use default fake params for G7
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][E][gf_algo_auth][gf_algo_do_authenticate] no finger match ri:1
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_UpdataCaliInfoForFusion] update_base_flag=0x0
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_get_fake_version] af for g7 opt7.X
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][E][gf_delmar_algo][algo_do_authenticate] exit. err=GF_ERROR_NOT_MATCH, errno=1008
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][E][gf_algo_common][gf_algo_authenticate] exit. err=GF_ERROR_NOT_MATCH, errno=1008
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][E][gf_algo_common][gf_algo_cmd_entry] exit. err=GF_ERROR_NOT_MATCH, errno=1008
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][E][gf_algo_module][cmd_entry_point] exit. err=GF_ERROR_NOT_MATCH, errno=1008
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][E][gf_modules][gf_modules_cmd_entry_point] exit. err=GF_ERROR_NOT_MATCH, errno=1008
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][E][gf_ta_entry][ta_handle_cmd] handle command failed.
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][E][gf_ta_entry][ta_handle_cmd] exit. err=GF_ERROR_NOT_MATCH, errno=1008
+09-24 04:44:09.126     0     0 I trusty  : [GF_TA][E][gf_main][handle_in_cmd] Error handle cmd 1008
+09-24 04:44:09.129     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_InitFlocculeDetectionTemplate] floc_base_update=0 frame_num=72
+09-24 04:44:09.129     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time = 1ms
+09-24 04:44:09.129     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time + total study time = 1ms
+09-24 04:44:09.129     0     0 I trusty  : [GF_TA][I][gf_tee_storage][trusty_file_open] 0 LHBM_auth_att.so 0
+09-24 04:44:09.142     0     0 I trusty  : [GF_TA][I][gf_algo_usr_portrait][gf_portrait_detect_finger_status] rty:0, pemResult:4 finger status: 1
+09-24 04:44:09.148     0     0 I trusty  : [GF_TA][E][gf_algo_customized][gf_customized_algo_cmd_entry]GF_DUMP_BIG_DATA_CMD, bd_cmd->big_data_type=1
+09-24 04:44:09.148     0     0 I trusty  : [GF_TA][I][gf_algo_customized][fill_auth_big_data] continuous_update_flag:0x03
+09-24 04:44:09.813     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 0, need_dec_gain_due_to_als: 0, expo mode:0
+09-24 04:44:09.813     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=0
+09-24 04:44:09.813     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=1
+09-24 04:44:09.813     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x00ff
+09-24 04:44:09.813     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=0, expo_time=77.939704, gain=0x41
+09-24 04:44:09.813     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 04:44:09.813     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][sensor_calculate_mask] cal sensor mask cost=0
+09-24 04:44:09.813     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode_poll_data] pre_dummy_time*100=1000, time_cost=0, expo=77, want delay = 67 
+09-24 04:44:09.917     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] pre_dummy_count = ***, tail=***, valid=***, expected=***
+09-24 04:44:09.917     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] read image end, err=0
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.920     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 04:44:09.925     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:09.928     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process_img2mats] do fp_AntiPeepG5 flag:0
+09-24 04:44:09.928     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 04:44:09.928     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 1, need_dec_gain_due_to_als: 0, expo mode:3
+09-24 04:44:09.928     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] capture sub image mode=0x0502
+09-24 04:44:09.928     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] retry1_valid_sg_mask=0x0003
+09-24 04:44:09.928     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=3
+09-24 04:44:09.928     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=0
+09-24 04:44:09.928     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x0003
+09-24 04:44:09.928     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=3, expo_time=100.205329, gain=0x41
+09-24 04:44:09.928     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 04:44:09.944     0     0 I trusty  : [GF_TA][E][gf_fake_detect_param][gf_get_fake_detect_param] use default fake params for G7
+09-24 04:44:09.944     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_expo] real_expo = 77.939704
+09-24 04:44:09.944     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_gain] real_gain = 1.390660
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV1Arr[1] :1
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[37] :***
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[38] :***
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[39] :***
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log1: 1
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log2: ***
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log3: 718
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log4: 147
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] No film has been detected
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] XY-shift value: 14
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_get_fake_version] af for g7 opt7.X
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:0 rawdata_mean_value:1880
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:1 rawdata_mean_value:1815
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:2 rawdata_mean_value:1661
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:3 rawdata_mean_value:1706
+09-24 04:44:09.951     0     0 I trusty  : [GF_TA][I][gf_fpcore_common][handle_event] timestamp:***.
+09-24 04:44:10.058     0     0 I trusty  : logging.cc: 91: ***: :244: Command Received: TzResetLockout
+09-24 04:44:10.069     0     0 I trusty  : logging.cc: 91: ***"faceauth": :188: Session finished, current heap footprint: 16384, maximum footprint: 16384
+09-24 04:44:10.133     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 1 time = 53ms
+09-24 04:44:10.133     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_InitFlocculeDetectionTemplate] floc_base_update=0 frame_num=72
+09-24 04:44:10.195     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_UpdataCaliInfoForFusion] update_base_flag=0xf
+09-24 04:44:10.195     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 2 time = 62ms
+09-24 04:44:10.199     0     0 I trusty  : [GF_TA][I][gf_cali][cali_handle_event] auth_save_autocali_count=12 post_auth_save_flag=0.
+09-24 04:44:10.199     0     0 I trusty  : [GF_TA][I][gf_cali][cali_handle_event] auth_save_extra_feature_count=2 save_extra_feature_flag=0.
+09-24 04:44:10.199     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 3 time = 0ms
+09-24 04:44:10.199     0     0 I trusty  : [GF_TA][E][gf_algo_auth][gf_algo_do_post_authenticate] skip stage=4
+09-24 04:44:10.199     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 4 time = 0ms
+09-24 04:44:10.202     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time = 2ms
+09-24 04:44:10.202     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time + total study time = 117ms
+09-24 04:44:10.202     0     0 I trusty  : [GF_TA][I][gf_tee_storage][trusty_file_open] 0 LHBM_auth_att.so 0
+09-24 04:44:10.221     0     0 I trusty  : [GF_TA][I][gf_algo_usr_portrait][gf_portrait_detect_finger_status] rty:0, pemResult:4 finger status: 1
+09-24 04:44:10.225     0     0 I trusty  : [GF_TA][E][gf_algo_customized][gf_customized_algo_cmd_entry]GF_DUMP_BIG_DATA_CMD, bd_cmd->big_data_type=1
+09-24 04:44:10.225     0     0 I trusty  : [GF_TA][I][gf_algo_customized][fill_auth_big_data] continuous_update_flag:0x0f
+09-24 05:08:33.169     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 0, need_dec_gain_due_to_als: 0, expo mode:0
+09-24 05:08:33.169     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=0
+09-24 05:08:33.169     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=1
+09-24 05:08:33.169     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x00ff
+09-24 05:08:33.169     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=0, expo_time=77.939704, gain=0x41
+09-24 05:08:33.169     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 05:08:33.170     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][sensor_calculate_mask] cal sensor mask cost=0
+09-24 05:08:33.170     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode_poll_data] pre_dummy_time*100=1000, time_cost=0, expo=77, want delay = 67 
+09-24 05:08:33.273     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] pre_dummy_count = ***, tail=***, valid=***, expected=***
+09-24 05:08:33.273     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] read image end, err=0
+09-24 05:08:33.276     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 05:08:33.277     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 05:08:33.281     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 05:08:33.284     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process_img2mats] do fp_AntiPeepG5 flag:0
+09-24 05:08:33.284     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 05:08:33.284     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 1, need_dec_gain_due_to_als: 0, expo mode:3
+09-24 05:08:33.284     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] capture sub image mode=0x0c02
+09-24 05:08:33.284     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] retry1_valid_sg_mask=0x000a
+09-24 05:08:33.284     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=3
+09-24 05:08:33.284     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=0
+09-24 05:08:33.284     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x000a
+09-24 05:08:33.284     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=3, expo_time=100.205329, gain=0x41
+09-24 05:08:33.284     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 05:08:33.300     0     0 I trusty  : [GF_TA][E][gf_fake_detect_param][gf_get_fake_detect_param] use default fake params for G7
+09-24 05:08:33.300     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_expo] real_expo = 77.939704
+09-24 05:08:33.300     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_gain] real_gain = 1.390660
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV1Arr[1] :1
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[37] :***
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[38] :***
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[39] :***
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log1: 1
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log2: ***
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log3: 807
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log4: 143
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] No film has been detected
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] XY-shift value: 14
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_get_fake_version] af for g7 opt7.X
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:0 rawdata_mean_value:1910
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:1 rawdata_mean_value:1850
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:2 rawdata_mean_value:1699
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:3 rawdata_mean_value:1740
+09-24 05:08:33.307     0     0 I trusty  : [GF_TA][I][gf_fpcore_common][handle_event] timestamp:***.
+09-24 05:08:33.370     0     0 I trusty  : logging.cc: 91: ***: :244: Command Received: TzResetLockout
+09-24 05:08:33.370     0     0 I trusty  : logging.cc: 91: ***"faceauth": :188: Session finished, current heap footprint: 16384, maximum footprint: 16384
+09-24 05:08:33.477     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 1 time = 50ms
+09-24 05:08:33.480     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_InitFlocculeDetectionTemplate] floc_base_update=0 frame_num=73
+09-24 05:08:33.529     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_UpdataCaliInfoForFusion] update_base_flag=0xf
+09-24 05:08:33.529     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 2 time = 51ms
+09-24 05:08:33.529     0     0 I trusty  : [GF_TA][I][gf_cali][cali_handle_event] auth_save_autocali_count=13 post_auth_save_flag=0.
+09-24 05:08:33.529     0     0 I trusty  : [GF_TA][I][gf_cali][cali_handle_event] auth_save_extra_feature_count=3 save_extra_feature_flag=0.
+09-24 05:08:33.529     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 3 time = 0ms
+09-24 05:08:33.529     0     0 I trusty  : [GF_TA][E][gf_algo_auth][gf_algo_do_post_authenticate] skip stage=4
+09-24 05:08:33.529     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 4 time = 0ms
+09-24 05:08:33.536     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time = 5ms
+09-24 05:08:33.537     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time + total study time = 106ms
+09-24 05:08:33.537     0     0 I trusty  : [GF_TA][I][gf_algo_usr_portrait][gf_portrait_detect_finger_status] rty:0, pemResult:4 finger status: 1
+09-24 05:08:33.544     0     0 I trusty  : [GF_TA][E][gf_algo_customized][gf_customized_algo_cmd_entry]GF_DUMP_BIG_DATA_CMD, bd_cmd->big_data_type=1
+09-24 05:08:33.544     0     0 I trusty  : [GF_TA][I][gf_algo_customized][fill_auth_big_data] continuous_update_flag:0x0f
+09-24 09:57:21.769     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 0, need_dec_gain_due_to_als: 0, expo mode:0
+09-24 09:57:21.769     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=0
+09-24 09:57:21.769     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=1
+09-24 09:57:21.769     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x00ff
+09-24 09:57:21.769     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=0, expo_time=77.939704, gain=0x41
+09-24 09:57:21.769     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 09:57:21.770     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][sensor_calculate_mask] cal sensor mask cost=0
+09-24 09:57:21.770     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode_poll_data] pre_dummy_time*100=1000, time_cost=0, expo=77, want delay = 67 
+09-24 09:57:21.874     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] pre_dummy_count = ***, tail=***, valid=***, expected=***
+09-24 09:57:21.874     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_read_image_hr_mode] read image end, err=0
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] authenticate, sNum = 1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] stRawdata.psData=0x***, stRawdata.psDarkImage=0, stRawdata.sNum=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nSegThre=-1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nCaliMode=2, support_moire_filter=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nRetryFlag=0
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] gain_ratio=100
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] nBrokenEnable=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 09:57:21.876     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] before fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nCaliMode=2, nDarkPixelFlag=0, nSubBaseCaliFlag=1
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): nAdj2FixFlag=0, nMaxITODepth=***, uchFlagScanMode=0
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process] after fp_preprocess(): uchCompensationOff=0, nFlagDeblurOff=1, uchAdj2FixOff=0
+09-24 09:57:21.884     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 09:57:21.888     0     0 I trusty  : [GF_TA][I][gf_cali][cali_process_img2mats] do fp_AntiPeepG5 flag:0
+09-24 09:57:21.888     0     0 I trusty  : [GF_TA][E][gf_algo_utils][gf_is_gain_decreased_retry0] gain ratio: 100
+09-24 09:57:21.888     0     0 I trusty  : [GF_TA][I][gf_delmar_sensor][determine_expo_mode] operation: 2, retry: 1, need_dec_gain_due_to_als: 0, expo mode:3
+09-24 09:57:21.888     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] capture sub image mode=0x0a02
+09-24 09:57:21.888     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] retry1_valid_sg_mask=0x000c
+09-24 09:57:21.888     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_current_expo_mode=3
+09-24 09:57:21.888     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] g_is_dec_expo_set_to_chip=0
+09-24 09:57:21.888     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] valid_sg_mask=0x000c
+09-24 09:57:21.888     0     0 I trusty  : [GF_TA][I][gf_delmar_cs_dc][delmar_capture_image] lb_mode=0, expo_mode=3, expo_time=100.205329, gain=0x41
+09-24 09:57:21.888     0     0 I trusty  : [GF_TA][E][gf_hw_dc][hw_set_current_operation] cali_flesh_max_frame_index = 0 
+09-24 09:57:21.904     0     0 I trusty  : [GF_TA][E][gf_fake_detect_param][gf_get_fake_detect_param] use default fake params for G7
+09-24 09:57:21.904     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_expo] real_expo = 77.939704
+09-24 09:57:21.904     0     0 I trusty  : [GF_TA][I][gf_hw][hw_get_real_gain] real_gain = 1.390660
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV1Arr[1] :1
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[37] :***
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[38] :***
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] fake algo check point, nFakeParamV2Arr[39] :***
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log1: 1
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log2: ***
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log3: 653
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] pay_test_log4: 144
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] No film has been detected
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_OP7_fake_detect] XY-shift value: 13
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_get_fake_version] af for g7 opt7.X
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:0 rawdata_mean_value:1843
+09-24 09:57:21.910     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:1 rawdata_mean_value:1781
+09-24 09:57:21.915     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:2 rawdata_mean_value:1626
+09-24 09:57:21.915     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_auth_big_data_info] retry 0 sg:3 rawdata_mean_value:1659
+09-24 09:57:21.915     0     0 I trusty  : [GF_TA][I][gf_fpcore_common][handle_event] timestamp:***.
+09-24 09:57:21.984     0     0 I trusty  : logging.cc: 91: ***: :244: Command Received: TzResetLockout
+09-24 09:57:21.984     0     0 I trusty  : logging.cc: 91: ***"faceauth": :188: Session finished, current heap footprint: 16384, maximum footprint: 16384
+09-24 09:57:22.078     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 1 time = 42ms
+09-24 09:57:22.079     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_InitFlocculeDetectionTemplate] floc_base_update=0 frame_num=74
+09-24 09:57:22.123     0     0 I trusty  : [GF_TA][I][gf_algo_adapter][gf_adt_UpdataCaliInfoForFusion] update_base_flag=0x7
+09-24 09:57:22.123     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 2 time = 43ms
+09-24 09:57:22.127     0     0 I trusty  : [GF_TA][I][gf_cali][cali_handle_event] auth_save_autocali_count=14 post_auth_save_flag=0.
+09-24 09:57:22.127     0     0 I trusty  : [GF_TA][I][gf_cali][cali_handle_event] auth_save_extra_feature_count=4 save_extra_feature_flag=0.
+09-24 09:57:22.127     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 3 time = 0ms
+09-24 09:57:22.127     0     0 I trusty  : [GF_TA][E][gf_algo_auth][gf_algo_do_post_authenticate] skip stage=4
+09-24 09:57:22.127     0     0 I trusty  : [GF_TA][I][gf_big_data][gf_get_study_time_big_data_info] study step = 4 time = 0ms
+09-24 09:57:22.127     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time = 1ms
+09-24 09:57:22.127     0     0 I trusty  : [GF_TA][I][gf_delmar_algo][algo_on_authenticate_end] auth stop time + total study time = 86ms
+09-24 09:57:22.131     0     0 I trusty  : [GF_TA][I][gf_algo_usr_portrait][gf_portrait_detect_finger_status] rty:0, pemResult:4 finger status: 1
+09-24 09:57:22.136     0     0 I trusty  : [GF_TA][E][gf_algo_customized][gf_customized_algo_cmd_entry]GF_DUMP_BIG_DATA_CMD, bd_cmd->big_data_type=1
+09-24 09:57:22.136     0     0 I trusty  : [GF_TA][I][gf_algo_customized][fill_auth_big_data] continuous_update_flag:0x07

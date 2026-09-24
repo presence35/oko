@@ -50,7 +50,7 @@ class ResilientConnectionSupervisor(
         const val SILENCE_TIMEOUT_MS = DEGRADED_STALE_MS * 4
         const val BASE_BACKOFF_MS = 1_000L
         const val MAX_BACKOFF_MS = 30_000L
-        const val WATCHDOG_TICK_MS = 3_000L
+        const val WATCHDOG_TICK_MS = 30_000L
         /** Offline/Connecting with a live network and no reconnect progress past this → force retry. */
         const val STUCK_OFFLINE_MS = MAX_BACKOFF_MS + 20_000L
         private const val MAX_CONN_EVENTS = 50
@@ -71,7 +71,7 @@ class ResilientConnectionSupervisor(
     private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS) // Infinite read timeout for long-lived WS
-        .pingInterval(15, TimeUnit.SECONDS)
+        .pingInterval(60, TimeUnit.SECONDS)
         .retryOnConnectionFailure(false)
         .build()
 

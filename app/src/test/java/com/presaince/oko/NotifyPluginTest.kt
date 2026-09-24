@@ -101,6 +101,43 @@ class NotifyPluginTest {
     }
 
     @Test
+    fun `once per type survives id flicker within the same sitting`() {
+        val p = NotifyPlugin()
+        val pr = prefs(ZonePolicy.ONCE_PER_TYPE)
+        assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.OUTER)), pr, now)["a"]!!.kind)
+        // Track "a" dies while another same-type track stays live: the respawn is still gated.
+        p.tick(listOf(inp("a", null, live = false), inp("b", ThreatZone.OUTER)), pr, now)
+        val re = p.tick(
+            listOf(inp("a", ThreatZone.OUTER), inp("b", ThreatZone.OUTER)), pr, now
+        )["a"]!!
+        assertEquals(VerdictKind.SUPPRESS, re.kind)
+        assertEquals(PolicyReason.ONCE_PER_TYPE, re.reason)
+    }
+
+    @Test
+    fun `once per type re-arms when the sky is clear of that type`() {
+        val p = NotifyPlugin()
+        val pr = prefs(ZonePolicy.ONCE_PER_TYPE)
+        assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.OUTER)), pr, now)["a"]!!.kind)
+        // Everyone dies: the sitting ends.
+        p.tick(listOf(inp("a", null, live = false)), pr, now)
+        p.tick(emptyList(), pr, now)
+        assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("b", ThreatZone.OUTER)), pr, now)["b"]!!.kind)
+    }
+
+    @Test
+    fun `once per type survives restart via seeded presence`() {
+        val p = NotifyPlugin()
+        p.seedKnown(mapOf("a" to ThreatZone.OUTER))
+        val pr = prefs(ZonePolicy.ONCE_PER_TYPE)
+        val gated = p.tick(
+            listOf(inp("a", ThreatZone.OUTER), inp("b", ThreatZone.OUTER)), pr, now
+        )["b"]!!
+        assertEquals(VerdictKind.SUPPRESS, gated.kind)
+        assertEquals(PolicyReason.ONCE_PER_TYPE, gated.reason)
+    }
+
+    @Test
     fun `digest minute window slides`() {
         val p = NotifyPlugin()
         val pr = prefs(ZonePolicy.DIGEST, max = 2, window = DigestWindow.MIN_2)

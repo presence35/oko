@@ -71,7 +71,8 @@ data class PluginVerdict(val kind: VerdictKind, val reason: PolicyReason? = null
  *
  * Policy owns every verdict, including red. Escalation to INNER is a gated
  * opportunity: ONCE_PER_THREAT still sounds on first red (per-threat escalation),
- * ONCE_PER_TYPE and DIGEST respect their gates.
+ * ONCE_PER_TYPE and DIGEST respect their gates. ONCE_PER_TYPE memory is per-type
+ * per sitting (survives id flicker, resets when the sky is clear of that type).
  */
 class NotifyPlugin {
 
@@ -86,11 +87,18 @@ class NotifyPlugin {
 
     private val episodes = mutableMapOf<String, Episode>()
     private val buckets = mutableMapOf<String, ArrayDeque<Long>>()
+    /**
+     * Type-level sound memory for ONCE_PER_TYPE: survives per-id episode flicker
+     * within one sitting, cleared when the sky is clear of that type (same
+     * eviction rule as the digest EPISODE buckets).
+     */
+    private val soundedTypes = mutableSetOf<ThreatType>()
 
     /** Preset switch = fresh start. Digest tweaks should use [clearBuckets] instead. */
     fun reset() {
         episodes.clear()
         buckets.clear()
+        soundedTypes.clear()
     }
 
     fun clearBuckets() {
@@ -104,6 +112,7 @@ class NotifyPlugin {
      */
     fun seedKnown(tiers: Map<String, ThreatZone>) {
         episodes.clear()
+        soundedTypes.clear()
         tiers.forEach { (id, tier) ->
             episodes[id] = Episode(
                 lastEffective = tier, present = true, muted = false,
@@ -128,6 +137,9 @@ class NotifyPlugin {
         // and removal are facts from the feed, not timers we invented.
         episodes.keys.filterNot { byId[it]?.live == true }.forEach { episodes.remove(it) }
         byId.forEach { (id, inp) -> if (!inp.shotGrace) episodes[id]?.type = inp.type }
+        // Rebuild type memory from still-open sounded episodes (restart continuity),
+        // so a re-keyed track never outruns the gate.
+        episodes.values.filter { it.sounded }.mapTo(soundedTypes) { it.type }
 
         val out = LinkedHashMap<String, PluginVerdict>()
         for (inp in inputs) {
@@ -160,6 +172,8 @@ class NotifyPlugin {
                 out[inp.id] = verdict
             }
         }
+        // Sky-clear eviction: a type with no live input left the sitting.
+        soundedTypes.retainAll(byId.values.filter { it.live }.map { it.type }.toSet())
         pruneBuckets(prefs, now)
         return out
     }
@@ -171,7 +185,7 @@ class NotifyPlugin {
             if (!ep.sounded || (inp.alertTier == ThreatZone.INNER && !ep.soundedInner)) sound(ep, inp, prefs, now)
             else PluginVerdict(VerdictKind.SUPPRESS, PolicyReason.ONCE_PER_THREAT)
         ZonePolicy.ONCE_PER_TYPE ->
-            if (!ep.sounded && episodes.values.none { it !== ep && it.type == inp.type && it.sounded }) {
+            if (inp.type !in soundedTypes) {
                 sound(ep, inp, prefs, now)
             } else {
                 PluginVerdict(VerdictKind.SUPPRESS, PolicyReason.ONCE_PER_TYPE)
@@ -183,6 +197,7 @@ class NotifyPlugin {
 
     private fun sound(ep: Episode, inp: PluginInput, prefs: NotifyPrefs, now: Long): PluginVerdict {
         ep.sounded = true
+        soundedTypes.add(inp.type)
         if (inp.alertTier == ThreatZone.INNER) ep.soundedInner = true
         recordBucket(inp, prefs, now)
         return PluginVerdict(VerdictKind.SOUND)
