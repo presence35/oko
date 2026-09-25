@@ -251,7 +251,7 @@ class AlertService : Service() {
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
         val officialRedAlertsEnabled: Boolean,
-        val yellowAlertsEnabled: Boolean = true,
+        val officialYellowAlertsEnabled: Boolean = true,
         val zoneSirenOverride: Boolean,
         val officialSirenOverride: Boolean,
         val fallingDebrisDelaySec: Int,
@@ -277,7 +277,7 @@ class AlertService : Service() {
         /** Derived summary of the two sub-channels — the master toggle. Mirrors the UI so the
          *  all-clear gate and the OFF log key on the same red||yellow fact the row shows. */
         val officialAlertsEnabled: Boolean
-            get() = officialRedAlertsEnabled || yellowAlertsEnabled
+            get() = officialRedAlertsEnabled || officialYellowAlertsEnabled
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -530,6 +530,12 @@ val mappedThreats = registry.allThreats.map { list ->
                 } else {
                     dayParams
                 }
+                // Armed bells are per group×tier, stored for day and night, resolved per tick
+                // (mirror rule) — the same effectiveArmed the ViewModel/ZonesSheet use.
+                val armed = effectiveArmed(
+                    ZoneArmed(p.slowRedArmed, p.slowYellowArmed, p.fastRedArmed, p.fastYellowArmed),
+                    nightZones, p.nightUseCustomZones, nightActive
+                )
                 val zoneSirenOverride = if (nightActive) p.nightZoneSirenOverride else p.sirenOverride
                 val officialSirenOverride = if (nightActive) p.nightOfficialSirenOverride else p.sirenOverride
 
@@ -604,12 +610,12 @@ val mappedThreats = registry.allThreats.map { list ->
                     zoneThreats = zoneThreats,
                     params = params,
                     lang = p.language,
-                    slowRedArmed = p.slowRedArmed,
-                    slowYellowArmed = p.slowYellowArmed,
-                    fastRedArmed = p.fastRedArmed,
-fastYellowArmed = p.fastYellowArmed,
-            officialRedAlertsEnabled = p.officialRedAlertsEnabled,
-            yellowAlertsEnabled = p.officialYellowAlertsEnabled,
+                    slowRedArmed = armed.slowRed,
+                    slowYellowArmed = armed.slowYellow,
+                    fastRedArmed = armed.fastRed,
+                    fastYellowArmed = armed.fastYellow,
+                    officialRedAlertsEnabled = effectiveOfficialEnabled(p.officialRedAlertsEnabled, p.nightOfficialRedEnabled, nightActive),
+                    officialYellowAlertsEnabled = effectiveOfficialEnabled(p.officialYellowAlertsEnabled, p.nightOfficialYellowEnabled, nightActive),
                     zoneSirenOverride = zoneSirenOverride,
                     officialSirenOverride = officialSirenOverride,
                     fallingDebrisDelaySec = p.fallingDebrisDelaySec,
@@ -849,7 +855,7 @@ fastYellowArmed = p.fastYellowArmed,
             // effective official is the latched one, not the current focus (pinned -> follow-me).
             if (effLevel != AlertLevel.NONE) {
                 val announced = if (effLevel == AlertLevel.RED) state.officialRedAlertsEnabled
-                else state.yellowAlertsEnabled
+                else state.officialYellowAlertsEnabled
                 if (announced) {
                     val onset = isNewEpisode(state)
                     if (effLevel == AlertLevel.RED) {
@@ -891,7 +897,7 @@ fastYellowArmed = p.fastYellowArmed,
             }
             if (boundary != null && lastOfficialEpisode != boundary) {
                 val audible = if (state.focusOblastLevel == AlertLevel.RED) state.officialRedAlertsEnabled
-                else state.yellowAlertsEnabled
+                else state.officialYellowAlertsEnabled
                 val reasonThreat = if (state.focusOblastLevel == AlertLevel.RED) {
                     state.officialReasonThreatId?.let { all[it] }
                 } else null

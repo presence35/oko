@@ -1,6 +1,7 @@
 package com.presaince.oko
 
 import android.content.Context
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -30,7 +31,7 @@ class UserPrefs(private val context: Context) {
     private val fastRedArmedKey = booleanPreferencesKey("fast_red_armed")
     private val fastYellowArmedKey = booleanPreferencesKey("fast_yellow_armed")
     private val officialRedAlertsKey = booleanPreferencesKey("official_red_alerts_enabled")
-    private val yellowAlertsKey = booleanPreferencesKey("yellow_alerts_enabled")
+    private val officialYellowAlertsKey = booleanPreferencesKey("yellow_alerts_enabled")
     private val sirenOverrideKey = booleanPreferencesKey("siren_override")
     private val fallingDebrisDelaySecKey = intPreferencesKey("falling_debris_delay_sec")
     private val disclaimerCollapsedKey = booleanPreferencesKey("disclaimer_collapsed")
@@ -156,7 +157,7 @@ class UserPrefs(private val context: Context) {
             digestWindow = digestWindow,
             digestPerType = this[digestPerTypeKey] ?: d.digestPerType,
             officialRedAlertsEnabled = this[officialRedAlertsKey] ?: d.officialRedAlertsEnabled,
-            yellowAlertsEnabled = this[yellowAlertsKey] ?: d.yellowAlertsEnabled,
+            officialYellowAlertsEnabled = this[officialYellowAlertsKey] ?: d.officialYellowAlertsEnabled,
             sirenOverride = this[sirenOverrideKey] ?: d.sirenOverride,
             fallingDebrisDelaySec = this[fallingDebrisDelaySecKey] ?: d.fallingDebrisDelaySec,
             disclaimerCollapsed = this[disclaimerCollapsedKey] ?: d.disclaimerCollapsed,
@@ -286,14 +287,14 @@ class UserPrefs(private val context: Context) {
         context.dataStore.edit { it[officialRedAlertsKey] = enabled }
     }
 
-    suspend fun setYellowAlertsEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[yellowAlertsKey] = enabled }
+    suspend fun setOfficialYellowAlertsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[officialYellowAlertsKey] = enabled }
     }
 
     suspend fun setOfficialAlertsEnabled(enabled: Boolean) {
         context.dataStore.edit {
             it[officialRedAlertsKey] = enabled
-            it[yellowAlertsKey] = enabled
+            it[officialYellowAlertsKey] = enabled
         }
     }
 
@@ -670,52 +671,54 @@ class UserPrefs(private val context: Context) {
      */
     suspend fun setNightSleep(enabled: Boolean) {
         context.dataStore.edit { p ->
-            val d = UserPreferences.DEFAULT
             if (enabled) {
-                p[nightSleepRestoreKey] = NightSleepPreset(
-                    useCustomZones = p[nightUseCustomZonesKey] ?: d.nightUseCustomZones,
-                    slowRedArmed = p[nightSlowRedArmedKey] ?: d.nightSlowRedArmed,
-                    slowYellowArmed = p[nightSlowYellowArmedKey] ?: d.nightSlowYellowArmed,
-                    fastRedArmed = p[nightFastRedArmedKey] ?: d.nightFastRedArmed,
-                    fastYellowArmed = p[nightFastYellowArmedKey] ?: d.nightFastYellowArmed,
-                    zoneSirenOverride = p[nightZoneSirenOverrideKey] ?: d.nightZoneSirenOverride,
-                    officialSirenOverride = p[nightOfficialSirenOverrideKey] ?: d.nightOfficialSirenOverride,
-                    officialRed = p[nightOfficialRedEnabledKey] ?: d.nightOfficialRedEnabled,
-                    officialYellow = p[nightOfficialYellowEnabledKey] ?: d.nightOfficialYellowEnabled
-                ).encode()
-                // useCustomZones must be on or effectiveArmed falls back to the day bells.
-                p[nightUseCustomZonesKey] = true
-                p[nightSlowRedArmedKey] = false
-                p[nightSlowYellowArmedKey] = false
-                p[nightFastRedArmedKey] = false
-                p[nightFastYellowArmedKey] = false
-                p[nightZoneSirenOverrideKey] = false
-                p[nightOfficialSirenOverrideKey] = false
-                p[nightOfficialRedEnabledKey] = false
-                p[nightOfficialYellowEnabledKey] = false
+                p[nightSleepRestoreKey] = nightSleepPresetOf(p).encode()
+                applyNightSleep(p, NightSleepPreset.MUTED)
             } else {
-                val prior = NightSleepPreset.decode(p[nightSleepRestoreKey])
-                if (prior != null) {
-                    p[nightUseCustomZonesKey] = prior.useCustomZones
-                    p[nightSlowRedArmedKey] = prior.slowRedArmed
-                    p[nightSlowYellowArmedKey] = prior.slowYellowArmed
-                    p[nightFastRedArmedKey] = prior.fastRedArmed
-                    p[nightFastYellowArmedKey] = prior.fastYellowArmed
-                    p[nightZoneSirenOverrideKey] = prior.zoneSirenOverride
-                    p[nightOfficialSirenOverrideKey] = prior.officialSirenOverride
-                    p[nightOfficialRedEnabledKey] = prior.officialRed
-                    p[nightOfficialYellowEnabledKey] = prior.officialYellow
-                } else {
-                    // Silent state reached without the button (no snapshot): normal night.
-                    p[nightUseCustomZonesKey] = false
-                    p[nightZoneSirenOverrideKey] = false
-                    p[nightOfficialSirenOverrideKey] = false
-                    p[nightOfficialRedEnabledKey] = true
-                    p[nightOfficialYellowEnabledKey] = true
-                }
+                applyNightSleep(p, NightSleepPreset.decode(p[nightSleepRestoreKey]) ?: NORMAL_NIGHT)
                 p.remove(nightSleepRestoreKey)
             }
         }
+    }
+
+    /** The night settings currently stored, as the preset the sleep button snapshots. */
+    private fun nightSleepPresetOf(p: Preferences): NightSleepPreset {
+        val d = UserPreferences.DEFAULT
+        return NightSleepPreset(
+            useCustomZones = p[nightUseCustomZonesKey] ?: d.nightUseCustomZones,
+            slowRedArmed = p[nightSlowRedArmedKey] ?: d.nightSlowRedArmed,
+            slowYellowArmed = p[nightSlowYellowArmedKey] ?: d.nightSlowYellowArmed,
+            fastRedArmed = p[nightFastRedArmedKey] ?: d.nightFastRedArmed,
+            fastYellowArmed = p[nightFastYellowArmedKey] ?: d.nightFastYellowArmed,
+            zoneSirenOverride = p[nightZoneSirenOverrideKey] ?: d.nightZoneSirenOverride,
+            officialSirenOverride = p[nightOfficialSirenOverrideKey] ?: d.nightOfficialSirenOverride,
+            officialRed = p[nightOfficialRedEnabledKey] ?: d.nightOfficialRedEnabled,
+            officialYellow = p[nightOfficialYellowEnabledKey] ?: d.nightOfficialYellowEnabled
+        )
+    }
+
+    /** Write all nine night-sleep keys at once. */
+    private fun applyNightSleep(p: MutablePreferences, preset: NightSleepPreset) {
+        p[nightUseCustomZonesKey] = preset.useCustomZones
+        p[nightSlowRedArmedKey] = preset.slowRedArmed
+        p[nightSlowYellowArmedKey] = preset.slowYellowArmed
+        p[nightFastRedArmedKey] = preset.fastRedArmed
+        p[nightFastYellowArmedKey] = preset.fastYellowArmed
+        p[nightZoneSirenOverrideKey] = preset.zoneSirenOverride
+        p[nightOfficialSirenOverrideKey] = preset.officialSirenOverride
+        p[nightOfficialRedEnabledKey] = preset.officialRed
+        p[nightOfficialYellowEnabledKey] = preset.officialYellow
+    }
+
+    private companion object {
+        /** Normal night, used when the silent state was reached without the button (no snapshot). */
+        val NORMAL_NIGHT = NightSleepPreset(
+            useCustomZones = false,
+            slowRedArmed = true, slowYellowArmed = true,
+            fastRedArmed = true, fastYellowArmed = false,
+            zoneSirenOverride = false, officialSirenOverride = false,
+            officialRed = true, officialYellow = true
+        )
     }
 
     suspend fun clearAll() {

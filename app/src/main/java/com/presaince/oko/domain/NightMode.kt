@@ -107,10 +107,13 @@ data class NightSleepPreset(
     val officialRed: Boolean,
     val officialYellow: Boolean
 ) {
-    /** Every alert is muted: the state the big button represents. */
+    /** Every alert is off. */
     val isSilent: Boolean
         get() = !slowRedArmed && !slowYellowArmed && !fastRedArmed && !fastYellowArmed &&
             !zoneSirenOverride && !officialSirenOverride && !officialRed && !officialYellow
+
+    /** The button's ON state: custom zones on (so the night bells actually apply) and every alert off. */
+    val isMuted: Boolean get() = useCustomZones && isSilent
 
     fun encode(): String = buildString(BITS) {
         append(if (useCustomZones) '1' else '0')
@@ -126,6 +129,15 @@ data class NightSleepPreset(
 
     companion object {
         private const val BITS = 9
+
+        /** The exact settings "Just let me sleep!" writes. */
+        val MUTED = NightSleepPreset(
+            useCustomZones = true,
+            slowRedArmed = false, slowYellowArmed = false,
+            fastRedArmed = false, fastYellowArmed = false,
+            zoneSirenOverride = false, officialSirenOverride = false,
+            officialRed = false, officialYellow = false
+        )
 
         fun decode(raw: String?): NightSleepPreset? {
             if (raw == null || raw.length != BITS || raw.any { it != '0' && it != '1' }) return null

@@ -159,126 +159,126 @@ internal fun NightModeCard(
                 )
             }
             if (!sleepActive) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Box(modifier = Modifier.padding(horizontal = 14.dp)) {
-                SectionCaption(s.nightSoundLabel)
-            }
-            Column(modifier = Modifier.padding(horizontal = 14.dp)) {
-                SectionCaption(s.officialAlertsTitle)
-                OfficialPairToggleRow(
-                    redTitle = s.officialRedAlertsTitle,
-                    redChecked = nightOfficialRedEnabled,
-                    onRedChange = onNightOfficialRedChange,
-                    yellowTitle = s.officialYellowAlertsTitle,
-                    yellowChecked = nightOfficialYellowEnabled,
-                    onYellowChange = onNightOfficialYellowChange
-                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Box(modifier = Modifier.padding(horizontal = 14.dp)) {
+                    SectionCaption(s.nightSoundLabel)
+                }
+                Column(modifier = Modifier.padding(horizontal = 14.dp)) {
+                    SectionCaption(s.officialAlertsTitle)
+                    OfficialPairToggleRow(
+                        redTitle = s.officialRedAlertsTitle,
+                        redChecked = nightOfficialRedEnabled,
+                        onRedChange = onNightOfficialRedChange,
+                        yellowTitle = s.officialYellowAlertsTitle,
+                        yellowChecked = nightOfficialYellowEnabled,
+                        onYellowChange = onNightOfficialYellowChange
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AlertToggleRow(
+                        title = s.nightOfficialSirenOverrideTitle,
+                        description = "Day: ${if (daySirenOverride) "ON" else "OFF"}",
+                        checked = officialSirenOverride,
+                        onCheckedChange = onOfficialSirenOverrideChange,
+                        icon = painterResource(R.drawable.ic_trident)
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AlertToggleRow(
+                        title = s.nightZoneSirenOverrideTitle,
+                        description = "Day: ${if (daySirenOverride) "ON" else "OFF"}",
+                        checked = zoneSirenOverride,
+                        onCheckedChange = onZoneSirenOverrideChange,
+                        icon = painterResource(R.drawable.ic_volume_up),
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    AlertToggleRow(
+                        title = s.officialAlertScopeTitle,
+                        description = "Day: ${if (dayOfficialAlertCityScope) "ON" else "OFF"}",
+                        checked = nightOfficialAlertCityScope,
+                        onCheckedChange = onNightOfficialAlertCityScopeChange,
+                        icon = painterResource(R.drawable.ic_city_medium),
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 AlertToggleRow(
-                    title = s.nightOfficialSirenOverrideTitle,
-                    description = "Day: ${if (daySirenOverride) "ON" else "OFF"}",
-                    checked = officialSirenOverride,
-                    onCheckedChange = onOfficialSirenOverrideChange,
-                    icon = painterResource(R.drawable.ic_trident)
+                    title = s.nightCustomZonesTitle,
+                    description = s.nightCustomZonesDesc,
+                    checked = useCustomZones,
+                    onCheckedChange = onUseCustomZonesChange
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                AlertToggleRow(
-                    title = s.nightZoneSirenOverrideTitle,
-                    description = "Day: ${if (daySirenOverride) "ON" else "OFF"}",
-                    checked = zoneSirenOverride,
-                    onCheckedChange = onZoneSirenOverrideChange,
-                    icon = painterResource(R.drawable.ic_volume_up),
-                    iconTint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                AlertToggleRow(
-                    title = s.officialAlertScopeTitle,
-                    description = "Day: ${if (dayOfficialAlertCityScope) "ON" else "OFF"}",
-                    checked = nightOfficialAlertCityScope,
-                    onCheckedChange = onNightOfficialAlertCityScopeChange,
-                    icon = painterResource(R.drawable.ic_city_medium),
-                    iconTint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            AlertToggleRow(
-                title = s.nightCustomZonesTitle,
-                description = s.nightCustomZonesDesc,
-                checked = useCustomZones,
-                onCheckedChange = onUseCustomZonesChange
-            )
-            if (useCustomZones) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) {
-                    GroupedZoneSection {
-                        SectionCaption(s.slowSectionLabel, leadingIcon = R.drawable.ic_turtle, leadingDesc = s.slowGroupIconDesc, leadingTint = TurtleGreen)
-                        ZoneRow(
-                            value = slowRedKm,
-                            range = 1f..20f,
-                            unit = s.kmUnit,
-                            accent = ZoneRedColor,
-                            armed = slowRedArmed,
-                            bellDesc = s.alertsBellToggle,
-                            reference = daySlowRedKm,
-                            dayLabel = s.dayShortLabel,
-                            onArmedChange = onSlowRedArmedChange,
-                            onCommit = onSlowRedChange
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        ZoneRow(
-                            value = slowYellowKm,
-                            range = (slowRedKm + 2).toFloat()..50f,
-                            unit = s.kmUnit,
-                            accent = ZoneYellowColor,
-                            armed = slowYellowArmed,
-                            bellDesc = s.alertsBellToggle,
-                            reference = daySlowYellowKm,
-                            dayLabel = s.dayShortLabel,
-                            onArmedChange = onSlowYellowArmedChange,
-                            onCommit = onSlowYellowChange
-                        )
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    GroupedZoneSection {
-                        SectionCaption(s.fastSectionLabel, leadingIcon = R.drawable.ic_lightning, leadingDesc = s.fastGroupIconDesc)
-                        ZoneRow(
-                            value = fastRedMin,
-                            range = 1f..5f,
-                            unit = s.minUnit,
-                            accent = ZoneRedColor,
-                            armed = fastRedArmed,
-                            bellDesc = s.alertsBellToggle,
-                            reference = dayFastRedMin,
-                            dayLabel = s.dayShortLabel,
-                            onArmedChange = onFastRedArmedChange,
-                            onCommit = onFastRedChange
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        ZoneRow(
-                            value = fastYellowMin,
-                            range = (fastRedMin + 2).toFloat()..20f,
-                            unit = s.minUnit,
-                            accent = ZoneYellowColor,
-                            armed = fastYellowArmed,
-                            bellDesc = s.alertsBellToggle,
-                            reference = dayFastYellowMin,
-                            dayLabel = s.dayShortLabel,
-                            onArmedChange = onFastYellowArmedChange,
-                            onCommit = onFastYellowChange
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    if (!slowRedArmed || !slowYellowArmed || !fastRedArmed || !fastYellowArmed) {
-                        Text(
-                            s.nightMuteExitNote,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 6.dp)
-                        )
+                if (useCustomZones) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) {
+                        GroupedZoneSection {
+                            SectionCaption(s.slowSectionLabel, leadingIcon = R.drawable.ic_turtle, leadingDesc = s.slowGroupIconDesc, leadingTint = TurtleGreen)
+                            ZoneRow(
+                                value = slowRedKm,
+                                range = 1f..20f,
+                                unit = s.kmUnit,
+                                accent = ZoneRedColor,
+                                armed = slowRedArmed,
+                                bellDesc = s.alertsBellToggle,
+                                reference = daySlowRedKm,
+                                dayLabel = s.dayShortLabel,
+                                onArmedChange = onSlowRedArmedChange,
+                                onCommit = onSlowRedChange
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            ZoneRow(
+                                value = slowYellowKm,
+                                range = (slowRedKm + 2).toFloat()..50f,
+                                unit = s.kmUnit,
+                                accent = ZoneYellowColor,
+                                armed = slowYellowArmed,
+                                bellDesc = s.alertsBellToggle,
+                                reference = daySlowYellowKm,
+                                dayLabel = s.dayShortLabel,
+                                onArmedChange = onSlowYellowArmedChange,
+                                onCommit = onSlowYellowChange
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        GroupedZoneSection {
+                            SectionCaption(s.fastSectionLabel, leadingIcon = R.drawable.ic_lightning, leadingDesc = s.fastGroupIconDesc)
+                            ZoneRow(
+                                value = fastRedMin,
+                                range = 1f..5f,
+                                unit = s.minUnit,
+                                accent = ZoneRedColor,
+                                armed = fastRedArmed,
+                                bellDesc = s.alertsBellToggle,
+                                reference = dayFastRedMin,
+                                dayLabel = s.dayShortLabel,
+                                onArmedChange = onFastRedArmedChange,
+                                onCommit = onFastRedChange
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            ZoneRow(
+                                value = fastYellowMin,
+                                range = (fastRedMin + 2).toFloat()..20f,
+                                unit = s.minUnit,
+                                accent = ZoneYellowColor,
+                                armed = fastYellowArmed,
+                                bellDesc = s.alertsBellToggle,
+                                reference = dayFastYellowMin,
+                                dayLabel = s.dayShortLabel,
+                                onArmedChange = onFastYellowArmedChange,
+                                onCommit = onFastYellowChange
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        if (!slowRedArmed || !slowYellowArmed || !fastRedArmed || !fastYellowArmed) {
+                            Text(
+                                s.nightMuteExitNote,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
+                        }
                     }
                 }
             }
         }
-    }
     }
 
     if (editing != null) {

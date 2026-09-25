@@ -107,10 +107,10 @@ object Strings {
         val nightModeDesc: String,
         val nightStartTimeLabel: String,
         val nightEndTimeLabel: String,
-val nightSoundLabel: String,
-         val nightZoneSirenOverrideTitle: String,
-         val nightOfficialSirenOverrideTitle: String,
-         val nightCustomZonesTitle: String,
+        val nightSoundLabel: String,
+        val nightZoneSirenOverrideTitle: String,
+        val nightOfficialSirenOverrideTitle: String,
+        val nightCustomZonesTitle: String,
         val nightCustomZonesDesc: String,
         val nightMuteExitNote: String,
         val nightSleepButton: String,
@@ -769,10 +769,10 @@ val nightSoundLabel: String,
         val nightModeDesc: String get() = settings.nightModeDesc
         val nightStartTimeLabel: String get() = settings.nightStartTimeLabel
         val nightEndTimeLabel: String get() = settings.nightEndTimeLabel
-val nightSoundLabel: String get() = settings.nightSoundLabel
-         val nightZoneSirenOverrideTitle: String get() = settings.nightZoneSirenOverrideTitle
-         val nightOfficialSirenOverrideTitle: String get() = settings.nightOfficialSirenOverrideTitle
-         val nightCustomZonesTitle: String get() = settings.nightCustomZonesTitle
+        val nightSoundLabel: String get() = settings.nightSoundLabel
+        val nightZoneSirenOverrideTitle: String get() = settings.nightZoneSirenOverrideTitle
+        val nightOfficialSirenOverrideTitle: String get() = settings.nightOfficialSirenOverrideTitle
+        val nightCustomZonesTitle: String get() = settings.nightCustomZonesTitle
         val nightCustomZonesDesc: String get() = settings.nightCustomZonesDesc
         val nightMuteExitNote: String get() = settings.nightMuteExitNote
         val nightSleepButton: String get() = settings.nightSleepButton

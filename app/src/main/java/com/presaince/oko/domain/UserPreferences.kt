@@ -59,7 +59,7 @@ data class UserPreferences(
     val digestWindow: DigestWindow = DigestWindow.EPISODE,
     val digestPerType: Boolean = false,
     val officialRedAlertsEnabled: Boolean = true,
-    val yellowAlertsEnabled: Boolean = true,
+    val officialYellowAlertsEnabled: Boolean = true,
     val sirenOverride: Boolean = false,
     val fallingDebrisDelaySec: Int = 0,
     val disclaimerCollapsed: Boolean = false,
@@ -126,10 +126,26 @@ data class UserPreferences(
     val mapVisibleTypes: Set<ThreatType> = ThreatType.values().toSet(),
     val alertEnabledTypes: Set<ThreatType> = ThreatType.values().toSet()
 ) {
-    val officialYellowAlertsEnabled: Boolean get() = yellowAlertsEnabled
     val iconSet: ThreatIconSet get() = threatIconSet
     val sheltersWithKids: Boolean get() = sheltersWithKidsEnabled
     val cardSize: ThreatCardSize get() = threatCardSize
+
+    /** The night settings the "Just let me sleep!" button owns. */
+    val nightSleepPreset: NightSleepPreset
+        get() = NightSleepPreset(
+            useCustomZones = nightUseCustomZones,
+            slowRedArmed = nightSlowRedArmed,
+            slowYellowArmed = nightSlowYellowArmed,
+            fastRedArmed = nightFastRedArmed,
+            fastYellowArmed = nightFastYellowArmed,
+            zoneSirenOverride = nightZoneSirenOverride,
+            officialSirenOverride = nightOfficialSirenOverride,
+            officialRed = nightOfficialRedEnabled,
+            officialYellow = nightOfficialYellowEnabled
+        )
+
+    /** True while the night settings are the fully-muted combination. */
+    val nightSleepActive: Boolean get() = nightEnabled && nightSleepPreset.isMuted
 
     companion object {
         val DEFAULT = UserPreferences()

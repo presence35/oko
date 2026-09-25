@@ -106,16 +106,12 @@ class NightModeTest {
     }
 
     @Test
-    fun `night sleep preset is silent only when every alert is muted`() {
-        val muted = NightSleepPreset(
-            useCustomZones = true,
-            slowRedArmed = false, slowYellowArmed = false,
-            fastRedArmed = false, fastYellowArmed = false,
-            zoneSirenOverride = false, officialSirenOverride = false,
-            officialRed = false, officialYellow = false
-        )
-        assertTrue(muted.isSilent)
-        assertFalse(muted.copy(officialYellow = true).isSilent)
-        assertFalse(muted.copy(fastRedArmed = true).isSilent)
+    fun `night sleep preset muting needs custom zones and every alert off`() {
+        assertTrue(NightSleepPreset.MUTED.isSilent)
+        assertTrue(NightSleepPreset.MUTED.isMuted)
+        assertFalse(NightSleepPreset.MUTED.copy(useCustomZones = false).isMuted)
+        assertFalse(NightSleepPreset.MUTED.copy(officialYellow = true).isSilent)
+        assertFalse(NightSleepPreset.MUTED.copy(fastRedArmed = true).isMuted)
+        assertEquals(NightSleepPreset.MUTED, NightSleepPreset.decode(NightSleepPreset.MUTED.encode()))
     }
 }

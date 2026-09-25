@@ -242,12 +242,7 @@ data class SettingsState(
     val nightOfficialRedEnabled: Boolean get() = prefs.nightOfficialRedEnabled
     val nightOfficialYellowEnabled: Boolean get() = prefs.nightOfficialYellowEnabled
     /** "Just let me sleep!" is on when the night settings are the fully-muted combination. */
-    val nightSleepActive: Boolean
-        get() = prefs.nightEnabled && prefs.nightUseCustomZones &&
-            !prefs.nightSlowRedArmed && !prefs.nightSlowYellowArmed &&
-            !prefs.nightFastRedArmed && !prefs.nightFastYellowArmed &&
-            !prefs.nightZoneSirenOverride && !prefs.nightOfficialSirenOverride &&
-            !prefs.nightOfficialRedEnabled && !prefs.nightOfficialYellowEnabled
+    val nightSleepActive: Boolean get() = prefs.nightSleepActive
     val followMe: Boolean get() = prefs.followMe
     val pinnedCity: City? get() = prefs.pinnedCity?.let { Cities.byUa[it] }
     val pinnedCityName: String? get() = prefs.pinnedCity
@@ -1222,7 +1217,7 @@ fun setAlertsArmed(armed: Boolean) {
     }
 
     fun setOfficialYellowAlertsEnabled(enabled: Boolean) {
-        viewModelScope.launch { prefs.setYellowAlertsEnabled(enabled) }
+        viewModelScope.launch { prefs.setOfficialYellowAlertsEnabled(enabled) }
     }
 
     fun setOfficialAlertCityScope(enabled: Boolean) {
