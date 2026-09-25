@@ -9,9 +9,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.presaince.oko.theme.AppPalette
 
 internal fun timeText(min: Int): String =
     String.format(java.util.Locale.US, "%02d:%02d", min / 60, min % 60)
@@ -95,7 +97,11 @@ internal fun NightModeCard(
     onZoneSirenOverrideChange: (Boolean) -> Unit,
     onOfficialSirenOverrideChange: (Boolean) -> Unit,
     nightOfficialAlertCityScope: Boolean,
+    nightOfficialRedEnabled: Boolean,
+    nightOfficialYellowEnabled: Boolean,
     onNightOfficialAlertCityScopeChange: (Boolean) -> Unit,
+    onNightOfficialRedChange: (Boolean) -> Unit,
+    onNightOfficialYellowChange: (Boolean) -> Unit,
     onSleepToggle: (Boolean) -> Unit
 ) {
     val s = Strings.get(lang)
@@ -103,29 +109,35 @@ internal fun NightModeCard(
 
     Column {
         if (enabled) {
-            Button(
-                onClick = { onSleepToggle(!sleepActive) },
-                interactionSource = rememberHapticInteractionSource(),
-                colors = if (sleepActive) {
-                    ButtonDefaults.buttonColors()
-                } else {
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                },
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 14.dp, end = 14.dp, top = 12.dp)
-                    .height(56.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (sleepActive) Color(AppPalette.Primary).copy(alpha = 0.16f) else Color.Transparent)
+                    .border(
+                        1.dp,
+                        if (sleepActive) Color(AppPalette.Primary) else Color(AppPalette.Border),
+                        RoundedCornerShape(14.dp)
+                    )
+                    .hapticClickable { onSleepToggle(!sleepActive) }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(painterResource(R.drawable.ic_moon), contentDescription = null)
-                Spacer(Modifier.width(10.dp))
+                Icon(
+                    painter = painterResource(if (sleepActive) R.drawable.ic_notifications_off else R.drawable.ic_moon),
+                    contentDescription = null,
+                    tint = if (sleepActive) Color(AppPalette.Primary) else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.width(12.dp))
                 Text(
                     if (sleepActive) s.allAlertsOffLabel else s.nightSleepButton,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (sleepActive) Color(AppPalette.Primary) else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
                 )
+                Switch(checked = sleepActive, onCheckedChange = null)
             }
             Row(
                 modifier = Modifier
@@ -152,6 +164,16 @@ internal fun NightModeCard(
                 SectionCaption(s.nightSoundLabel)
             }
             Column(modifier = Modifier.padding(horizontal = 14.dp)) {
+                SectionCaption(s.officialAlertsTitle)
+                OfficialPairToggleRow(
+                    redTitle = s.officialRedAlertsTitle,
+                    redChecked = nightOfficialRedEnabled,
+                    onRedChange = onNightOfficialRedChange,
+                    yellowTitle = s.officialYellowAlertsTitle,
+                    yellowChecked = nightOfficialYellowEnabled,
+                    onYellowChange = onNightOfficialYellowChange
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 AlertToggleRow(
                     title = s.nightOfficialSirenOverrideTitle,
                     description = "Day: ${if (daySirenOverride) "ON" else "OFF"}",

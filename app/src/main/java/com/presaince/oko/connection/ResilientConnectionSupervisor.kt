@@ -78,6 +78,8 @@ class ResilientConnectionSupervisor(
 
     private var activeWebSocket: WebSocket? = null
     private val isNetworkValidated = AtomicBoolean(false)
+    /** All currently attached validated networks; a teardown is only justified when this drains. */
+    private val validatedNetworks = ValidatedNetworkTracker<Network>()
     private val isRunning = AtomicBoolean(false)
     /** Only executeConnect mints generations; closeCurrentSocket never bumps it. */
     private val connectionGeneration = AtomicInteger(0)
@@ -133,6 +135,7 @@ class ResilientConnectionSupervisor(
             val valid = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                     capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             if (valid) {
+                validatedNetworks.add(network)
                 if (isNetworkValidated.compareAndSet(false, true)) {
                     recordEvent(ConnEventKind.FALLBACK_RESTORED, detail = "Network validated")
                     if (isRunning.get() && isDownForReconnect()) {
@@ -141,12 +144,15 @@ class ResilientConnectionSupervisor(
                     }
                 }
             } else {
-                isNetworkValidated.set(false)
+                // Only a fully drained set is an outage; losing one of several interfaces is not.
+                if (validatedNetworks.remove(network)) isNetworkValidated.set(false)
             }
         }
 
         override fun onLost(network: Network) {
-            handleNetworkLost("Network lost")
+            // A lost secondary interface (e.g. Wi-Fi while LTE is up) must not tear the socket
+            // down; only the last validated network going away is a real outage.
+            if (validatedNetworks.remove(network)) handleNetworkLost("Network lost")
         }
     }
 
@@ -166,6 +172,7 @@ class ResilientConnectionSupervisor(
         val activeNet = connectivityManager.activeNetwork
         val caps = connectivityManager.getNetworkCapabilities(activeNet)
         val valid = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+        if (valid && activeNet != null) validatedNetworks.add(activeNet)
         isNetworkValidated.set(valid)
         transport = transportOf(caps)
 
@@ -199,6 +206,7 @@ class ResilientConnectionSupervisor(
     private fun handleNetworkLost(reason: String) {
         val wasDown = _connectionState.value is ConnectionState.Offline ||
                 _connectionState.value is ConnectionState.Connecting
+        validatedNetworks.clear()
         isNetworkValidated.set(false)
         closeCurrentSocket(reason)
         connectJob?.cancel()
@@ -283,6 +291,8 @@ class ResilientConnectionSupervisor(
         val valid = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                 caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         if (!valid) return
+        val active = connectivityManager.activeNetwork
+        if (active != null) validatedNetworks.add(active)
         if (isNetworkValidated.compareAndSet(false, true)) {
             recordEvent(ConnEventKind.FALLBACK_RESTORED, detail = "Network validated (poll)")
             if (isRunning.get() && isDownForReconnect()) {

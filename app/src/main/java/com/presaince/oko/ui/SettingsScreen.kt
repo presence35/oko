@@ -110,6 +110,8 @@ fun SettingsScreen(
     onNightZoneSirenOverrideChange: (Boolean) -> Unit,
     onNightOfficialSirenOverrideChange: (Boolean) -> Unit,
     onNightOfficialAlertCityScopeChange: (Boolean) -> Unit,
+    onNightOfficialRedChange: (Boolean) -> Unit,
+    onNightOfficialYellowChange: (Boolean) -> Unit,
     onNightSleepToggle: (Boolean) -> Unit,
     onFollowMeChange: (Boolean) -> Unit,
     onPinnedCityChange: (City?) -> Unit,
@@ -190,6 +192,8 @@ fun SettingsScreen(
     val nightZoneSirenOverride = state.nightZoneSirenOverride
     val nightOfficialSirenOverride = state.nightOfficialSirenOverride
     val nightOfficialAlertCityScope = state.nightOfficialAlertCityScope
+    val nightOfficialRedEnabled = state.nightOfficialRedEnabled
+    val nightOfficialYellowEnabled = state.nightOfficialYellowEnabled
     val disclaimerCollapsed = state.disclaimerCollapsed
     val disclaimerReadCount = state.disclaimerReadCount
     val followMe = state.followMe
@@ -841,7 +845,11 @@ fun SettingsScreen(
                         onZoneSirenOverrideChange = onNightZoneSirenOverrideChange,
                         onOfficialSirenOverrideChange = onNightOfficialSirenOverrideChange,
                         nightOfficialAlertCityScope = nightOfficialAlertCityScope,
+                        nightOfficialRedEnabled = nightOfficialRedEnabled,
+                        nightOfficialYellowEnabled = nightOfficialYellowEnabled,
                         onNightOfficialAlertCityScopeChange = onNightOfficialAlertCityScopeChange,
+                        onNightOfficialRedChange = onNightOfficialRedChange,
+                        onNightOfficialYellowChange = onNightOfficialYellowChange,
                         onSleepToggle = onNightSleepToggle
                     )
                 }

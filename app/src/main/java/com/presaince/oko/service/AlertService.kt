@@ -128,6 +128,20 @@ class AlertService : Service() {
             }
         }
 
+        /**
+         * Background-safe start for WorkManager/watchdog paths. Android 12+ forbids starting a
+         * foreground service from the background, so a failure is expected there: swallow it
+         * (never crash the worker) and post a tap-to-resume prompt instead. Returns whether the
+         * service actually started.
+         */
+        fun startResilient(context: Context): Boolean = try {
+            start(context)
+            true
+        } catch (_: Exception) {
+            AlertNotificationManager(context.applicationContext).postMonitoringPaused()
+            false
+        }
+
         fun stop(context: Context) {
             context.stopService(Intent(context, AlertService::class.java))
         }
@@ -354,9 +368,13 @@ class AlertService : Service() {
         val notif = notificationManager.buildMonitorNotification(s.notifOngoingTitle, "")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                // API 34+ requires the location type for background fixes; Android 15 caps
+                // dataSync at 6h/24h, so keep specialUse as the 24/7 monitor type.
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
             } else {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
             }
             ServiceCompat.startForeground(this, NOTIF_MONITOR, notif, fgsType)
         } else {

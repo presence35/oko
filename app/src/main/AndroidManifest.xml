@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -26,7 +27,7 @@
         <service
             android:name=".AlertService"
             android:exported="false"
-            android:foregroundServiceType="dataSync|specialUse">
+            android:foregroundServiceType="dataSync|specialUse|location">
             <!-- specialUse on API 34+: Android 15 caps dataSync FGS at 6h per 24h in the
                  background, which would kill a 24/7 alert monitor. The subtype is the
                  human-reviewable rationale shown during Play Console review. -->

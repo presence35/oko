@@ -2,6 +2,7 @@ package com.presaince.oko.service
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.SoundPool
 import android.os.Build
@@ -18,7 +19,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Safety Invariants:
  * 1. ZERO disk I/O on the critical audio triggering path.
  * 2. Pre-loaded in-memory audio buffers via SoundPool with USAGE_ALARM and FLAG_AUDIBILITY_ENFORCED.
- * 3. Vibration is handled exclusively by notification channels; this class only manages audio.
+ * 3. A siren requested before its buffer finished loading is queued, never dropped.
+ * 4. Audio focus is requested but never abandoned on transient loss — the siren is short and
+ *    safety-first, so an incoming call must not silence it (see [PendingAlarm] / focus listener).
  */
 class AudioAlarmDispatcher(
     private val context: Context
@@ -36,7 +39,22 @@ class AudioAlarmDispatcher(
         context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
     }
 
+    private val alarmAttributes: AudioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_ALARM)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
+        .build()
+
+    private val audioFocusRequest: AudioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+        .setAudioAttributes(alarmAttributes)
+        .setWillPauseWhenDucked(false)
+        // Safety-first: ignore transient/duck loss so a phone call never silences the siren.
+        .setOnAudioFocusChangeListener { }
+        .build()
+    private val hasFocus = AtomicBoolean(false)
+
     private val loadedSampleIds = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+    private val pendingAlarm = PendingAlarm()
     private var soundPool: SoundPool? = null
 
     private var soundRedAlertId: Int = 0
@@ -52,19 +70,16 @@ class AudioAlarmDispatcher(
 
     private fun initSoundPool() {
         try {
-            val attributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
-                .build()
-
             soundPool = SoundPool.Builder()
                 .setMaxStreams(4)
-                .setAudioAttributes(attributes)
+                .setAudioAttributes(alarmAttributes)
                 .build()
                 .apply {
                     setOnLoadCompleteListener { _, sampleId, status ->
-                        if (status == 0) loadedSampleIds.add(sampleId)
+                        val ok = status == 0
+                        if (ok) loadedSampleIds.add(sampleId)
+                        // Play a siren that was queued while this buffer was still loading.
+                        pendingAlarm.onLoaded(sampleId, ok)?.let { playNow(it) }
                     }
                 }
 
@@ -133,9 +148,19 @@ class AudioAlarmDispatcher(
         loopCount: Int = 0,
         rate: Float = 1.0f
     ): Boolean {
-        if (sampleId == 0 || !loadedSampleIds.contains(sampleId)) return false
+        val sound = PendingAlarm.Sound(sampleId, leftVol, rightVol, priority, loopCount, rate)
+        return when (pendingAlarm.onRequest(sound, sampleId != 0 && loadedSampleIds.contains(sampleId))) {
+            PendingAlarm.Decision.DROP, PendingAlarm.Decision.QUEUE -> false
+            PendingAlarm.Decision.PLAY -> playNow(sound)
+        }
+    }
+
+    private fun playNow(sound: PendingAlarm.Sound): Boolean {
         stopActiveAlert()
-        activeLoopStreamId = soundPool?.play(sampleId, leftVol, rightVol, priority, loopCount, rate) ?: 0
+        requestFocus()
+        activeLoopStreamId = soundPool?.play(
+            sound.sampleId, sound.leftVol, sound.rightVol, sound.priority, sound.loopCount, sound.rate
+        ) ?: 0
         return true
     }
 
@@ -145,6 +170,25 @@ class AudioAlarmDispatcher(
             activeLoopStreamId = 0
         }
         vibrator.cancel()
+        abandonFocus()
+    }
+
+    private fun requestFocus() {
+        if (hasFocus.compareAndSet(false, true)) {
+            try {
+                audioManager.requestAudioFocus(audioFocusRequest)
+            } catch (_: Exception) {
+                hasFocus.set(false)
+            }
+        }
+    }
+
+    private fun abandonFocus() {
+        if (hasFocus.compareAndSet(true, false)) {
+            try {
+                audioManager.abandonAudioFocusRequest(audioFocusRequest)
+            } catch (_: Exception) {}
+        }
     }
 
     private fun enforceAlarmStreamVolume() {
@@ -163,6 +207,7 @@ class AudioAlarmDispatcher(
 
     fun release() {
         stopActiveAlert()
+        pendingAlarm.clear()
         loadedSampleIds.clear()
         soundPool?.release()
         soundPool = null

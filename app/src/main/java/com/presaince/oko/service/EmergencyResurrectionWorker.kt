@@ -44,14 +44,14 @@ class EmergencyResurrectionWorker(
     override suspend fun doWork(): Result {
         val isServiceRunning = isAlertServiceRunning(applicationContext)
         if (!isServiceRunning) {
+            // Kill evidence: the OS stopped background monitoring, so arm the one-shot
+            // battery-exemption prompt for the next foreground session.
             try {
-                AlertService.start(applicationContext)
-                // Kill evidence: the OS stopped background monitoring, so arm the one-shot
-                // battery-exemption prompt for the next foreground session.
-                try {
-                    UserPrefs(applicationContext).setServiceResurrected(true)
-                } catch (_: Exception) {}
+                UserPrefs(applicationContext).setServiceResurrected(true)
             } catch (_: Exception) {}
+            // Background-safe: Android 12+ blocks the FGS start here, in which case a
+            // tap-to-resume prompt is posted instead (never crashes the worker).
+            AlertService.startResilient(applicationContext)
         }
         return Result.success()
     }

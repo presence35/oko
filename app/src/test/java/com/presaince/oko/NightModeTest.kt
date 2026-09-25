@@ -78,9 +78,10 @@ class NightModeTest {
 
     @Test
     fun `official enable follows the night window`() {
-        assertTrue(effectiveOfficialEnabled(day = true, night = true, nightActive = false))
-        assertFalse(effectiveOfficialEnabled(day = true, night = false, nightActive = false))
+        // Outside the window the day value wins; inside it the night value wins.
+        assertTrue(effectiveOfficialEnabled(day = true, night = false, nightActive = false))
         assertFalse(effectiveOfficialEnabled(day = true, night = false, nightActive = true))
+        assertFalse(effectiveOfficialEnabled(day = false, night = true, nightActive = false))
         assertTrue(effectiveOfficialEnabled(day = false, night = true, nightActive = true))
     }
 

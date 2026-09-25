@@ -16,11 +16,8 @@ class AlertWatchdog(ctx: Context, params: androidx.work.WorkerParameters) : Coro
         if (MonitoringStatus.running.value) return Result.success()
         val bootRestart = UserPrefs(applicationContext).preferences.first().bootRestartEnabled
         if (!bootRestart) return Result.success()
-        try {
-            AlertService.start(applicationContext)
-        } catch (_: Exception) {
-            // best-effort; will retry next cycle
-        }
+        // Background-safe: a blocked FGS start (Android 12+) posts a resume prompt instead.
+        AlertService.startResilient(applicationContext)
         return Result.success()
     }
 

@@ -239,6 +239,8 @@ data class SettingsState(
     val nightZoneSirenOverride: Boolean get() = prefs.nightZoneSirenOverride
     val nightOfficialSirenOverride: Boolean get() = prefs.nightOfficialSirenOverride
     val nightOfficialAlertCityScope: Boolean get() = prefs.nightOfficialAlertCityScope
+    val nightOfficialRedEnabled: Boolean get() = prefs.nightOfficialRedEnabled
+    val nightOfficialYellowEnabled: Boolean get() = prefs.nightOfficialYellowEnabled
     /** "Just let me sleep!" is on when the night settings are the fully-muted combination. */
     val nightSleepActive: Boolean
         get() = prefs.nightEnabled && prefs.nightUseCustomZones &&
@@ -1269,6 +1271,16 @@ fun setAlertsArmed(armed: Boolean) {
         welcomeShootdownFlow.value = null
     }
 
+    /** The map handled the reveal request: drop it so re-entering the map never replays it. */
+    fun consumeReveal() {
+        revealFlow.value = null
+    }
+
+    /** The map handled the center (locate) request: drop it so it never replays. */
+    fun consumeCenter() {
+        centerFlow.value = null
+    }
+
     fun setNightEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setNightEnabled(enabled) }
     }
@@ -1339,6 +1351,14 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setNightOfficialAlertCityScope(enabled: Boolean) {
         viewModelScope.launch { prefs.setNightOfficialAlertCityScope(enabled) }
+    }
+
+    fun setNightOfficialRedEnabled(enabled: Boolean) {
+        viewModelScope.launch { prefs.setNightOfficialRedEnabled(enabled) }
+    }
+
+    fun setNightOfficialYellowEnabled(enabled: Boolean) {
+        viewModelScope.launch { prefs.setNightOfficialYellowEnabled(enabled) }
     }
 
     fun setNightSleep(enabled: Boolean) {

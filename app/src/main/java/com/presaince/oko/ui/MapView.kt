@@ -365,6 +365,8 @@ fun NeptunMapView(
     popupCoverPxState: State<Int> = remember { mutableIntStateOf(0) },
     zonesSheetCoverPxState: State<Int> = remember { mutableIntStateOf(0) },
     revealRequest: RevealRequest? = null,
+    onRevealHandled: () -> Unit = {},
+    onCenterHandled: () -> Unit = {},
     paused: Boolean = false,
     mapVisible: Boolean = true,
     shelterZoomTick: Int = 0,
@@ -608,6 +610,7 @@ fun NeptunMapView(
             val placed = threatOutcomes[center.id]
             camera.animateTo(bridge, placed?.lat ?: center.lat, placed?.lon ?: center.lon, NORMAL_MAX_ZOOM)
         }
+        if (center != null) onCenterHandled()
     }
 
     // Debounced slider refit
@@ -644,6 +647,8 @@ fun NeptunMapView(
             )
             lastArmTick.value = camera.pendingVersion
         }
+        // One-shot: consume so re-entering the map can never replay a stale reveal.
+        onRevealHandled()
     }
 
     // Tapping a threat marker only updates the selection state and presents the

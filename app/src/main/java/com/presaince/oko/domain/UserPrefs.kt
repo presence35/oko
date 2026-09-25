@@ -655,6 +655,14 @@ class UserPrefs(private val context: Context) {
         context.dataStore.edit { it[nightOfficialAlertCityScopeKey] = enabled }
     }
 
+    suspend fun setNightOfficialRedEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[nightOfficialRedEnabledKey] = enabled }
+    }
+
+    suspend fun setNightOfficialYellowEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[nightOfficialYellowEnabledKey] = enabled }
+    }
+
     /**
      * "Just let me sleep!" — mute every night alert, remembering exactly what the night
      * settings were so the next tap puts them back. One atomic edit: the snapshot and the

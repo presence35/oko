@@ -64,6 +64,7 @@ class AlertNotificationManager(private val context: Context) {
         const val NOTIF_OFFLINE_CRITICAL = 6
         const val NOTIF_UPDATE = 7
         const val NOTIF_ALARM_EPISODE = 8
+const val NOTIF_MONITORING_PAUSED = 9
 
         /** Bump to delete + recreate all managed channels (sound/importance/attrs are
          *  frozen by Android at creation — this is the only way a change takes effect). */
@@ -394,6 +395,23 @@ class AlertNotificationManager(private val context: Context) {
         } catch (_: SecurityException) {
             // POST_NOTIFICATIONS denied — silently skip
         }
+    }
+
+    /**
+     * Background monitoring could not be restarted (Android 12+ blocks starting a foreground
+     * service from the background). Surface a tap-to-resume prompt: the tap brings the app to
+     * the foreground, where [AlertService.start] is legal.
+     */
+    fun postMonitoringPaused() {
+        val s = Strings.get(AppLanguage.EN)
+        val notif = NotificationCompat.Builder(context, CHANNEL_MONITOR)
+            .setSmallIcon(R.drawable.ic_trident)
+            .setContentTitle(s.bootRestartPaused)
+            .setOngoing(true)
+            .setContentIntent(openAppIntent())
+            .setAutoCancel(true)
+            .build()
+        safeNotify(NOTIF_MONITORING_PAUSED, notif)
     }
 
     private fun sirenUri(resName: String): Uri =
