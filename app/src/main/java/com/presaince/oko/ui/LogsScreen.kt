@@ -2,6 +2,7 @@ package com.presaince.oko
 import com.presaince.oko.theme.AppPalette
 
 import com.presaince.oko.engine.ThreatZone
+import com.presaince.oko.engine.AlertLevel
 import com.presaince.oko.engine.toThreatType
 import android.content.Intent
 import android.net.Uri
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -419,7 +421,7 @@ private fun LogsTabPage(
     val groups = if (isDecisions) buildGroups(visible.filterIsInstance<DecisionRow>().map { it.entry }, groupBy, showFlourish, proximitySort, newestFirst) else emptyList()
     val subtitle = if (isDecisions) String.format(s.logsSubtitleFormat, rows.size) else null
     LazyColumn(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -598,6 +600,10 @@ private fun buildGroups(
         ProximitySort.DISTANCE -> list.sortedWith(compareBy<DebugLogEntry> { it.distanceKm ?: Double.MAX_VALUE }.thenByDescending { it.atMillis })
         ProximitySort.AGE -> if (newestFirst) list.sortedByDescending { it.atMillis } else list.sortedBy { it.atMillis }
     }
+    fun officialAccent(rows: List<DebugLogEntry>): GroupAccent {
+        val levels = rows.filter { it.kind == DebugLogKind.OFFICIAL_ON }.mapNotNull { it.level }
+        return if (levels.isNotEmpty() && levels.all { it == AlertLevel.YELLOW }) GroupAccent.YELLOW else GroupAccent.OFFICIAL
+    }
     return when (groupBy) {
         GroupBy.TIMELINE -> listOf(LogGroupSpec("timeline", null, null, null, rows, subTypes = false))
         GroupBy.PROXIMITY -> {
@@ -612,7 +618,7 @@ private fun buildGroups(
             val yellow = sortProximity(rest.filter { it.tier == ThreatZone.OUTER })
             val oblast = sortProximity(rest.filter { it.tier == null })
             buildList {
-                if (official.isNotEmpty()) add(LogGroupSpec("official", "official", GroupAccent.OFFICIAL, null, official, subTypes = false))
+                if (official.isNotEmpty()) add(LogGroupSpec("official", "official", officialAccent(official), null, official, subTypes = false))
                 if (flourish.isNotEmpty()) add(LogGroupSpec("flourish", "flourish", null, null, flourish, subTypes = false))
                 if (red.isNotEmpty()) add(LogGroupSpec("red", "red", GroupAccent.RED, null, red, subTypes = true))
                 if (yellow.isNotEmpty()) add(LogGroupSpec("yellow", "yellow", GroupAccent.YELLOW, null, yellow, subTypes = true))
@@ -624,7 +630,7 @@ private fun buildGroups(
             val flourish = if (showFlourish) rows.filter { it.kind == DebugLogKind.FLOURISH } else emptyList()
             val typed = rows.filter { it !in official && it.threatType != null && it.kind != DebugLogKind.FLOURISH }
             buildList {
-                if (official.isNotEmpty()) add(LogGroupSpec("official", "official", GroupAccent.OFFICIAL, null, official, subTypes = false))
+                if (official.isNotEmpty()) add(LogGroupSpec("official", "official", officialAccent(official), null, official, subTypes = false))
                 if (flourish.isNotEmpty()) add(LogGroupSpec("flourish", "flourish", null, null, flourish, subTypes = false))
                 typed.groupBy { it.threatType!! }
                     .entries
@@ -928,16 +934,16 @@ private fun LogRowCard(
 }
 
 @Composable
-private fun DebugLogKind.accent(tier: ThreatZone?): Color = when (this) {
-    DebugLogKind.OFFICIAL_ON -> DebugRed
-    DebugLogKind.OFFICIAL_OFF -> DebugGreen
-    DebugLogKind.ZONE_ENTER -> when (tier) {
-        ThreatZone.INNER -> DebugRed
-        ThreatZone.OUTER -> DebugAmber
-        null -> MaterialTheme.colorScheme.onSurfaceVariant
+    private fun DebugLogKind.accent(tier: ThreatZone?, level: AlertLevel?): Color = when (this) {
+        DebugLogKind.OFFICIAL_ON -> if (level == AlertLevel.YELLOW) DebugAmber else DebugRed
+        DebugLogKind.OFFICIAL_OFF -> DebugGreen
+        DebugLogKind.ZONE_ENTER -> when (tier) {
+            ThreatZone.INNER -> DebugRed
+            ThreatZone.OUTER -> DebugAmber
+            null -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
-}
 
 private fun DebugLogKind.icon(): ImageVector = when (this) {
     DebugLogKind.OFFICIAL_ON -> Icons.Filled.Warning
@@ -1018,7 +1024,7 @@ private fun DecisionCard(
     now: Long,
     iconSet: ThreatIconSet
 ) {
-    val accent = entry.kind.accent(entry.tier)
+    val accent = entry.kind.accent(entry.tier, entry.level)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1220,6 +1226,18 @@ private fun RetryLogCard(
 
 
 
+private fun NetTransport.iconRes(): Int = when (this) {
+    NetTransport.WIFI -> R.drawable.ic_wifi
+    NetTransport.CELLULAR -> R.drawable.ic_signal_cellular
+    NetTransport.OTHER -> R.drawable.ic_language
+}
+
+private fun NetTransport.label(s: Strings.StringSet): String = when (this) {
+    NetTransport.WIFI -> s.connTransportWifi
+    NetTransport.CELLULAR -> s.connTransportCellular
+    NetTransport.OTHER -> s.connTransportOther
+}
+
 @Composable
 private fun ConnectionCard(entry: ConnLogEntry, s: Strings.StringSet, lang: AppLanguage, now: Long) {
 val accent = when (entry.status) {
@@ -1291,6 +1309,23 @@ val accent = when (entry.status) {
                     style = MaterialTheme.typography.bodySmall,
                     color = DebugAmber
                 )
+            }
+            entry.transport?.let { transport ->
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(transport.iconRes()),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        transport.label(s),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

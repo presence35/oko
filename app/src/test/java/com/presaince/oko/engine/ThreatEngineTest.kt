@@ -626,9 +626,9 @@ class ThreatEngineTest {
     }
 
     @Test
-    fun `canonicalId - every city stem resolves to a canonical boundary ID`() {
-        for (stem in Cities.cityOblast.values.toSet()) {
-            assertNotNull("stem $stem", CompactOblastBoundaries.canonicalId(stem))
+    fun `canonicalId - every city oblast id is a canonical boundary ID`() {
+        for (oblastId in Cities.cityOblastId.values.toSet()) {
+            assertNotNull("oblast $oblastId", CompactOblastBoundaries.canonicalId(oblastId))
         }
         assertEquals("odeska", CompactOblastBoundaries.canonicalId("Одеськ"))
         assertEquals("kharkivska", CompactOblastBoundaries.canonicalId("Харківська область"))
@@ -839,13 +839,13 @@ class ThreatEngineTest {
         )
         val result = engine.computeCityAlerts(listOf(alert))
         val donetskaCities = Cities.ALL
-            .filter { CompactOblastBoundaries.canonicalId(Cities.cityOblast[it.nameUa] ?: "") == "donetska" }
+            .filter { CompactOblastBoundaries.canonicalId(Cities.cityOblastId[it.nameUa] ?: "") == "donetska" }
         assertTrue("expected donetska cities, got ${donetskaCities.size}", donetskaCities.isNotEmpty())
         for (city in donetskaCities) {
             assertEquals("city ${city.nameUa}", AlertLevel.RED, result[city.nameUa])
         }
         val lvivCities = Cities.ALL
-            .filter { CompactOblastBoundaries.canonicalId(Cities.cityOblast[it.nameUa] ?: "") == "lvivska" }
+            .filter { CompactOblastBoundaries.canonicalId(Cities.cityOblastId[it.nameUa] ?: "") == "lvivska" }
         for (city in lvivCities) {
             assertNull("city ${city.nameUa} must stay untinted", result[city.nameUa])
         }
@@ -860,7 +860,7 @@ class ThreatEngineTest {
         )
         val result = engine.computeCityAlerts(listOf(alert))
         val zaporizkaCities = Cities.ALL
-            .filter { CompactOblastBoundaries.canonicalId(Cities.cityOblast[it.nameUa] ?: "") == "zaporizka" }
+            .filter { CompactOblastBoundaries.canonicalId(Cities.cityOblastId[it.nameUa] ?: "") == "zaporizka" }
         assertTrue(zaporizkaCities.isNotEmpty())
         for (city in zaporizkaCities) {
             assertEquals("city ${city.nameUa}", AlertLevel.RED, result[city.nameUa])
@@ -875,7 +875,7 @@ class ThreatEngineTest {
         )
         val result = engine.computeCityAlerts(listOf(yellow))
         val odeskaCities = Cities.ALL
-            .filter { CompactOblastBoundaries.canonicalId(Cities.cityOblast[it.nameUa] ?: "") == "odeska" }
+            .filter { CompactOblastBoundaries.canonicalId(Cities.cityOblastId[it.nameUa] ?: "") == "odeska" }
         assertTrue(odeskaCities.isNotEmpty())
         for (city in odeskaCities) {
             assertEquals("city ${city.nameUa}", AlertLevel.YELLOW, result[city.nameUa])
@@ -904,7 +904,7 @@ class ThreatEngineTest {
             assertEquals(
                 "city $cityName outside donetska",
                 "donetska",
-                CompactOblastBoundaries.canonicalId(Cities.cityOblast[cityName] ?: "")
+                CompactOblastBoundaries.canonicalId(Cities.cityOblastId[cityName] ?: "")
             )
         }
     }

@@ -174,17 +174,10 @@ class ThreatEngine(
             for (city in Cities.ALL) {
                 var level: AlertLevel? = null
                 for (alert in alerts) {
-                    val token = Cities.cityOblast[city.nameUa] ?: continue
-                    if (!alert.inOblast(token)) continue
+                    if (!alert.coversCity(city.nameUa)) continue
                     val alertLevel = if (alert.level.equals("yellow", true))
                         AlertLevel.YELLOW else AlertLevel.RED
-                    if (alert.isOblastWide()) {
-                        if (level == null || alertLevel == AlertLevel.RED) level = alertLevel
-                        continue
-                    }
-                    if (alert.coversCity(city.nameUa)) {
-                        if (level == null || alertLevel == AlertLevel.RED) level = alertLevel
-                    }
+                    if (level == null || alertLevel == AlertLevel.RED) level = alertLevel
                 }
                 if (level != null) put(city.nameUa, level)
             }
@@ -222,9 +215,9 @@ class ThreatEngine(
                 val oblastId = CompactOblastBoundaries.canonicalId(alert.oblast)
                     ?: CompactOblastBoundaries.canonicalId(alert.name)
                     ?: continue
-                val raionKey = CompactRaionBoundaries.canonicalKey(alert.key)
-                    ?: CompactRaionBoundaries.canonicalKey(alert.name)
-                    ?: continue
+                // The raion fill keys off the alert's own canonical key only. A bare city alert
+                // (key/name = a city, e.g. "Бердянськ") must never resolve to its raion here.
+                val raionKey = alert.canonicalRaionKey() ?: continue
                 if (CompactRaionBoundaries.get(raionKey) != null) {
                     add(oblastId to raionKey)
                 }
@@ -244,7 +237,7 @@ class ThreatEngine(
         lang: AppLanguage,
         now: Long
     ): Pair<String?, String?> {
-        val token = canonicalToken(alert.oblast) ?: return null to null
+        val token = alert.canonicalOblastId() ?: return null to null
         // No focus point → can't judge proximity; fall back to the alert name alone.
         if (focus == null) return alertRegionName(alert, lang) to null
         var best: NormalizedThreat? = null

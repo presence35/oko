@@ -76,6 +76,9 @@ class UserPrefs(private val context: Context) {
     private val nightZoneSirenOverrideKey = booleanPreferencesKey("night_zone_siren_override")
     private val nightOfficialSirenOverrideKey = booleanPreferencesKey("night_official_siren_override")
     private val nightOfficialAlertCityScopeKey = booleanPreferencesKey("night_official_alert_city_scope")
+    private val nightOfficialRedEnabledKey = booleanPreferencesKey("night_official_red_enabled")
+    private val nightOfficialYellowEnabledKey = booleanPreferencesKey("night_official_yellow_enabled")
+    private val nightSleepRestoreKey = stringPreferencesKey("night_sleep_restore")
     private val flybyAnimationEnabledKey = booleanPreferencesKey("flyby_animation_enabled")
     private val threatIconZoomKey = booleanPreferencesKey("threat_icon_zoom")
     private val sheltersEnabledKey = booleanPreferencesKey("shelters_enabled")
@@ -198,6 +201,9 @@ class UserPrefs(private val context: Context) {
             nightZoneSirenOverride = this[nightZoneSirenOverrideKey] ?: d.nightZoneSirenOverride,
             nightOfficialSirenOverride = this[nightOfficialSirenOverrideKey] ?: d.nightOfficialSirenOverride,
             nightOfficialAlertCityScope = this[nightOfficialAlertCityScopeKey] ?: d.nightOfficialAlertCityScope,
+            nightOfficialRedEnabled = this[nightOfficialRedEnabledKey] ?: d.nightOfficialRedEnabled,
+            nightOfficialYellowEnabled = this[nightOfficialYellowEnabledKey] ?: d.nightOfficialYellowEnabled,
+            nightSleepRestore = this[nightSleepRestoreKey] ?: d.nightSleepRestore,
             flybyAnimationEnabled = this[flybyAnimationEnabledKey] ?: d.flybyAnimationEnabled,
             threatIconZoom = this[threatIconZoomKey] ?: d.threatIconZoom,
             sheltersEnabled = this[sheltersEnabledKey] ?: d.sheltersEnabled,
@@ -647,6 +653,61 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setNightOfficialAlertCityScope(enabled: Boolean) {
         context.dataStore.edit { it[nightOfficialAlertCityScopeKey] = enabled }
+    }
+
+    /**
+     * "Just let me sleep!" — mute every night alert, remembering exactly what the night
+     * settings were so the next tap puts them back. One atomic edit: the snapshot and the
+     * muted values either both land or neither does.
+     */
+    suspend fun setNightSleep(enabled: Boolean) {
+        context.dataStore.edit { p ->
+            val d = UserPreferences.DEFAULT
+            if (enabled) {
+                p[nightSleepRestoreKey] = NightSleepPreset(
+                    useCustomZones = p[nightUseCustomZonesKey] ?: d.nightUseCustomZones,
+                    slowRedArmed = p[nightSlowRedArmedKey] ?: d.nightSlowRedArmed,
+                    slowYellowArmed = p[nightSlowYellowArmedKey] ?: d.nightSlowYellowArmed,
+                    fastRedArmed = p[nightFastRedArmedKey] ?: d.nightFastRedArmed,
+                    fastYellowArmed = p[nightFastYellowArmedKey] ?: d.nightFastYellowArmed,
+                    zoneSirenOverride = p[nightZoneSirenOverrideKey] ?: d.nightZoneSirenOverride,
+                    officialSirenOverride = p[nightOfficialSirenOverrideKey] ?: d.nightOfficialSirenOverride,
+                    officialRed = p[nightOfficialRedEnabledKey] ?: d.nightOfficialRedEnabled,
+                    officialYellow = p[nightOfficialYellowEnabledKey] ?: d.nightOfficialYellowEnabled
+                ).encode()
+                // useCustomZones must be on or effectiveArmed falls back to the day bells.
+                p[nightUseCustomZonesKey] = true
+                p[nightSlowRedArmedKey] = false
+                p[nightSlowYellowArmedKey] = false
+                p[nightFastRedArmedKey] = false
+                p[nightFastYellowArmedKey] = false
+                p[nightZoneSirenOverrideKey] = false
+                p[nightOfficialSirenOverrideKey] = false
+                p[nightOfficialRedEnabledKey] = false
+                p[nightOfficialYellowEnabledKey] = false
+            } else {
+                val prior = NightSleepPreset.decode(p[nightSleepRestoreKey])
+                if (prior != null) {
+                    p[nightUseCustomZonesKey] = prior.useCustomZones
+                    p[nightSlowRedArmedKey] = prior.slowRedArmed
+                    p[nightSlowYellowArmedKey] = prior.slowYellowArmed
+                    p[nightFastRedArmedKey] = prior.fastRedArmed
+                    p[nightFastYellowArmedKey] = prior.fastYellowArmed
+                    p[nightZoneSirenOverrideKey] = prior.zoneSirenOverride
+                    p[nightOfficialSirenOverrideKey] = prior.officialSirenOverride
+                    p[nightOfficialRedEnabledKey] = prior.officialRed
+                    p[nightOfficialYellowEnabledKey] = prior.officialYellow
+                } else {
+                    // Silent state reached without the button (no snapshot): normal night.
+                    p[nightUseCustomZonesKey] = false
+                    p[nightZoneSirenOverrideKey] = false
+                    p[nightOfficialSirenOverrideKey] = false
+                    p[nightOfficialRedEnabledKey] = true
+                    p[nightOfficialYellowEnabledKey] = true
+                }
+                p.remove(nightSleepRestoreKey)
+            }
+        }
     }
 
     suspend fun clearAll() {

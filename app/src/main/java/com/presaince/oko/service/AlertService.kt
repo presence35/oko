@@ -887,10 +887,11 @@ fastYellowArmed = p.fastYellowArmed,
                     primary?.zone != null -> DebugLog.recordOfficial(
                         DebugLogKind.OFFICIAL_ON, night = state.nightActive,
                         sirenOverride = state.officialSirenOverride, vibrationLevel = vibration,
-                        notified = false, reason = DebugLogReason.COALESCED,
-                        threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
-                        locality = locality, distanceKm = distanceFromFocusKm(reasonThreat, state),
-                        now = System.currentTimeMillis()
+                            notified = false, reason = DebugLogReason.COALESCED,
+                            threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
+                            locality = locality, distanceKm = distanceFromFocusKm(reasonThreat, state),
+                            level = state.focusOblastLevel,
+                            now = System.currentTimeMillis()
                     )
                     audible -> {
                         wakeLockManager.acquireForAlert()
@@ -900,6 +901,7 @@ fastYellowArmed = p.fastYellowArmed,
                             notified = true, reason = DebugLogReason.FIRED,
                             threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
                             locality = locality, distanceKm = distanceFromFocusKm(reasonThreat, state),
+                            level = state.focusOblastLevel,
                             now = System.currentTimeMillis()
                         )
                         persistOfficialAnnounced(state)
@@ -907,10 +909,11 @@ fastYellowArmed = p.fastYellowArmed,
                     else -> DebugLog.recordOfficial(
                         DebugLogKind.OFFICIAL_ON, night = state.nightActive,
                         sirenOverride = state.officialSirenOverride, vibrationLevel = vibration,
-                        notified = false, reason = DebugLogReason.TOGGLE_OFF,
-                        threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
-                        locality = locality, distanceKm = distanceFromFocusKm(reasonThreat, state),
-                        now = System.currentTimeMillis()
+                            notified = false, reason = DebugLogReason.TOGGLE_OFF,
+                            threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
+                            locality = locality, distanceKm = distanceFromFocusKm(reasonThreat, state),
+                            level = state.focusOblastLevel,
+                            now = System.currentTimeMillis()
                     )
                 }
                 lastOfficialEpisode = boundary

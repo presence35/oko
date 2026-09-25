@@ -388,6 +388,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onNightZoneSirenOverrideChange = remember { { viewModel.setNightZoneSirenOverride(it) } },
                  onNightOfficialSirenOverrideChange = remember { { viewModel.setNightOfficialSirenOverride(it) } },
                  onNightOfficialAlertCityScopeChange = remember { { viewModel.setNightOfficialAlertCityScope(it) } },
+                 onNightSleepToggle = remember { { viewModel.setNightSleep(it) } },
                  onFollowMeChange = remember { { viewModel.setFollowMe(it) } },
                 onPinnedCityChange = remember { { viewModel.setPinnedCity(it) } },
                 onPeriodicGpsChange = remember { { viewModel.setPeriodicGps(it) } },
@@ -955,18 +956,20 @@ private fun MapScreen(
                     ) {
                         LocalizedScaleIndicator(
                             scaleState = scaleState,
-                            visible = uiState.showMapScale,
+                            visible = uiState.showMapScale && !flourishActive,
                             lang = uiState.language
                         )
                     }
-                    Text(
-                        "© CARTO",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.40f),
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 12.dp, bottom = 4.dp)
-                    )
+                    if (!flourishActive) {
+                        Text(
+                            "© CARTO",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.40f),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 12.dp, bottom = 4.dp)
+                        )
+                    }
                     if (!flourishActive) {
                         val shelterFocus = uiState.focusLocation
                         val shelterIndex = uiState.shelterIndex

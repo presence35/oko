@@ -3,6 +3,7 @@ package com.presaince.oko
 import com.presaince.oko.engine.LatLng
 import com.presaince.oko.engine.NormalizedThreat
 import com.presaince.oko.engine.ThreatZone
+import com.presaince.oko.engine.AlertLevel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,13 +22,14 @@ class DebugLogTest {
         type: ThreatType? = ThreatType.SHAHED,
         tier: ThreatZone? = ThreatZone.INNER,
         dist: Double? = 12.5,
-        locality: String? = "Одеса"
-    ) = DebugLogEntry(at, kind, night, siren, vibr, notified, reason, threatId, type, tier, dist, locality)
+        locality: String? = "Одеса",
+        level: AlertLevel? = null
+    ) = DebugLogEntry(at, kind, night, siren, vibr, notified, reason, threatId, type, tier, dist, locality, level)
 
     @Test
     fun `full round trip preserves every field`() {
         val src = listOf(
-            entry(1_000, kind = DebugLogKind.OFFICIAL_ON, threatId = null, type = null, tier = null, locality = "Одеська", vibr = 4),
+            entry(1_000, kind = DebugLogKind.OFFICIAL_ON, threatId = null, type = null, tier = null, locality = "Одеська", vibr = 4, level = AlertLevel.YELLOW),
             entry(2_000, kind = DebugLogKind.ZONE_ENTER, tier = ThreatZone.INNER),
             entry(3_000, kind = DebugLogKind.REGION_THREAT, reason = DebugLogReason.OUTSIDE_ZONES, notified = false, tier = null, dist = 90.0, locality = null)
         )

@@ -176,7 +176,8 @@ fun BoxScope.FlourishFooter(
                     message,
                     style = MaterialTheme.typography.bodyMedium,
                     color = amber,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }

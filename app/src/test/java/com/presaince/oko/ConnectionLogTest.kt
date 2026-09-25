@@ -95,4 +95,23 @@ class ConnectionLogTest {
         assertEquals(10, entries.size)
         assertEquals(ConnStatus.ONLINE, entries.last().status)
     }
+
+    @Test
+    fun `transport rides the pending episode through to recovery`() {
+        val start = 1_000L
+        val opened = commitLogState(
+            ConnStatus.ONLINE, ConnStatus.OFFLINE, start, null, emptyList(), maxEntries, graceMs,
+            transport = NetTransport.WIFI
+        )!!
+        assertEquals(NetTransport.WIFI, opened.nextPending?.transport)
+
+        val recovered = commitLogState(
+            ConnStatus.OFFLINE, ConnStatus.ONLINE, start + graceMs + 5_000,
+            opened.nextPending, opened.entries, maxEntries, graceMs,
+            transport = NetTransport.CELLULAR
+        )!!
+        assertEquals(NetTransport.WIFI, recovered.entries[0].transport)
+        assertEquals(NetTransport.CELLULAR, recovered.entries[1].transport)
+        assertNull(recovered.nextPending)
+    }
 }

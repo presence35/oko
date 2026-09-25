@@ -4,6 +4,7 @@ import com.presaince.oko.engine.ZoneParams
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
@@ -73,5 +74,47 @@ class NightModeTest {
         assertEquals(day, effectiveArmed(day, night, true, false))
         assertEquals(muted, effectiveArmed(day, night, true, true))
         assertEquals(day, effectiveArmed(day, night, false, true))
+    }
+
+    @Test
+    fun `official enable follows the night window`() {
+        assertTrue(effectiveOfficialEnabled(day = true, night = true, nightActive = false))
+        assertFalse(effectiveOfficialEnabled(day = true, night = false, nightActive = false))
+        assertFalse(effectiveOfficialEnabled(day = true, night = false, nightActive = true))
+        assertTrue(effectiveOfficialEnabled(day = false, night = true, nightActive = true))
+    }
+
+    @Test
+    fun `night sleep preset round-trips all nine flags`() {
+        val preset = NightSleepPreset(
+            useCustomZones = true,
+            slowRedArmed = false, slowYellowArmed = true,
+            fastRedArmed = false, fastYellowArmed = true,
+            zoneSirenOverride = true, officialSirenOverride = false,
+            officialRed = false, officialYellow = true
+        )
+        assertEquals(preset, NightSleepPreset.decode(preset.encode()))
+    }
+
+    @Test
+    fun `night sleep preset decode rejects malformed input`() {
+        assertNull(NightSleepPreset.decode(null))
+        assertNull(NightSleepPreset.decode(""))
+        assertNull(NightSleepPreset.decode("101"))
+        assertNull(NightSleepPreset.decode("101010102"))
+    }
+
+    @Test
+    fun `night sleep preset is silent only when every alert is muted`() {
+        val muted = NightSleepPreset(
+            useCustomZones = true,
+            slowRedArmed = false, slowYellowArmed = false,
+            fastRedArmed = false, fastYellowArmed = false,
+            zoneSirenOverride = false, officialSirenOverride = false,
+            officialRed = false, officialYellow = false
+        )
+        assertTrue(muted.isSilent)
+        assertFalse(muted.copy(officialYellow = true).isSilent)
+        assertFalse(muted.copy(fastRedArmed = true).isSilent)
     }
 }

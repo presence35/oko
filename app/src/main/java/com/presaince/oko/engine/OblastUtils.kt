@@ -4,6 +4,7 @@ import com.presaince.oko.AppLanguage
 import com.presaince.oko.pick
 import com.presaince.oko.Cities
 import com.presaince.oko.CityRaions
+import com.presaince.oko.RussianToponyms
 import com.presaince.oko.ThreatType
 import com.presaince.oko.ThreatTypeCatalog
 import com.presaince.oko.Transliteration
@@ -11,62 +12,84 @@ import com.presaince.oko.community.CompactOblastBoundaries
 import com.presaince.oko.community.CompactRaionBoundaries
 import com.presaince.oko.isNationalMig
 import com.presaince.oko.nationalMigWhereText
+import com.presaince.oko.normalizePlace
+
+/** Canonical oblast id for arbitrary Ukrainian place text (city name, oblast name, stem).
+ *  Exact resolution only — a city is resolved by its full registered name, never a prefix. */
+fun resolveOblastId(text: String?): String? {
+    if (text.isNullOrBlank()) return null
+    val t = text.trim()
+    Cities.cityOblastId[t]?.let { return it }
+    Cities.cityNameToUa[normalizePlace(t)]?.let { ua -> Cities.cityOblastId[ua]?.let { return it } }
+    return CompactOblastBoundaries.canonicalId(t)
+}
 
 fun inOblast(region: String?, district: String?, locality: String?, token: String?): Boolean {
     if (token == null) return false
-    return (region != null && inOblastText(region, token)) ||
-        (district != null && inOblastText(district, token)) ||
-        (locality != null && inOblastText(locality, token))
+    val id = CompactOblastBoundaries.canonicalId(token.trim()) ?: token.trim().lowercase()
+    return (region != null && sameAlertRegion(resolveOblastId(region), id)) ||
+        (district != null && sameAlertRegion(resolveOblastId(district), id)) ||
+        (locality != null && sameAlertRegion(resolveOblastId(locality), id))
 }
-
-private fun inOblastText(text: String, token: String): Boolean =
-    text.startsWith(token, ignoreCase = true) || Cities.cityOblast[text] == token
 
 fun inFocusOblast(t: NormalizedThreat, token: String?): Boolean {
     if (token == null) return false
     return inOblast(t.region, t.district, t.locality, token)
 }
 
+/** Russian display form of arbitrary Ukrainian place text (city, raion or oblast), falling back
+ *  to the original when unknown. Display-only. */
+fun placeRu(text: String): String {
+    RussianToponyms.city(text).let { if (it != text) return it }
+    if (text.contains("район", ignoreCase = true) || text.contains("р-н", ignoreCase = true)) {
+        return RussianToponyms.raion(text)
+    }
+    resolveOblastId(text)?.let { return RussianToponyms.oblast(it) }
+    return RussianToponyms.raion(text)
+}
+
 fun threatBody(t: NormalizedThreat, lang: AppLanguage): String {
     val info = threatTypeInfoByString(t.type) ?: ThreatTypeCatalog.INFO.getValue(ThreatType.UNKNOWN)
     val label = info.label(lang)
     // The national MiG carries descriptors, not places — never transliterate them as a city.
-    // UA shows the plain label; EN and RU (EN text for now) show the fixed descriptor.
+    // UA shows the plain label; EN and RU show their fixed descriptor.
     if (lang.pick(false, true, true) && isNationalMig(t)) return "$label — ${nationalMigWhereText()}"
     val where = t.locality ?: t.district ?: t.region
     val whereText = where?.let { w ->
         val en = Cities.byUa[w]?.nameEn ?: Transliteration.transliterate(w)
-        lang.pick(w, en, en)
+        lang.pick(w, en, placeRu(w))
     }
     return if (whereText != null) "$label — $whereText" else label
 }
 
-/** The alert's region name in the given language: UA keeps the raw server text; EN/RU
- *  transliterate (КМУ №55) so an oblast alert never leaks Cyrillic into the EN path, and
- *  "район" is TRANSLATED to "district" rather than transliterated to "raion". */
+/** The alert's region name in the given language: UA keeps the raw server text; EN transliterates
+ *  (КМУ №55); RU renders a real Russian form (oblast/raion/city), never a Latin transliteration. */
 fun alertRegionName(alert: OblastAlert, lang: AppLanguage): String {
     val raw = alert.name.ifBlank { alert.oblast }.ifBlank { alert.key }
-    val base = Cities.byUa[raw]?.nameEn ?: Transliteration.transliterate(raw)
-    val en = base.replace("район", "district").replace("Raion", "district").replace("raion", "district")
-    return lang.pick(raw, en, en)
+    return when (lang) {
+        AppLanguage.UA -> raw
+        AppLanguage.EN -> {
+            val base = Cities.byUa[raw]?.nameEn ?: Transliteration.transliterate(raw)
+            base.replace("район", "district").replace("Raion", "district").replace("raion", "district")
+        }
+        AppLanguage.RU -> {
+            if (raw.contains("район", ignoreCase = true) || raw.contains("р-н", ignoreCase = true)) {
+                RussianToponyms.raion(raw)
+            } else {
+                alert.canonicalOblastId()?.let { RussianToponyms.oblast(it) } ?: placeRu(raw)
+            }
+        }
+    }
 }
 
 fun matchOblast(lat: Double, lon: Double): OblastMatch? {
     val city = Cities.nearestCity(lat, lon) ?: return null
-    val stem = Cities.cityOblast[city.nameUa] ?: return null
-    return OblastMatch(stem, city.nameUa, city.nameEn)
-}
-
-fun canonicalToken(region: String): String? {
-    if (region.isBlank()) return null
-    val trimmed = region.trim()
-    val idx = trimmed.indexOf(' ')
-    val stem = if (idx > 0) trimmed.substring(0, idx) else trimmed
-    return stem.ifBlank { null }
+    val id = Cities.cityOblastId[city.nameUa] ?: return null
+    return OblastMatch(id, city.nameUa, city.nameEn)
 }
 
 data class OblastMatch(
-    val stem: String,
+    val id: String,
     val nameUa: String,
     val nameEn: String
 )
@@ -83,8 +106,7 @@ fun coversCityRaion(
 ): Boolean {
     if (raionKeys.isEmpty()) return false
     val rawRaion = CityRaions.cityRaion[cityUa] ?: return false
-    val cityStem = Cities.cityOblast[cityUa] ?: return false
-    val cityOblastId = CompactOblastBoundaries.canonicalId(cityStem) ?: return false
+    val cityOblastId = Cities.cityOblastId[cityUa] ?: return false
     if (cityOblastId != oblastId) return false
     val canonicalCityRaion = CompactRaionBoundaries.canonicalKey(rawRaion) ?: return false
     if ((oblastId to canonicalCityRaion) in raionKeys) return true

@@ -18,6 +18,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import com.presaince.oko.ConnectionLog
 import com.presaince.oko.ConnStatus
+import com.presaince.oko.NetTransport
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -103,28 +104,32 @@ class ResilientConnectionSupervisor(
     private var connectJob: Job? = null
     private var watchdogJob: Job? = null
     @Volatile private var activeSource: String? = null
+    /** Last transport Android reported as active; drives the logged row's network badge. */
+    @Volatile private var transport: NetTransport? = null
 
     private fun updateConnectionState(newState: ConnectionState) {
         _connectionState.value = newState
-        val now = System.currentTimeMillis()
-        when (newState) {
-            is ConnectionState.Connected -> {
-                ConnectionLog.observe(ConnStatus.ONLINE, now, activeSource)
-            }
-            is ConnectionState.Degraded -> {
-                ConnectionLog.observe(ConnStatus.DEGRADED, now, activeSource)
-            }
-            is ConnectionState.Offline, ConnectionState.Disconnected -> {
-                ConnectionLog.observe(ConnStatus.OFFLINE, now, activeSource)
-            }
-            is ConnectionState.Connecting -> {
-                // Keep previous state until connection resolves
-            }
+        val status = when (newState) {
+            is ConnectionState.Connected -> ConnStatus.ONLINE
+            is ConnectionState.Degraded -> ConnStatus.DEGRADED
+            is ConnectionState.Offline, ConnectionState.Disconnected -> ConnStatus.OFFLINE
+            is ConnectionState.Connecting -> return // keep previous state until it resolves
         }
+        ConnectionLog.observe(status, System.currentTimeMillis(), activeSource, transport)
+    }
+
+    /** Map the active network's capabilities to the logged transport (null = no network). */
+    private fun transportOf(caps: NetworkCapabilities?): NetTransport? = when {
+        caps == null -> null
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> NetTransport.WIFI
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> NetTransport.CELLULAR
+        else -> NetTransport.OTHER
     }
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+            transport = transportOf(capabilities)
+            ConnectionLog.setPendingTransport(transport)
             val valid = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                     capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             if (valid) {
@@ -162,6 +167,7 @@ class ResilientConnectionSupervisor(
         val caps = connectivityManager.getNetworkCapabilities(activeNet)
         val valid = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
         isNetworkValidated.set(valid)
+        transport = transportOf(caps)
 
         startWatchdogLoop()
         lastReconnectProgressMono.set(Monotonic.now())
@@ -272,6 +278,8 @@ class ResilientConnectionSupervisor(
         val caps = runCatching {
             connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
         }.getOrNull() ?: return
+        transport = transportOf(caps)
+        ConnectionLog.setPendingTransport(transport)
         val valid = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                 caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         if (!valid) return

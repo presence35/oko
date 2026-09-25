@@ -113,6 +113,7 @@ val nightSoundLabel: String,
          val nightCustomZonesTitle: String,
         val nightCustomZonesDesc: String,
         val nightMuteExitNote: String,
+        val nightSleepButton: String,
         val allAlertsOffLabel: String,
         val notificationsDisabledLabel: String,
         val zoneButtonRed: String,
@@ -171,6 +172,9 @@ val nightSoundLabel: String,
         val connDegraded: String,
         val connDegradedBody: String,
         val connActiveLabel: String,
+        val connTransportWifi: String,
+        val connTransportCellular: String,
+        val connTransportOther: String,
         val reliabilityLow: String,
         val reliabilityMedium: String,
         val reliabilityHigh: String,
@@ -771,6 +775,7 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
          val nightCustomZonesTitle: String get() = settings.nightCustomZonesTitle
         val nightCustomZonesDesc: String get() = settings.nightCustomZonesDesc
         val nightMuteExitNote: String get() = settings.nightMuteExitNote
+        val nightSleepButton: String get() = settings.nightSleepButton
         val allAlertsOffLabel: String get() = settings.allAlertsOffLabel
         val notificationsDisabledLabel: String get() = settings.notificationsDisabledLabel
         val zoneButtonRed: String get() = settings.zoneButtonRed
@@ -897,6 +902,9 @@ val nightSoundLabel: String get() = settings.nightSoundLabel
         val connDegraded: String get() = status.connDegraded
         val connDegradedBody: String get() = status.connDegradedBody
         val connActiveLabel: String get() = status.connActiveLabel
+        val connTransportWifi: String get() = status.connTransportWifi
+        val connTransportCellular: String get() = status.connTransportCellular
+        val connTransportOther: String get() = status.connTransportOther
         val reliabilityLow: String get() = status.reliabilityLow
         val reliabilityMedium: String get() = status.reliabilityMedium
         val reliabilityHigh: String get() = status.reliabilityHigh

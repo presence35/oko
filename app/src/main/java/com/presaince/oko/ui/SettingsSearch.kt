@@ -125,7 +125,7 @@ internal fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
             "калібрування", "періодичн", "мереж", "фікс", "позиція"
         ) + cityTerms,
         SettingsSection.NIGHT to kw(
-            "night", "night mode", "zone", "zones", "vibration", "vibrate",
+            "night", "night mode", "zone", "zones", "vibration", "vibrate", "sleep", "silent",
             "ніч", "нічний", "вночі", "зона", "зони", "вібрація"
         ),
         SettingsSection.ALERTS to kw(

@@ -1,6 +1,7 @@
 package com.presaince.oko
 import com.presaince.oko.theme.AppPalette
 
+import com.presaince.oko.community.CompactRaionBoundaries
 import com.presaince.oko.engine.AlertLevel
 import com.presaince.oko.engine.LatLng
 import com.presaince.oko.engine.distanceFlat
@@ -29,13 +30,20 @@ data class City(
     val tier: CityTier = CityTier.MINOR,
     val pop: Int = 0,
     val nameEn: String = Transliteration.transliterate(nameUa),
+    val nameRu: String = RussianToponyms.city(nameUa),
     val reveal: MajorReveal = MajorReveal.LATE
 ) {
     /** Attribution/banner/pin-picker eligibility — always MAJOR-only (see [Cities.nearestCity]). */
     val major: Boolean get() = tier == CityTier.MAJOR
 
-    fun name(lang: AppLanguage): String = lang.pick(nameUa, nameEn, nameEn)
+    fun name(lang: AppLanguage): String = lang.pick(nameUa, nameEn, nameRu)
 }
+
+/** Full-name place normalization for identity matching: lowercase, collapse whitespace, and
+ *  normalize apostrophes/similar marks. Exact equality only — never substring. */
+internal fun normalizePlace(s: String): String = s.trim().lowercase()
+    .replace('\u2019', '\'').replace('\u02BC', '\'').replace('\u0060', '\'')
+    .replace(Regex("\\s+"), " ")
 
 /**
  * Curated city list (no hoods/villages) so users get a sense of distance/scale while zooming.
@@ -46,11 +54,11 @@ data class City(
  */
 object Cities {
 
-    /** One oblast region: [stem] is matched against the alert oblast name; [cities] its places. */
-    internal data class Region(val stem: String, val cities: List<City>)
+    /** One oblast region: [id] is the canonical boundary id ([CompactOblastBoundaries]); [cities] its places. */
+    internal data class Region(val id: String, val cities: List<City>)
 
     internal val REGIONS: List<Region> = listOf(
-        Region("Київськ", listOf(
+        Region("kyivska", listOf(
             City("Київ", 50.4501, 30.5234, CityTier.MAJOR, reveal = MajorReveal.OVERVIEW),
             City("Біла Церква", 49.7954, 30.1167, CityTier.MEDIUM),
             City("Бровари", 50.5184, 30.7908),
@@ -88,7 +96,7 @@ object Cities {
             City("Українка", 50.1432, 30.7461, pop = 13636), // pop ~13636
             City("Чайки", 50.4303, 30.2838, pop = 12000), // pop ~12000
         )),
-        Region("Одеськ", listOf(
+        Region("odeska", listOf(
             City("Одеса", 46.4825, 30.7233, CityTier.MAJOR, reveal = MajorReveal.OVERVIEW),
             City("Чорноморськ", 46.3036, 30.6566),
             City("Південне", 46.6226, 31.1014),
@@ -113,7 +121,7 @@ object Cities {
             City("Лиманка", 46.3856, 30.6774, pop = 13085), // pop ~13085
             City("Черемушки", 46.4325, 30.7115),
         )),
-        Region("Львівськ", listOf(
+        Region("lvivska", listOf(
             City("Львів", 49.8397, 24.0297, CityTier.MAJOR, reveal = MajorReveal.OVERVIEW),
             City("Дрогобич", 49.3500, 23.5050, CityTier.MEDIUM),
             City("Стрий", 49.2620, 23.8500),
@@ -139,7 +147,7 @@ object Cities {
             City("Соснівка", 50.2897, 24.2514, pop = 10838), // pop ~10838
             City("Стебник", 49.301, 23.552, pop = 20200), // pop ~20200
         )),
-        Region("Дніпропетровськ", listOf(
+        Region("dnipropetrovska", listOf(
             City("Дніпро", 48.4647, 35.0462, CityTier.MAJOR, reveal = MajorReveal.OVERVIEW),
             City("Кривий Ріг", 47.9105, 33.3918, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Кам'янське", 48.5147, 34.6102),
@@ -165,7 +173,7 @@ object Cities {
             City("Слобожанське", 48.532, 35.0715, pop = 13556), // pop ~13556
             City("Таромське", 48.4428, 34.7885, pop = 13289), // pop ~13289
         )),
-        Region("Харківськ", listOf(
+        Region("kharkivska", listOf(
             City("Харків", 49.9935, 36.2304, CityTier.MAJOR, reveal = MajorReveal.OVERVIEW),
             City("Чугуїв", 49.8370, 36.9390, CityTier.MEDIUM),
             City("Лозова", 48.8890, 36.3900),
@@ -188,7 +196,7 @@ object Cities {
             City("Слобожанське", 49.5905, 36.5217, pop = 15825), // pop ~15825
             City("Солоницівка", 49.9968, 36.0346, pop = 12378), // pop ~12378
         )),
-        Region("Запорізьк", listOf(
+        Region("zaporizka", listOf(
             City("Запоріжжя", 47.8388, 35.1396, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Мелітополь", 46.8380, 35.3600, CityTier.MEDIUM),
             City("Бердянськ", 46.7540, 36.7890, CityTier.MEDIUM),
@@ -207,7 +215,7 @@ object Cities {
             City("Костянтинівка", 46.8178, 35.4242, pop = 11540), // pop ~11540
             City("Якимівка", 46.7011, 35.1633, pop = 11069), // pop ~11069
         )),
-        Region("Вінницьк", listOf(
+        Region("vinnytska", listOf(
             City("Вінниця", 49.2331, 28.4682, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Жмеринка", 49.0370, 28.1130, CityTier.MEDIUM),
             City("Могилів-Подільський", 48.4470, 27.7980, CityTier.MEDIUM),
@@ -226,7 +234,7 @@ object Cities {
             City("Гнівань", 49.0939, 28.3378, pop = 12191), // pop ~12191
             City("Ямпіль", 48.2406, 28.2814, pop = 10957), // pop ~10957
         )),
-        Region("Миколаївськ", listOf(
+        Region("mykolaivska", listOf(
             City("Миколаїв", 46.9750, 31.9946, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Вознесенськ", 47.5653, 31.3311, CityTier.MEDIUM),
             City("Первомайськ", 48.0446, 30.8506, CityTier.MEDIUM),
@@ -240,7 +248,7 @@ object Cities {
             City("Казанка", 47.8360, 32.8230),
             City("Нова Одеса", 47.3127, 31.7697, pop = 13547), // pop ~13547
         )),
-        Region("Херсонськ", listOf(
+        Region("khersonska", listOf(
             City("Херсон", 46.6354, 32.6169, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Нова Каховка", 46.7560, 33.3850),
             City("Каховка", 46.7980, 33.4760, CityTier.MEDIUM),
@@ -257,7 +265,7 @@ object Cities {
             City("Новоолексіївка", 46.23, 34.6458, pop = 10154), // pop ~10154
             City("Новотроїцьке", 46.3509, 34.3324, pop = 10647), // pop ~10647
         )),
-        Region("Кіровоградськ", listOf(
+        Region("kirovohradska", listOf(
             City("Кропивницький", 48.5079, 32.2603, CityTier.MAJOR),
             City("Олександрія", 48.6690, 33.1150),
             City("Світловодськ", 49.0490, 33.2510, CityTier.MEDIUM),
@@ -271,7 +279,7 @@ object Cities {
             City("Мала Виска", 48.6460, 31.6340),
             City("Устинівка", 48.1540, 32.5350)
         )),
-        Region("Полтавськ", listOf(
+        Region("poltavska", listOf(
             City("Полтава", 49.5883, 34.5514, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Кременчук", 49.0680, 33.4230, CityTier.MEDIUM),
             City("Горішні Плавні", 49.0110, 33.6500),
@@ -289,7 +297,7 @@ object Cities {
             City("Гребінка", 50.1202, 32.4297, CityTier.MEDIUM, pop = 10541), // pop ~10541
             City("Котельва", 50.0685, 34.747, pop = 12122), // pop ~12122
         )),
-        Region("Черкаськ", listOf(
+        Region("cherkaska", listOf(
             City("Черкаси", 49.4444, 32.0598, CityTier.MAJOR),
             City("Умань", 48.7484, 30.2211, CityTier.MAJOR),
             City("Сміла", 49.2170, 31.8710),
@@ -307,7 +315,7 @@ object Cities {
             City("Городище", 49.2880, 31.4510),
             City("Кам’янка", 49.0396, 32.1017, pop = 11501), // pop ~11501
         )),
-        Region("Хмельницьк", listOf(
+        Region("khmelnytska", listOf(
             City("Хмельницький", 49.4220, 26.9871, CityTier.MAJOR),
             City("Кам'янець-Подільський", 48.6840, 26.5910),
             City("Шепетівка", 50.1850, 27.0640, CityTier.MEDIUM),
@@ -324,7 +332,7 @@ object Cities {
             City("Чемерівці", 49.0030, 26.3500),
             City("Летичів", 49.3801, 27.6189, pop = 10335), // pop ~10335
         )),
-        Region("Житомирськ", listOf(
+        Region("zhytomyrska", listOf(
             City("Житомир", 50.2546, 28.6587, CityTier.MAJOR),
             City("Бердичів", 49.8930, 28.6020, CityTier.MEDIUM),
             City("Коростень", 50.9520, 28.6370, CityTier.MEDIUM),
@@ -341,7 +349,7 @@ object Cities {
             City("Хорошів", 50.5970, 28.4450),
             City("Баранівка", 50.2969, 27.6622, pop = 11161), // pop ~11161
         )),
-        Region("Рівненськ", listOf(
+        Region("rivnenska", listOf(
             City("Рівне", 50.6199, 26.2516, CityTier.MAJOR),
             City("Вараш", 51.3400, 25.8500),
             City("Дубно", 50.4170, 25.7500),
@@ -357,7 +365,7 @@ object Cities {
             City("Млинів", 50.5170, 25.6080),
             City("Рокитне", 51.2780, 27.2200)
         )),
-        Region("Чернівецьк", listOf(
+        Region("chernivetska", listOf(
             City("Чернівці", 48.2917, 25.9352, CityTier.MAJOR),
             City("Сторожинець", 48.1590, 25.7150),
             City("Кіцмань", 48.4400, 25.7610),
@@ -372,7 +380,7 @@ object Cities {
             City("Красноїльськ", 48.0186, 25.56, CityTier.MEDIUM, pop = 10428), // pop ~10428
             City("Новодністровськ", 48.5832, 27.4366, CityTier.MEDIUM, pop = 10590), // pop ~10590
         )),
-        Region("Івано-Франківськ", listOf(
+        Region("ivano_frankivska", listOf(
             City("Івано-Франківськ", 48.9226, 24.7111, CityTier.MAJOR),
             City("Калуш", 49.0430, 24.3670),
             City("Коломия", 48.5290, 25.0360),
@@ -389,7 +397,7 @@ object Cities {
             City("Тлумач", 48.8640, 25.0010),
             City("Перегінське", 48.8112, 24.192, CityTier.MEDIUM, pop = 12681), // pop ~12681
         )),
-        Region("Тернопільськ", listOf(
+        Region("ternopilska", listOf(
             City("Тернопіль", 49.5535, 25.5948, CityTier.MAJOR),
             City("Чортків", 49.0170, 25.7950),
             City("Кременець", 50.1070, 25.7240, CityTier.MEDIUM),
@@ -406,7 +414,7 @@ object Cities {
             City("Монастириська", 49.0890, 25.1680, CityTier.MEDIUM),
             City("Борщів", 48.8032, 26.0317, pop = 10632), // pop ~10632
         )),
-        Region("Сумськ", listOf(
+        Region("sumska", listOf(
             City("Суми", 50.9077, 34.7981, CityTier.MAJOR),
             City("Шостка", 51.8630, 33.4700),
             City("Конотоп", 51.2390, 33.2030, CityTier.MEDIUM),
@@ -421,7 +429,7 @@ object Cities {
             City("Буринь", 51.1940, 33.8210),
             City("Середина-Буда", 52.1900, 34.0260, CityTier.MEDIUM)
         )),
-        Region("Чернігівськ", listOf(
+        Region("chernihivska", listOf(
             City("Чернігів", 51.4982, 31.2893, CityTier.MAJOR),
             City("Ніжин", 51.0470, 31.8780, CityTier.MEDIUM),
             City("Прилуки", 50.5950, 32.3880, CityTier.MEDIUM),
@@ -439,7 +447,7 @@ object Cities {
             City("Масани", 51.5332, 31.2313, pop = 30000), // pop ~30000
             City("Носівка", 50.938, 31.5803, pop = 12908), // pop ~12908
         )),
-        Region("Донецьк", listOf(
+        Region("donetska", listOf(
             City("Донецьк", 48.0159, 37.8029, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Маріуполь", 47.0971, 37.5434, CityTier.MEDIUM),
             City("Горлівка", 48.3380, 38.0860),
@@ -493,7 +501,7 @@ object Cities {
             City("Юнокомунарівськ", 48.2214, 38.2836, CityTier.MEDIUM, pop = 13495), // pop ~13495
             City("Ясинувата", 48.1268, 37.8592, pop = 37600), // pop ~37600
         )),
-        Region("Луганськ", listOf(
+        Region("luhanska", listOf(
             City("Луганськ", 48.5740, 39.3078, CityTier.MAJOR, reveal = MajorReveal.MID),
             City("Алчевськ", 48.4690, 38.8000, CityTier.MEDIUM),
             City("Сєвєродонецьк", 48.9480, 38.4870),
@@ -524,7 +532,7 @@ object Cities {
             City("Щастя", 48.7378, 39.2305, pop = 11411), // pop ~11411
             City("Ювілейне", 48.5559, 39.1828, pop = 16948), // pop ~16948
         )),
-        Region("Закарпатськ", listOf(
+        Region("zakarpatska", listOf(
             City("Ужгород", 48.6208, 22.2879, CityTier.MAJOR),
             City("Мукачево", 48.4410, 22.7130, CityTier.MEDIUM),
             City("Хуст", 48.1800, 23.2930),
@@ -541,7 +549,7 @@ object Cities {
             City("Перечин", 48.7340, 22.4740),
             City("Королево", 48.1573, 23.1377, pop = 10385), // pop ~10385
         )),
-        Region("Волинськ", listOf(
+        Region("volynska", listOf(
             City("Луцьк", 50.7472, 25.3254, CityTier.MAJOR),
             City("Ковель", 51.2150, 24.7080, CityTier.MEDIUM),
             City("Володимир", 50.8480, 24.3230),
@@ -557,7 +565,7 @@ object Cities {
             City("Ратне", 51.6610, 24.5290),
             City("Стара Вижівка", 51.4380, 24.4280)
         )),
-        Region("Крим", listOf(
+        Region("krym", listOf(
             City("Сімферополь", 44.9521, 34.1024),
             City("Керч", 45.3530, 36.4740),
             City("Євпаторія", 45.1930, 33.3660),
@@ -580,7 +588,7 @@ object Cities {
             City("Судак", 44.8492, 34.9747, pop = 16597), // pop ~16597
             City("Чорноморське", 45.5066, 32.6978, pop = 11039), // pop ~11039
         )),
-        Region("Севастополь", listOf(
+        Region("sevastopol", listOf(
             City("Севастополь", 44.6166, 33.5254),
             City("Балаклава", 44.5112, 33.5994, pop = 18649), // pop ~18649
             City("Інкерман", 44.6139, 33.6098, pop = 10204), // pop ~10204
@@ -609,14 +617,32 @@ object Cities {
                 ?.key?.let { byUa[it] }
             ?: byUa.values.firstOrNull { it.nameEn.equals(name, ignoreCase = true) }
 
-    /** City (by Ukrainian name) → its oblast name stem, used to highlight a city label in red
-     *  while an official air-raid alert is active for that oblast. Matched via `contains`
-     *  against the alert's oblast/name (e.g. stem "Харківськ" hits "Харківська область").
-     *  Same-named towns resolve to the oblast of the largest one. */
-    val cityOblast: Map<String, String> =
-        REGIONS.flatMap { r -> r.cities.map { Triple(it.nameUa, r.stem, it.pop) } }
+    /** City (by Ukrainian name) → its canonical oblast boundary id, used for alert matching
+     *  and for tinting a city label while an official air-raid alert is active. Same-named
+     *  towns resolve to the oblast of the largest one. */
+    val cityOblastId: Map<String, String> =
+        REGIONS.flatMap { r -> r.cities.map { Triple(it.nameUa, r.id, it.pop) } }
             .groupBy({ it.first }, { it })
             .mapValues { (_, v) -> v.maxByOrNull { it.third }!!.second }
+
+    /** City (UA name) → its registered raion's canonical boundary key, for raion-scoped alert
+     *  matching. Null when the city's raion has no boundary key (e.g. Crimean city-okruhs). */
+    val cityRaionKey: Map<String, String> = buildMap {
+        for (c in ALL) {
+            val raion = CityRaions.cityRaion[c.nameUa] ?: continue
+            CompactRaionBoundaries.canonicalKey(raion)?.let { put(c.nameUa, it) }
+        }
+    }
+
+    /** Normalized full-name alias (UA, EN, transliterated) → canonical UA city name, so a bare
+     *  city alert expressed in either Cyrillic or Latin resolves by exact name — never a stem. */
+    val cityNameToUa: Map<String, String> = buildMap {
+        for (c in ALL) {
+            put(normalizePlace(c.nameUa), c.nameUa)
+            put(normalizePlace(c.nameEn), c.nameUa)
+            put(normalizePlace(Transliteration.transliterate(c.nameUa)), c.nameUa)
+        }
+    }
 
     /**
      * Nearest **major** listed city within [radiusKm] of a GPS position, used to attribute a
@@ -642,9 +668,10 @@ object Cities {
 data class FocusAttribution(
     val token: String?,
     val bannerCityUa: String,
-    val bannerCityEn: String
+    val bannerCityEn: String,
+    val bannerCityRu: String = RussianToponyms.city(bannerCityUa)
 ) {
-    fun bannerCity(lang: AppLanguage): String = lang.pick(bannerCityUa, bannerCityEn, bannerCityEn)
+    fun bannerCity(lang: AppLanguage): String = lang.pick(bannerCityUa, bannerCityEn, bannerCityRu)
 }
 
 /** Nothing to attribute to: no pinned city and no GPS fix. Country-wide, no oblast claimed. */
@@ -677,7 +704,7 @@ fun resolveFocus(
         return Focus(
             location = LatLng(pinned.lat, pinned.lon),
             attribution = FocusAttribution(
-                token = Cities.cityOblast[pinned.nameUa],
+                token = Cities.cityOblastId[pinned.nameUa],
                 bannerCityUa = pinned.nameUa,
                 bannerCityEn = pinned.nameEn
             ),
@@ -689,7 +716,7 @@ fun resolveFocus(
     val attribution = lastGps?.takeIf { isInsideUkraine(it.lat, it.lon) }?.let { gps ->
         Cities.nearestCity(gps.lat, gps.lon)?.let { city ->
             FocusAttribution(
-                token = Cities.cityOblast[city.nameUa],
+                token = Cities.cityOblastId[city.nameUa],
                 bannerCityUa = city.nameUa,
                 bannerCityEn = city.nameEn
             )

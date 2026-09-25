@@ -1,10 +1,14 @@
 package com.presaince.oko.engine
 
-import com.presaince.oko.CityRaions
+import com.presaince.oko.Cities
+import com.presaince.oko.community.CompactOblastBoundaries
+import com.presaince.oko.community.CompactRaionBoundaries
+import com.presaince.oko.normalizePlace
 
 /** Severity a zone/threat evaluation resolves to for alert routing. Mirrors [OblastAlert.level]'s
  *  two real values (red = air-raid siren, yellow = tactical/artillery warning) plus NONE for no alert.
- *  Used only for alert gating in [AlertService]; never persisted or serialised. */
+ *  Used for alert gating in [AlertService] and carried on the debug audit trail
+ *  ([DebugLogEntry.level]) for official-alert rows. */
 enum class AlertLevel {
     /** No active alert at this point. */
     NONE,
@@ -32,39 +36,37 @@ data class OblastAlert(
     val level: String = "red"
 )
 
-/** True when [token] appears in [text] delimited by word boundaries (no regex allocation). */
-private fun containsWord(text: String, token: String): Boolean {
-    var idx = text.indexOf(token, ignoreCase = true)
-    while (idx >= 0) {
-        val before = idx == 0 || !text[idx - 1].isLetterOrDigit()
-        val after = idx + token.length >= text.length || !text[idx + token.length].isLetterOrDigit()
-        if (before && after) return true
-        idx = text.indexOf(token, idx + 1, ignoreCase = true)
-    }
-    return false
+/** Canonical oblast ids that share one air-raid coverage group: Crimea and Sevastopol ring
+ *  together. Kyiv City is already merged into `kyivska` by [CompactOblastBoundaries]. */
+private val SHARED_ALERT_REGIONS: Set<String> = setOf("krym", "sevastopol")
+
+/** True when two canonical oblast ids denote the same alert region. Exact equality, except the
+ *  shared Crimea/Sevastopol group. Never a substring. */
+fun sameAlertRegion(a: String?, b: String?): Boolean {
+    if (a == null || b == null) return false
+    if (a == b) return true
+    return a in SHARED_ALERT_REGIONS && b in SHARED_ALERT_REGIONS
 }
 
-/** True when the official alert belongs to the oblast whose adjectival stem is [token]. */
+/** Canonical oblast boundary id of the alert's parent region, or null when unknown. */
+fun OblastAlert.canonicalOblastId(): String? =
+    CompactOblastBoundaries.canonicalId(oblast)
+        ?: CompactOblastBoundaries.canonicalId(key)
+        ?: CompactOblastBoundaries.canonicalId(name)
+
+/** Canonical raion boundary key named by the alert's own [OblastAlert.key], or null for
+ *  wide/city-only alerts. The display name is never treated as a raion key — a bare city alert
+ *  (e.g. "Бердянськ") must not resolve to its enclosing raion. */
+fun OblastAlert.canonicalRaionKey(): String? =
+    CompactRaionBoundaries.canonicalKey(key)
+
+/** True when the official alert belongs to the oblast [token] (a canonical id, or a stem/name
+ *  that resolves to one). Exact identity only — stems are canonicalized, never prefix-matched. */
 fun OblastAlert.inOblast(token: String): Boolean {
-    val t = token.trim()
-    if (t.isEmpty()) return false
-    // Prefix match handles "Харківськ" → "Харківська область"; a whole-word match handles
-    // Crimea ("Крим" in "Автономна Республіка Крим") and short stems.
-    if (oblast.startsWith(t, ignoreCase = true) || name.startsWith(t, ignoreCase = true) ||
-        key.startsWith(t, ignoreCase = true) ||
-        containsWord(oblast, t) || containsWord(name, t) || containsWord(key, t)
-    ) return true
-
-    // Special cases: Kyiv city belongs to Kyiv oblast stem ("Київськ")
-    if (t.equals("Київськ", ignoreCase = true) &&
-        (name.contains("Київ", ignoreCase = true) || key.contains("kyiv", ignoreCase = true) || oblast.contains("Київ", ignoreCase = true))
-    ) return true
-    // Sevastopol city belongs to Crimea stem ("Крим")
-    if (t.equals("Крим", ignoreCase = true) &&
-        (name.contains("Севастополь", ignoreCase = true) || key.contains("sevastopol", ignoreCase = true) || oblast.contains("Севастополь", ignoreCase = true))
-    ) return true
-
-    return false
+    val raw = token.trim()
+    if (raw.isEmpty()) return false
+    val id = CompactOblastBoundaries.canonicalId(raw) ?: raw.lowercase()
+    return sameAlertRegion(canonicalOblastId(), id)
 }
 
 /**
@@ -98,32 +100,22 @@ fun OblastAlert.isOblastWide(): Boolean {
 }
 
 /**
- * True when the alert's raion key/name matches the given raion name ([CityRaions]).
- */
-fun OblastAlert.raionCovers(raion: String): Boolean {
-    val k = key.trim().lowercase()
-    val n = name.lowercase()
-    val r = raion.lowercase()
-    return (k.isNotEmpty() && (r.contains(k) || k.contains(r))) || n.contains(r)
-}
-
-/**
- * True when the official alert actually covers the focus city, for the "City alerts" scope.
- * First checks whether the alert covers the city's registered raion ([CityRaions]).
- * Otherwise falls back to matching direct name or a shared 4-char stem.
- * Oblast-wide alerts ([OblastAlert.isOblastWide]) cover every city, so they return true here.
+ * True when the official alert actually covers [cityUa], for the "City alerts" scope.
+ * Canonical identity only: same oblast (Crimea/Sevastopol merged), then the city's registered
+ * raion boundary key, or an exact full-name match for a bare city alert. Oblast-wide alerts
+ * cover every city in their oblast. No stem/substring matching — a 4-letter prefix like
+ * "Нова Каховка" can never cover "Нова Одеса".
  */
 fun OblastAlert.coversCity(cityUa: String): Boolean {
+    val cityOblast = Cities.cityOblastId[cityUa] ?: return false
+    val alertOblast = canonicalOblastId() ?: return false
+    if (!sameAlertRegion(alertOblast, cityOblast)) return false
     if (isOblastWide()) return true
-    val raion = CityRaions.cityRaion[cityUa]
-    if (raion != null && raionCovers(raion)) return true
-    val c = cityUa.trim().lowercase()
-    if (c.length < 4) return c.isNotEmpty() &&
-        (key.lowercase().contains(c) || name.lowercase().contains(c))
-    val stem = c.substring(0, 4)
-    val k = key.lowercase()
-    val n = name.lowercase()
-    return k.contains(c) || n.contains(c) || k.startsWith(stem) || n.startsWith(stem)
+    val alertRaion = canonicalRaionKey()
+    val cityRaion = Cities.cityRaionKey[cityUa]
+    if (alertRaion != null && cityRaion != null && alertRaion == cityRaion) return true
+    val named = Cities.cityNameToUa[normalizePlace(key)] ?: Cities.cityNameToUa[normalizePlace(name)]
+    return named != null && named == cityUa
 }
 
 /**

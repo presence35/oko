@@ -15,13 +15,18 @@ import com.presaince.oko.service.ServiceState
 /** Connection states shown in the status log — mirrors the header pill's two states. */
 enum class ConnStatus { ONLINE, OFFLINE, DEGRADED }
 
+/** Network transport carrying the feed during an episode (null = no active network). */
+enum class NetTransport { WIFI, CELLULAR, OTHER }
+
 /** One logged status change. [durationSec] is the episode length for OFF, null for ONLINE.
- *  [activeSource] names the source providing alerts during this episode (null = primary/Neptun). */
+ *  [activeSource] names the source providing alerts during this episode (null = primary/Neptun).
+ *  [transport] is the network the status change was observed on (null = none). */
 data class ConnLogEntry(
     val atMillis: Long,
     val status: ConnStatus,
     val durationSec: Long?,
-    val activeSource: String? = null
+    val activeSource: String? = null,
+    val transport: NetTransport? = null
 )
 
 /**
@@ -71,10 +76,15 @@ object ConnectionLog {
      * episode as soon as the status changes once it has outlasted the production grace,
      * bracketing it with a recovery row when it returns online.
      */
-    fun observe(status: ConnStatus, now: Long, activeSource: String? = null) {
+    fun observe(
+        status: ConnStatus,
+        now: Long,
+        activeSource: String? = null,
+        transport: NetTransport? = null
+    ) {
         val prev = lastStatus
         lastStatus = status
-        val t = commitLogState(prev, status, now, pending, _entries.value, MAX_ENTRIES, PRODUCTION_GRACE_MS, activeSource) ?: return
+        val t = commitLogState(prev, status, now, pending, _entries.value, MAX_ENTRIES, PRODUCTION_GRACE_MS, activeSource, transport) ?: return
         _entries.value = t.entries
         pending = t.nextPending
         if (t.persistLog) persist()
@@ -82,7 +92,7 @@ object ConnectionLog {
 
     /** The in-progress offline episode with its running duration, or null when online. */
     fun currentEpisode(now: Long): ConnLogEntry? =
-        pending?.let { ConnLogEntry(it.atMillis, it.status, (now - it.atMillis) / 1000, it.activeSource) }
+        pending?.let { ConnLogEntry(it.atMillis, it.status, (now - it.atMillis) / 1000, it.activeSource, it.transport) }
 
     /** Update the source currently owning the alert feed on the in-progress episode. Called
      *  whenever the registry's active source changes (e.g. a fallback takes over mid-outage),
@@ -93,6 +103,14 @@ object ConnectionLog {
         pending = p.copy(activeSource = source)
     }
 
+    /** Update the transport of the in-progress episode when the device switches networks
+     *  mid-outage (e.g. WiFi drops to cellular), so the committed entry reflects it. */
+    fun setPendingTransport(transport: NetTransport?) {
+        val p = pending ?: return
+        if (p.status == ConnStatus.ONLINE || p.transport == transport) return
+        pending = p.copy(transport = transport)
+    }
+
     private fun persist() {
         val context = appContext ?: return
         attachScope.launch { ServiceState(context).setConnLog(serialize(_entries.value)) }
@@ -100,7 +118,7 @@ object ConnectionLog {
 
     private fun serialize(entries: List<ConnLogEntry>): String =
         entries.joinToString(LINE_SEP.toString()) {
-            "${it.atMillis}|${it.status.name}|${it.durationSec ?: ""}|${it.activeSource ?: ""}"
+            "${it.atMillis}|${it.status.name}|${it.durationSec ?: ""}|${it.activeSource ?: ""}|${it.transport?.name ?: ""}"
         }
 
     private fun parse(raw: String): List<ConnLogEntry> =
@@ -111,7 +129,9 @@ object ConnectionLog {
             val status = ConnStatus.entries.firstOrNull { it.name == parts[1] } ?: return@mapNotNull null
             val dur = parts[2].toLongOrNull()
             val source = parts.getOrNull(3)?.takeIf { it.isNotEmpty() }
-            ConnLogEntry(at, status, dur, source)
+            val transport = parts.getOrNull(4)?.takeIf { it.isNotEmpty() }
+                ?.let { name -> NetTransport.entries.firstOrNull { it.name == name } }
+            ConnLogEntry(at, status, dur, source, transport)
         }.takeLast(MAX_ENTRIES)
 }
 
@@ -138,13 +158,14 @@ internal fun commitLogState(
     entries: List<ConnLogEntry>,
     maxEntries: Int,
     graceMs: Long,
-    activeSource: String? = null
+    activeSource: String? = null,
+    transport: NetTransport? = null
 ): LogTransition? {
     if (prevStatus == null) {
         return if (status == ConnStatus.OFFLINE) {
             LogTransition(
                 entries = entries,
-                nextPending = ConnLogEntry(now, status, null, activeSource),
+                nextPending = ConnLogEntry(now, status, null, activeSource, transport),
                 persistLog = false
             )
         } else null
@@ -160,9 +181,9 @@ internal fun commitLogState(
             dirty = true
         }
     }
-    val nextPending = if (status == ConnStatus.ONLINE) null else ConnLogEntry(now, status, null, activeSource)
+    val nextPending = if (status == ConnStatus.ONLINE) null else ConnLogEntry(now, status, null, activeSource, transport)
     if (status == ConnStatus.ONLINE && dirty) {
-        newEntries = (newEntries + ConnLogEntry(now, ConnStatus.ONLINE, null)).takeLast(maxEntries)
+        newEntries = (newEntries + ConnLogEntry(now, ConnStatus.ONLINE, null, transport = transport)).takeLast(maxEntries)
     }
     return LogTransition(
         entries = newEntries,

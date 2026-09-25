@@ -3,7 +3,7 @@ package com.presaince.oko
 import com.presaince.oko.community.CompactOblastBoundaries
 import com.presaince.oko.engine.BoundingBox
 import com.presaince.oko.engine.LatLng
-import com.presaince.oko.engine.canonicalToken
+import com.presaince.oko.engine.resolveOblastId
 import com.presaince.oko.engine.distanceFlat
 import com.presaince.oko.engine.matchOblast
 
@@ -111,7 +111,7 @@ internal fun boundingBoxFromExtent(
  * (region text → canonical stem, else nearest-city geo lookup, else "other").
  */
 internal fun flourishOblastKey(r: FlourishRecord): String =
-    r.region?.let { canonicalToken(it) } ?: matchOblast(r.lat, r.lon)?.stem ?: "other"
+    r.region?.let { resolveOblastId(it) } ?: matchOblast(r.lat, r.lon)?.id ?: "other"
 
 /**
  * Zoom target for an oblast group: the whole oblast extent when its boundary is known (so the

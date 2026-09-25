@@ -2,8 +2,10 @@ package com.presaince.oko
 
 import com.presaince.oko.engine.LatLng
 import com.presaince.oko.engine.distanceFlat
+import com.presaince.oko.community.CompactOblastBoundaries
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -29,14 +31,21 @@ class CitiesTest {
                 Cities.byUa[name]
             )
             assertTrue(Cities.uaToEn[name]!!.isNotBlank())
-            assertTrue(Cities.cityOblast.containsKey(name))
+            assertTrue(Cities.cityOblastId.containsKey(name))
         }
     }
 
     @Test
     fun `every city has an oblast attribution`() {
         for (c in Cities.ALL) {
-            assertTrue("missing cityOblast for ${c.nameUa}", Cities.cityOblast.containsKey(c.nameUa))
+            assertTrue("missing cityOblastId for ${c.nameUa}", Cities.cityOblastId.containsKey(c.nameUa))
+        }
+    }
+
+    @Test
+    fun `every city's oblast resolves to a canonical boundary id`() {
+        for (c in Cities.ALL) {
+            assertNotNull("unresolved oblast for ${c.nameUa}", CompactOblastBoundaries.get(Cities.cityOblastId[c.nameUa]!!))
         }
     }
 
@@ -49,11 +58,19 @@ class CitiesTest {
     }
 
     @Test
-    fun `name accessor routes UA to raw and EN plus RU to transliterated`() {
+    fun `city names carry a Russian display form`() {
+        assertEquals("Киев", Cities.byUa.getValue("Київ").name(AppLanguage.RU))
+        assertEquals("Харьков", Cities.byUa.getValue("Харків").name(AppLanguage.RU))
+        assertEquals("Одесса", Cities.byUa.getValue("Одеса").name(AppLanguage.RU))
+        for (c in Cities.ALL) assertTrue("blank RU name for ${c.nameUa}", c.nameRu.isNotBlank())
+    }
+
+    @Test
+    fun `name accessor routes UA to raw, EN to transliteration and RU to the Russian form`() {
         for (c in Cities.ALL) {
             assertEquals(c.nameUa, c.name(AppLanguage.UA))
             assertEquals(c.nameEn, c.name(AppLanguage.EN))
-            assertEquals(c.nameEn, c.name(AppLanguage.RU))
+            assertEquals(c.nameRu, c.name(AppLanguage.RU))
         }
     }
 
@@ -108,7 +125,7 @@ class CitiesTest {
             gpsFresh = true,
             pinnedName = null
         )
-        assertEquals("Одеськ", f.attribution.token)
+        assertEquals("odeska", f.attribution.token)
         assertEquals("Одеса", f.attribution.bannerCityUa)
         assertEquals("Odesa", f.attribution.bannerCityEn)
         assertEquals(false, f.pinned)
@@ -146,7 +163,7 @@ class CitiesTest {
     fun `resolveFocus pins only when not following GPS`() {
         val pinned = resolveFocus(followMe = false, lastGps = null, gpsFresh = false, pinnedName = "Одеса")
         assertEquals(true, pinned.pinned)
-        assertEquals("Одеськ", pinned.attribution.token)
+        assertEquals("odeska", pinned.attribution.token)
         assertEquals(false, pinned.gpsFixMissing)
 
         val following = resolveFocus(followMe = true, lastGps = null, gpsFresh = false, pinnedName = "Одеса")

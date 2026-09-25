@@ -37,6 +37,7 @@ import com.presaince.oko.engine.NormalizedThreat
 import com.presaince.oko.engine.LatLng
 import com.presaince.oko.engine.OblastAlert
 import com.presaince.oko.engine.inOblast
+import com.presaince.oko.engine.canonicalOblastId
 import com.presaince.oko.engine.ThreatZone
 import com.presaince.oko.AlertService
 import com.presaince.oko.DebugLog
@@ -53,6 +54,8 @@ import com.presaince.oko.engine.SpeedSource
 import com.presaince.oko.engine.ZoneParams
 import com.presaince.oko.service.ServiceState
 import com.presaince.oko.service.MonitoringStatus
+import com.presaince.oko.ShelterIndex
+import com.presaince.oko.UpdateManager
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.random.Random
@@ -174,7 +177,7 @@ data class UiState(
     val periodicGps: Boolean = false,
     val calmMessagesEnabled: Boolean = true,
     val hapticsEnabled: Boolean = true,
-    val shelterIndex: ShelterIndex? = null,        // Odesa shelters — null while loading/unavailable
+    val shelterIndex: ShelterIndex? = null,        // shelters — null while loading/unavailable
     val mapVisible: Boolean = true,          // the map screen is the visible screen (not settings/shelters/guide)
     val shelterOverlayUp: Boolean = false,   // the shelter overlay is showing (suppresses flourish)
     val alertActive: Boolean = false,        // any threat or official alert live right now
@@ -236,6 +239,13 @@ data class SettingsState(
     val nightZoneSirenOverride: Boolean get() = prefs.nightZoneSirenOverride
     val nightOfficialSirenOverride: Boolean get() = prefs.nightOfficialSirenOverride
     val nightOfficialAlertCityScope: Boolean get() = prefs.nightOfficialAlertCityScope
+    /** "Just let me sleep!" is on when the night settings are the fully-muted combination. */
+    val nightSleepActive: Boolean
+        get() = prefs.nightEnabled && prefs.nightUseCustomZones &&
+            !prefs.nightSlowRedArmed && !prefs.nightSlowYellowArmed &&
+            !prefs.nightFastRedArmed && !prefs.nightFastYellowArmed &&
+            !prefs.nightZoneSirenOverride && !prefs.nightOfficialSirenOverride &&
+            !prefs.nightOfficialRedEnabled && !prefs.nightOfficialYellowEnabled
     val followMe: Boolean get() = prefs.followMe
     val pinnedCity: City? get() = prefs.pinnedCity?.let { Cities.byUa[it] }
     val pinnedCityName: String? get() = prefs.pinnedCity
@@ -378,7 +388,6 @@ data class ThreatProximity(
 class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     companion object {
         private const val DAILY_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
-        private const val SHELTERS_CACHE_FILE = "odesa_shelters.json"
     }
 
     private val prefs = UserPrefs(app.applicationContext)
@@ -472,10 +481,9 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     init {
         AppSources.init(getApplication())
         LocationTracker.start(getApplication())
+        loadShelters()
         // Auto-check for updates at most once per day; pops only when no alert is active.
         autoCheckForUpdates(allowPopup = true)
-        // Shelters load from the bundled snapshot first (offline), then refresh daily.
-        viewModelScope.launch { loadShelters() }
     }
 
     override fun onCleared() {
@@ -1058,8 +1066,9 @@ showBorders = prefs.showBorders,
         val focusBannerCity = attribution.bannerCity(language)
             .ifBlank { Strings.get(language).unknownLocation }
         // Distinct oblasts under ANY official alert (whole-oblast or region) — the Logs header count.
-        val alertingOblastCount = Cities.cityOblast.values.toSet()
-            .count { citiesToken -> alerts.any { it.inOblast(citiesToken) } }
+        val alertingOblastCount = alerts.mapNotNull { it.canonicalOblastId() }
+            .map { if (it == "sevastopol") "krym" else it }
+            .toSet().size
 
         val threatDataStale = registry.isThreatDataStale(nowMono)
         val threatList = if (threatDataStale) emptyList() else threats.values
@@ -1332,12 +1341,23 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setNightOfficialAlertCityScope(enabled) }
     }
 
+    fun setNightSleep(enabled: Boolean) {
+        viewModelScope.launch { prefs.setNightSleep(enabled) }
+    }
+
     fun setSheltersEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setSheltersEnabled(enabled) }
     }
 
     fun setSheltersWithKidsEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setSheltersWithKidsEnabled(enabled) }
+    }
+
+    private fun loadShelters() {
+        viewModelScope.launch {
+            val json = UpdateManager(app).fetchSheltersJson()
+            json?.let { ShelterIndex.fromJson(it) }?.let { shelterIndexFlow.value = it }
+        }
     }
 
     /** Tracks which screen is visible so map-only work (neutralizing animation, death
@@ -1350,28 +1370,6 @@ fun setAlertsArmed(armed: Boolean) {
      *  neutralizing card are suppressed while it is. */
     fun setShelterModeActive(active: Boolean) {
         shelterModeFlow.value = active
-    }
-
-    /** Loads the bundled Odesa shelter snapshot, then refreshes it from the update server daily. */
-    private suspend fun loadShelters() {
-        val context = getApplication<Application>()
-        val bundle = runCatching {
-            context.resources.openRawResource(R.raw.odesa_shelters).use {
-                it.readBytes().toString(Charsets.UTF_8)
-            }
-        }.getOrNull()?.let { ShelterIndex.fromJson(it) }
-        val cacheFile = File(context.filesDir, SHELTERS_CACHE_FILE)
-        val cache = if (cacheFile.exists()) ShelterIndex.fromJson(cacheFile.readText()) else null
-        shelterIndexFlow.value = cache ?: bundle
-        if (cache == null || cacheFile.lastModified() < System.currentTimeMillis() - DAILY_CHECK_INTERVAL_MS) {
-            val fresh = updateManager.fetchSheltersJson()
-            if (fresh != null) {
-                ShelterIndex.fromJson(fresh)?.let {
-                    shelterIndexFlow.value = it
-                    cacheFile.writeText(fresh)
-                }
-            }
-        }
     }
 
     /** Follow-me toggle: switching it back on resumes GPS-centered zones/camera. */

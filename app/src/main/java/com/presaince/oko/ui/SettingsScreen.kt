@@ -110,6 +110,7 @@ fun SettingsScreen(
     onNightZoneSirenOverrideChange: (Boolean) -> Unit,
     onNightOfficialSirenOverrideChange: (Boolean) -> Unit,
     onNightOfficialAlertCityScopeChange: (Boolean) -> Unit,
+    onNightSleepToggle: (Boolean) -> Unit,
     onFollowMeChange: (Boolean) -> Unit,
     onPinnedCityChange: (City?) -> Unit,
     onPeriodicGpsChange: (Boolean) -> Unit,
@@ -781,13 +782,17 @@ fun SettingsScreen(
                     title = s.nightModeLabel,
                     icon = painterResource(R.drawable.ic_moon),
                     expanded = collapse.nightMode,
-                    subtitle = s.nightSubtitle(
-                        nightEnabled,
-                        nightStartMin,
-                        nightEndMin,
-                        nightZoneSirenOverride || nightOfficialSirenOverride,
-                        nightUseCustomZones
-                    ),
+                    subtitle = if (nightEnabled && state.nightSleepActive) {
+                        s.allAlertsOffLabel
+                    } else {
+                        s.nightSubtitle(
+                            nightEnabled,
+                            nightStartMin,
+                            nightEndMin,
+                            nightZoneSirenOverride || nightOfficialSirenOverride,
+                            nightUseCustomZones
+                        )
+                    },
                     onToggle = { onCollapseChange(collapse.copy(nightMode = !collapse.nightMode)) },
                     cardColor = NightSectionBg,
                     cardBorder = NightSectionBorder,
@@ -802,6 +807,7 @@ fun SettingsScreen(
                     NightModeCard(
                         lang = lang,
                         enabled = nightEnabled,
+                        sleepActive = state.nightSleepActive,
                         startMin = nightStartMin,
                         endMin = nightEndMin,
                         useCustomZones = nightUseCustomZones,
@@ -835,7 +841,8 @@ fun SettingsScreen(
                         onZoneSirenOverrideChange = onNightZoneSirenOverrideChange,
                         onOfficialSirenOverrideChange = onNightOfficialSirenOverrideChange,
                         nightOfficialAlertCityScope = nightOfficialAlertCityScope,
-                        onNightOfficialAlertCityScopeChange = onNightOfficialAlertCityScopeChange
+                        onNightOfficialAlertCityScopeChange = onNightOfficialAlertCityScopeChange,
+                        onSleepToggle = onNightSleepToggle
                     )
                 }
             }

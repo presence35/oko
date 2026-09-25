@@ -917,8 +917,7 @@ LaunchedEffect(selectedId) {
                 putAll(uiState.cityAlerts)
                 for (city in Cities.ALL) {
                     if (city.nameUa in uiState.cityAlerts) continue
-                    val stem = Cities.cityOblast[city.nameUa] ?: continue
-                    val id = CompactOblastBoundaries.canonicalId(stem) ?: continue
+                    val id = Cities.cityOblastId[city.nameUa] ?: continue
                     when {
                         id in uiState.alertOblastIds -> put(city.nameUa, AlertLevel.RED)
                         coversCityRaion(city.nameUa, id, uiState.alertRaionKeys) -> put(city.nameUa, AlertLevel.RED)

@@ -78,6 +78,30 @@ class OblastAlertScopeTest {
     }
 
     @Test
+    fun `coversCity - a city alert never covers a sibling by 4-letter prefix`() {
+        val a = alert("нова каховка", "Нова Каховка", "Херсонська область")
+        assertTrue(a.coversCity("Нова Каховка"))
+        assertFalse(a.coversCity("Нова Одеса"))
+        assertFalse(a.coversCity("Каховка"))
+    }
+
+    @Test
+    fun `coversCity - Kyiv district alert never covers another oblast`() {
+        val a = alert("дніпровський", "Дніпровський район", "м. Київ")
+        assertFalse(a.coversCity("Дніпро"))
+        assertFalse(a.coversCity("Нова Одеса"))
+        assertFalse(a.coversCity("Запоріжжя"))
+    }
+
+    @Test
+    fun `inOblast - a Kyiv district alert is Kyiv, never Dnipropetrovsk`() {
+        val a = alert("дніпровський", "Дніпровський район", "м. Київ")
+        assertTrue(a.inOblast("kyivska"))
+        assertFalse(a.inOblast("dnipropetrovska"))
+        assertFalse(a.inOblast("Дніпропетровськ"))
+    }
+
+    @Test
     fun `officialAlertActiveFor - scope off rings the whole oblast`() {
         val alerts = listOf(alert("луганська", "Луганська область", "Луганська область"))
         assertTrue(officialAlertActiveFor(alerts, "Луганськ", null, scope = false))

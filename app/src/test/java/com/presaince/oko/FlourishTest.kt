@@ -97,7 +97,8 @@ class FlourishTest {
 
     @Test
     fun `flourishGroupBoundingBox falls back to the group spread when the region is unknown`() {
-        val group = listOf(FlourishRecord(46.48, 30.73, ThreatType.SHAHED, "Місто Нове"))
+        // Remote Carpathian point: neither the region text nor a nearest-major lookup resolves.
+        val group = listOf(FlourishRecord(48.0, 23.5, ThreatType.SHAHED, "Місто Нове"))
         val box = flourishGroupBoundingBox(group)
         // Unresolvable key → the box hugs the record (min-span floor), not the whole oblast.
         val expected = flourishesBoundingBox(group, null)

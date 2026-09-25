@@ -36,23 +36,18 @@ class ThreatEvaluatorTest {
     }
 
     @Test
-    fun `inOblast - district match works`() {
-        assertTrue(inOblast(
-            region = "Одеська",
-            district = "Київський",
-            locality = null,
-            token = "Київськ"
-        ))
+    fun `inOblast - exact identity only, no city-district false positive`() {
+        // "Київський" is a district of Odesa city, not Kyiv oblast — must never match the Kyiv token.
+        assertFalse(inOblast(region = "Одеська", district = "Київський", locality = null, token = "Київськ"))
+        // "Київське" is a village in Odesa oblast — not Kyiv.
+        assertFalse(inOblast(region = "Одеська", district = "Одеський", locality = "Київське", token = "Київськ"))
     }
 
     @Test
-    fun `inOblast - locality match works`() {
-        assertTrue(inOblast(
-            region = "Одеська",
-            district = "Одеський",
-            locality = "Київське",
-            token = "Київськ"
-        ))
+    fun `inOblast - canonical region text matches`() {
+        assertTrue(inOblast(region = "Київська область", district = null, locality = null, token = "kyivska"))
+        assertTrue(inOblast(region = "Київ", district = null, locality = null, token = "kyivska"))
+        assertFalse(inOblast(region = "Одеська область", district = null, locality = null, token = "kyivska"))
     }
 
     // ─────────────────────────────────────────────────────────────

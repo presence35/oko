@@ -46,59 +46,6 @@ object CompactOblastBoundaries {
         "kyiv" to "kyivska",
         "kyiv_city" to "kyivska",
         "odesa" to "odeska",
-        "ubilling:автономна республіка крим" to "krym",
-        "ubilling:волинська" to "volynska",
-        "ubilling:волинська область" to "volynska",
-        "ubilling:вінницька" to "vinnytska",
-        "ubilling:вінницька область" to "vinnytska",
-        "ubilling:дніпропетровська" to "dnipropetrovska",
-        "ubilling:дніпропетровська область" to "dnipropetrovska",
-        "ubilling:донецька" to "donetska",
-        "ubilling:донецька область" to "donetska",
-        "ubilling:житомирська" to "zhytomyrska",
-        "ubilling:житомирська область" to "zhytomyrska",
-        "ubilling:закарпатська" to "zakarpatska",
-        "ubilling:закарпатська область" to "zakarpatska",
-        "ubilling:запорізька" to "zaporizka",
-        "ubilling:запорізька область" to "zaporizka",
-        "ubilling:київська" to "kyivska",
-        "ubilling:київська область" to "kyivska",
-        "ubilling:кіровоградська" to "kirovohradska",
-        "ubilling:кіровоградська область" to "kirovohradska",
-        "ubilling:луганська" to "luhanska",
-        "ubilling:луганська область" to "luhanska",
-        "ubilling:львівська" to "lvivska",
-        "ubilling:львівська область" to "lvivska",
-        "ubilling:м. київ" to "kyivska",
-        "ubilling:м.київ" to "kyivska",
-        "ubilling:миколаївська" to "mykolaivska",
-        "ubilling:миколаївська область" to "mykolaivska",
-        "ubilling:місто київ" to "kyivska",
-        "ubilling:одеська" to "odeska",
-        "ubilling:одеська область" to "odeska",
-        "ubilling:полтавська" to "poltavska",
-        "ubilling:полтавська область" to "poltavska",
-        "ubilling:рівненська" to "rivnenska",
-        "ubilling:рівненська область" to "rivnenska",
-        "ubilling:севастополь" to "sevastopol",
-        "ubilling:сумська" to "sumska",
-        "ubilling:сумська область" to "sumska",
-        "ubilling:тернопільська" to "ternopilska",
-        "ubilling:тернопільська область" to "ternopilska",
-        "ubilling:харківська" to "kharkivska",
-        "ubilling:харківська область" to "kharkivska",
-        "ubilling:херсонська" to "khersonska",
-        "ubilling:херсонська область" to "khersonska",
-        "ubilling:хмельницька" to "khmelnytska",
-        "ubilling:хмельницька область" to "khmelnytska",
-        "ubilling:черкаська" to "cherkaska",
-        "ubilling:черкаська область" to "cherkaska",
-        "ubilling:чернівецька" to "chernivetska",
-        "ubilling:чернівецька область" to "chernivetska",
-        "ubilling:чернігівська" to "chernihivska",
-        "ubilling:чернігівська область" to "chernihivska",
-        "ubilling:івано-франківська" to "ivano_frankivska",
-        "ubilling:івано-франківська область" to "ivano_frankivska",
         "автономна республіка крим" to "krym",
         "волинськ" to "volynska",
         "волинська" to "volynska",
@@ -179,36 +126,6 @@ object CompactOblastBoundaries {
         "івано-франківська область" to "ivano_frankivska",
     )
 
-    // Substring fallback stems
-    private val STEM_TO_ID: Map<String, String> = mapOf(
-        "волинськ" to "volynska",
-        "вінницьк" to "vinnytska",
-        "дніпропетровськ" to "dnipropetrovska",
-        "донецьк" to "donetska",
-        "житомирськ" to "zhytomyrska",
-        "закарпатськ" to "zakarpatska",
-        "запорізьк" to "zaporizka",
-        "київськ" to "kyivska",
-        "крим" to "krym",
-        "кіровоградськ" to "kirovohradska",
-        "луганськ" to "luhanska",
-        "львівськ" to "lvivska",
-        "миколаївськ" to "mykolaivska",
-        "одеськ" to "odeska",
-        "полтавськ" to "poltavska",
-        "рівненськ" to "rivnenska",
-        "севастополь" to "sevastopol",
-        "сумськ" to "sumska",
-        "тернопільськ" to "ternopilska",
-        "харківськ" to "kharkivska",
-        "херсонськ" to "khersonska",
-        "хмельницьк" to "khmelnytska",
-        "черкаськ" to "cherkaska",
-        "чернівецьк" to "chernivetska",
-        "чернігівськ" to "chernihivska",
-        "івано-франківськ" to "ivano_frankivska",
-    )
-
     /** Cached singleton polygons for all 27 canonical regions. */
     val all: Map<String, CompactPolygon> by lazy {
         BY_ID.mapValues { it.value() }
@@ -218,11 +135,9 @@ object CompactOblastBoundaries {
     val allStems: Set<String> get() = BY_ID.keys
 
     /**
-     * Canonical boundary ID for any region query (canonical ID, Ubilling/full name/Cyrillic stem):
-     * 1. Direct match against canonical ID (e.g. "odeska", "м. київ").
-     * 2. Alias match (Ubilling, full Ukrainian name, Cyrillic stem).
-     * 3. Fallback stem substring match (respecting Kyiv City vs Oblast distinction).
-     * Null when the query names no known region. Single owner of the token→ID mapping.
+     * Canonical boundary ID for any region query — exact match only (canonical ID, full Ukrainian
+     * name, or Cyrillic stem), never a substring. Null when the query names no known region.
+     * Single owner of the token→ID mapping.
      */
     fun canonicalId(idOrStem: String): String? {
         val needle = idOrStem.trim().lowercase()
@@ -235,17 +150,20 @@ object CompactOblastBoundaries {
         val mappedId = ALIAS_TO_ID[needle]
         if (mappedId != null) return mappedId
 
-        // Special guard for Kyiv: "м. київ" or city references must NOT match "київська" oblast
+        // Tolerate "<id> oblast" / "<name> область" style suffixes from non-canonical sources.
+        val stripped = needle
+            .removeSuffix(" область").removeSuffix(" обл.").removeSuffix(" обл")
+            .removeSuffix(" oblast").removeSuffix(" region").trim()
+        if (stripped != needle && stripped.isNotEmpty()) {
+            if (BY_ID.containsKey(stripped)) return stripped
+            ALIAS_TO_ID[stripped]?.let { return it }
+        }
+
+        // Kyiv City is merged into Kyiv oblast for alert matching.
         if (needle == "м. київ" || needle == "м.київ" || needle == "київ" || needle == "kyiv") {
             return "kyivska"
         }
 
-        // 3. Fallback stem matching
-        for ((stem, id) in STEM_TO_ID) {
-            if (needle.contains(stem)) {
-                return id
-            }
-        }
         return null
     }
 

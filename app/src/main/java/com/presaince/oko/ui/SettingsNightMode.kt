@@ -61,6 +61,7 @@ internal fun NightTimeField(
 internal fun NightModeCard(
     lang: AppLanguage,
     enabled: Boolean,
+    sleepActive: Boolean,
     startMin: Int,
     endMin: Int,
     useCustomZones: Boolean,
@@ -94,13 +95,38 @@ internal fun NightModeCard(
     onZoneSirenOverrideChange: (Boolean) -> Unit,
     onOfficialSirenOverrideChange: (Boolean) -> Unit,
     nightOfficialAlertCityScope: Boolean,
-    onNightOfficialAlertCityScopeChange: (Boolean) -> Unit
+    onNightOfficialAlertCityScopeChange: (Boolean) -> Unit,
+    onSleepToggle: (Boolean) -> Unit
 ) {
     val s = Strings.get(lang)
     var editing by remember { mutableStateOf<String?>(null) }  // "start" | "end" | null
 
     Column {
         if (enabled) {
+            Button(
+                onClick = { onSleepToggle(!sleepActive) },
+                interactionSource = rememberHapticInteractionSource(),
+                colors = if (sleepActive) {
+                    ButtonDefaults.buttonColors()
+                } else {
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, end = 14.dp, top = 12.dp)
+                    .height(56.dp)
+            ) {
+                Icon(painterResource(R.drawable.ic_moon), contentDescription = null)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    if (sleepActive) s.allAlertsOffLabel else s.nightSleepButton,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -120,6 +146,7 @@ internal fun NightModeCard(
                     modifier = Modifier.weight(1f)
                 )
             }
+            if (!sleepActive) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Box(modifier = Modifier.padding(horizontal = 14.dp)) {
                 SectionCaption(s.nightSoundLabel)
@@ -229,6 +256,7 @@ internal fun NightModeCard(
                 }
             }
         }
+    }
     }
 
     if (editing != null) {

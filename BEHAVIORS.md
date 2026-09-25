@@ -9,7 +9,7 @@ behavior here, update the implementation in the same change.
 |---|---|---|
 | Threat stream | `List<NormalizedThreat>` | Source-agnostic threat objects (see Threat Model) |
 | Official alerts | `List<OblastAlert>` | Regional alert feed (source-agnostic alert currency, `engine/OblastAlert.kt`) |
-| Alert focus | `focusToken: String?`, `focusCityUa: String?`, `cityScope: Boolean` | Which oblast stem / city the official-alert gate scopes to |
+| Alert focus | `focusToken: String?`, `focusCityUa: String?`, `cityScope: Boolean` | Which canonical oblast id / city the official-alert gate scopes to |
 | Focus state | `LatLng`, `FocusCity?`, `hasGps: Boolean` | Where to center evaluation |
 | Zone params | `ZoneParams` (day/night variants) | User thresholds + armed bells |
 | Type gates | `hiddenTypes: Set<String>`, `silencedTypes: Set<String>` | Per-source filtering |
@@ -257,9 +257,14 @@ Clamped to 0–10.
 
 ```
 Engine gate (engine/OblastAlert.kt). Returns true when any alert covers the focus point.
-scope=false → oblast-wide matching
-scope=true  → oblast + city name matching (coversCity)
-Falls back to oblast-wide when city name is unknown.
+Matching is by canonical region identity only — never letter stems, 4-char prefixes or
+substrings. `focusToken` is a canonical oblast boundary id (e.g. "odeska"); the alert's own
+region is resolved to one via `CompactOblastBoundaries.canonicalId(oblast ?: key ?: name)`.
+scope=false → oblast-wide matching (`OblastAlert.inOblast`)
+scope=true  → oblast + city coverage (`OblastAlert.coversCity`): same oblast, then the city's
+              registered canonical raion key, or an exact full-name match for a bare city alert.
+Crimea and Sevastopol share one coverage group (`sameAlertRegion`); Kyiv City is merged into
+`kyivska`. Falls back to oblast-wide when the city name is unknown.
 The red siren flag (`focusOblastAlertActive`, level "red") and the yellow flag
 (`focusOblastYellowAlertActive`, level "yellow") are derived with the same scoping: the red
 flag through `officialAlertActiveFor`, the yellow flag through its twin
@@ -274,8 +279,9 @@ regardless of the day setting.
 
 ```
 ThreatEngine method. Finds the highest-scoring active threat in the alert's oblast that falls
-inside the user's configured zones; falls back to the transliterated region name when nothing
-is in range or there is no focus point.
+inside the user's configured zones; falls back to the region name when nothing is in range or
+there is no focus point. The region name renders in the app language (UA raw, EN transliterated,
+RU a real Russian form).
 Returns (formatted reason string, threat ID).
 ```
 
@@ -364,6 +370,7 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 | Offline critical | Offline 5 min, or 1 min while an official alert (red/yellow) is active on the focus oblast | Once per episode, honors the critical-offline toggle; milestone emission (SourceRegistry `degradedSince` + `connectionMilestones`) vs notification (service) |
 | Offline bypass silent | Sub-toggle of offline critical | Plays sound in silent mode |
 | Night siren overrides | Night window active | Separate zone + official override flags |
+| Sleep mode ("Just let me sleep!") | Night toggles all off (preset) | Zone + official alerts muted by the prefs themselves; no service gate |
 | Resolved tally | Threat removed from stream | Scoped to focus oblast or all-Ukraine |
 
 ### Notification policy (NotifyPlugin — frequency, not capability)

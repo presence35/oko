@@ -9,70 +9,73 @@ import com.presaince.oko.engine.LatLng
  *
  * Bridges [Cities], [CityRaions], [CompactOblastBoundaries], and [CompactRaionBoundaries] into a single,
  * cohesive domain model. Guarantees consistent coordinate ordering ([LatLng] with lat, lon)
- * across both oblast and raion polygon rings.
+ * across both oblast and raion polygon rings. All oblast references are canonical boundary IDs.
  */
 object AdminHierarchy {
 
     data class AdminCity(
         val nameUa: String,
         val nameEn: String,
+        val nameRu: String,
         val lat: Double,
         val lon: Double,
         val tier: CityTier,
         val pop: Int,
         val raionName: String?,
-        val oblastStem: String
+        val oblastId: String
     ) {
         val location: LatLng get() = LatLng(lat, lon)
 
-        fun name(lang: AppLanguage): String = lang.pick(nameUa, nameEn, nameEn)
+        fun name(lang: AppLanguage): String = lang.pick(nameUa, nameEn, nameRu)
 
         /** Boundary polygon of the enclosing raion (if known), normalized to [LatLng]. */
         fun raionPolygon(): List<List<LatLng>>? =
-            raionName?.let { getRaion(it, oblastStem)?.polygon() }
+            raionName?.let { getRaion(it, oblastId)?.polygon() }
 
         /** Boundary polygon of the enclosing oblast, normalized to [LatLng]. */
         fun oblastPolygon(): List<List<LatLng>>? =
-            getOblast(oblastStem)?.polygon()
+            getOblast(oblastId)?.polygon()
     }
 
     data class AdminRaion(
         val key: String,
         val nameUa: String,
         val nameEn: String,
-        val oblastStem: String
+        val nameRu: String,
+        val oblastId: String
     ) {
-        fun name(lang: AppLanguage): String = lang.pick(nameUa, nameEn, nameEn)
+        fun name(lang: AppLanguage): String = lang.pick(nameUa, nameEn, nameRu)
         /** Boundary polygon rings for this raion in normalized [LatLng] order (lat, lon). */
         fun polygon(): List<List<LatLng>>? {
-            val polygon = CompactRaionBoundaries.forKey(oblastStem, key) ?: return null
+            val polygon = CompactRaionBoundaries.forKey(oblastId, key) ?: return null
             return polygon.toPoints().map { ring -> ring.map { LatLng(lat = it.lat, lon = it.lon) } }
         }
 
         /** All cities cataloged in this raion. */
         fun cities(): List<AdminCity> =
-            ALL_CITIES.filter { it.oblastStem == oblastStem && it.raionName?.equals(nameUa, ignoreCase = true) == true }
+            ALL_CITIES.filter { it.oblastId == oblastId && it.raionName?.equals(nameUa, ignoreCase = true) == true }
     }
 
     data class AdminOblast(
-        val stem: String,
+        val id: String,
         val nameUa: String,
-        val nameEn: String
+        val nameEn: String,
+        val nameRu: String
     ) {
-        fun name(lang: AppLanguage): String = lang.pick(nameUa, nameEn, nameEn)
+        fun name(lang: AppLanguage): String = lang.pick(nameUa, nameEn, nameRu)
         /** Boundary polygon rings for this oblast in normalized [LatLng] order (lat, lon). */
         fun polygon(): List<List<LatLng>>? {
-            val polygon = CompactOblastBoundaries.get(stem) ?: return null
+            val polygon = CompactOblastBoundaries.get(id) ?: return null
             return polygon.toPoints().map { ring -> ring.map { LatLng(lat = it.lat, lon = it.lon) } }
         }
 
         /** All raions belonging to this oblast. */
         fun raions(): List<AdminRaion> =
-            ALL_RAIONS.filter { it.oblastStem == stem }
+            ALL_RAIONS.filter { it.oblastId == id }
 
         /** All cities cataloged in this oblast. */
         fun cities(): List<AdminCity> =
-            ALL_CITIES.filter { it.oblastStem == stem }
+            ALL_CITIES.filter { it.oblastId == id }
     }
 
     /** All cities with raion and oblast attributes. */
@@ -82,12 +85,13 @@ object AdminHierarchy {
                 AdminCity(
                     nameUa = city.nameUa,
                     nameEn = city.nameEn,
+                    nameRu = city.nameRu,
                     lat = city.lat,
                     lon = city.lon,
                     tier = city.tier,
                     pop = city.pop,
                     raionName = CityRaions.cityRaion[city.nameUa],
-                    oblastStem = region.stem
+                    oblastId = region.id
                 )
             }
         }
@@ -95,11 +99,12 @@ object AdminHierarchy {
 
     /** All 25 oblasts. */
     val ALL_OBLASTS: List<AdminOblast> by lazy {
-        OBLAST_NAMES.map { (stem, names) ->
+        OBLAST_NAMES.map { (id, names) ->
             AdminOblast(
-                stem = stem,
+                id = id,
                 nameUa = names.first,
-                nameEn = names.second
+                nameEn = names.second,
+                nameRu = RussianToponyms.oblast(id)
             )
         }
     }
@@ -112,14 +117,15 @@ object AdminHierarchy {
         for (city in ALL_CITIES) {
             val rName = city.raionName ?: continue
             val key = rName.lowercase()
-            val id = "${city.oblastStem}:$key"
+            val id = "${city.oblastId}:$key"
             if (seen.add(id)) {
                 list.add(
                     AdminRaion(
                         key = key,
                         nameUa = rName,
                         nameEn = Transliteration.transliterate(rName),
-                        oblastStem = city.oblastStem
+                        nameRu = RussianToponyms.raion(rName),
+                        oblastId = city.oblastId
                     )
                 )
             }
@@ -135,35 +141,42 @@ object AdminHierarchy {
         ALL_CITIES.groupBy { it.nameEn.lowercase() }.mapValues { (_, list) -> list.maxByOrNull { it.pop }!! }
     }
 
-    private val oblastByStem: Map<String, AdminOblast> by lazy {
-        ALL_OBLASTS.associateBy { it.stem.lowercase() }
+    private val cityByRu: Map<String, AdminCity> by lazy {
+        ALL_CITIES.groupBy { it.nameRu.lowercase() }.mapValues { (_, list) -> list.maxByOrNull { it.pop }!! }
     }
 
-    /** Resolves a city by Ukrainian or English name. */
+    private val oblastById: Map<String, AdminOblast> by lazy {
+        ALL_OBLASTS.associateBy { it.id.lowercase() }
+    }
+
+    /** Resolves a city by Ukrainian, English or Russian name. */
     fun getCity(name: String): AdminCity? {
         val trimmed = name.trim()
         return cityByUa[trimmed]
             ?: cityByEn[trimmed.lowercase()]
+            ?: cityByRu[trimmed.lowercase()]
             ?: ALL_CITIES.firstOrNull {
-                it.nameUa.equals(trimmed, ignoreCase = true) || it.nameEn.equals(trimmed, ignoreCase = true)
+                it.nameUa.equals(trimmed, ignoreCase = true) ||
+                    it.nameEn.equals(trimmed, ignoreCase = true) ||
+                    it.nameRu.equals(trimmed, ignoreCase = true)
             }
     }
 
-    /** Resolves an oblast by its stem (e.g. "Київськ") or full name. */
-    fun getOblast(stemOrName: String): AdminOblast? {
-        val lower = stemOrName.trim().lowercase()
-        return oblastByStem[lower]
+    /** Resolves an oblast by its canonical id or full name (UA/EN). */
+    fun getOblast(idOrName: String): AdminOblast? {
+        val lower = idOrName.trim().lowercase()
+        return oblastById[lower]
             ?: ALL_OBLASTS.firstOrNull {
-                it.stem.lowercase() in lower || lower in it.nameUa.lowercase() || lower in it.nameEn.lowercase()
+                it.id.lowercase() == lower || lower in it.nameUa.lowercase() || lower in it.nameEn.lowercase()
             }
     }
 
-    /** Resolves a raion by name (e.g. "Бучанський" or "бучанський"), optionally scoped by oblast stem. */
-    fun getRaion(raionName: String, oblastStem: String? = null): AdminRaion? {
+    /** Resolves a raion by name (e.g. "Бучанський"), optionally scoped by canonical oblast id. */
+    fun getRaion(raionName: String, oblastId: String? = null): AdminRaion? {
         val key = raionName.trim().lowercase()
-        if (oblastStem != null) {
+        if (oblastId != null) {
             val match = ALL_RAIONS.firstOrNull {
-                it.oblastStem.equals(oblastStem, ignoreCase = true) &&
+                it.oblastId.equals(oblastId, ignoreCase = true) &&
                     (it.key == key || it.nameUa.equals(key, ignoreCase = true) || it.nameEn.equals(key, ignoreCase = true))
             }
             if (match != null) return match
@@ -176,34 +189,34 @@ object AdminHierarchy {
     /** Direct map of city name (UA) to its Raion adjectival name (e.g. "Одеса" -> "Одеський"). */
     fun cityToRaion(cityName: String): String? = CityRaions.cityRaion[cityName]
 
-    /** Direct map of city name (UA) to its parent Oblast stem (e.g. "Одеса" -> "Одеськ"). */
-    fun cityToOblast(cityName: String): String? = Cities.cityOblast[cityName]
+    /** Direct map of city name (UA) to its parent canonical oblast id (e.g. "Одеса" -> "odeska"). */
+    fun cityToOblast(cityName: String): String? = Cities.cityOblastId[cityName]
 
     private val OBLAST_NAMES: Map<String, Pair<String, String>> = mapOf(
-        "Вінницьк" to ("Вінницька область" to "Vinnytska oblast"),
-        "Волинськ" to ("Волинська область" to "Volynska oblast"),
-        "Дніпропетровськ" to ("Дніпропетровська область" to "Dnipropetrovska oblast"),
-        "Донецьк" to ("Донецька область" to "Donetska oblast"),
-        "Житомирськ" to ("Житомирська область" to "Zhytomyrska oblast"),
-        "Закарпатськ" to ("Закарпатська область" to "Zakarpatska oblast"),
-        "Запорізьк" to ("Запорізька область" to "Zaporizka oblast"),
-        "Івано-Франківськ" to ("Івано-Франківська область" to "Ivano-Frankivska oblast"),
-        "Київськ" to ("Київська область" to "Kyivska oblast"),
-        "Кіровоградськ" to ("Кіровоградська область" to "Kirovohradska oblast"),
-        "Луганськ" to ("Луганська область" to "Luhanska oblast"),
-        "Львівськ" to ("Львівська область" to "Lvivska oblast"),
-        "Миколаївськ" to ("Миколаївська область" to "Mykolaivska oblast"),
-        "Одеськ" to ("Одеська область" to "Odeska oblast"),
-        "Полтавськ" to ("Полтавська область" to "Poltavska oblast"),
-        "Рівненськ" to ("Рівненська область" to "Rivnenska oblast"),
-        "Сумськ" to ("Сумська область" to "Sumska oblast"),
-        "Тернопільськ" to ("Тернопільська область" to "Ternopilska oblast"),
-        "Харківськ" to ("Харківська область" to "Kharkivska oblast"),
-        "Херсонськ" to ("Херсонська область" to "Khersonska oblast"),
-        "Хмельницьк" to ("Хмельницька область" to "Khmelnytska oblast"),
-        "Черкаськ" to ("Черкаська область" to "Cherkaska oblast"),
-        "Чернівецьк" to ("Чернівецька область" to "Chernivetska oblast"),
-        "Чернігівськ" to ("Чернігівська область" to "Chernihivska oblast"),
-        "Крим" to ("Автономна Республіка Крим" to "Autonomous Republic of Crimea")
+        "vinnytska" to ("Вінницька область" to "Vinnytska oblast"),
+        "volynska" to ("Волинська область" to "Volynska oblast"),
+        "dnipropetrovska" to ("Дніпропетровська область" to "Dnipropetrovska oblast"),
+        "donetska" to ("Донецька область" to "Donetska oblast"),
+        "zhytomyrska" to ("Житомирська область" to "Zhytomyrska oblast"),
+        "zakarpatska" to ("Закарпатська область" to "Zakarpatska oblast"),
+        "zaporizka" to ("Запорізька область" to "Zaporizka oblast"),
+        "ivano_frankivska" to ("Івано-Франківська область" to "Ivano-Frankivska oblast"),
+        "kyivska" to ("Київська область" to "Kyivska oblast"),
+        "kirovohradska" to ("Кіровоградська область" to "Kirovohradska oblast"),
+        "luhanska" to ("Луганська область" to "Luhanska oblast"),
+        "lvivska" to ("Львівська область" to "Lvivska oblast"),
+        "mykolaivska" to ("Миколаївська область" to "Mykolaivska oblast"),
+        "odeska" to ("Одеська область" to "Odeska oblast"),
+        "poltavska" to ("Полтавська область" to "Poltavska oblast"),
+        "rivnenska" to ("Рівненська область" to "Rivnenska oblast"),
+        "sumska" to ("Сумська область" to "Sumska oblast"),
+        "ternopilska" to ("Тернопільська область" to "Ternopilska oblast"),
+        "kharkivska" to ("Харківська область" to "Kharkivska oblast"),
+        "khersonska" to ("Херсонська область" to "Khersonska oblast"),
+        "khmelnytska" to ("Хмельницька область" to "Khmelnytska oblast"),
+        "cherkaska" to ("Черкаська область" to "Cherkaska oblast"),
+        "chernivetska" to ("Чернівецька область" to "Chernivetska oblast"),
+        "chernihivska" to ("Чернігівська область" to "Chernihivska oblast"),
+        "krym" to ("Автономна Республіка Крим" to "Autonomous Republic of Crimea")
     )
 }

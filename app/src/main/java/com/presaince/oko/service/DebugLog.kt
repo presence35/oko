@@ -20,6 +20,7 @@ import com.presaince.oko.engine.LatLng
 import com.presaince.oko.engine.toThreatType
 import com.presaince.oko.engine.inOblast
 import com.presaince.oko.engine.isFastType
+import com.presaince.oko.engine.AlertLevel
 
 /** Event kinds shown in the Debug log screen. */
 enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, REGION_THREAT, FLOURISH }
@@ -39,7 +40,8 @@ enum class DebugLogReason {
  * One debug decision row. Every entry carries the day/night flag, the effective siren
  * override and the vibration level that WOULD have been used, plus whether a notification
  * fired and why not ([reason]). [tier] is the effective zone for zone alerts (what actually
- * rang), null for official alerts / region sweeps. [distanceKm] is from the focus point.
+ * rang), null for official alerts / region sweeps; [level] is the official alert severity
+ * (RED/YELLOW) for OFFICIAL_ON rows, null otherwise. [distanceKm] is from the focus point.
  */
 data class DebugLogEntry(
     val atMillis: Long,
@@ -53,7 +55,8 @@ data class DebugLogEntry(
     val threatType: ThreatType?,
     val tier: ThreatZone?,
     val distanceKm: Double?,
-    val locality: String?
+    val locality: String?,
+    val level: AlertLevel? = null
 )
 
 /**
@@ -149,12 +152,13 @@ object DebugLog {
         threatType: ThreatType?,
         locality: String?,
         distanceKm: Double?,
+        level: AlertLevel? = null,
         now: Long
     ) {
         record(
             DebugLogEntry(
                 now, kind, night, sirenOverride, vibrationLevel, notified, reason,
-                threatId, threatType, null, distanceKm, locality
+                threatId, threatType, null, distanceKm, locality, level
             )
         )
     }
@@ -365,7 +369,7 @@ internal fun computeSweep(
 
 /**
  * Serialized form of the log — pipe-delimited lines, one per event:
- * "at|kind|night|siren|vibr|notified|reason|threatId|type|tier|distance|locality".
+ * "at|kind|night|siren|vibr|notified|reason|threatId|type|tier|distance|locality|level".
  * Blank fields mean null. Pure, so persistence is unit-testable without DataStore.
  */
 internal fun serializeDebugLog(entries: List<DebugLogEntry>): String =
@@ -382,7 +386,8 @@ internal fun serializeDebugLog(entries: List<DebugLogEntry>): String =
             entry.threatType?.name ?: "",
             entry.tier?.name ?: "",
             entry.distanceKm?.toString() ?: "",
-            entry.locality ?: ""
+            entry.locality ?: "",
+            entry.level?.name ?: ""
         ).joinToString("|")
     }
 
@@ -390,7 +395,7 @@ internal fun serializeDebugLog(entries: List<DebugLogEntry>): String =
 internal fun parseDebugLog(raw: String, maxEntries: Int = DebugLog.MAX_ENTRIES): List<DebugLogEntry> =
     raw.split('\n').mapNotNull { line ->
         val parts = line.split('|')
-        if (parts.size != 12) return@mapNotNull null
+        if (parts.size < 12) return@mapNotNull null
         val at = parts[0].toLongOrNull() ?: return@mapNotNull null
         val kind = DebugLogKind.entries.firstOrNull { it.name == parts[1] } ?: return@mapNotNull null
         val night = parts[2].toBooleanStrictOrNull() ?: return@mapNotNull null
@@ -403,5 +408,6 @@ internal fun parseDebugLog(raw: String, maxEntries: Int = DebugLog.MAX_ENTRIES):
         val tier = ThreatZone.entries.firstOrNull { it.name == parts[9] }
         val dist = parts[10].toDoubleOrNull()
         val locality = parts[11].takeIf { it.isNotEmpty() }
-        DebugLogEntry(at, kind, night, siren, vibr, notified, reason, threatId, type, tier, dist, locality)
+        val level = parts.getOrNull(12)?.let { name -> AlertLevel.entries.firstOrNull { it.name == name } }
+        DebugLogEntry(at, kind, night, siren, vibr, notified, reason, threatId, type, tier, dist, locality, level)
     }.takeLast(maxEntries)
