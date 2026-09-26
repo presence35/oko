@@ -112,4 +112,55 @@ class ThreatCardDedupeTest {
         assertFalse(isAreaAdvisory("Шахеди курсом на Чорноморськ"))
         assertFalse(isAreaAdvisory(null))
     }
+
+    @Test
+    fun reconSynonymRestatingTypeAndPlaceIsHidden() {
+        // NEPTUN names the recon type "Розвідувальний дрон", not the catalog label "Розвідка".
+        // Its romanized form reaches the EN card as "Rozviduvalnyi Drone", which shares no whole
+        // word with "Reconnaissance" — only a root, which the dedupe must still catch.
+        assertTrue(
+            repeatsShownInfo(
+                "Rozviduvalnyi Drone — Ivanivka, Khersonska oblast",
+                typeLabel = "Reconnaissance",
+                labelEn = "Reconnaissance",
+                shownRegion = "Ivanivka · Khersonska oblast"
+            )
+        )
+    }
+
+    @Test
+    fun ukrainianReconSynonymRestatingTypeAndPlaceIsHidden() {
+        assertTrue(
+            repeatsShownInfo(
+                "Розвідувальний дрон — Іванівка, Херсонська область",
+                typeLabel = "Розвідка",
+                labelEn = "Reconnaissance",
+                shownRegion = "Іванівка · Херсонська область"
+            )
+        )
+    }
+
+    @Test
+    fun reconSynonymWithRealCourseSurvives() {
+        assertFalse(
+            repeatsShownInfo(
+                "Rozviduvalnyi dron patrolling over the sea",
+                typeLabel = "Reconnaissance",
+                labelEn = "Reconnaissance",
+                shownRegion = "Kobleve · Mykolaiv oblast"
+            )
+        )
+    }
+
+    @Test
+    fun ukrainianDroneWordRestatingTypeAndPlaceIsHidden() {
+        assertTrue(
+            repeatsShownInfo(
+                "Дрон — Іванівка, Херсонська область",
+                typeLabel = "БпЛА",
+                labelEn = "Drone",
+                shownRegion = "Іванівка · Херсонська область"
+            )
+        )
+    }
 }

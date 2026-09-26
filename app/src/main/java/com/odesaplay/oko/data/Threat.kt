@@ -355,6 +355,7 @@ private val COURSE_GLOSSARY: List<Pair<String, String>> = listOf(
     "транзитом" to "in transit",
     "відбій" to "all clear",
     "тривога" to "alert",
+    "дрон" to "drone",
     "розвідник" to "recon drone",
     "розвідники" to "recon drones",
     "ціль" to "target",
@@ -375,7 +376,8 @@ private val COURSE_GLOSSARY: List<Pair<String, String>> = listOf(
 /** Course-prose type terms the EN fallback glossary emits; the UA key and its EN value are
  *  both used to recognise a course line that only restates the threat type. */
 private val COURSE_TYPE_GLOSSARY_KEYS = listOf(
-    "шахед", "шахеди", "крилата ракета", "балістична ракета", "керована авіабомба", "КАБи", "швидкісна ціль"
+    "шахед", "шахеди", "крилата ракета", "балістична ракета", "керована авіабомба", "КАБи", "швидкісна ціль",
+    "дрон"
 )
 
 /**

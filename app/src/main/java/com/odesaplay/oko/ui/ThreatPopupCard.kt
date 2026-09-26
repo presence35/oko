@@ -585,30 +585,45 @@ private fun firstSentence(text: String): String {
 /** Whitespace run matcher shared by [repeatsShownInfo] — hoisted so cards never recompile it. */
 private val WhitespaceRun = Regex("\\s+")
 
-/** True when the course line carries nothing beyond the type label and the place names
- *  already shown in the header: deleting those leaves no real words behind. Both operands are
- *  canonicalized (Cyrillic → Latin, case- and punctuation-insensitive) so the same name written
- *  in either script collapses — a translated course compared against a raw region never matched,
- *  which is how duplicates survived in EN/RU. */
+/** Shortest shared word root that still counts as the same word. Inflected forms of a name
+ *  diverge right after their common stem ("Розвідка" / "Розвідувальний" → "розвід"), which is
+ *  exactly the case a plain word-equality check missed. */
+private const val DEDUPE_ROOT_MIN = 5
+
+/** True when [a] and [b] share a word root: a ≥[DEDUPE_ROOT_MIN] common prefix, or the shorter
+ *  word spelled out in full at the start of the longer ("KAB" / "KABs"). */
+private fun sharesRoot(a: String, b: String): Boolean {
+    val n = minOf(a.length, b.length)
+    var i = 0
+    while (i < n && a[i] == b[i]) i++
+    return i >= DEDUPE_ROOT_MIN || (i == n && n >= 3)
+}
+
+/**
+ * True when the course line carries nothing beyond the type label and the place names already
+ * shown in the header. Type-agnostic: it never consults the threat type, only the strings the
+ * card already renders (both language forms of the label) plus the catalog's own label
+ * vocabulary. Matching is by word root, so the same name written with a different inflection or
+ * in the other script still collapses — "Розвідувальний" vs "Розвідка", "Rozviduvalnyi" vs the
+ * romanized "Розвідка". Both operands must already be rendered in the card's language.
+ */
 internal fun repeatsShownInfo(course: String, typeLabel: String, labelEn: String, shownRegion: String): Boolean {
     fun norm(s: String): String = Transliteration.transliterate(s).lowercase()
         .map { if (it.isLetterOrDigit()) it else ' ' }
         .joinToString("")
         .replace(WhitespaceRun, " ")
         .trim()
+    // Connector phrases are dropped verbatim first, so their short filler words ("in", "the")
+    // never enter the root vocabulary and can't over-match a real word later.
     var rest = " ${norm(course)} "
-    val drops = (listOf(typeLabel, labelEn) +
-            COURSE_TYPE_NAMES +
-            listOf("heading toward", "moving toward", "in the area of", "from the direction of") +
-            shownRegion.split('·', ','))
-        .map { norm(it) }
-        .filter { it.isNotBlank() }
-        .sortedByDescending { it.length }
-    for (d in drops) {
-        val padded = " $d "
-        while (padded in rest) rest = rest.replace(padded, " ")
+    for (phrase in listOf("heading toward", "moving toward", "in the area of", "from the direction of")) {
+        val p = norm(phrase)
+        if (p.isNotBlank()) rest = rest.replace(" $p ", " ")
     }
-    return rest.isBlank()
+    val vocab = (listOf(typeLabel, labelEn) + COURSE_TYPE_NAMES + shownRegion.split('·', ','))
+        .flatMap { norm(it).split(' ') }
+        .filter { it.isNotBlank() }
+    return rest.split(' ').none { token -> token.isNotBlank() && vocab.none { sharesRoot(token, it) } }
 }
 
 /** Horizontal skull gauge for the compact card: skull left, bar fills left→right. */

@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Threat cards no longer repeat the type under the title when the feed names it differently than the label, e.g. Reconnaissance described as a recon drone 09-26_14:49:40
 - Wizard threat toggles now only switch alerts, no longer hiding the type from the map 09-26_15:05:00
 - Removed the Telegram SDK-change notifier 09-26_14:09:49
 - Stale threats dim the icon and show a "Stale" pill beneath it on the threat card 09-26_14:22
