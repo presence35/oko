@@ -165,6 +165,7 @@ fun ThreatPopupCard(
     iconSet: ThreatIconSet = ThreatIconSet.PHOTO,
     proximity: ThreatProximity?,
     zoneTier: ThreatZone? = null,
+    approachingCity: String? = null,
     pinnedCity: City?,
     threatLevel: Double,
     onDismiss: () -> Unit,
@@ -184,6 +185,9 @@ fun ThreatPopupCard(
     val titleLabel = if (threat.count > 1) "${threat.count}x $typeLabel" else typeLabel
 
     val confirmations = threat.confirmations.takeIf { it > 0 }
+    // NEPTUN's "…: попередження по області, точка невідома" is area-level by content; treat it
+    // as area-only so the chip carries it and the redundant prose line is dropped.
+    val areaAdvisory = isAreaAdvisory(threat.explanationShort)
 
     val bandColor = when (zoneTier) {
         ThreatZone.INNER -> DistUserRed
@@ -256,6 +260,8 @@ fun ThreatPopupCard(
         shownCourse to shownRegion
     }
     val (shownCourse, shownRegion) = cardText
+    // Area advisory is carried by the chip below; never repeat it as prose.
+    val visibleCourse = shownCourse.takeUnless { areaAdvisory }
 
     val smallFixedWidth = 250.dp
     val cardInteraction = remember { MutableInteractionSource() }
@@ -377,6 +383,15 @@ fun ThreatPopupCard(
                                 )
                             }
                         }
+                        approachingCity?.let { city ->
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                String.format(s.approachingFormat, city),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = AdvisoryAmber,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                         Spacer(Modifier.height(4.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -445,8 +460,19 @@ fun ThreatPopupCard(
                         }
 
                         // NEPTUN's course assessment, e.g. "Drone heading toward Chornomorsk"
-                        shownCourse?.let {
+                        visibleCourse?.let {
                             Text(it, style = MaterialTheme.typography.bodyLarge, color = Color(AppPalette.TextDetail))
+                            Spacer(Modifier.height(4.dp))
+                        }
+
+                        // Inbound track staged onto its ring: say so, instead of only implying it.
+                        approachingCity?.let { city ->
+                            Text(
+                                String.format(s.approachingFormat, city),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = AdvisoryAmber,
+                                fontWeight = FontWeight.Medium
+                            )
                             Spacer(Modifier.height(4.dp))
                         }
 
@@ -479,7 +505,7 @@ fun ThreatPopupCard(
                             Spacer(Modifier.height(6.dp))
                         }
 
-                        if (threat.areaOnly) {
+                        if (threat.areaOnly || areaAdvisory) {
                             Surface(shape = RoundedCornerShape(12.dp), color = AdvisoryAmber.copy(alpha = 0.18f)) {
                                 Text(
                                     s.areaOnlyLabel,

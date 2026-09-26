@@ -221,6 +221,7 @@ internal val Russian: Strings.StringSet = Strings.StringSet(
         cardSkullNote = "Оценка «Череп» (0–10) является приблизительной.",
         distanceLabel = "Расстояние",
         distanceToCityFormat = "Расстояние до г. %1\$s",
+        approachingFormat = "Approaching %1\$s",
         etaLabel = "ETA",
         etaUnit = "мин",
         approxNote = "Все цифры в приложении являются приблизительными",

@@ -58,7 +58,11 @@ data class NormalizedThreat(
     /** True when this track is emitted by a simulator (Test source), not a live feed — the UI
      *  watermarks it so a fake threat is never mistaken for a real one. Pure metadata: the engine
      *  treats simulated and live threats identically. */
-    val simulated: Boolean = false
+    val simulated: Boolean = false,
+    /** Destination city named by the source's course text ("... heading toward X"), resolved at
+     *  ingest. Source-owned data — the engine never parses or fabricates a destination. */
+    val destination: LatLng? = null,
+    val destinationName: String? = null
 ) {
     /** A track is dead-reckonable when the source gave it a course (authoritative velocity
      *  `bearingDeg` or reported `heading`) and an anchor (`confirmedAt`, or `updatedAt` when the

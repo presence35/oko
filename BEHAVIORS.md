@@ -218,6 +218,33 @@ Used by the map glide loop, marker placement, and predictPosition itself, so sta
 freeze at their reported fix and tracks NEPTUN gives no course never move.
 ```
 
+### `isInbound(t, focus, params, props, now)` — Approach Predicate (consumer policy)
+
+```
+Source data only, no timers. True when the track is an approximate (`positionQuality ==
+"approx"`), fresh, active, in-reach track that either:
+  1. names a `destination` (source-resolved from the course text) inside the focus's yellow
+     ring (`slowYellowKm`), or
+  2. carries a server course whose bearing points at the focus (within a 45° cone).
+Advisory/area-only/stale tracks never qualify. Lives in `domain/ThreatBehavior.kt`.
+```
+
+### `stageInbound(eval, threats, focus, params, propsFor, now, silencedTypes)` — Ring Staging
+
+```
+Pure re-tag of one engine result, applied by BOTH consumers (MainViewModel, AlertService) so
+the map, card and siren agree:
+  - slow inbound → OUTER (patrols the yellow ring),
+  - fast inbound → INNER (patrols the red ring, so it still sounds).
+Rewrites zoneThreats, threatsInner/Outer and activeZone; no-op when nothing is inbound. Only
+tracks the engine already placed in a zone are staged, so a far out-of-range track never gets a
+synthetic alarm. The engine itself stays a pure reporter of source data — staging never changes
+engine inputs/math.
+`OrbitBehavior` places an inbound track on its ring (around its destination, else the focus)
+instead of parking it on the city centre; radius = `slowYellowKm` (slow) / `slowRedKm` (fast).
+The widget does not stage yet (see ROADMAP.md).
+```
+
 ### `distanceHaversine(lat1, lon1, lat2, lon2)` — Accurate Distance
 
 ```

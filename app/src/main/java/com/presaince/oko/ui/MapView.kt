@@ -439,6 +439,7 @@ fun NeptunMapView(
     val mapThreatsState by rememberUpdatedState(uiState.mapThreats)
     val slowRedKmState by rememberUpdatedState(uiState.activeZoneParams.slowRedKm)
     val slowYellowKmState by rememberUpdatedState(uiState.activeZoneParams.slowYellowKm)
+    val zoneParamsState by rememberUpdatedState(uiState.activeZoneParams)
     val threatIconZoomState by rememberUpdatedState(uiState.threatIconZoom)
     val selectedId by selectedThreatId.collectAsState()
     val selectedThreatIdState by rememberUpdatedState(selectedId)
@@ -865,7 +866,7 @@ LaunchedEffect(selectedId) {
             }
             val now = System.currentTimeMillis()
             val behaviors = listOf<ThreatBehavior>(
-                OrbitBehavior(slowRedKmState, slowYellowKmState)
+                OrbitBehavior(zoneParamsState, focusLocationState)
             )
             var moving = false
             val currentIds = mapThreatsState.map { it.id }.toSet()

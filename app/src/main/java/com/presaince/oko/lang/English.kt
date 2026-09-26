@@ -221,6 +221,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
         cardSkullNote = "Skull 0–10 is a rough estimate, not official.",
         distanceLabel = "Distance",
         distanceToCityFormat = "Distance to %1\$s",
+        approachingFormat = "Approaching %1\$s",
         etaLabel = "ETA",
         etaUnit = "min",
         approxNote = "All numbers in the app are approximate",

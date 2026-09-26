@@ -3,6 +3,22 @@
 Planned-but-not-started features, tracked so a future session can pick them up. Nothing here is
 committed to a release.
 
+## Inbound approach model (staging follow-up)
+
+Inbound tracks are now re-tagged by a consumer-side policy (`domain/ThreatBehavior.kt`:
+`isInbound`/`stageInbound`, applied by `MainViewModel` + `AlertService`): slow → yellow ring,
+fast → red ring, so an approximate track the source reports heading to your area no longer lands
+on your position. Remaining work for the full design (worked out 2026-09-26):
+
+- Split facts from policy: the engine reports raw data, a policy layer owns the classification,
+  so the widget (and any future consumer) stages too — today only the app + service do.
+- User setting: "an incoming threat means red or yellow" (default yellow), mapped plugin-side
+  like `NotifyPrefs.from` rather than a hardcoded slow/fast rule.
+- Uncertainty edge: tier and place approximate tracks by the far edge of `uncertaintyKm`, so an
+  uncertain fix cannot claim overhead even without a destination or an aimed course.
+- Match the destination to the focus (today any named destination inside the yellow ring
+  qualifies) and share the "course points at me" geometry with the widget.
+
 ## Multi-city official-alert monitoring (TL;DR)
 
 Replace the single-focus alert model with a tappable watch set: a "Monitor cities" card grid in

@@ -96,4 +96,20 @@ class ThreatCardDedupeTest {
         val course = translateCourseAssessment("FPV-дрон — Радківка", AppLanguage.EN)!!
         assertTrue(repeatsShownInfo(course, "FPV drone", "FPV drone", "Radkivka"))
     }
+
+    @Test
+    fun areaAdvisoryTemplateRecognized() {
+        assertTrue(
+            isAreaAdvisory("БпЛА — Чернігівська область: попередження по області, точка невідома")
+        )
+        assertTrue(
+            isAreaAdvisory("Drone — Chernihivska oblast: попередження по території, точка не відома")
+        )
+    }
+
+    @Test
+    fun realCourseIsNotAreaAdvisory() {
+        assertFalse(isAreaAdvisory("Шахеди курсом на Чорноморськ"))
+        assertFalse(isAreaAdvisory(null))
+    }
 }

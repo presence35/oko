@@ -277,20 +277,16 @@ private fun buildNotesFromChangelog(): Triple<String, String, String> {
         .takeWhile { !it.trim().startsWith("## ") }
         .map { it.trim() }
         .filter { it.startsWith("- ") }
-    val en = mutableListOf<String>()
-    val ua = mutableListOf<String>()
-    val ru = mutableListOf<String>()
-    for (bullet in bullets) {
-        val text = bullet.removePrefix("- ").trim()
-        val parts = text.split(" / ")
-        en += parts.getOrElse(0) { "" }.trim()
-        ua += parts.getOrElse(1) { "" }.trim()
-        // RU reuses EN until a real RU translation lands.
-        ru += parts.getOrElse(2) { parts.getOrElse(0) { "" } }.trim().ifBlank { parts.getOrElse(0) { "" }.trim() }
+    // Entries are EN-only. UA/RU fall back to EN until real translations land.
+    val notes = bullets.map { bullet ->
+        bullet.removePrefix("- ").trim()
+            .replace(Regex("\\s+\\d{2}-\\d{2}_\\d{2}:\\d{2}:\\d{2}$"), "")
+            .trim()
     }
-    return if (en.isNotEmpty() && en.any { it.isNotBlank() })
-        Triple(en.joinToString("\n"), ua.joinToString("\n"), ru.joinToString("\n"))
-    else fallbackNotes()
+    return if (notes.any { it.isNotBlank() }) {
+        val joined = notes.joinToString("\n")
+        Triple(joined, joined, joined)
+    } else fallbackNotes()
 }
 
 private fun fallbackNotes(): Triple<String, String, String> = Triple(

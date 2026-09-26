@@ -230,6 +230,7 @@ object Strings {
         val cardSkullNote: String,
         val distanceLabel: String,
         val distanceToCityFormat: String,
+        val approachingFormat: String,
         val etaLabel: String,
         val etaUnit: String,
         val approxNote: String,
@@ -950,6 +951,7 @@ object Strings {
         val cardSkullNote: String get() = threat.cardSkullNote
         val distanceLabel: String get() = threat.distanceLabel
         val distanceToCityFormat: String get() = threat.distanceToCityFormat
+        val approachingFormat: String get() = threat.approachingFormat
         val etaLabel: String get() = threat.etaLabel
         val etaUnit: String get() = threat.etaUnit
         val approxNote: String get() = threat.approxNote

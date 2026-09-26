@@ -288,6 +288,7 @@ data class SelectionUi(
     val selected: NormalizedThreat? = null,
     val proximity: ThreatProximity? = null,
     val zoneTier: ThreatZone? = null,
+    val approachingCity: String? = null,  // inbound track: the city named in the source course text
     val cardLevel: Double = 0.0,          // per-threat gauge score (banner aggregate never enters the card)
     val alertsOff: Boolean = false,       // selected type silenced in Settings (chip state travels with the card)
     val neutralized: NormalizedThreat? = null,   // resolved card while the death window plays
@@ -310,6 +311,7 @@ internal fun areSelectionUiVisuallyEqual(old: SelectionUi, new: SelectionUi): Bo
     if (old.fakeNeutralize != new.fakeNeutralize) return false
     if (old.alertsOff != new.alertsOff) return false
     if (old.zoneTier != new.zoneTier) return false
+    if (old.approachingCity != new.approachingCity) return false
     if ((old.neutralized == null) != (new.neutralized == null)) return false
     if (old.neutralized?.id != new.neutralized?.id) return false
     if ((old.selected == null) != (new.selected == null)) return false
@@ -975,25 +977,36 @@ showBorders = prefs.showBorders,
                     )
                 val neutralizedThreat =
                     if (FlourishPolicy.showNeutralizedCard(selectedGone, animOn, sel.mapVisible)) sel.selected else null
+                val focusLatLng = ui.focusLocation
+                val props = refreshed?.let { engine.propsFor(it.type) }
+                val inbound = refreshed != null && props != null &&
+                    isInbound(refreshed, focusLatLng, ui.activeZoneParams, props, nowMs)
                 val proximity = refreshed?.let { t ->
-                    engine.computeProximity(
-                        t,
-                        ui.focusLocation?.let { loc -> LatLng(loc.lat, loc.lon) },
-                        nowMs
-                    )
+                    engine.computeProximity(t, focusLatLng, nowMs)
                 }?.let { ep ->
+                    // A staged inbound track is drawn on its ring, so the card must show the ring
+                    // distance, not the raw fix — otherwise it reads "0 km" next to "Approaching".
+                    val ringKm = props?.takeIf { inbound }
+                        ?.let { approachRingKm(it.isFast, ui.activeZoneParams).toDouble() }
                     ThreatProximity(
                         predicted = ep.predicted,
-                        distToUserKm = ep.distToUserKm,
-                        etaToUserMin = ep.etaToUserMin,
+                        distToUserKm = ringKm ?: ep.distToUserKm,
+                        etaToUserMin = if (ringKm != null && ep.speedKmh != null && ep.speedKmh > 0.0) {
+                            ringKm / ep.speedKmh * 60.0
+                        } else ep.etaToUserMin,
                         params = ui.activeZoneParams,
                         speedSource = ep.speedSource,
                         speedKmh = ep.speedKmh
                     )
                 }
-                val zoneTier = if (refreshed != null && proximity?.distToUserKm != null) {
-                    val props = engine.propsFor(refreshed.type)
-                    engine.zoneTier(props, proximity.distToUserKm, proximity.speedKmh, proximity.params)
+                val zoneTier = when {
+                    refreshed == null || props == null -> null
+                    inbound -> stagedTier(props.isFast)
+                    proximity?.distToUserKm == null -> null
+                    else -> engine.zoneTier(props, proximity.distToUserKm, proximity.speedKmh, proximity.params)
+                }
+                val approachingCity = if (inbound) {
+                    refreshed?.destinationName?.let { Cities.findCity(it)?.name(ui.language) }
                 } else null
                 val cardLevel = if (refreshed != null) {
                     engine.cardLevel(
@@ -1009,6 +1022,7 @@ showBorders = prefs.showBorders,
                     selected = if (FlourishPolicy.dropSelection(selectedGone, animOn)) null else refreshed,
                     proximity = proximity,
                     zoneTier = zoneTier,
+                    approachingCity = approachingCity,
                     cardLevel = cardLevel,
                     alertsOff = alertsOff,
                     neutralized = neutralizedThreat,
@@ -1073,20 +1087,29 @@ showBorders = prefs.showBorders,
         val silencedTypeStrings = (ThreatType.values().toSet() - alertedTypes).map { it.toEngineString() }.toSet()
         val engineFocus = focusLocation?.let { LatLng(it.lat, it.lon) }
         val engineParams = ZoneParams(params.slowRedKm, params.slowYellowKm, params.fastRedMin, params.fastYellowMin)
-        val evaluation = engine.evaluate(
-            threats = threatList,
-            focus = engineFocus,
-            params = engineParams,
-            hiddenTypes = emptySet(),
-            silencedTypes = silencedTypeStrings,
-            now = now,
-            alerts = alerts,
-            focusToken = focusToken,
-            focusCityUa = attribution.bannerCityUa.takeIf { it.isNotBlank() },
-            cityScope = officialAlertCityScope,
-            lang = language,
-            prevTiers = lastZoneTiers
-        ).also { lastZoneTiers = it.zoneThreats }
+        val evaluation = stageInbound(
+            engine.evaluate(
+                threats = threatList,
+                focus = engineFocus,
+                params = engineParams,
+                hiddenTypes = emptySet(),
+                silencedTypes = silencedTypeStrings,
+                now = now,
+                alerts = alerts,
+                focusToken = focusToken,
+                focusCityUa = attribution.bannerCityUa.takeIf { it.isNotBlank() },
+                cityScope = officialAlertCityScope,
+                lang = language,
+                prevTiers = lastZoneTiers
+            ),
+            threatList,
+            engineFocus,
+            engineParams,
+            engine::propsFor,
+            now,
+            silencedTypeStrings
+        )
+        lastZoneTiers = evaluation.zoneThreats
         val inInner = evaluation.threatsInner
         val inOuter = evaluation.threatsOuter
         val mapThreats = evaluation.mapThreats

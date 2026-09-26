@@ -590,7 +590,8 @@ val mappedThreats = registry.allThreats.map { list ->
                 val zoneThreats = if (focusLoc != null && !registry.isThreatDataStale(Monotonic.now())) {
                     val threatList = threats.values.toList()
                     val engineFocus = LatLng(focusLoc.lat, focusLoc.lon)
-                    engine.evaluate(threatList, engineFocus, params, emptySet(), emptySet(), now, prevTiers = lastZoneTiers).zoneThreats
+                    val eval = engine.evaluate(threatList, engineFocus, params, emptySet(), emptySet(), now, prevTiers = lastZoneTiers)
+                    stageInbound(eval, threatList, engineFocus, params, engine::propsFor, now).zoneThreats
                 } else {
                     emptyMap()
                 }

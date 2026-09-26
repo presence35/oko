@@ -1348,6 +1348,7 @@ private fun ThreatCardHost(
                         iconSet = iconSet,
                         proximity = sel.proximity,
                         zoneTier = sel.zoneTier,
+                        approachingCity = sel.approachingCity,
                         pinnedCity = if (followMe) null else pinnedCity,
                         threatLevel = sel.cardLevel,
                         cardSize = cardSize,

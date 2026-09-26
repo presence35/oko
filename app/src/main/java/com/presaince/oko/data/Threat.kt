@@ -222,6 +222,20 @@ fun translateCourseAssessment(text: String?, lang: AppLanguage): String? {
     return courseFallback(text)
 }
 
+/**
+ * NEPTUN's area-level advisory template, e.g.
+ * "БпЛА — Чернігівська область: попередження по області, точка невідома".
+ * It restates the type and region (already in the header) and says only "warning across the
+ * oblast, point unknown" — the card folds that into its area-level chip instead of prose.
+ */
+private val AREA_ADVISORY_REGEX = Regex(
+    "(?iu)^\\s*[^:]{0,120}:\\s*попередженн\\p{L}*\\s+по\\s+(?:област|територ)\\p{L}*\\s*,?\\s*точка\\s+не\\s*відом\\p{L}*\\.?\\s*$"
+)
+
+/** True when [text] is solely NEPTUN's area-level advisory; the card renders it as a chip. */
+fun isAreaAdvisory(text: String?): Boolean =
+    text != null && AREA_ADVISORY_REGEX.matches(text.trim())
+
 /** The heading-to sentence patterns only (a destination, not a source/loiter): a threat that
  *  "goes toward {X}" orbits {X} on the map, so we need the captured place to resolve it. */
 private val DESTINATION_PATTERNS: List<Regex> = listOf(

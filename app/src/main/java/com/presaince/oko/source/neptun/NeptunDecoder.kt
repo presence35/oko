@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import org.json.JSONObject
 import com.presaince.oko.ThreatType
 import com.presaince.oko.Reliability
+import com.presaince.oko.Cities
+import com.presaince.oko.courseTargetPlace
+import com.presaince.oko.engine.LatLng
 import com.presaince.oko.connection.Monotonic
 import com.presaince.oko.engine.MonitorCore
 import com.presaince.oko.engine.NormalizedThreat
@@ -117,6 +120,8 @@ class NeptunDecoder(
 
             val rawTitle = o.optString("title", "")
             val rawCount = o.optInt("count", 0)
+            val explanationShort = sanitizeCourse(optNullable("explanationShort"))
+            val destCity = courseTargetPlace(explanationShort)?.let { Cities.findCity(it) }
 
             return NormalizedThreat(
                 id = o.optString("id"),
@@ -137,13 +142,15 @@ class NeptunDecoder(
                     optNullable("confidenceLevel") ?: optNullable("reliability")
                 ).name,
                 count = sanitizeCount(rawCount, rawTitle),
-                explanationShort = sanitizeCourse(optNullable("explanationShort")),
+                explanationShort = explanationShort,
                 speedKmh = speedKmh,
                 uncertaintyKm = uncertainty,
                 positionQuality = optNullable("positionQuality"),
                 confirmedAtMillis = confirmedAtMillis,
                 updatedAtMillis = updatedAtMillis,
-                trail = parseTrail(o, nowWall)
+                trail = parseTrail(o, nowWall),
+                destination = destCity?.let { LatLng(it.lat, it.lon) },
+                destinationName = destCity?.nameUa
             )
         }
 

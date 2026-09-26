@@ -221,6 +221,7 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         cardSkullNote = "Skull 0–10 is a rough estimate, not official.",
         distanceLabel = "Відстань",
         distanceToCityFormat = "Відстань до %1\$s",
+        approachingFormat = "Approaching %1\$s",
         etaLabel = "Час підльоту",
         etaUnit = "хв",
         approxNote = "Усі числа в застосунку приблизні",
