@@ -7,9 +7,16 @@ enum class SpeedSource { RECORDED, TYPICAL }
 class SpeedCache {
     private data class Fix(val t: Long, val lat: Double, val lon: Double)
     private val fixes = HashMap<String, ArrayDeque<Fix>>()
+    private var newestT = 0L
+    private var lastPruneT = Long.MIN_VALUE
 
     @Synchronized
     fun record(id: String, t: Long, lat: Double, lon: Double) {
+        newestT = maxOf(newestT, t)
+        if (lastPruneT == Long.MIN_VALUE || t - lastPruneT >= PRUNE_INTERVAL_MS) {
+            pruneExpired()
+            lastPruneT = t
+        }
         val q = fixes.getOrPut(id) { ArrayDeque() }
         val last = q.lastOrNull()
         if (last != null && last.t == t) return
@@ -20,9 +27,23 @@ class SpeedCache {
         }
     }
 
+    /** Drops tracks whose newest fix is older than [SPEED_TTL_MS]. The cutoff is measured against
+     *  the newest timestamp ever seen, never the incoming fix, so a backdated server `updatedAt`
+     *  cannot erase a live track. Throttled to once per [PRUNE_INTERVAL_MS]; the caller holds the
+     *  lock (only [record] calls this). */
+    private fun pruneExpired() {
+        val cutoff = newestT - SPEED_TTL_MS
+        val it = fixes.entries.iterator()
+        while (it.hasNext()) {
+            if ((it.next().value.lastOrNull()?.t ?: Long.MIN_VALUE) < cutoff) it.remove()
+        }
+    }
+
     @Synchronized
     fun clear() {
         fixes.clear()
+        newestT = 0L
+        lastPruneT = Long.MIN_VALUE
     }
 
     fun estimate(id: String, t: NormalizedThreat, props: ThreatProps): Double? =
@@ -79,5 +100,7 @@ class SpeedCache {
     companion object {
         private const val HEADING_MIN_METERS = 100.0
         private const val MAX_TRACKS = 500
+        private const val SPEED_TTL_MS = 30 * 60 * 1000L
+        private const val PRUNE_INTERVAL_MS = 60_000L
     }
 }

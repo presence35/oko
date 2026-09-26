@@ -7,8 +7,6 @@ import com.presaince.oko.engine.resolveOblastId
 import com.presaince.oko.engine.distanceFlat
 import com.presaince.oko.engine.matchOblast
 
-import kotlin.math.roundToInt
-
 import androidx.compose.runtime.Immutable
 data class FlourishRecord(
     val lat: Double,
@@ -47,8 +45,7 @@ data class ReplayProgress(
     val groupSize: Int,
     val bulletOverall: Int,
     val totalRecords: Int,
-    val groupType: ThreatType? = null,
-    val distanceKm: Int? = null
+    val groupType: ThreatType? = null
 ) {
     /** Overall show completion 0f..1f for the footer progress bar. */
     val fraction: Float
@@ -175,11 +172,6 @@ internal fun clusterFlourishByOblast(records: List<FlourishRecord>): List<List<F
 internal fun flourishGroupType(group: List<FlourishRecord>): ThreatType? {
     val types = group.map { it.type }.toSet()
     return if (types.size == 1) types.first() else null
-}
-
-internal fun flourishGroupDistanceKm(group: List<FlourishRecord>, focus: LatLng?): Int? {
-    if (focus == null || group.isEmpty()) return null
-    return group.map { distanceFlat(focus.lat, focus.lon, it.lat, it.lon) / 1000.0 }.average().roundToInt()
 }
 
 /** When a selected threat vanishes it shows the compact "shot-down" card and drops the *  selection only while the death animation is on and the map is the visible screen —

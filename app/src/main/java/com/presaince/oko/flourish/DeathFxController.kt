@@ -212,15 +212,12 @@ class DeathFxController(
     }
 
     /** Launch the tally-tap replay on the controller's scope, replacing any show in flight. */
-    fun startReplay(focus: LatLng?, records: List<FlourishRecord>) {
+    fun startReplay(records: List<FlourishRecord>) {
         if (!moraleEnabled.value) return
         replayJob?.cancel()
         _replayProgress.value = null
-        replayJob = scope.launch { replay(focus, records) }
+        replayJob = scope.launch { replay(records) }
     }
-
-    @Deprecated("Use focus overload", ReplaceWith("startReplay(null, records)"))
-    fun startReplay(records: List<FlourishRecord>) = startReplay(null, records)
 
     /**
      * Start a 3-second countdown before an auto-strike fires. [onFire] executes when the
@@ -480,7 +477,7 @@ class DeathFxController(
      * red alert ejects it (see [clear], which also cancels this show mid-flight). Launched via
      * [startReplay]; the caller gates on visibility/alert/lifecycle before invoking.
      */
-    suspend fun replay(focus: LatLng?, records: List<FlourishRecord>) {
+    suspend fun replay(records: List<FlourishRecord>) {
         if (!moraleEnabled.value) return
         val b = bridge() ?: return
         if (records.isEmpty()) return
@@ -548,8 +545,7 @@ class DeathFxController(
                     groupSize = group.size,
                     bulletOverall = index,
                     totalRecords = records.size,
-                    groupType = flourishGroupType(group),
-                    distanceKm = flourishGroupDistanceKm(group, focus)
+                    groupType = flourishGroupType(group)
                 )
                 strikeHaptics()
             }

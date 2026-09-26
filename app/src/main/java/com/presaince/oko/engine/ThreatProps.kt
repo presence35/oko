@@ -16,7 +16,10 @@ data class ThreatProps(
     val ghostCapMs: Long,
     val nominalSpeedMps: Double?,
     val horizonSec: Double,
-    val maxGhostMeters: Double
+    val maxGhostMeters: Double,
+    /** Intrinsic danger weight (0–10) used by [ThreatEngine.scoreThreat]. Plugin-provided like
+     *  every other per-type value — the engine holds no severity table of its own. */
+    val baseSeverity: Double = 4.0
 )
 
 val DEFAULT_THREAT_PROPS = ThreatProps(
@@ -27,5 +30,6 @@ val DEFAULT_THREAT_PROPS = ThreatProps(
     ghostCapMs = 900_000L,
     nominalSpeedMps = null,
     horizonSec = 300.0,
-    maxGhostMeters = 18_000.0
+    maxGhostMeters = 18_000.0,
+    baseSeverity = 4.0
 )

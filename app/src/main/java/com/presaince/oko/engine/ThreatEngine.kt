@@ -78,6 +78,17 @@ class ThreatEngine(
         val mapThreats = mutableListOf<NormalizedThreat>()
         val threatScores = mutableListOf<Double>()
 
+        // Official-alert facts: single derivation owned by the engine (mirror rule). The gate and
+        // the human-readable reason both come from here — consumers never re-implement alert
+        // matching. Orchestration (region latch, announce-once, sound policy) stays in AlertService.
+        val official = alerts.officialStateFor(focusToken, focusCityUa, cityScope)
+        val focusOblastAlertActive = official.level == AlertLevel.RED
+        val focusOblastYellowAlertActive = official.level == AlertLevel.YELLOW
+        val activeAlert = official.alert
+        val reasonToken = activeAlert?.canonicalOblastId()
+        var reasonBest: NormalizedThreat? = null
+        var reasonBestDistKm = Double.MAX_VALUE
+
         for (t in threats) {
             val props = propsFor(t.type)
             if (t.status == "resolved" || isGhost(t, props, now)) continue
@@ -92,14 +103,26 @@ class ThreatEngine(
             val predicted = speed?.let { predictPosition(t, it, props, now) }
                 ?: LatLng(t.lat, t.lon)
 
-            mapThreats.add(t.copy())
+            mapThreats.add(t)
 
             if (stale || focus == null) continue
-            if (t.advisory || t.areaOnly || t.type in silencedTypes) continue
+            if (t.advisory || t.areaOnly) continue
 
             val distKm = distanceHaversine(focus.lat, focus.lon, predicted.lat, predicted.lon) / 1000.0
             val speedKmh = speed?.times(3.6)
             val tier = holdTier(zoneTier(props, distKm, speedKmh, params), prevTiers[t.id], props, distKm, speedKmh, params)
+
+            // Attribution for an active official alert: the nearest in-zone threat of that oblast.
+            // Silenced types stay eligible — the siren is already ringing, so naming its cause
+            // re-alerts nobody (their marker is still on the map, just dimmed); hidden types are
+            // skipped before this pass, so they can never be named.
+            if (reasonToken != null && reasonEligible(t, tier, reasonToken) && distKm < reasonBestDistKm) {
+                reasonBestDistKm = distKm
+                reasonBest = t
+            }
+
+            // Silenced types are attributed above but never tiered into zones or scored.
+            if (t.type in silencedTypes) continue
 
             if (tier != null) {
                 val eta = etaMinutes(distKm, speedKmh)
@@ -123,25 +146,17 @@ class ThreatEngine(
             else -> null
         }
 
-        // Official-alert facts: single derivation owned by the engine (mirror rule). The gate,
-        // red-city labels and the human-readable reason all come from here — consumers never
-        // re-implement alert matching. Orchestration (region latch, announce-once, sound policy)
-        // stays in AlertService.
-        // One official fact, derived once: level views below are projections, never
-        // parallel matching rules, so trident/monitor/service can never diverge.
-        val official = alerts.officialStateFor(focusToken, focusCityUa, cityScope)
-        val focusOblastAlertActive = official.level == AlertLevel.RED
-        val focusOblastYellowAlertActive = official.level == AlertLevel.YELLOW
+        // One official fact, derived once: the level views and the reason below are projections of
+        // [official] (computed before the pass), never parallel matching rules.
         val cityAlerts = computeCityAlerts(alerts)
         val (fillOblastTokens, fillRaionKeys) =
             computeFillKeys(alerts.filter { it.level != "yellow" }, fillRegions = true)
         val (fillYellowOblastTokens, fillYellowRaionKeys) =
             computeFillKeys(alerts.filter { it.level == "yellow" }, fillRegions = true)
-        val activeAlert = official.alert
-        val (officialReason, reasonThreatId) = if (activeAlert != null) {
-            deriveOfficialAlertReason(activeAlert, threats, focus, params, lang, now)
-        } else {
-            null to null
+        val (officialReason, reasonThreatId) = when {
+            activeAlert == null || reasonToken == null -> null to null
+            reasonBest != null -> threatBody(reasonBest, lang) to reasonBest.id
+            else -> alertRegionName(activeAlert, lang) to null
         }
 
         return ThreatEvaluationResult(
@@ -170,14 +185,23 @@ class ThreatEngine(
      *  - RED takes precedence over YELLOW when multiple alerts hit the same city. */
     fun computeCityAlerts(alerts: List<OblastAlert>): Map<String, AlertLevel> {
         if (alerts.isEmpty()) return emptyMap()
+        // Index by canonical oblast: `coversCity` already requires same-region identity, so
+        // scanning only the city's own region group (Crimea/Sevastopol share one) is exactly
+        // equivalent to the full cross product, minus the product.
+        val byOblast = alerts.groupBy { it.canonicalOblastId() }
         return buildMap {
             for (city in Cities.ALL) {
+                val cityOblast = Cities.cityOblastId[city.nameUa] ?: continue
+                val groups = if (cityOblast in SHARED_ALERT_REGIONS) SHARED_ALERT_REGIONS
+                    else setOf(cityOblast)
                 var level: AlertLevel? = null
-                for (alert in alerts) {
-                    if (!alert.coversCity(city.nameUa)) continue
-                    val alertLevel = if (alert.level.equals("yellow", true))
-                        AlertLevel.YELLOW else AlertLevel.RED
-                    if (level == null || alertLevel == AlertLevel.RED) level = alertLevel
+                for (group in groups) {
+                    for (alert in byOblast[group] ?: continue) {
+                        if (!alert.coversCity(city.nameUa)) continue
+                        val alertLevel = if (alert.level.equals("yellow", true))
+                            AlertLevel.YELLOW else AlertLevel.RED
+                        if (level == null || alertLevel == AlertLevel.RED) level = alertLevel
+                    }
                 }
                 if (level != null) put(city.nameUa, level)
             }
@@ -226,16 +250,28 @@ class ThreatEngine(
         return fillOblastTokens to fillRaionKeys
     }
 
-    /** Human-readable attribution for an active official alert: the highest-scoring live threat
-     *  inside the user's configured zones, falling back to the transliterated region name when
-     *  nothing is in range (or there is no focus point to judge proximity by). */
+    /** Shared eligibility rule for naming a threat as an official alert's cause: active, and
+     *  inside the alert's oblast and the user's configured zones. Hidden types are filtered by
+     *  the caller; silenced types are deliberately eligible — naming the cause of a siren that is
+     *  already ringing is attribution, not a re-alert. */
+    private fun reasonEligible(t: NormalizedThreat, tier: ThreatZone?, token: String): Boolean =
+        tier != null && t.status == "active" &&
+            inOblast(t.region, t.district, t.locality, token)
+
+    /** Human-readable attribution for an active official alert: the nearest live threat inside
+     *  the user's configured zones, falling back to the transliterated region name when nothing is
+     *  in range (or there is no focus point to judge proximity by). Hidden types ([hiddenTypes])
+     *  are never named; silenced ones are (see [reasonEligible]). Used by consumers that derive a
+     *  reason for a region other than the evaluate() focus (AlertService's latched episode);
+     *  evaluate() folds the same rule into its single pass. */
     fun deriveOfficialAlertReason(
         alert: OblastAlert,
         threats: List<NormalizedThreat>,
         focus: LatLng?,
         params: ZoneParams,
         lang: AppLanguage,
-        now: Long
+        now: Long,
+        hiddenTypes: Set<String> = emptySet()
     ): Pair<String?, String?> {
         val token = alert.canonicalOblastId() ?: return null to null
         // No focus point → can't judge proximity; fall back to the alert name alone.
@@ -243,14 +279,15 @@ class ThreatEngine(
         var best: NormalizedThreat? = null
         var bestDistKm = Double.MAX_VALUE
         for (t in threats) {
-            if (t.status != "active" || t.advisory || t.areaOnly) continue
-            if (isStale(t, propsFor(t.type), now)) continue
-            if (!inOblast(t.region, t.district, t.locality, token)) continue
+            if (t.advisory || t.areaOnly) continue
+            if (t.type in hiddenTypes) continue
+            val props = propsFor(t.type)
+            if (isStale(t, props, now)) continue
             val distKm = distanceHaversine(focus.lat, focus.lon, t.lat, t.lon) / 1000.0
             // Only threats inside the user's configured zones qualify as the "reason" — a drone
             // 100km away in the same oblast must not be announced as if it were local.
-            val props = propsFor(t.type)
-            if (zoneTier(props, distKm, t.speedKmh, params) == null) continue
+            val tier = zoneTier(props, distKm, t.speedKmh, params)
+            if (!reasonEligible(t, tier, token)) continue
             if (distKm < bestDistKm) {
                 bestDistKm = distKm
                 best = t
@@ -423,7 +460,7 @@ class ThreatEngine(
             else -> 0.0
         }
         if (distanceFactor == 0.0) return 0.0
-        val baseSeverity = BASE_SEVERITY[t.type] ?: 4.0
+        val baseSeverity = props.baseSeverity
         return (baseSeverity
             * distanceFactor
             * reliabilityFactor(Reliability.fromApi(t.reliability))
@@ -469,17 +506,6 @@ class ThreatEngine(
          *  last confirmed fix — a "relevant distance" at the app's map scale, so drift never looks
          *  like the threat crossed the country. */
         const val DRIFT_MAX_METERS = 5_000.0
-
-        val BASE_SEVERITY: Map<String, Double> = mapOf(
-            "ballistic" to 10.0,
-            "cruise" to 8.0,
-            "aviation" to 7.0,
-            "shahed" to 5.0,
-            "kab" to 4.0,
-            "unknown" to 4.0,
-            "fpv" to 3.0,
-            "recon" to 2.0
-        )
 
         private fun reliabilityFactor(r: Reliability): Double = when (r) {
             Reliability.HIGH -> 1.0

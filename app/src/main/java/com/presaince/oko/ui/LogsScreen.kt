@@ -173,6 +173,14 @@ private data class ConnectionRow(val entry: ConnLogEntry) : LogRow {
     override val atMillis: Long get() = entry.atMillis
 }
 
+/** Stable list identity for a row. A live connection episode and its committed counterpart
+ *  share atMillis + status, so Compose keeps the row in place and adds the new recovery row
+ *  instead of remounting the list. */
+private fun LogRow.stableKey(): String = when (this) {
+    is DecisionRow -> "dec-${entry.atMillis}-${entry.kind.name}-${entry.threatId}-${entry.tier?.name}-${entry.reason.name}"
+    is ConnectionRow -> "conn-${entry.atMillis}-${entry.status.name}"
+}
+
 /**
  * Logs drop-down sheet: a top sheet that slides DOWN from the top bar (mirroring
  * how the alert zones sheet slides UP from the bottom).
@@ -493,18 +501,18 @@ modifier = Modifier
                             item(key = "sub-${group.id}-$type") {
                                 TypeSubHeader(TypeSubGroup(type, subEntries), lang, iconSet)
                             }
-                            itemsIndexed(subEntries, key = { index, entry -> "sub-${group.id}-$type-$index-${entry.atMillis}-${entry.threatId}-${entry.kind.name}" }) { _, entry ->
+                            itemsIndexed(subEntries, key = { _, entry -> "sub-${group.id}-$type-${entry.atMillis}-${entry.threatId}-${entry.kind.name}-${entry.reason.name}" }) { _, entry ->
                                 DecisionCard(entry, s, lang, now, iconSet)
                             }
                         }
                 } else {
-                    itemsIndexed(group.entries, key = { index, entry -> "group-${group.id}-$index-${entry.atMillis}-${entry.threatId}-${entry.kind.name}" }) { _, entry ->
+                    itemsIndexed(group.entries, key = { _, entry -> "group-${group.id}-${entry.atMillis}-${entry.threatId}-${entry.kind.name}-${entry.reason.name}" }) { _, entry ->
                         DecisionCard(entry, s, lang, now, iconSet)
                     }
                 }
             }
         } else {
-            itemsIndexed(visible, key = { index, row -> "flat-$index-${row.atMillis}-${row::class.simpleName}" }) { _, row ->
+            itemsIndexed(visible, key = { _, row -> row.stableKey() }) { _, row ->
                 LogRowCard(row, s, lang, now, iconSet)
             }
         }
@@ -571,8 +579,8 @@ private fun buildRows(
     showFlourish: Boolean
 ): List<LogRow> {
     if (!isDecisions) {
-        val connRows = (ConnectionLog.currentEpisode(now)?.let { listOf(ConnectionRow(it)) }
-            ?: emptyList()) + connEntries.map { ConnectionRow(it) }
+        val live = ConnectionLog.currentEpisode(now)?.takeIf { now - it.atMillis >= ConnectionLog.LIVE_GRACE_MS }
+        val connRows = (live?.let { listOf(ConnectionRow(it)) } ?: emptyList()) + connEntries.map { ConnectionRow(it) }
         return if (newestFirst) connRows.sortedByDescending { it.atMillis } else connRows.sortedBy { it.atMillis }
     }
     var filtered: List<DebugLogEntry> = decisions
@@ -600,10 +608,6 @@ private fun buildGroups(
         ProximitySort.DISTANCE -> list.sortedWith(compareBy<DebugLogEntry> { it.distanceKm ?: Double.MAX_VALUE }.thenByDescending { it.atMillis })
         ProximitySort.AGE -> if (newestFirst) list.sortedByDescending { it.atMillis } else list.sortedBy { it.atMillis }
     }
-    fun officialAccent(rows: List<DebugLogEntry>): GroupAccent {
-        val levels = rows.filter { it.kind == DebugLogKind.OFFICIAL_ON }.mapNotNull { it.level }
-        return if (levels.isNotEmpty() && levels.all { it == AlertLevel.YELLOW }) GroupAccent.YELLOW else GroupAccent.OFFICIAL
-    }
     return when (groupBy) {
         GroupBy.TIMELINE -> listOf(LogGroupSpec("timeline", null, null, null, rows, subTypes = false))
         GroupBy.PROXIMITY -> {
@@ -618,7 +622,7 @@ private fun buildGroups(
             val yellow = sortProximity(rest.filter { it.tier == ThreatZone.OUTER })
             val oblast = sortProximity(rest.filter { it.tier == null })
             buildList {
-                if (official.isNotEmpty()) add(LogGroupSpec("official", "official", officialAccent(official), null, official, subTypes = false))
+                if (official.isNotEmpty()) add(LogGroupSpec("official", "official", GroupAccent.OFFICIAL, null, official, subTypes = false))
                 if (flourish.isNotEmpty()) add(LogGroupSpec("flourish", "flourish", null, null, flourish, subTypes = false))
                 if (red.isNotEmpty()) add(LogGroupSpec("red", "red", GroupAccent.RED, null, red, subTypes = true))
                 if (yellow.isNotEmpty()) add(LogGroupSpec("yellow", "yellow", GroupAccent.YELLOW, null, yellow, subTypes = true))
@@ -630,7 +634,7 @@ private fun buildGroups(
             val flourish = if (showFlourish) rows.filter { it.kind == DebugLogKind.FLOURISH } else emptyList()
             val typed = rows.filter { it !in official && it.threatType != null && it.kind != DebugLogKind.FLOURISH }
             buildList {
-                if (official.isNotEmpty()) add(LogGroupSpec("official", "official", officialAccent(official), null, official, subTypes = false))
+                if (official.isNotEmpty()) add(LogGroupSpec("official", "official", GroupAccent.OFFICIAL, null, official, subTypes = false))
                 if (flourish.isNotEmpty()) add(LogGroupSpec("flourish", "flourish", null, null, flourish, subTypes = false))
                 typed.groupBy { it.threatType!! }
                     .entries
@@ -826,7 +830,7 @@ private fun LegendItem(painter: Painter, label: String, tint: Color = MaterialTh
 @Composable
 private fun GroupHeader(group: LogGroupSpec, s: Strings.StringSet) {
     val accent = when (group.accent) {
-        GroupAccent.OFFICIAL, GroupAccent.RED -> DebugRed
+        GroupAccent.RED -> DebugRed
         GroupAccent.YELLOW -> DebugAmber
         GroupAccent.OBLAST -> DebugBlue
         else -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -1276,9 +1280,18 @@ val accent = when (entry.status) {
                     label,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = accent,
-                    modifier = Modifier.weight(1f)
+                    color = accent
                 )
+                entry.transport?.let { transport ->
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        painter = painterResource(transport.iconRes()),
+                        contentDescription = transport.label(s),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                Spacer(Modifier.weight(1f))
                 Text(
                     formatAlertAge(now, entry.atMillis, s),
                     style = MaterialTheme.typography.bodySmall,
@@ -1309,23 +1322,6 @@ val accent = when (entry.status) {
                     style = MaterialTheme.typography.bodySmall,
                     color = DebugAmber
                 )
-            }
-            entry.transport?.let { transport ->
-                Spacer(Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        painter = painterResource(transport.iconRes()),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        transport.label(s),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
         }
     }

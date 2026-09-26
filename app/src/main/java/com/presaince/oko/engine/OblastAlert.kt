@@ -38,7 +38,7 @@ data class OblastAlert(
 
 /** Canonical oblast ids that share one air-raid coverage group: Crimea and Sevastopol ring
  *  together. Kyiv City is already merged into `kyivska` by [CompactOblastBoundaries]. */
-private val SHARED_ALERT_REGIONS: Set<String> = setOf("krym", "sevastopol")
+internal val SHARED_ALERT_REGIONS: Set<String> = setOf("krym", "sevastopol")
 
 /** True when two canonical oblast ids denote the same alert region. Exact equality, except the
  *  shared Crimea/Sevastopol group. Never a substring. */

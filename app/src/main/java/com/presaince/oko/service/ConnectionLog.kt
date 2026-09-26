@@ -34,13 +34,16 @@ data class ConnLogEntry(
  * survives app/service restarts. Fed by [ConnectionSupervisor]'s StateFlow bridge. The currently
  * in-progress offline episode is kept separately (see [currentEpisode]) so the popup can show
  * a live running duration, and is committed to the log the moment the status changes again —
- * sub-grace flaps (under [PRODUCTION_GRACE_MS]) never hit the log or disk.
+ * sub-grace flaps (under [LIVE_GRACE_MS]) never hit the log or disk.
  */
 object ConnectionLog {
 
     private const val MAX_ENTRIES = 50
     private const val LINE_SEP = '\n'
-    private const val PRODUCTION_GRACE_MS = 15_000L
+
+    /** Minimum offline duration for an episode to be shown live and committed; shorter flaps
+     *  never hit the log or disk (overnight battery guard on flaky connections). */
+    const val LIVE_GRACE_MS = 15_000L
 
     private val _entries = MutableStateFlow<List<ConnLogEntry>>(emptyList())
     val entries: StateFlow<List<ConnLogEntry>> = _entries.asStateFlow()
@@ -84,7 +87,7 @@ object ConnectionLog {
     ) {
         val prev = lastStatus
         lastStatus = status
-        val t = commitLogState(prev, status, now, pending, _entries.value, MAX_ENTRIES, PRODUCTION_GRACE_MS, activeSource, transport) ?: return
+        val t = commitLogState(prev, status, now, pending, _entries.value, MAX_ENTRIES, LIVE_GRACE_MS, activeSource, transport) ?: return
         _entries.value = t.entries
         pending = t.nextPending
         if (t.persistLog) persist()
@@ -146,9 +149,9 @@ internal data class LogTransition(
  * Pure episode-commit decision for [ConnectionLog.observe] (extracted so the grace-window and
  * ring-buffer rules are unit-testable without DataStore). Returns null when the status didn't
  * actually change. A completed offline episode is committed to the ring buffer once it has
- * outlasted [graceMs] (the production call passes zero, so every episode is recorded); a
- * recovery to [ConnStatus.ONLINE] adds a bracketing row when the episode was committed.
- * [maxEntries] caps the ring buffer.
+ * outlasted [graceMs] (production passes [ConnectionLog.LIVE_GRACE_MS], 15s, so short flaps
+ * are dropped); a recovery to [ConnStatus.ONLINE] adds a bracketing row when the episode was
+ * committed. [maxEntries] caps the ring buffer.
  */
 internal fun commitLogState(
     prevStatus: ConnStatus?,

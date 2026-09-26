@@ -150,18 +150,20 @@ For each threat:
   3. Record fix in speed cache (if not stale)
   4. Compute predicted position (if flying)
   5. Add to mapThreats (all visible threats, raw fixes)
-  6. Skip stale, advisory, areaOnly, silenced types, no focus → no zone evaluation
-  7. Compute distance (Haversine)
-  8. Compute distance from predicted position (all types)
-  9. Compute speed (server > measured > nominal from ThreatProps)
-  10. Call zoneTier()
-  11. If tiered: compute score, add to zoneThreatsMap, categorize inner/outer
-  12. Return EvaluationResult
+  6. Skip stale, advisory, areaOnly, no focus → no zone evaluation
+  7. Compute distance from the predicted position (Haversine)
+  8. Compute speed (server > measured > nominal from ThreatProps)
+  9. Call zoneTier() + holdTier()
+  10. If in-zone and inside the active official alert's oblast → reason candidate (nearest wins);
+      hidden types never reach here, silenced ones stay eligible (attribution, not a re-alert)
+  11. Silenced types stop here: attributed above, but never tiered into zones or scored
+  12. If tiered: compute score, add to zoneThreatsMap, categorize inner/outer
+  13. Return EvaluationResult
 
-Official-alert facts (same pass, engine-owned):
-  13. focusOblastAlertActive = officialAlertActiveFor(alerts, focusToken, focusCityUa, cityScope)
-  14. redCities = computeRedCities(alerts) — region-precise labels
-  15. officialReason/reasonThreatId = deriveOfficialAlertReason(first oblast-matching alert, ...)
+Official-alert facts (engine-owned, computed before/within the same pass):
+  14. focusOblastAlertActive / focusOblastYellowAlertActive = officialStateFor(alerts, focusToken, focusCityUa, cityScope)
+  15. cityAlerts = computeCityAlerts(alerts) — region-precise labels (redCities is its RED projection)
+  16. officialReason/reasonThreatId = the nearest candidate, else the region name, else null (no focus/token)
 ```
 
 ### `zoneTier(props, distKm, speedKmh, params)` — Zone Classification
@@ -234,7 +236,7 @@ Null when speedKmh is null or <= 0.
 
 ```
 Multiplicative combination:
-  BASE_SEVERITY[type] × distanceFactor × reliabilityFactor × confirmFactor
+  props.baseSeverity × distanceFactor × reliabilityFactor × confirmFactor
   × countFactor × qualityFactor × staleFactor × etaFactor
 
 distanceFactor: 1.0 in red, 0.65 in yellow, 0.0 beyond
@@ -278,9 +280,13 @@ regardless of the day setting.
 ### `deriveOfficialAlertReason(alert, threats, focus, params, lang, now)` — Human-Readable Reason
 
 ```
-ThreatEngine method. Finds the highest-scoring active threat in the alert's oblast that falls
-inside the user's configured zones; falls back to the region name when nothing is in range or
-there is no focus point. The region name renders in the app language (UA raw, EN transliterated,
+ThreatEngine method. Finds the nearest active threat in the alert's oblast that falls
+inside the user's configured zones; falls back to the region name when nothing is in range
+or there is no focus point. Hidden types are never named; silenced types are, because
+naming the cause of a siren that is already ringing is attribution, not a re-alert.
+`evaluate` applies the same rule during its single pass (`reasonEligible`); this method is
+for consumers deriving a reason for a region other than the evaluate focus (AlertService's
+latched episode). The region name renders in the app language (UA raw, EN transliterated,
 RU a real Russian form).
 Returns (formatted reason string, threat ID).
 ```

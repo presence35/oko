@@ -38,10 +38,11 @@ const val DEATH_EXPLOSION_LEN_MS = DEATH_DURATION_MS - DEATH_EXPLOSION_START_MS
  *  after impact, then gone — the show pans on instead of lingering through every burst. */
 private const val QUICK_EXPLOSION_LEN_MS = 800L
 
-/** Concurrent-death ceiling. Pre-spawning a whole replay group (≤21 targets) while the
- *  previous group's flashes are still fading needs real headroom — the old hard-coded 6
- *  silently ate bullets mid-show. */
-private const val MAX_DEATHS = 32
+/** Concurrent-death ceiling. Pre-spawning a whole replay group while the previous group's
+ *  flashes are still fading needs real headroom — the old hard-coded 6 silently ate bullets
+ *  mid-show (dropped bullets still buzzed, because the replay loop haptics every planned shot).
+ *  Set absurdly high so a full overnight show always plays; only a week-plus backlog could hit it. */
+private const val MAX_DEATHS = 420
 
 private data class Shard(
     val dx: Float, val dy: Float,

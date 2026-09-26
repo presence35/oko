@@ -909,9 +909,109 @@ class ThreatEngineTest {
         }
     }
 
+    @Test
+    fun `computeCityAlerts - Crimea and Sevastopol share one coverage group`() {
+        val alert = OblastAlert(
+            key = "krym", name = "Автономна Республіка Крим", oblast = "АР Крим",
+            since = null, wide = true, level = "red"
+        )
+        val result = engine.computeCityAlerts(listOf(alert))
+        val crimean = Cities.ALL.filter {
+            CompactOblastBoundaries.canonicalId(Cities.cityOblastId[it.nameUa] ?: "") in
+                setOf("krym", "sevastopol")
+        }
+        assertTrue("expected Crimea/Sevastopol cities", crimean.isNotEmpty())
+        for (city in crimean) {
+            assertEquals("city ${city.nameUa}", AlertLevel.RED, result[city.nameUa])
+        }
+    }
+
+    @Test
+    fun `computeCityAlerts - alert with no canonical oblast tints nothing`() {
+        val alert = OblastAlert(
+            key = "nonexistent-region", name = "Nonexistent", oblast = "Nowhere",
+            since = null, wide = true, level = "red"
+        )
+        assertNull(CompactOblastBoundaries.canonicalId(alert.key))
+        assertTrue(engine.computeCityAlerts(listOf(alert)).isEmpty())
+    }
+
+    @Test
+    fun `scoreThreat - severity comes from props, not the type name`() {
+        val t = makeThreat(type = "unknown", speedKmh = null)
+        val now = System.currentTimeMillis()
+        val fromDefault = engine.scoreThreat(
+            t, engine.propsFor("unknown"), 5.0, null, params.slowRedKm, params.slowYellowKm, now
+        )
+        val doubled = engine.scoreThreat(
+            t, NEPTUN_TYPES.getValue("unknown").copy(baseSeverity = 8.0),
+            5.0, null, params.slowRedKm, params.slowYellowKm, now
+        )
+        assertEquals(fromDefault * 2.0, doubled, 1e-9)
+        assertEquals(10.0, NEPTUN_TYPES.getValue("ballistic").baseSeverity, 1e-9)
+        assertEquals(2.0, NEPTUN_TYPES.getValue("recon").baseSeverity, 1e-9)
+    }
+
+    @Test
+    fun `scoreThreat - absent catalog falls back to the default severity`() {
+        val t = makeThreat(type = "made-up", speedKmh = null)
+        val empty = ThreatEngine()
+        assertEquals(4.0, empty.propsFor("made-up").baseSeverity, 1e-9)
+        val score = empty.scoreThreat(
+            t, empty.propsFor("made-up"), 5.0, null,
+            params.slowRedKm, params.slowYellowKm, System.currentTimeMillis()
+        )
+        assertTrue("default severity must still score", score > 0.0)
+    }
+
+    @Test
+    fun `speedCache - prunes tracks idle past the TTL and keeps live ones`() {
+        val props = NEPTUN_TYPES.getValue("shahed")
+        val idle = makeThreat(id = "idle", speedKmh = null)
+        val live = makeThreat(id = "live", speedKmh = null)
+        engine.speedCache.record("idle", 1_000L, 50.0, 30.0)
+        engine.speedCache.record("idle", 61_000L, 50.01, 30.0)
+        engine.speedCache.record("live", 1_740_000L, 51.0, 31.0)
+        engine.speedCache.record("live", 1_800_000L, 51.01, 31.0)
+        assertEquals(SpeedSource.RECORDED, engine.speedCache.estimateWithSource("idle", idle, props)!!.second)
+
+        // 40 minutes in: idle's newest fix is older than the TTL, live's is not.
+        engine.speedCache.record("pulse", 2_400_001L, 52.0, 32.0)
+
+        assertEquals(SpeedSource.TYPICAL, engine.speedCache.estimateWithSource("idle", idle, props)!!.second)
+        assertEquals(SpeedSource.RECORDED, engine.speedCache.estimateWithSource("live", live, props)!!.second)
+    }
+
+    @Test
+    fun `evaluate - reason names a silenced type but never a hidden one`() {
+        val now = System.currentTimeMillis()
+        val alert = OblastAlert(key = "odesa", name = "Одеська область", oblast = "Одеська", since = "x")
+        val threat = makeThreat(
+            id = "odesa-drone", type = "shahed", region = "Одеська",
+            lat = 46.48, lon = 30.73, speedKmh = 180.0,
+            updatedAtMillis = now - 30_000, confirmedAtMillis = now - 60_000
+        )
+        val silenced = engine.evaluate(
+            threats = listOf(threat), focus = LatLng(46.48, 30.73), params = params,
+            hiddenTypes = emptySet(), silencedTypes = setOf("shahed"), now = now,
+            alerts = listOf(alert), focusToken = "Одеськ"
+        )
+        assertEquals("silenced types stay attributed", "odesa-drone", silenced.reasonThreatId)
+        assertTrue("a silenced type must not enter zones", silenced.zoneThreats.isEmpty())
+
+        val hidden = engine.evaluate(
+            threats = listOf(threat), focus = LatLng(46.48, 30.73), params = params,
+            hiddenTypes = setOf("shahed"), silencedTypes = emptySet(), now = now,
+            alerts = listOf(alert), focusToken = "Одеськ"
+        )
+        assertNull("a hidden type must never be named", hidden.reasonThreatId)
+        assertNotNull("falls back to the region name", hidden.officialReason)
+    }
+
     private fun makeThreat(
         id: String = "test-${System.nanoTime()}",
         type: String = "shahed",
+        region: String? = null,
         lat: Double = 50.0,
         lon: Double = 30.0,
         speedKmh: Double? = 180.0,
@@ -926,7 +1026,7 @@ class ThreatEngineTest {
         id = id,
         type = type,
         title = "Test",
-        region = null,
+        region = region,
         district = null,
         locality = null,
         lat = lat,

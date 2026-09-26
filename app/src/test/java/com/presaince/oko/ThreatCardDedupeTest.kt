@@ -13,7 +13,7 @@ class ThreatCardDedupeTest {
                 "Drone - Kobleve, Mykolaiv oblast",
                 typeLabel = "Drone",
                 labelEn = "Drone",
-                regionText = "Kobleve · Mykolaiv oblast"
+                shownRegion = "Kobleve · Mykolaiv oblast"
             )
         )
     }
@@ -46,7 +46,7 @@ class ThreatCardDedupeTest {
                 "БпЛА - Коблеве, Миколаївська область",
                 typeLabel = "БпЛА",
                 labelEn = "Drone",
-                regionText = "Коблеве · Миколаївська область"
+                shownRegion = "Коблеве · Миколаївська область"
             )
         )
     }
@@ -75,5 +75,17 @@ class ThreatCardDedupeTest {
         assertTrue(
             repeatsShownInfo("Guided bomb heading toward Khmelnytskyi", "KAB", "KAB", "Khmelnytskyi")
         )
+    }
+
+    @Test
+    fun translatedCourseVersusTransliteratedRegionIsHidden() {
+        // Real pipeline: NEPTUN sends Ukrainian course + region; the EN card renders both
+        // before deduping. Comparing a translated course against a raw region (the old bug)
+        // never matched, so the duplicate survived in EN/RU.
+        val course = translateCourseAssessment(
+            "БпЛА — Олександрія, Кіровоградська область", AppLanguage.EN
+        )!!
+        val region = Transliteration.transliterate("Олександрія · Кіровоградська область")
+        assertTrue(repeatsShownInfo(course, "Drone", "Drone", region))
     }
 }

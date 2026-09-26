@@ -252,7 +252,7 @@ fun ThreatPopupCard(
         }
         val shownCourse = translateCourseAssessment(threat.explanationShort, lang)
             ?.let { firstSentence(it) }
-            ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, regionText) }
+            ?.takeUnless { repeatsShownInfo(it, typeLabel, typeInfo.labelEn, shownRegion) }
         shownCourse to shownRegion
     }
     val (shownCourse, shownRegion) = cardText
@@ -535,8 +535,10 @@ private fun firstSentence(text: String): String {
 private val WhitespaceRun = Regex("\\s+")
 
 /** True when the course line carries nothing beyond the type label and the place names
- *  already shown in the header: deleting those leaves no real words behind. */
-internal fun repeatsShownInfo(course: String, typeLabel: String, labelEn: String, regionText: String): Boolean {
+ *  already shown in the header: deleting those leaves no real words behind. Both operands
+ *  must already be rendered in the card's language (a translated course compared against a
+ *  raw region never matched, so duplicates survived in EN/RU). */
+internal fun repeatsShownInfo(course: String, typeLabel: String, labelEn: String, shownRegion: String): Boolean {
     fun norm(s: String): String = s.lowercase()
         .map { if (it.isLetterOrDigit()) it else ' ' }
         .joinToString("")
@@ -544,10 +546,9 @@ internal fun repeatsShownInfo(course: String, typeLabel: String, labelEn: String
         .trim()
     var rest = " ${norm(course)} "
     val drops = (listOf(typeLabel, labelEn) +
-            listOf("БпЛА", "Shahed", "Шахед", "Шахеди", "Drone", "Дрон") +
-            listOf("guided bomb", "guided bombs", "cruise missile", "ballistic missile", "high-speed target") +
+            COURSE_TYPE_NAMES +
             listOf("heading toward", "moving toward", "in the area of", "from the direction of") +
-            regionText.split('·', ','))
+            shownRegion.split('·', ','))
         .map { norm(it) }
         .filter { it.isNotBlank() }
         .sortedByDescending { it.length }

@@ -46,6 +46,7 @@ import com.presaince.oko.Transliteration
 import com.presaince.oko.ThreatType
 import com.presaince.oko.engine.ThreatZone
 import com.presaince.oko.engine.toThreatType
+import com.presaince.oko.engine.toEngineString
 import com.presaince.oko.engine.inOblast
 import com.presaince.oko.engine.alertRegionName
 import com.presaince.oko.engine.threatBody
@@ -268,6 +269,7 @@ class AlertService : Service() {
         val gpsFixMissing: Boolean = false,
         val nightActive: Boolean,
         val enabled: Set<ThreatType>,
+        val hiddenTypes: Set<String>,
         val notifyPolicyEnabled: Boolean,
         val zonePolicy: ZonePolicy,
         val digestMax: Int,
@@ -540,6 +542,8 @@ val mappedThreats = registry.allThreats.map { list ->
                 val officialSirenOverride = if (nightActive) p.nightOfficialSirenOverride else p.sirenOverride
 
                 val enabled = p.alertEnabledTypes
+                val hiddenTypeStrings = (ThreatType.values().toSet() - p.mapVisibleTypes)
+                    .map { it.toEngineString() }.toSet()
                 val threats = rawThreats.filterValues { it.type.toThreatType() in enabled }
 
                 val focus = resolveFocus(p.followMe, gps, LocationTracker.isFresh(now), p.pinnedCity)
@@ -572,11 +576,12 @@ val mappedThreats = registry.allThreats.map { list ->
                 val (officialReason, officialReasonThreatId) = if (activeOfficialAlert != null) {
                     engine.deriveOfficialAlertReason(
                         activeOfficialAlert,
-                        threats.values.toList(),
+                        rawThreats.values.toList(),
                         focusLoc,
                         params,
                         p.language,
-                        now
+                        now,
+                        hiddenTypes = hiddenTypeStrings
                     )
                 } else {
                     null to null
@@ -632,6 +637,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     gpsFixMissing = gpsFixMissing,
                     nightActive = nightActive,
                     enabled = enabled,
+                    hiddenTypes = hiddenTypeStrings,
                     notifyPolicyEnabled = p.notifyPolicyEnabled,
                     zonePolicy = p.zonePolicy,
                     digestMax = p.digestMax,
@@ -744,7 +750,10 @@ val mappedThreats = registry.allThreats.map { list ->
         val effSince = if (latchedAlive) latched!!.since else state.focusOblastAlertSince
         val effAlert = if (latchedAlive) state.alerts.officialStateFor(latched!!.token, null, false).alert else null
         val (effReason, effReasonId) = if (latchedAlive && effAlert != null) {
-            engine.deriveOfficialAlertReason(effAlert, all.values.toList(), state.focusLocation, state.params, state.lang, now)
+            engine.deriveOfficialAlertReason(
+                effAlert, state.rawThreats.values.toList(), state.focusLocation,
+                state.params, state.lang, now, hiddenTypes = state.hiddenTypes
+            )
         } else {
             state.officialReason to state.officialReasonThreatId
         }

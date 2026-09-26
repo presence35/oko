@@ -29,13 +29,11 @@ internal val FOOTER_BAND_DP = 60.dp
 
 private fun replayLine(rp: ReplayProgress, language: AppLanguage): String {
     val s = Strings.get(language)
-    val suffix = rp.distanceKm?.let { flourishDistanceSuffix(it, language) }.orEmpty()
-    val subject = rp.groupType?.let { t ->
+    return rp.groupType?.let { t ->
         val info = ThreatTypeCatalog.INFO.getValue(t)
         val label = info.label(language)
         "${s.flourishResolvingVerb} $label"
     } ?: resolvingThreatsPhrase(rp.groupSize, language)
-    return subject + suffix
 }
 
 @Composable

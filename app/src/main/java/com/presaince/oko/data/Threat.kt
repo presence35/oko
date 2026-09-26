@@ -358,6 +358,31 @@ private val COURSE_GLOSSARY: List<Pair<String, String>> = listOf(
     "аеробалістичних" to "aeroballistic"
 )
 
+/** Course-prose type terms the EN fallback glossary emits; the UA key and its EN value are
+ *  both used to recognise a course line that only restates the threat type. */
+private val COURSE_TYPE_GLOSSARY_KEYS = listOf(
+    "шахед", "шахеди", "крилата ракета", "балістична ракета", "керована авіабомба", "КАБи", "швидкісна ціль"
+)
+
+/**
+ * Every UA/EN name a threat type can appear under in NEPTUN course prose: all catalog labels
+ * plus the type terms the fallback glossary translates. Single owner for the card's course-line
+ * dedupe — extend this, never a UI-local list. Generic glossary words ("missile", "course") are
+ * deliberately excluded: they carry real information and must survive.
+ */
+val COURSE_TYPE_NAMES: Set<String> = mutableSetOf<String>().apply {
+    ThreatTypeCatalog.INFO.values.forEach { info ->
+        add(info.labelUa)
+        add(info.labelEn)
+        info.shortLabelUa?.let { add(it) }
+        info.shortLabelEn?.let { add(it) }
+    }
+    COURSE_TYPE_GLOSSARY_KEYS.forEach { ua ->
+        add(ua)
+        COURSE_GLOSSARY.firstOrNull { it.first == ua }?.let { add(it.second) }
+    }
+}
+
 /**
  * Common (non-place) Ukrainian words that carry real meaning for an EN reader and are
  * translated, not transliterated — "морем" → "morem" would be pointless. Looked up

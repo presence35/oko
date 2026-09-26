@@ -748,7 +748,7 @@ LaunchedEffect(selectedId) {
                 showToast(String.format(strings.flourishDisabledToastFormat, strings.deathAnimationTitle))
                 DebugLog.recordFlourish(DebugLogReason.TOGGLE_OFF, now = System.currentTimeMillis())
             } else {
-                deathFx.startReplay(focusLocationState, flourishShow.records)
+                deathFx.startReplay(flourishShow.records)
             }
         }
     }
