@@ -37,13 +37,13 @@ class NeptunDecoder(
         private val EXPLICIT_GROUP_COUNT_REGEX = Regex("""\((\d+)(?:\+\??)?\)""")
 
         // Group formation semantics in titles
-        private val GROUP_PAIR_REGEX = Regex("""(?iu)\bпара\b""")
-        private val GROUP_SWARM_REGEX = Regex("""(?iu)\bрій\b""")
-        private val GROUP_CLUSTER_REGEX = Regex("""(?iu)\b(?:група|хвиля)\b""")
+        private val GROUP_PAIR_REGEX = Regex("""(?iuU)\bпара\b""")
+        private val GROUP_SWARM_REGEX = Regex("""(?iuU)\bрій\b""")
+        private val GROUP_CLUSTER_REGEX = Regex("""(?iuU)\b(?:група|хвиля)\b""")
 
         // Words denoting inherently single threats where upstream multi-counts represent leaked artifacts
         private val SINGULAR_TITLE_REGEX = Regex(
-            """(?iu)\b(?:ракета|крилата ракета|балістика|бпла|шахед|дрон|каб|керована авіабомба|міг-?31|літак|розвідник)\b"""
+            """(?iuU)\b(?:ракета|крилата ракета|балістика|бпла|шахед|дрон|каб|керована авіабомба|міг-?31|літак|розвідник)\b"""
         )
 
         /**

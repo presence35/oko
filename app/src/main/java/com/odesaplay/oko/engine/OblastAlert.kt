@@ -85,8 +85,7 @@ fun OblastAlert.isOblastWide(): Boolean {
     if (k.contains("область") || n.contains("область") ||
         k.contains("республіка") || n.contains("республіка") ||
         k.contains("автономна") || n.contains("автономна") ||
-        k == "м. київ" || n == "м. київ" || k == "київ" || n == "київ" || k == "kyiv" ||
-        k == "м. севастополь" || n == "м. севастополь" || k == "севастополь" || n == "севастополь"
+        k == "м. київ" || n == "м. київ" || k == "київ" || n == "київ" || k == "kyiv"
     ) return true
 
     // Detect oblast-wide adjectival names (e.g. "Харківська", "odeska") that are not raions/hromadas

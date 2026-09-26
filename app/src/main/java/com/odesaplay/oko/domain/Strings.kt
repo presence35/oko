@@ -1422,7 +1422,7 @@ fun formatAlertAge(nowMillis: Long, atMillis: Long, s: Strings.StringSet): Strin
         secs < 3600 -> "${secs / 60}${s.alertAgeMinSuffix}"
         else -> "${secs / 3600}${s.alertAgeHrSuffix}"
     }
-    return "$compact ${s.alertAgeAgo}"
+    return compact
 }
 
 /**

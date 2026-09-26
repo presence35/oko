@@ -314,9 +314,9 @@ internal val Russian: Strings.StringSet = Strings.StringSet(
         hapticsDesc = "Легкий виброотклик при нажатиях в приложении.",
         vibrationUrgent = "Срочная",
         logDistanceFormat = "%1\$d км",
-        alertAgeSecSuffix = "с",
-        alertAgeMinSuffix = "м",
-        alertAgeHrSuffix = "ч",
+        alertAgeSecSuffix = " сек",
+        alertAgeMinSuffix = " мин",
+        alertAgeHrSuffix = " ч",
         alertAgeAgo = "назад",
         logsTitle = "Журнал",
         logsFilterConnections = "Соединения",
@@ -671,8 +671,8 @@ internal val Russian: Strings.StringSet = Strings.StringSet(
     wordForms = Strings.WordForms(
         sources = listOf("источник", "источника", "источников"),
         resolvedThreats = listOf("%d угроза нейтрализована", "%d угрозы нейтрализовано", "%d угроз нейтрализовано"),
-        resolvingThreats = listOf("Нейтрализация %d угрозы", "Нейтрализация %d угроз", "Нейтрализация %d угроз"),
-        preciseGps = listOf("Точный GPS: %d минуту назад", "Точный GPS: %d минуты назад", "Точный GPS: %d минут назад"),
+        resolvingThreats = listOf("Resolving %d threat", "Resolving %d threats", "Resolving %d threats"),
+        preciseGps = listOf("Precise GPS: %d min ago", "Precise GPS: %d min ago", "Precise GPS: %d min ago"),
     ),
     calmMessages = listOf(
         "Тишина — сходите подышите свежим воздухом",

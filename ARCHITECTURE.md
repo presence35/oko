@@ -262,7 +262,7 @@ like the rest of the app). |
 
 | File | Responsibility |
 | --- | --- |
-| `app/build.gradle.kts` | Android config + custom tasks: `bumpVersion`, `release`, `uploadRelease`, `uploadPrivacy`. Declares the `play`/`sideload` flavors (`BuildConfig.SELF_UPDATE`). |
+| `app/build.gradle.kts` | Android config + custom tasks: `bumpVersion`, `releaseDirect`, `releasePlay`, `uploadRelease`, `uploadPrivacy`. Declares the `play`/`sideload` flavors (`BuildConfig.SELF_UPDATE`). |
 | `app/version.properties` | `versionCode`/`versionName` — source of truth for the build + `version.json`. |
 | `server/version.json` | Committed example of the generated update feed. |
 

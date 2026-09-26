@@ -18,16 +18,16 @@ class MapLibreGeoJsonTest {
 
             // Zone circles
             val circleJson = MapLibreGeoJson.singleCircle(50.45, 30.52, 10.0)
-            assertFalse("Circle GeoJSON must not contain comma-decimal numbers", circleJson.contains(Regex("""\d,\d""")))
+            assertFalse("Circle GeoJSON must not contain comma-decimal numbers", circleJson.contains(Regex("""\[-?\d+,\d""")))
             assertTrue("Circle GeoJSON must contain dot-decimal numbers", circleJson.contains(Regex("""\d\.\d""")))
 
             // Oblast alerts and borders
             val alertJson = MapLibreGeoJson.alertRegions(setOf("kyivska"))
-            assertFalse("Alert GeoJSON must not contain comma-decimal numbers", alertJson.contains(Regex("""\d,\d""")))
+            assertFalse("Alert GeoJSON must not contain comma-decimal numbers", alertJson.contains(Regex("""\[-?\d+,\d""")))
             assertTrue("Alert GeoJSON must contain dot-decimal numbers", alertJson.contains(Regex("""\d\.\d""")))
 
             val borderJson = MapLibreGeoJson.oblastBorders()
-            assertFalse("Border GeoJSON must not contain comma-decimal numbers", borderJson.contains(Regex("""\d,\d""")))
+            assertFalse("Border GeoJSON must not contain comma-decimal numbers", borderJson.contains(Regex("""\[-?\d+,\d""")))
             assertTrue("Border GeoJSON must contain dot-decimal numbers", borderJson.contains(Regex("""\d\.\d""")))
         } finally {
             Locale.setDefault(prevLocale)

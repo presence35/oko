@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- Fixed alert age display to compact form (e.g. 50 sec, 15 min, 2 hr) 09-26_16:45:00
+- The app now also supports older 32-bit phones (added armeabi-v7a) 09-26_16:1:44
 - Added Play/sideload build flavors: the Play AAB has no self-update and never requests install-APK permission, while the sideload beta keeps in-app updates 09-26_16:05:00
 - Removed the unused full-screen-intent permission 09-26_16:05:00
 - The test simulator no longer ships in release builds 09-26_16:05:00

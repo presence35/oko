@@ -8,7 +8,8 @@ Only when the user says **"release it"**, perform a full release:
 2. Infer the new version from `app/version.properties`.
 3. Show the inferred version + the notes that will be generated (from the CHANGELOG entries) and wait for confirmation ("go"). Upload only after confirmation.
 4. Run the single command (no args — the version auto-bumps its patch, e.g. 0.3.8 → 0.3.9; use `-PnewVersion=<ver>` only for an explicit override):
-   - `.\gradlew.bat :app:release`
+   - `.\gradlew.bat :app:releaseDirect` — sideload/beta path: builds the APK and uploads it + `version.json` to the FTP server.
+   - `.\gradlew.bat :app:releasePlay` — Google Play path: builds the `play` App Bundle only (no self-update, no upload).
 5. Verify the live result at `https://odesaplay.com.ua/other_apps/ukrainedrones/version.json` (version + both translations).
 6. Move the released entries under a new `## [<ver>]` heading in `CHANGELOG.md` and clear `## [Unreleased]` + mm-dd_h:m:s.
 

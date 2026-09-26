@@ -1,6 +1,7 @@
 package com.odesaplay.oko.source.neptun
 
 import com.odesaplay.oko.ThreatType
+import com.odesaplay.oko.connection.Monotonic
 import com.odesaplay.oko.engine.MonitorCore
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.OblastAlert
@@ -39,10 +40,18 @@ class NeptunDecoderTest {
         trail = emptyList()
     )
 
+    private val realNowProvider = Monotonic.nowProvider
+
     @Before
     fun setUp() {
+        Monotonic.nowProvider = { 1_000_000L }
         core = FakeMonitorCore()
         decoder = NeptunDecoder(core)
+    }
+
+    @org.junit.After
+    fun tearDown() {
+        Monotonic.nowProvider = realNowProvider
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -224,7 +233,7 @@ class NeptunDecoderTest {
                 put(JSONObject().apply {
                     put("lat", 50.2)
                     put("lon", 30.2)
-                    put("t", "2025-06-15T12:00:00Z")
+                    put("t", "2020-06-15T12:00:00Z")
                 })
             })
         }
@@ -232,7 +241,7 @@ class NeptunDecoderTest {
         val threat = NeptunDecoder.parseNormalizedThreat(json, nowWall = now)!!
         assertEquals(2, threat.trail.size)
         assertEquals(now, threat.trail[0].tMillis)
-        assertEquals(Instant.parse("2025-06-15T12:00:00Z").toEpochMilli(), threat.trail[1].tMillis)
+        assertEquals(Instant.parse("2020-06-15T12:00:00Z").toEpochMilli(), threat.trail[1].tMillis)
     }
 
     // ─────────────────────────────────────────────────────────────

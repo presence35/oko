@@ -35,7 +35,7 @@ android {
         versionName = readVersionProps().getProperty("versionName") ?: "0.1.0"
         buildConfigField("String", "CARTO_API_KEY", "\"$cartoApiKey\"")
         ndk {
-            abiFilters.addAll(listOf("arm64-v8a"))
+            abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
         }
         resourceConfigurations += listOf("en", "uk", "ru")
     }
@@ -188,12 +188,20 @@ private fun deriveVersionName(current: String, newCode: Int): String {
     return "$major.$minor.$newCode"
 }
 
-tasks.register<GradleBuild>("release") {
-    group = "versioning"
-    description = "Bumps the version, then builds the release APK and uploads it in a fresh Gradle run so the APK and version.json both carry the new version. Release notes come from the root CHANGELOG.md ## [Unreleased] section."
+tasks.register<GradleBuild>("releaseDirect") {
+    group = "release"
+    description = "Bumps the version, then builds the sideload (direct/beta) APK and uploads it + version.json to the FTP server, in a fresh Gradle run so both carry the new version."
     dependsOn("bumpVersion")
     dir = rootProject.projectDir
     tasks = listOf(":app:uploadRelease")
+}
+
+tasks.register<GradleBuild>("releasePlay") {
+    group = "release"
+    description = "Bumps the version, then builds the Google Play App Bundle (play flavor — no self-update). Does not upload."
+    dependsOn("bumpVersion")
+    dir = rootProject.projectDir
+    tasks = listOf(":app:bundlePlayRelease")
 }
 
 tasks.register("uploadRelease") {
