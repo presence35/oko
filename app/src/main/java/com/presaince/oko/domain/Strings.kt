@@ -227,6 +227,7 @@ object Strings {
     data class Threat(
         val advisoryLabel: String,
         val areaOnlyLabel: String,
+        val staleLabel: String,
         val cardSkullNote: String,
         val distanceLabel: String,
         val distanceToCityFormat: String,
@@ -948,6 +949,7 @@ object Strings {
         val updateAvailableOnOpen: String get() = updates.updateAvailableOnOpen
         val advisoryLabel: String get() = threat.advisoryLabel
         val areaOnlyLabel: String get() = threat.areaOnlyLabel
+        val staleLabel: String get() = threat.staleLabel
         val cardSkullNote: String get() = threat.cardSkullNote
         val distanceLabel: String get() = threat.distanceLabel
         val distanceToCityFormat: String get() = threat.distanceToCityFormat

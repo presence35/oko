@@ -1,7 +1,8 @@
 # Changelog
 
 ## [Unreleased]
-- Incoming threats now circle the edge of your zone instead of landing on your position — slow ones on the yellow ring, fast ones on the red — with an "Approaching" line on the card 09-26_13:14:31
+- Stale threats dim the icon and show a "Stale" pill beneath it on the threat card 09-26_14:22
+- Incoming threats heading to your city now ride the yellow ring instead of landing on your position, with an "Approaching" line on the card; fast ones still sound red 09-26_13:14:31
 - Area-level drone warnings now show as the area-level chip instead of repeating the type, region and "point unknown" as a sentence 09-26_13:05:06
 - Reset all tips now sits with the other Settings action buttons, and the System & Display section is renamed to Display 09-26_12:47:46
 - Threat cards no longer repeat the type and place under the title in non-Ukrainian languages 09-26_12:25:11

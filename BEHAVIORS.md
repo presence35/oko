@@ -222,10 +222,9 @@ freeze at their reported fix and tracks NEPTUN gives no course never move.
 
 ```
 Source data only, no timers. True when the track is an approximate (`positionQuality ==
-"approx"`), fresh, active, in-reach track that either:
-  1. names a `destination` (source-resolved from the course text) inside the focus's yellow
-     ring (`slowYellowKm`), or
-  2. carries a server course whose bearing points at the focus (within a 45° cone).
+"approx"`), fresh, active track whose source-named `destination` (resolved from the course
+text) lands inside the focus's yellow ring (`slowYellowKm`). A bare course-bearing is not
+enough — fast types reach 1500 km and would otherwise stage from anywhere in the country.
 Advisory/area-only/stale tracks never qualify. Lives in `domain/ThreatBehavior.kt`.
 ```
 
@@ -234,14 +233,16 @@ Advisory/area-only/stale tracks never qualify. Lives in `domain/ThreatBehavior.k
 ```
 Pure re-tag of one engine result, applied by BOTH consumers (MainViewModel, AlertService) so
 the map, card and siren agree:
-  - slow inbound → OUTER (patrols the yellow ring),
-  - fast inbound → INNER (patrols the red ring, so it still sounds).
+  - slow inbound → OUTER (yellow),
+  - fast inbound → INNER (still sounds red).
+Both ride the yellow ring; the fast track's alarm stays red while its marker reads "approaching".
 Rewrites zoneThreats, threatsInner/Outer and activeZone; no-op when nothing is inbound. Only
 tracks the engine already placed in a zone are staged, so a far out-of-range track never gets a
-synthetic alarm. The engine itself stays a pure reporter of source data — staging never changes
-engine inputs/math.
-`OrbitBehavior` places an inbound track on its ring (around its destination, else the focus)
-instead of parking it on the city centre; radius = `slowYellowKm` (slow) / `slowRedKm` (fast).
+synthetic alarm. The engine itself stays a pure reporter of source data.
+
+`OrbitBehavior` places an inbound track on the yellow ring around its destination instead of
+parking it on the city centre. It only applies when the raw fix is already within `slowRedKm`
+of the destination (the "would land on us" case) — farther tracks keep their normal drift.
 The widget does not stage yet (see ROADMAP.md).
 ```
 

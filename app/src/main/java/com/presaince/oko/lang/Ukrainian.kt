@@ -218,6 +218,7 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
     threat = Strings.Threat(
         advisoryLabel = "Спостереження",
         areaOnlyLabel = "Лише область (без точної точки)",
+        staleLabel = "Старе",
         cardSkullNote = "Skull 0–10 is a rough estimate, not official.",
         distanceLabel = "Відстань",
         distanceToCityFormat = "Відстань до %1\$s",

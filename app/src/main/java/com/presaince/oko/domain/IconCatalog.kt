@@ -8,6 +8,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -233,7 +234,7 @@ fun ThreatIcon(
             painter = painterResource(id = IconCatalog.res(type, set)),
             contentDescription = contentDescription,
             tint = tint,
-            modifier = Modifier.size(size)
+            modifier = Modifier.size(size).alpha(if (dimmed) 0.45f else 1f)
         )
     } else {
         Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) {

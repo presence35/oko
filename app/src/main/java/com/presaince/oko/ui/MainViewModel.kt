@@ -291,6 +291,7 @@ data class SelectionUi(
     val approachingCity: String? = null,  // inbound track: the city named in the source course text
     val cardLevel: Double = 0.0,          // per-threat gauge score (banner aggregate never enters the card)
     val alertsOff: Boolean = false,       // selected type silenced in Settings (chip state travels with the card)
+    val stale: Boolean = false,            // threat has gone quiet (engine.isStale) — card dims icon + shows pill
     val neutralized: NormalizedThreat? = null,   // resolved card while the death window plays
     val fakeNeutralize: Boolean = false
 )
@@ -987,7 +988,7 @@ showBorders = prefs.showBorders,
                     // A staged inbound track is drawn on its ring, so the card must show the ring
                     // distance, not the raw fix — otherwise it reads "0 km" next to "Approaching".
                     val ringKm = props?.takeIf { inbound }
-                        ?.let { approachRingKm(it.isFast, ui.activeZoneParams).toDouble() }
+                        ?.let { approachRingKm(ui.activeZoneParams).toDouble() }
                     ThreatProximity(
                         predicted = ep.predicted,
                         distToUserKm = ringKm ?: ep.distToUserKm,
@@ -1018,6 +1019,7 @@ showBorders = prefs.showBorders,
                     )
                 } else 0.0
                 val alertsOff = refreshed?.let { it.type.toThreatType() in ui.silencedTypes } ?: false
+                val stale = refreshed?.let { engine.isStale(it, engine.propsFor(it.type), nowMs) } ?: false
                 SelectionUi(
                     selected = if (FlourishPolicy.dropSelection(selectedGone, animOn)) null else refreshed,
                     proximity = proximity,
@@ -1025,6 +1027,7 @@ showBorders = prefs.showBorders,
                     approachingCity = approachingCity,
                     cardLevel = cardLevel,
                     alertsOff = alertsOff,
+                    stale = stale,
                     neutralized = neutralizedThreat,
                     fakeNeutralize = sel.fakeNeutralize
                 )

@@ -218,6 +218,7 @@ internal val Russian: Strings.StringSet = Strings.StringSet(
     threat = Strings.Threat(
         advisoryLabel = "Наблюдение",
         areaOnlyLabel = "Зональный уровень (без точной точки)",
+        staleLabel = "Старе",
         cardSkullNote = "Оценка «Череп» (0–10) является приблизительной.",
         distanceLabel = "Расстояние",
         distanceToCityFormat = "Расстояние до г. %1\$s",

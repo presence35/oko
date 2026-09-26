@@ -62,24 +62,16 @@ class OrbitMotionTest {
     }
 
     @Test
-    fun `a fast inbound track patrols the red ring`() {
-        val t = threat(destination = destLatLng)
+    fun `a fast inbound track at the city patrols the yellow ring`() {
+        val t = threat(lat = dest.lat, lon = dest.lon, destination = destLatLng)
         val outcome = outcome(t, fastEngine)
         assertTrue(outcome.moving)
-        assertEquals(20.0, distanceFlat(dest.lat, dest.lon, outcome.lat, outcome.lon) / 1000.0, 1.0)
-        assertEquals(orbitTangentBearing(orbitAngle(0L, t.id)).toFloat(), outcome.headingDeg, 0.001f)
-    }
-
-    @Test
-    fun `a slow inbound track patrols the yellow ring`() {
-        val t = threat(type = "shahed", destination = destLatLng)
-        val outcome = outcome(t, slowEngine)
-        assertTrue(outcome.moving)
         assertEquals(50.0, distanceFlat(dest.lat, dest.lon, outcome.lat, outcome.lon) / 1000.0, 1.0)
+        assertEquals(orbitTangentBearing(orbitAngle(0L, t, destLatLng)).toFloat(), outcome.headingDeg, 0.001f)
     }
 
     @Test
-    fun `an inbound track at the city never parks on it`() {
+    fun `a slow inbound track at the city patrols the yellow ring`() {
         val t = threat(type = "shahed", lat = dest.lat, lon = dest.lon, destination = destLatLng)
         val outcome = outcome(t, slowEngine)
         assertTrue(outcome.moving)
@@ -87,10 +79,17 @@ class OrbitMotionTest {
     }
 
     @Test
-    fun `a course aiming at the focus is inbound even without a destination`() {
-        // Raw fix due north of Chornomorsk, flying south (180) straight at it.
-        val t = threat(lat = 47.5, lon = dest.lon, bearingDeg = 180.0)
-        assertTrue(isInbound(t, focus, params, fastProps, 0L))
+    fun `an inbound track far from the city is not pulled onto the ring`() {
+        val t = threat(lat = 50.4, lon = 30.4, destination = destLatLng)
+        val outcome = outcome(t, fastEngine, now = 10_000L)
+        assertTrue(outcome.moving)
+        assertEquals(0.0f, outcome.headingDeg, 0.001f)
+        assertTrue(distanceFlat(dest.lat, dest.lon, outcome.lat, outcome.lon) / 1000.0 > 100.0)
+    }
+
+    @Test
+    fun `a track with no named destination is not inbound`() {
+        assertFalse(isInbound(threat(lat = 50.4, lon = 30.4), focus, params, fastProps, 0L))
     }
 
     @Test

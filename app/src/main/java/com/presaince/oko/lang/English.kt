@@ -218,6 +218,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
     threat = Strings.Threat(
         advisoryLabel = "Observation",
         areaOnlyLabel = "Area-level (no precise point)",
+        staleLabel = "Stale",
         cardSkullNote = "Skull 0–10 is a rough estimate, not official.",
         distanceLabel = "Distance",
         distanceToCityFormat = "Distance to %1\$s",

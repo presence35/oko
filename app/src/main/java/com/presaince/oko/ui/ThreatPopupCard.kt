@@ -126,6 +126,22 @@ private fun SimulationChip(s: Strings.StringSet) {
     }
 }
 
+/** Muted-grey "Stale" pill shown beneath the icon when a threat has gone quiet. */
+@Composable
+private fun StalePill(label: String) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = Color(AppPalette.TextSecondary).copy(alpha = 0.25f)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(AppPalette.TextSecondary),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+        )
+    }
+}
+
 /** System font scale, capped so extreme accessibility sizes can't break the layout. */
 @Composable
 private fun fontScale(): Float = min(LocalDensity.current.fontScale, 1.5f)
@@ -176,6 +192,7 @@ fun ThreatPopupCard(
     neutralized: Boolean = false,
     neutralizing: Boolean = false,
     fakeNeutralize: Boolean = false,
+    stale: Boolean = false,
     onRequestSizeToggle: (() -> Unit)? = null
 ) {
     val s = Strings.get(lang)
@@ -304,12 +321,16 @@ fun ThreatPopupCard(
                             verticalAlignment = Alignment.Top,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            ThreatIcon(
-                                type = threat.type.toThreatType(),
-                                set = iconSet,
-                                size = fontAware(44.dp),
-                                contentDescription = typeLabel
-                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                ThreatIcon(
+                                    type = threat.type.toThreatType(),
+                                    set = iconSet,
+                                    size = fontAware(44.dp),
+                                    contentDescription = typeLabel,
+                                    dimmed = stale
+                                )
+                                if (stale) StalePill(s.staleLabel)
+                            }
                             Spacer(Modifier.width(8.dp))
                             Column(
                                 verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -416,12 +437,16 @@ fun ThreatPopupCard(
                     Column(modifier = Modifier.weight(1f)) {
                         // Header: icon, type, status chips, region, and elapsed time on top-right
                         Row(verticalAlignment = Alignment.Top) {
-                            ThreatIcon(
-                                type = threat.type.toThreatType(),
-                                set = iconSet,
-                                size = fontAware(40.dp),
-                                contentDescription = typeLabel
-                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                ThreatIcon(
+                                    type = threat.type.toThreatType(),
+                                    set = iconSet,
+                                    size = fontAware(40.dp),
+                                    contentDescription = typeLabel,
+                                    dimmed = stale
+                                )
+                                if (stale) StalePill(s.staleLabel)
+                            }
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(

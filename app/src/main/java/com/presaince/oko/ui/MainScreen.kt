@@ -1353,6 +1353,7 @@ private fun ThreatCardHost(
                         threatLevel = sel.cardLevel,
                         cardSize = cardSize,
                         alertsOff = sel.alertsOff,
+                        stale = sel.stale,
                         onDismiss = onDismiss,
                         fakeNeutralize = sel.fakeNeutralize,
                         modifier = Modifier
