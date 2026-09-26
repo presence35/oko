@@ -85,9 +85,9 @@ class AlarmEpisodeTally(
             episodeCity = city
             episodeStartMs = startMs
         }
-        try {
-            NotificationManagerCompat.from(context).cancel(NOTIF_ALARM_EPISODE)
-        } catch (_: SecurityException) {}
+        // The previous episode's summary is deliberately left posted: its tap replays the
+        // show from the episode that just ended, so "what happened before" stays available
+        // while the new alert is live. The current episode's own summary replaces it on finish.
     }
 
     /** Buffer a resolution into the open window. Never notifies — [finish] owns that. */

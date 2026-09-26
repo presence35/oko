@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- A new official alert now clears the previous all-clear notification and its stuck debris countdown; the last episode's replay stays tappable while the new alert is live 09-26_15:37:41
 - Stale pill sits by the threat type (and beside the timer on the small card) so a threat going stale no longer nudges the card layout 09-26_15:01:26
 - Fixed a crash on first launch after an app update (the monitoring service no longer demands location access when Android starts it in the background) 09-26_15:10:00
 - Threat cards no longer repeat the type under the title when the feed names it differently than the label, e.g. Reconnaissance described as a recon drone 09-26_14:49:40

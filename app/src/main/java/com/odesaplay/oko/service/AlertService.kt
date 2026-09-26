@@ -397,15 +397,21 @@ class AlertService : Service() {
             return
         }
         // Even the base type was refused — surface the dead state like startResilient intends.
+        MonitoringStatus.setRunning(false)
         AlertNotificationManager(applicationContext).postMonitoringPaused()
         stopSelf()
     }
 
-    /** Attempts [ServiceCompat.startForeground]; returns false if the platform refused the type. */
+    /** Attempts [ServiceCompat.startForeground]; returns false when the platform refuses the
+     *  start. A background start denies the location type via [SecurityException], and denies
+     *  the whole start on Android 12+ via [android.app.ForegroundServiceStartNotAllowedException]
+     *  (an [IllegalStateException]); both mean "do not crash, degrade instead". */
     private fun startForegroundTyped(type: Int, notif: android.app.Notification): Boolean = try {
         ServiceCompat.startForeground(this, NOTIF_MONITOR, notif, type)
         true
     } catch (_: SecurityException) {
+        false
+    } catch (_: IllegalStateException) {
         false
     }
 
@@ -937,6 +943,12 @@ val mappedThreats = registry.allThreats.map { list ->
                 lastOfficialEpisode = boundary
             }
             if (boundary != null && lastOfficialEpisode != boundary) {
+                // A new official episode supersedes any lingering all-clear artifact: drop the
+                // notification and stop its debris countdown so the shade never shows an
+                // all-clear beside an active alert. Fires even when the new episode's own
+                // notification is toggled off, since the raw feed contradicts the all-clear.
+                notificationManager.cancelNotification(NOTIF_ALLCLEAR)
+                debrisBuffer.abort()
                 val audible = if (state.focusOblastLevel == AlertLevel.RED) state.officialRedAlertsEnabled
                 else state.officialYellowAlertsEnabled
                 val reasonThreat = if (state.focusOblastLevel == AlertLevel.RED) {
@@ -1049,7 +1061,6 @@ val mappedThreats = registry.allThreats.map { list ->
                         }
                     }
                     primary.isOnset -> {
-                        debrisBuffer.abort()
                         wakeLockManager.acquireForAlert()
                         audioAlarmDispatcher.dispatchDangerAlarm(
                             isRed = (primary.level == "red"),
