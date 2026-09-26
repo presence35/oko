@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- Fixed release builds crashing on startup (WorkManager DB stripped by the new R8; upgraded WorkManager) 09-26_23:49:50
+- Fixed crash when parsing alert titles containing the pair/swarm/group keywords 09-26_23:49:50
+- Update server moved to /other_apps/oko/ (version feed, APK, privacy page) 09-26_23:15:00
+- Alert notifications now carry OK / Mute raid / Mute 10 min buttons: mute silences the siren and all-clear until the raid ends, while the notification still appears quietly 09-26_23:04:30
+- Fixed repeat zone alerts under "Once per threat": a briefly stale track no longer closes its episode and re-sounds as a new threat 09-26_23:04:30
+- Threat-card status pills (simulation, stale, alerts-off) now sit in a dedicated bottom row, so the SIMULATION tag no longer stacked vertically on a crowded card 09-26_23:04:30
+- Targets Android 16 (targetSdk 36): edge-to-edge and predictive back behavior now enforced 09-26_20:54:53
 - Fixed alert age display to compact form (e.g. 50 sec, 15 min, 2 hr) 09-26_16:45:00
 - The app now also supports older 32-bit phones (added armeabi-v7a) 09-26_16:1:44
 - Added Play/sideload build flavors: the Play AAB has no self-update and never requests install-APK permission, while the sideload beta keeps in-app updates 09-26_16:05:00

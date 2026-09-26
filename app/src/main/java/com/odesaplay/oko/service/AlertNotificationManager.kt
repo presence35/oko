@@ -29,6 +29,9 @@ import com.odesaplay.oko.UserPrefs
 import com.odesaplay.oko.NeutralizedTally
 import com.odesaplay.oko.service.ServiceState
 
+/** Alert-notification action-button labels. Persona lives in the title/body, never here. */
+data class AlertActions(val ok: String, val muteRaid: String, val mute10: String)
+
 /**
  * Handles notification channels, notification building, and dispatching for [AlertService].
  */
@@ -40,6 +43,10 @@ class AlertNotificationManager(private val context: Context) {
         const val ACTION_RETRY = "com.odesaplay.oko.RETRY"
         const val ACTION_IGNORE_RETRY = "com.odesaplay.oko.IGNORE_RETRY"
         const val ACTION_ALLCLEAR_DISMISSED = "com.odesaplay.oko.ALLCLEAR_DISMISSED"
+        const val ACTION_ALERT_OK = "com.odesaplay.oko.ALERT_OK"
+        const val ACTION_MUTE_RAID = "com.odesaplay.oko.MUTE_RAID"
+        const val ACTION_MUTE_10 = "com.odesaplay.oko.MUTE_10"
+
         const val EXTRA_REVEAL_ID = "reveal_threat_id"
         const val EXTRA_REVEAL_LAT = "reveal_threat_lat"
         const val EXTRA_REVEAL_LON = "reveal_threat_lon"
@@ -271,7 +278,9 @@ const val NOTIF_MONITORING_PAUSED = 9
         sirenOverride: Boolean,
         revealThreat: NormalizedThreat? = null,
         vibrationLevel: Int = 3,
-        silent: Boolean = false
+        silent: Boolean = false,
+        muted: Boolean = false,
+        actions: AlertActions? = null
     ) {
         val channel = when {
             zone == ThreatZone.INNER && sirenOverride -> CHANNEL_ALERTS_INNER_ALARM
@@ -285,7 +294,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             }
             if (show) " · #${t.id.takeLast(4)}" else ""
         }.orEmpty()
-        val notif = NotificationCompat.Builder(context, channel)
+        val b = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
             .setContentText(body + idSuffix)
@@ -294,14 +303,21 @@ const val NOTIF_MONITORING_PAUSED = 9
             .setVibrate(vibrationPattern(vibrationLevel))
             .setContentIntent(openAppIntent(revealThreat))
             .setOnlyAlertOnce(silent)
-            .build()
-        safeNotify(NOTIF_ALERT, notif)
+            // Full silence (channel sound + vibration); setOnlyAlertOnce is a repost knob.
+            .setSilent(muted)
+        actions?.let { a ->
+            b.addAction(0, a.ok, alertAction(ACTION_ALERT_OK, 21))
+            b.addAction(0, a.muteRaid, alertAction(ACTION_MUTE_RAID, 22))
+            b.addAction(0, a.mute10, alertAction(ACTION_MUTE_10, 23))
+        }
+        safeNotify(NOTIF_ALERT, b.build())
     }
 
     fun postAllClearNotification(
         title: String,
         body: String,
         silent: Boolean = false,
+        muted: Boolean = false,
         replay: List<FlourishRecord> = emptyList()
     ) {
         val tap = if (replay.isEmpty()) openAppIntent()
@@ -315,6 +331,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             .setContentIntent(tap)
             .setDeleteIntent(allClearDeleteIntent())
             .setOnlyAlertOnce(silent)
+            .setSilent(muted)
             .build()
         safeNotify(NOTIF_ALLCLEAR, notif)
     }
@@ -465,6 +482,17 @@ const val NOTIF_MONITORING_PAUSED = 9
             PendingIntent.getForegroundService(context, 2, intent, flags)
         } else {
             PendingIntent.getService(context, 2, intent, flags)
+        }
+    }
+
+    /** Alert action button -> [AlertService] (OK / Mute raid / Mute 10 min). */
+    private fun alertAction(action: String, requestCode: Int): PendingIntent {
+        val intent = Intent(context, AlertService::class.java).setAction(action)
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(context, requestCode, intent, flags)
+        } else {
+            PendingIntent.getService(context, requestCode, intent, flags)
         }
     }
 

@@ -6,6 +6,8 @@ import kotlin.math.roundToInt
 import com.odesaplay.oko.engine.ThreatZone
 import com.odesaplay.oko.DigestWindow
 import com.odesaplay.oko.ZonePolicy
+import com.odesaplay.oko.RaidMute
+import com.odesaplay.oko.SilentReason
 import com.odesaplay.oko.engine.AlertLevel
 import com.odesaplay.oko.engine.toThreatType
 import com.odesaplay.oko.engine.distanceFlat
@@ -316,6 +318,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onNeutralize = { id -> viewModel.neutralizeThreat(id) },
             onFlybyFinished = { id -> viewModel.onFlybyFinished(id) },
             onEjectAll = viewModel::ejectAllFun,
+            onClearRaidMute = viewModel::clearRaidMute,
             onLocateThreat = onLocateThreat,
             showZonesSheet = showZonesSheet,
             onShowZonesSheetChange = { showZonesSheet = it },
@@ -647,6 +650,7 @@ private fun MapScreen(
     onNeutralize: (String) -> Unit,
     onFlybyFinished: (String) -> Unit,
     onEjectAll: () -> Unit,
+    onClearRaidMute: () -> Unit = {},
     onLocateThreat: (NormalizedThreat) -> Unit = {},
     onRevealHandled: () -> Unit = {},
     onCenterHandled: () -> Unit = {},
@@ -749,6 +753,10 @@ private fun MapScreen(
         onShowZonesSheetChange(true)
         fitZonesTick++
     }
+
+    // Tapping the muted notice (not a zone-bells-off notice) cancels the service's mute.
+    val unmuteRaid: () -> Unit = onClearRaidMute
+
 
     // Drop the measured sheet height when it closes so a stale cover never shrinks the framing.
     LaunchedEffect(showZonesSheet) {
@@ -1042,8 +1050,10 @@ private fun MapScreen(
                                     yellowArmed = uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
                                     lang = uiState.language,
                                     notificationsDisabled = uiState.notificationsDisabledBySystem,
+                                    mute = uiState.raidMute,
                                     onZoneTap = zoneOnTap,
-                                    onEditZones = openZonesPanel
+                                    onEditZones = openZonesPanel,
+                                    onClearMute = unmuteRaid
                                 )
                             }
                         }
@@ -1083,10 +1093,12 @@ private fun MapScreen(
             if (!flourishActive) {
                 val alertsOff = !uiState.activeSlowRedArmed && !uiState.activeFastRedArmed &&
                     !uiState.activeSlowYellowArmed && !uiState.activeFastYellowArmed
-                val notifsDisabled = uiState.notificationsDisabledBySystem
                 val landscape = LocalConfiguration.current.orientation ==
                     Configuration.ORIENTATION_LANDSCAPE
-                if (landscape && (alertsOff || notifsDisabled)) {
+                val notice = if (landscape) {
+                    rememberSilentNotice(!alertsOff, uiState.notificationsDisabledBySystem, uiState.raidMute, s)
+                } else null
+                if (notice != null) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1094,8 +1106,8 @@ private fun MapScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         AllAlertsOffWarning(
-                            label = if (alertsOff) s.allAlertsOffLabel else s.notificationsDisabledLabel,
-                            onClick = openZonesPanel
+                            label = notice.label,
+                            onClick = if (notice.isMute) unmuteRaid else openZonesPanel
                         )
                     }
                 }
@@ -1686,9 +1698,11 @@ internal fun ZoneButtons(
     yellowArmed: Boolean,
     lang: AppLanguage,
     notificationsDisabled: Boolean = false,
+    mute: RaidMute = RaidMute.None,
     vertical: Boolean = false,
     onZoneTap: (ThreatZone) -> Unit,
     onEditZones: () -> Unit,
+    onClearMute: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val s = Strings.get(lang)
@@ -1707,11 +1721,12 @@ internal fun ZoneButtons(
             modifier = modifier,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (!redArmed && !yellowArmed) {
-                AllAlertsOffWarning(label = s.allAlertsOffLabel, onClick = onEditZones)
-                Spacer(Modifier.height(6.dp))
-            } else if (notificationsDisabled) {
-                AllAlertsOffWarning(label = s.notificationsDisabledLabel, onClick = onEditZones)
+            val notice = rememberSilentNotice(redArmed || yellowArmed, notificationsDisabled, mute, s)
+            if (notice != null) {
+                AllAlertsOffWarning(
+                    label = notice.label,
+                    onClick = if (notice.isMute) onClearMute else onEditZones
+                )
                 Spacer(Modifier.height(6.dp))
             }
             Row(
@@ -1759,6 +1774,44 @@ private fun ZoneGearButton(onClick: () -> Unit, label: String) {
                 .graphicsLayer { rotationZ = gearRotation.value }
         )
     }
+}
+
+/** Resolved notice text + whether the tap should unmute (vs open the zones panel). */
+private data class SilentNoticeText(val label: String, val isMute: Boolean)
+
+/**
+ * The one reason the map explains silent bells (see [SilentReason]). Ticks only while a
+ * timed mute is pending, so its countdown runs and the pill lapses exactly on time.
+ */
+@Composable
+private fun rememberSilentNotice(
+    zonesArmed: Boolean,
+    notificationsDisabled: Boolean,
+    mute: RaidMute,
+    s: Strings.StringSet
+): SilentNoticeText? {
+    val now by produceState(System.currentTimeMillis(), mute) {
+        if (mute is RaidMute.Until) {
+            while (value < mute.deadlineMs) {
+                delay(1_000)
+                value = System.currentTimeMillis()
+            }
+        }
+    }
+    val reason = SilentReason.resolve(zonesArmed, notificationsDisabled, mute, now) ?: return null
+    val label = when (reason) {
+        SilentReason.NotificationsDisabled -> s.notificationsDisabledLabel
+        SilentReason.ZonesOff -> s.allAlertsOffLabel
+        SilentReason.MutedForRaid -> s.silentMutedForRaid
+        is SilentReason.MutedFor -> String.format(s.silentMutedTimedFormat, countdownText(reason.deadlineMs - now))
+    }
+    return SilentNoticeText(label, reason.isMute)
+}
+
+/** Ceil to whole seconds so a fresh 10-min mute reads "10:00". */
+private fun countdownText(remainingMs: Long): String {
+    val total = (remainingMs.coerceAtLeast(0L) + 999L) / 1000L
+    return "%d:%02d".format(total / 60, total % 60)
 }
 
 @Composable

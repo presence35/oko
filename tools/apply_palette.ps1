@@ -2,7 +2,7 @@
 # with `AppPalette` tokens. Not magic numbers. UTF-8-safe (.NET IO, BOM-preserving).
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$src = Join-Path $root 'app\src\main\java\ua\ukrainedrones'
+$src = Join-Path $root 'app\src\main\java\com\odesaplay\oko'
 
 $skip = @(
     'ThreatPalette.kt',

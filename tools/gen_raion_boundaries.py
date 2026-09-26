@@ -25,7 +25,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(TOOLS)
-OUT_FILE = os.path.join(REPO, "app", "src", "main", "java", "ua", "ukrainedrones", "domain", "RaionBoundaries.kt")
+OUT_FILE = os.path.join(REPO, "app", "src", "main", "java", "com", "odesaplay", "oko", "domain", "RaionBoundaries.kt")
 
 OVERQUERY = (
     '[out:json][timeout:300];'

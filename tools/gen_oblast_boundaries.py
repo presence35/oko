@@ -10,7 +10,7 @@ import math
 import os
 
 GEOJSON_URL = "https://github.com/EugeneBorshch/ukraine_geojson/raw/refs/heads/master/UA_FULL_Ukraine.geojson"
-OUT_FILE = os.path.join(os.path.dirname(__file__), "..", "app", "src", "main", "java", "ua", "ukrainedrones", "domain", "OblastBoundaries.kt")
+OUT_FILE = os.path.join(os.path.dirname(__file__), "..", "app", "src", "main", "java", "com", "odesaplay", "oko", "domain", "OblastBoundaries.kt")
 
 # ISO3166-2 code -> Ukrainian stem (Cities.kt Region names)
 ISO_TO_STEM = {

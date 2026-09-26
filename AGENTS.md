@@ -10,7 +10,7 @@ Only when the user says **"release it"**, perform a full release:
 4. Run the single command (no args — the version auto-bumps its patch, e.g. 0.3.8 → 0.3.9; use `-PnewVersion=<ver>` only for an explicit override):
    - `.\gradlew.bat :app:releaseDirect` — sideload/beta path: builds the APK and uploads it + `version.json` to the FTP server.
    - `.\gradlew.bat :app:releasePlay` — Google Play path: builds the `play` App Bundle only (no self-update, no upload).
-5. Verify the live result at `https://odesaplay.com.ua/other_apps/ukrainedrones/version.json` (version + both translations).
+5. Verify the live result at `https://odesaplay.com.ua/other_apps/oko/version.json` (version + both translations).
 6. Move the released entries under a new `## [<ver>]` heading in `CHANGELOG.md` and clear `## [Unreleased]` + mm-dd_h:m:s.
 
 ## While working
@@ -79,5 +79,7 @@ Fix any failures before finishing.
 
 When you add a source file or change a documented invariant, update the module map /
 key-invariants section of `ARCHITECTURE.md` in the same change, so the docs never rot.
+
+Reply with direct, short, only required lingo, bullet points, choices clearly, explanations just the key points.
 
 

@@ -115,6 +115,8 @@ object Strings {
         val nightMuteExitNote: String,
         val nightSleepButton: String,
         val allAlertsOffLabel: String,
+        val silentMutedForRaid: String,
+        val silentMutedTimedFormat: String,
         val notificationsDisabledLabel: String,
         val zoneButtonRed: String,
         val zoneButtonYellow: String,
@@ -258,6 +260,9 @@ object Strings {
         val notifBodyRegionFormat: String,
         val notifOfficialFormat: String,
         val notifOfficialWithReasonFormat: String,
+        val alertActionOk: String,
+        val alertActionMuteRaid: String,
+        val alertActionMute10: String,
         val offlineStatusTitle: String,
         val offlineBodyFormat: String,
         val offlineOfficialSirensLine: String,
@@ -780,6 +785,8 @@ object Strings {
         val nightMuteExitNote: String get() = settings.nightMuteExitNote
         val nightSleepButton: String get() = settings.nightSleepButton
         val allAlertsOffLabel: String get() = settings.allAlertsOffLabel
+        val silentMutedForRaid: String get() = settings.silentMutedForRaid
+        val silentMutedTimedFormat: String get() = settings.silentMutedTimedFormat
         val notificationsDisabledLabel: String get() = settings.notificationsDisabledLabel
         val zoneButtonRed: String get() = settings.zoneButtonRed
         val zoneButtonYellow: String get() = settings.zoneButtonYellow
@@ -981,6 +988,9 @@ object Strings {
         val notifBodyRegionFormat: String get() = threat.notifBodyRegionFormat
         val notifOfficialFormat: String get() = threat.notifOfficialFormat
         val notifOfficialWithReasonFormat: String get() = threat.notifOfficialWithReasonFormat
+        val alertActionOk: String get() = threat.alertActionOk
+        val alertActionMuteRaid: String get() = threat.alertActionMuteRaid
+        val alertActionMute10: String get() = threat.alertActionMute10
         val offlineStatusTitle: String get() = threat.offlineStatusTitle
         val offlineBodyFormat: String get() = threat.offlineBodyFormat
         val offlineOfficialSirensLine: String get() = threat.offlineOfficialSirensLine

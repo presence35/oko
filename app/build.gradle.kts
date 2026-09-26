@@ -83,6 +83,9 @@ android {
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
         }
     }
 
@@ -145,7 +148,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     // WorkManager — periodic watchdog for process-kill resilience
-    implementation("androidx.work:work-runtime-ktx:2.9.1")
+    // 2.10+ ships R8-full-mode-correct consumer rules; 2.9.1 relied on AGP<9's
+    // implicit constructor retention and crashed on startup under AGP 9.
+    implementation("androidx.work:work-runtime-ktx:2.11.0")
 
     // Home-screen widget
     implementation("androidx.glance:glance-appwidget:1.1.0")
@@ -223,7 +228,7 @@ tasks.register("uploadRelease") {
             appendLine("{")
             append("  \"versionCode\": ").append(vc).appendLine(",")
             append("  \"versionName\": \"").append(escapeJson(vn)).appendLine("\",")
-            append("  \"apkUrl\": \"https://").append(host).append("/other_apps/ukrainedrones/app-release.apk\",").appendLine()
+            append("  \"apkUrl\": \"https://").append(host).append("/other_apps/oko/app-release.apk\",").appendLine()
             appendLine("  \"notes\": {")
             append("    \"en\": \"").append(escapeJson(notesEn)).appendLine("\",")
             append("    \"ua\": \"").append(escapeJson(notesUa)).appendLine("\",")
@@ -257,7 +262,7 @@ tasks.register("uploadRelease") {
         upload(jsonFile, "version.json")
         val privacyFile = rootProject.file("privacy.html")
         if (privacyFile.exists()) upload(privacyFile, "privacy.html")
-        println("Done. https://$host/other_apps/ukrainedrones/version.json")
+        println("Done. https://$host/other_apps/oko/version.json")
     }
 }
 
@@ -286,7 +291,7 @@ tasks.register("uploadPrivacy") {
         val code = result.waitFor()
         if (output.isNotBlank()) println(output)
         if (code != 0) throw GradleException("FTP upload of privacy.html failed (exit $code)")
-        println("Privacy policy: https://$host/other_apps/ukrainedrones/privacy.html")
+        println("Privacy policy: https://$host/other_apps/oko/privacy.html")
     }
 }
 

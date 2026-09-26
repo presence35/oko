@@ -37,14 +37,19 @@ class NeptunDecoder(
         private val EXPLICIT_GROUP_COUNT_REGEX = Regex("""\((\d+)(?:\+\??)?\)""")
 
         // Group formation semantics in titles
-        private val GROUP_PAIR_REGEX = Regex("""(?iuU)\bпара\b""")
-        private val GROUP_SWARM_REGEX = Regex("""(?iuU)\bрій\b""")
-        private val GROUP_CLUSTER_REGEX = Regex("""(?iuU)\b(?:група|хвиля)\b""")
+        private val GROUP_PAIR_REGEX = titleRegex("пара")
+        private val GROUP_SWARM_REGEX = titleRegex("рій")
+        private val GROUP_CLUSTER_REGEX = titleRegex("(?:група|хвиля)")
 
         // Words denoting inherently single threats where upstream multi-counts represent leaked artifacts
-        private val SINGULAR_TITLE_REGEX = Regex(
-            """(?iuU)\b(?:ракета|крилата ракета|балістика|бпла|шахед|дрон|каб|керована авіабомба|міг-?31|літак|розвідник)\b"""
+        private val SINGULAR_TITLE_REGEX = titleRegex(
+            "(?:ракета|крилата ракета|балістика|бпла|шахед|дрон|каб|керована авіабомба|міг-?31|літак|розвідник)"
         )
+
+        // Case-insensitive matcher bounded by Unicode word chars. The `(?U)` flag is unsupported by
+        // Android's ICU regex and the JVM's `\b` is ASCII-only, so explicit lookarounds keep both engines identical.
+        private fun titleRegex(body: String) =
+            Regex("""(?iu)(?<![\p{L}\p{N}_])$body(?![\p{L}\p{N}_])""")
 
         /**
          * Upstream NEPTUN NLP occasionally leaks channel post counters, timestamps, or confirmation

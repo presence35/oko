@@ -17,7 +17,7 @@ import okhttp3.Request
 import org.json.JSONObject
 
 // Single place to point at your own update server. Host version.json + the APK there.
-const val UPDATE_BASE_URL = "https://odesaplay.com.ua/other_apps/ukrainedrones/"
+const val UPDATE_BASE_URL = "https://odesaplay.com.ua/other_apps/oko/"
 
 data class UpdateInfo(
     val versionCode: Int,

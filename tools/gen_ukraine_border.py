@@ -30,8 +30,8 @@ import numpy as np
 GEOJSON_URL = "https://github.com/EugeneBorshch/ukraine_geojson/raw/refs/heads/master/UA_FULL_Ukraine.geojson"
 OCEAN_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_ocean.geojson"
 OUT_FILE = os.path.join(
-    os.path.dirname(__file__), "..", "app", "src", "main", "java", "ua",
-    "ukrainedrones", "ui", "UkraineBorder.kt",
+    os.path.dirname(__file__), "..", "app", "src", "main", "java", "com",
+    "odesaplay", "oko", "ui", "UkraineBorder.kt",
 )
 
 # Rounding grid for edge identity — shared admin-1 boundaries must match exactly

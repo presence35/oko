@@ -47,6 +47,7 @@ import com.odesaplay.oko.DigestWindow
 import com.odesaplay.oko.NotifyPlugin
 import com.odesaplay.oko.NotifyPrefs
 import com.odesaplay.oko.ZonePolicy
+import com.odesaplay.oko.RaidMute
 import com.odesaplay.oko.engine.AlertLevel
 import com.odesaplay.oko.engine.toEngineString
 import com.odesaplay.oko.engine.toThreatType
@@ -54,6 +55,7 @@ import com.odesaplay.oko.engine.SpeedSource
 import com.odesaplay.oko.engine.ZoneParams
 import com.odesaplay.oko.service.ServiceState
 import com.odesaplay.oko.service.MonitoringStatus
+import com.odesaplay.oko.service.RaidMuteState
 import com.odesaplay.oko.ShelterIndex
 import com.odesaplay.oko.BuildConfig
 import com.odesaplay.oko.UpdateManager
@@ -184,6 +186,7 @@ data class UiState(
     val alertActive: Boolean = false,        // any threat or official alert live right now
     val threatDataStale: Boolean = false,
     val notificationsDisabledBySystem: Boolean = false,
+    val raidMute: RaidMute = RaidMute.None,
     val protectionState: ProtectionState = ProtectionState.ACTIVE
 ) {
     /** Derived summary of the two sub-channels — the master toggle. Can never be ON while red
@@ -723,7 +726,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         flybyFlow,
         MonitoringStatus.running,
         registry.degraded,
-        registry.coveredByFallback
+        registry.coveredByFallback,
+        RaidMuteState.state
     ) { values ->
         val live = values[1] as LiveSnapshot
         val rawPrefs = values[2] as UserPreferences
@@ -732,6 +736,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val shelterIndex = values[4] as ShelterIndex?
         val flyby = values[5] as AviationFlybyShow?
         val monitoringRunning = values[6] as Boolean
+        val raidMute = values[9] as RaidMute
         val bootRestartEnabled = rawPrefs.bootRestartEnabled
         // No 1s wall-clock flow: the model rebuild is event-driven, so stamp the build time
         // here. Per-second visuals (staleness dimming, marker motion) live in MapView's own
@@ -856,6 +861,7 @@ showBorders = prefs.showBorders,
             shelterIndex = shelterIndex,
             shelterOverlayUp = live.shelterModeActive,
             notificationsDisabledBySystem = !AlertNotificationManager.areNotificationsEnabled(app),
+            raidMute = raidMute,
             monitoringRunning = monitoringRunning,
             bootRestartEnabled = bootRestartEnabled,
             protectionState = deriveProtectionState(
@@ -1922,6 +1928,15 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun dismissUpdate() {
         updateStateFlow.value = UpdateState.Idle
+    }
+
+    /** Cancel the service's "mute raid" state — the map's muted notice tap. */
+    fun clearRaidMute() {
+        runCatching {
+            app.startService(
+                Intent(app, AlertService::class.java).setAction(AlertService.ACTION_CLEAR_MUTE)
+            )
+        }
     }
 }
 

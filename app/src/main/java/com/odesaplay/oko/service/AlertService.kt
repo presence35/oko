@@ -76,6 +76,7 @@ import com.odesaplay.oko.NeutralizedTally
 import com.odesaplay.oko.engine.ThreatEngine
 import com.odesaplay.oko.service.ServiceState
 import com.odesaplay.oko.service.MonitoringStatus
+import com.odesaplay.oko.service.RaidMuteState
 import com.odesaplay.oko.service.AudioAlarmDispatcher
 import com.odesaplay.oko.service.FallingDebrisBuffer
 
@@ -84,6 +85,10 @@ class AlertService : Service() {
     companion object {
         const val ACTION_RETRY = AlertNotificationManager.ACTION_RETRY
         const val ACTION_IGNORE_RETRY = AlertNotificationManager.ACTION_IGNORE_RETRY
+        const val ACTION_ALERT_OK = AlertNotificationManager.ACTION_ALERT_OK
+        const val ACTION_MUTE_RAID = AlertNotificationManager.ACTION_MUTE_RAID
+        const val ACTION_MUTE_10 = AlertNotificationManager.ACTION_MUTE_10
+        const val ACTION_CLEAR_MUTE = "com.odesaplay.oko.CLEAR_MUTE"
         const val EXTRA_REVEAL_ID = AlertNotificationManager.EXTRA_REVEAL_ID
         const val EXTRA_REVEAL_LAT = AlertNotificationManager.EXTRA_REVEAL_LAT
         const val EXTRA_REVEAL_LON = AlertNotificationManager.EXTRA_REVEAL_LON
@@ -109,6 +114,9 @@ class AlertService : Service() {
 
         /** "Ignore 30 min": how long offline milestone/critical notifications stay muted. */
         private const val IGNORE_RETRY_MUTE_MS = 30 * 60_000L
+
+        /** "Mute 10 min" alert action. */
+        private const val MUTE_10_MS = 10 * 60_000L
 
         const val CRITICAL_OFFLINE_MIN = 5
         const val CRITICAL_OFFLINE_ALARM_MIN = 1
@@ -201,7 +209,7 @@ class AlertService : Service() {
                 if (!allClearSwipedAway && notificationManager.isAllClearNotificationActive()) {
                     lastCleanAllClearCity?.let { city ->
                         val s = Strings.get(lastChannelLang ?: AppLanguage.EN)
-                        postAllClear(s, city, debrisSeconds = sec, silent = true, replay = lastEpisodeReplay)
+                        postAllClear(s, city, debrisSeconds = sec, silent = true, muted = bellsMuted(), replay = lastEpisodeReplay)
                     }
                 }
             },
@@ -209,9 +217,9 @@ class AlertService : Service() {
                 if (!allClearSwipedAway && notificationManager.isAllClearNotificationActive()) {
                     lastCleanAllClearCity?.let { city ->
                         val s = Strings.get(lastChannelLang ?: AppLanguage.EN)
-                        postAllClear(s, city, debrisSeconds = 0, silent = true, replay = lastEpisodeReplay)
+                        postAllClear(s, city, debrisSeconds = 0, silent = true, muted = bellsMuted(), replay = lastEpisodeReplay)
                     }
-                    audioAlarmDispatcher.dispatchSmallVibration()
+                    if (!bellsMuted()) audioAlarmDispatcher.dispatchSmallVibration()
                 }
             }
         )
@@ -229,6 +237,18 @@ class AlertService : Service() {
     /** "Ignore 30 min" mute deadline (session-only, wall clock). Offline milestone/critical
      *  notifications are suppressed until this instant; the connection keeps reconnecting. */
     @Volatile private var notifMuteUntilMs = 0L
+
+    /** "Mute raid" bells-off state for the active raid (see [RaidMute]). */
+    @Volatile private var raidMute: RaidMute = RaidMute.None
+
+    /** Bells off (danger siren + all-clear chime). Notifications still post, silently. */
+    private fun bellsMuted(): Boolean = raidMute.silent(System.currentTimeMillis())
+
+    /** Single writer: keeps the service field and the UI mirror in lockstep. */
+    private fun setRaidMute(value: RaidMute) {
+        raidMute = value
+        RaidMuteState.set(value)
+    }
 
     private val tally by lazy { NeutralizedTally(applicationContext, scope) }
     private val episodeTally by lazy { AlarmEpisodeTally(applicationContext, scope) }
@@ -362,6 +382,18 @@ class AlertService : Service() {
                     detail = "${IGNORE_RETRY_MUTE_MS / 60_000} min"
                 )
             }
+            ACTION_ALERT_OK -> notificationManager.cancelNotification(NOTIF_ALERT)
+            ACTION_MUTE_RAID -> {
+                setRaidMute(raidMute.untilClear())
+                audioAlarmDispatcher.stopActiveAlert()
+                notificationManager.cancelNotification(NOTIF_ALERT)
+            }
+            ACTION_MUTE_10 -> {
+                setRaidMute(raidMute.forDuration(System.currentTimeMillis(), MUTE_10_MS))
+                audioAlarmDispatcher.stopActiveAlert()
+                notificationManager.cancelNotification(NOTIF_ALERT)
+            }
+            ACTION_CLEAR_MUTE -> setRaidMute(RaidMute.None)
             NeutralizedTally.ACTION_NEUTRALIZED_DISMISS -> tally.reset()
             AlarmEpisodeTally.ACTION_ALARM_EPISODE_DISMISS -> episodeTally.reset()
             AlertNotificationManager.ACTION_ALLCLEAR_DISMISSED -> {
@@ -827,21 +859,22 @@ val mappedThreats = registry.allThreats.map { list ->
         if (lastPrefs == null || lastPrefs.preset != notifyPrefs.preset) notifyPlugin.reset()
         else if (lastPrefs != notifyPrefs) notifyPlugin.clearBuckets()
         lastNotifyPrefs = notifyPrefs
+        // Episode lifetime tracks identity, not freshness: a threat still present in the
+        // feed but momentarily stale must not close its episode and re-sire next tick.
         val pluginInputs = all.values.map { t ->
-            val live = t.status != "resolved" && !t.areaOnly &&
-                !engine.isStale(t, engine.propsFor(t.type), now)
+            val alive = t.status != "resolved" && !t.areaOnly
             PluginInput(
                 id = t.id,
                 tier = state.zoneThreats[t.id],
                 alertTier = alertable[t.id],
                 type = t.type.toThreatType(),
-                live = live
+                alive = alive
             )
         } + notifyPlugin.snapshot().keys.filterNot { it in all }.mapNotNull { id ->
             // Shot-down id in its grace window: keep the episode frozen so the
             // same-id respawn reads as the same kill, never a new onset.
             if (AppSources.registry.wasUserShotRecently(id)) {
-                PluginInput(id, null, null, ThreatType.UNKNOWN, live = true, shotGrace = true)
+                PluginInput(id, null, null, ThreatType.UNKNOWN, alive = true, shotGrace = true)
             } else null
         }
         val verdicts = notifyPlugin.tick(pluginInputs, notifyPrefs, now)
@@ -1015,13 +1048,15 @@ val mappedThreats = registry.allThreats.map { list ->
                 val s = Strings.get(state.lang)
                 val delay = state.fallingDebrisDelaySec.coerceIn(0, 600)
                 lastEpisodeReplay = episodeTally.snapshot()
+                val muted = bellsMuted()
                 if (delay > 0) {
-                    postAllClear(s, state.focusBannerCity, debrisSeconds = delay, silent = true, replay = lastEpisodeReplay)
+                    postAllClear(s, state.focusBannerCity, debrisSeconds = delay, silent = true, muted = muted, replay = lastEpisodeReplay)
                     debrisBuffer.start(durationSeconds = delay)
                 } else {
-                    postAllClear(s, state.focusBannerCity, debrisSeconds = 0, silent = true, replay = lastEpisodeReplay)
-                    audioAlarmDispatcher.dispatchAllClearChime()
+                    postAllClear(s, state.focusBannerCity, debrisSeconds = 0, silent = true, muted = muted, replay = lastEpisodeReplay)
+                    if (!muted) audioAlarmDispatcher.dispatchAllClearChime()
                 }
+                setRaidMute(raidMute.cleared())
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
                     sirenOverride = state.officialSirenOverride, vibrationLevel = null,
@@ -1051,6 +1086,12 @@ val mappedThreats = registry.allThreats.map { list ->
 
         /** Reconcile NOTIF_ALERT post/cancel based on primary vs lastShownId. */
         fun reconcileNotif(primary: Primary?, state: MonitorState) {
+            val s = Strings.get(state.lang)
+            val actions = AlertActions(
+                ok = s.alertActionOk,
+                muteRaid = s.alertActionMuteRaid,
+                mute10 = s.alertActionMute10
+            )
             if (primary?.identity != lastShownId) {
                 when {
                     primary == null -> {
@@ -1065,13 +1106,17 @@ val mappedThreats = registry.allThreats.map { list ->
                     }
                     primary.isOnset -> {
                         wakeLockManager.acquireForAlert()
-                        audioAlarmDispatcher.dispatchDangerAlarm(
-                            isRed = (primary.level == "red"),
-                            overrideSilence = (state.zoneSirenOverride ?: state.officialSirenOverride)
-                        )
+                        val muted = bellsMuted()
+                        if (!muted) {
+                            audioAlarmDispatcher.dispatchDangerAlarm(
+                                isRed = (primary.level == "red"),
+                                overrideSilence = (state.zoneSirenOverride ?: state.officialSirenOverride)
+                            )
+                        }
                         postAlert(primary.zone, primary.level, primary.title, primary.body,
                             state.zoneSirenOverride ?: state.officialSirenOverride,
-                            revealThreat = primary.revealThreat, vibrationLevel = primary.vibration)
+                            revealThreat = primary.revealThreat, vibrationLevel = primary.vibration,
+                            muted = muted, actions = actions)
                         if (primary.zone != null) {
                             primary.revealThreat?.let { t ->
                                 DebugLog.recordZoneFired(
@@ -1091,7 +1136,9 @@ val mappedThreats = registry.allThreats.map { list ->
                     alertNotificationShowing() -> {
                         postAlert(primary.zone, primary.level, primary.title, primary.body,
                             state.zoneSirenOverride ?: state.officialSirenOverride,
-                            revealThreat = primary.revealThreat, silent = true, vibrationLevel = primary.vibration)
+                            revealThreat = primary.revealThreat, silent = true,
+                            vibrationLevel = primary.vibration,
+                            muted = bellsMuted(), actions = actions)
                     }
                     else -> { /* dismissed, don't re-raise */ }
                 }
@@ -1113,9 +1160,12 @@ val mappedThreats = registry.allThreats.map { list ->
             (primary.zone == null || restoredPresence)
         ) {
             coldStartRepostDone = true
+            val cs = Strings.get(state.lang)
             postAlert(primary.zone, primary.level, primary.title, primary.body,
                 state.zoneSirenOverride ?: state.officialSirenOverride,
-                revealThreat = primary.revealThreat, silent = true, vibrationLevel = primary.vibration)
+                revealThreat = primary.revealThreat, silent = true,
+                vibrationLevel = primary.vibration, muted = bellsMuted(),
+                actions = AlertActions(cs.alertActionOk, cs.alertActionMuteRaid, cs.alertActionMute10))
             lastShownId = primary.identity
         }
         reconcileNotif(primary, state)
@@ -1166,6 +1216,7 @@ val mappedThreats = registry.allThreats.map { list ->
             } else if (System.currentTimeMillis() - since >= ALL_CLEAR_GRACE_MS) {
                 emptySince = null
                 cancelAlert()
+                setRaidMute(raidMute.cleared())
             }
         } else {
             emptySince = null
@@ -1256,7 +1307,9 @@ val mappedThreats = registry.allThreats.map { list ->
         sirenOverride: Boolean,
         revealThreat: NormalizedThreat? = null,
         silent: Boolean = false,
-        vibrationLevel: Int = 3
+        vibrationLevel: Int = 3,
+        muted: Boolean = false,
+        actions: AlertActions? = null
     ) {
         notificationManager.postAlertNotification(
             zone = zone ?: ThreatZone.INNER,
@@ -1265,7 +1318,9 @@ val mappedThreats = registry.allThreats.map { list ->
             sirenOverride = sirenOverride,
             revealThreat = revealThreat,
             vibrationLevel = vibrationLevel,
-            silent = silent
+            silent = silent,
+            muted = muted,
+            actions = actions
         )
     }
 
@@ -1295,7 +1350,7 @@ val mappedThreats = registry.allThreats.map { list ->
         }
     }
 
-    private fun postAllClear(s: Strings.StringSet, city: String, debrisSeconds: Int = 0, silent: Boolean = false, replay: List<FlourishRecord> = emptyList()) {
+    private fun postAllClear(s: Strings.StringSet, city: String, debrisSeconds: Int = 0, silent: Boolean = false, muted: Boolean = false, replay: List<FlourishRecord> = emptyList()) {
         val body = if (debrisSeconds > 0) {
             val mm = debrisSeconds / 60
             val ss = debrisSeconds % 60
@@ -1308,6 +1363,7 @@ val mappedThreats = registry.allThreats.map { list ->
             title = String.format(s.allClearTitle, city),
             body = body,
             silent = silent,
+            muted = muted,
             replay = replay
         )
     }
@@ -1372,6 +1428,7 @@ val mappedThreats = registry.allThreats.map { list ->
 
     override fun onDestroy() {
         MonitoringStatus.setRunning(false)
+        setRaidMute(RaidMute.None)
         audioAlarmDispatcher.release()
         debrisBuffer.abort()
         screenReceiver?.let { unregisterReceiver(it) }

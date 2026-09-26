@@ -18,8 +18,8 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(TOOLS)
-CITIES_KT = os.path.join(REPO, "app", "src", "main", "java", "ua", "ukrainedrones", "domain", "Cities.kt")
-OUT_FILE = os.path.join(REPO, "app", "src", "main", "java", "ua", "ukrainedrones", "domain", "CityRaions.kt")
+CITIES_KT = os.path.join(REPO, "app", "src", "main", "java", "com", "odesaplay", "oko", "domain", "Cities.kt")
+OUT_FILE = os.path.join(REPO, "app", "src", "main", "java", "com", "odesaplay", "oko", "domain", "CityRaions.kt")
 
 OVERQUERY = (
     '[out:json][timeout:300];'

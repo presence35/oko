@@ -103,7 +103,9 @@ internal fun AlertsOffChip(s: Strings.StringSet) {
             Text(
                 s.alertsOffLabel,
                 style = MaterialTheme.typography.labelSmall,
-                color = Color(AppPalette.TextSecondary)
+                color = Color(AppPalette.TextSecondary),
+                maxLines = 1,
+                softWrap = false
             )
         }
     }
@@ -121,6 +123,8 @@ private fun SimulationChip(s: Strings.StringSet) {
             s.simulationLabel,
             style = MaterialTheme.typography.labelSmall,
             color = AdvisoryAmber,
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
         )
     }
@@ -137,8 +141,37 @@ private fun StalePill(label: String) {
             label,
             style = MaterialTheme.typography.labelSmall,
             color = Color(AppPalette.TextSecondary),
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
         )
+    }
+}
+
+/**
+ * Dedicated bottom row for a threat's status pills (alerts-off, stale, simulation…).
+ * Hidden when there is nothing to show. Wraps instead of squeezing, so a pill can never
+ * be compressed into a one-character-per-line column; new pills are a one-line addition.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ThreatStatusRow(
+    alertsOff: Boolean,
+    simulated: Boolean,
+    stale: Boolean,
+    staleLabel: String,
+    s: Strings.StringSet,
+    modifier: Modifier = Modifier
+) {
+    if (!alertsOff && !simulated && !stale) return
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (alertsOff) AlertsOffChip(s)
+        if (stale) StalePill(staleLabel)
+        if (simulated) SimulationChip(s)
     }
 }
 
@@ -420,8 +453,15 @@ fun ThreatPopupCard(
                                 updatedAtMillis = threat.updatedAtMillis,
                                 strings = s
                             )
-                            if (stale) StalePill(s.staleLabel)
                         }
+                        ThreatStatusRow(
+                            alertsOff = alertsOff,
+                            simulated = threat.simulated,
+                            stale = stale,
+                            staleLabel = s.staleLabel,
+                            s = s,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
                 }
             }
@@ -455,18 +495,6 @@ fun ThreatPopupCard(
                                         style = MaterialTheme.typography.titleLarge,
                                         color = Color.White
                                     )
-                                    if (alertsOff) {
-                                        Spacer(Modifier.width(6.dp))
-                                        AlertsOffChip(s)
-                                    }
-                                    if (threat.simulated) {
-                                        Spacer(Modifier.width(6.dp))
-                                        SimulationChip(s)
-                                    }
-                                    if (stale) {
-                                        Spacer(Modifier.width(6.dp))
-                                        StalePill(s.staleLabel)
-                                    }
                                     Spacer(Modifier.weight(1f))
                                     ThreatElapsedBadge(
                                         updatedAtMillis = threat.updatedAtMillis,
@@ -557,6 +585,14 @@ fun ThreatPopupCard(
                                 )
                             }
                         }
+                        ThreatStatusRow(
+                            alertsOff = alertsOff,
+                            simulated = threat.simulated,
+                            stale = stale,
+                            staleLabel = s.staleLabel,
+                            s = s,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
                     }
                     Spacer(Modifier.width(16.dp))
                     ThreatLevelGauge(level = threatLevel)

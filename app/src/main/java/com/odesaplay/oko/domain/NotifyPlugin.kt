@@ -45,7 +45,7 @@ enum class VerdictKind { SOUND, SILENT, SUPPRESS }
 /** Why a would-be sound was swallowed. Mirrored in [DebugLogReason] for log rows. */
 enum class PolicyReason { ONCE_PER_THREAT, ONCE_PER_TYPE, RATE_LIMITED }
 
-/** One threat's per-tick facts. [live] = present, fresh, active, not area-only. */
+/** One threat's per-tick facts. [alive] = in the feed, active, not area-only. */
 data class PluginInput(
     val id: String,
     /** Engine tier (banded); null = outside the zones. */
@@ -53,7 +53,11 @@ data class PluginInput(
     /** Armed mapping; null = muted (bell off) or outside. */
     val alertTier: ThreatZone?,
     val type: ThreatType,
-    val live: Boolean,
+    /**
+     * The track's identity: present in the feed, not area-only. Deliberately excludes
+     * freshness — closing an episode on a stale blip would re-sire the same track.
+     */
+    val alive: Boolean,
     /**
      * User just shot this id (grace window): the track is briefly gone, but the episode
      * must survive untouched — a same-id respawn is the same kill, never a new onset.
@@ -135,7 +139,7 @@ class NotifyPlugin {
         val byId = inputs.associateBy { it.id }
         // Close dead episodes: track no longer live. Nothing time-based — staleness
         // and removal are facts from the feed, not timers we invented.
-        episodes.keys.filterNot { byId[it]?.live == true }.forEach { episodes.remove(it) }
+        episodes.keys.filterNot { byId[it]?.alive == true }.forEach { episodes.remove(it) }
         byId.forEach { (id, inp) -> if (!inp.shotGrace) episodes[id]?.type = inp.type }
         // Rebuild type memory from still-open sounded episodes (restart continuity),
         // so a re-keyed track never outruns the gate.
@@ -173,7 +177,7 @@ class NotifyPlugin {
             }
         }
         // Sky-clear eviction: a type with no live input left the sitting.
-        soundedTypes.retainAll(byId.values.filter { it.live }.map { it.type }.toSet())
+        soundedTypes.retainAll(byId.values.filter { it.alive }.map { it.type }.toSet())
         pruneBuckets(prefs, now)
         return out
     }

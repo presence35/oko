@@ -1401,7 +1401,7 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.hapticClickable {
-                            uriHandler.openUri("https://odesaplay.com.ua/other_apps/ukrainedrones/privacy.html")
+                            uriHandler.openUri("https://odesaplay.com.ua/other_apps/oko/privacy.html")
                         }
                     )
                 }

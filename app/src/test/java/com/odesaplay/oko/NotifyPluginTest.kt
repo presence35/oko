@@ -14,9 +14,9 @@ class NotifyPluginTest {
         tier: ThreatZone?,
         alertTier: ThreatZone? = tier,
         type: ThreatType = ThreatType.SHAHED,
-        live: Boolean = true,
+        alive: Boolean = true,
         shotGrace: Boolean = false
-    ) = PluginInput(id, tier, alertTier, type, live, shotGrace)
+    ) = PluginInput(id, tier, alertTier, type, alive, shotGrace)
 
     private fun prefs(
         preset: ZonePolicy,
@@ -33,8 +33,8 @@ class NotifyPluginTest {
         assertEquals(VerdictKind.SILENT, p.tick(listOf(inp("a", ThreatZone.OUTER)), pr, now)["a"]!!.kind)
         assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!.kind)
         assertEquals(VerdictKind.SILENT, p.tick(listOf(inp("a", ThreatZone.OUTER)), pr, now)["a"]!!.kind)
-        // Out of zones one tick (live), back in: re-entry sounds.
-        assertTrue(p.tick(listOf(inp("a", null, live = true)), pr, now).isEmpty())
+        // Out of zones one tick, back in: re-entry sounds.
+        assertTrue(p.tick(listOf(inp("a", null, alive = true)), pr, now).isEmpty())
         assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.OUTER)), pr, now)["a"]!!.kind)
     }
 
@@ -43,12 +43,12 @@ class NotifyPluginTest {
         val p = NotifyPlugin()
         val pr = prefs(ZonePolicy.ONCE_PER_THREAT)
         assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!.kind)
-        p.tick(listOf(inp("a", null, live = true)), pr, now)
+        p.tick(listOf(inp("a", null, alive = true)), pr, now)
         val re = p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!
         assertEquals(VerdictKind.SUPPRESS, re.kind)
         assertEquals(PolicyReason.ONCE_PER_THREAT, re.reason)
-        // Track dies (stale): episode closes; return is a new episode and sounds.
-        p.tick(listOf(inp("a", null, live = false)), pr, now)
+        // Track dies (resolved): episode closes; return is a new episode and sounds.
+        p.tick(listOf(inp("a", null, alive = false)), pr, now)
         assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!.kind)
     }
 
@@ -106,7 +106,7 @@ class NotifyPluginTest {
         val pr = prefs(ZonePolicy.ONCE_PER_TYPE)
         assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.OUTER)), pr, now)["a"]!!.kind)
         // Track "a" dies while another same-type track stays live: the respawn is still gated.
-        p.tick(listOf(inp("a", null, live = false), inp("b", ThreatZone.OUTER)), pr, now)
+        p.tick(listOf(inp("a", null, alive = false), inp("b", ThreatZone.OUTER)), pr, now)
         val re = p.tick(
             listOf(inp("a", ThreatZone.OUTER), inp("b", ThreatZone.OUTER)), pr, now
         )["a"]!!
@@ -120,7 +120,7 @@ class NotifyPluginTest {
         val pr = prefs(ZonePolicy.ONCE_PER_TYPE)
         assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.OUTER)), pr, now)["a"]!!.kind)
         // Everyone dies: the sitting ends.
-        p.tick(listOf(inp("a", null, live = false)), pr, now)
+        p.tick(listOf(inp("a", null, alive = false)), pr, now)
         p.tick(emptyList(), pr, now)
         assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("b", ThreatZone.OUTER)), pr, now)["b"]!!.kind)
     }
@@ -170,7 +170,7 @@ class NotifyPluginTest {
         )["b"]!!
         assertEquals(VerdictKind.SUPPRESS, over.kind)
         // Everyone dies: buckets reset; the next sitting sounds again.
-        p.tick(listOf(inp("a", null, live = false), inp("b", null, live = false)), pr, now)
+        p.tick(listOf(inp("a", null, alive = false), inp("b", null, alive = false)), pr, now)
         assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("c", ThreatZone.OUTER)), pr, now)["c"]!!.kind)
     }
 
@@ -191,7 +191,7 @@ class NotifyPluginTest {
         val pr = prefs(ZonePolicy.EVERY_CHANGE)
         assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!.kind)
         // Shot down: track gone, grace holds the episode frozen (no verdict).
-        assertTrue(p.tick(listOf(inp("a", null, live = true, shotGrace = true)), pr, now).isEmpty())
+        assertTrue(p.tick(listOf(inp("a", null, alive = true, shotGrace = true)), pr, now).isEmpty())
         // Same-id respawn reads as steady, even under EVERY_CHANGE.
         assertEquals(VerdictKind.SILENT, p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!.kind)
     }
@@ -201,7 +201,7 @@ class NotifyPluginTest {
         val p = NotifyPlugin()
         val pr = prefs(ZonePolicy.EVERY_CHANGE)
         p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)
-        p.tick(listOf(inp("a", null, live = false)), pr, now)
+        p.tick(listOf(inp("a", null, alive = false)), pr, now)
         assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!.kind)
     }
 
@@ -256,7 +256,7 @@ class NotifyPluginTest {
             )
             assertEquals(ZonePolicy.EVERY_CHANGE, pr.preset)
             assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!.kind)
-            p.tick(listOf(inp("a", null, live = true)), pr, now)
+            p.tick(listOf(inp("a", null, alive = true)), pr, now)
             assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!.kind)
         }
     }
@@ -271,7 +271,7 @@ class NotifyPluginTest {
         assertEquals(10, pr.digestMax)
         val p = NotifyPlugin()
         assertEquals(VerdictKind.SOUND, p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!.kind)
-        p.tick(listOf(inp("a", null, live = true)), pr, now)
+        p.tick(listOf(inp("a", null, alive = true)), pr, now)
         val re = p.tick(listOf(inp("a", ThreatZone.INNER)), pr, now)["a"]!!
         assertEquals(VerdictKind.SUPPRESS, re.kind)
         assertEquals(PolicyReason.ONCE_PER_THREAT, re.reason)
