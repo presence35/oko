@@ -1,10 +1,12 @@
 package com.odesaplay.oko
 
+import android.Manifest
 import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -149,6 +151,9 @@ class AlertService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var monitoringJob: Job? = null
+    /** True once the FGS was (re)started with the location type. Left false when a background
+     *  start had to fall back (no location exemption), so the next foreground start re-promotes. */
+    private var locationFgsActive = false
     private var lastShownId: String? = null
     /** Frequency policy: the service feeds it per-tick facts and executes verdicts. */
     private val notifyPlugin = NotifyPlugin()
@@ -338,6 +343,9 @@ class AlertService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         MonitoringStatus.setRunning(true)
+        // A background start (package-replaced/boot) may have had to drop the location type;
+        // once we're started again in the foreground, re-promote so background fixes resume.
+        if (!locationFgsActive) startForegroundCompat()
         when (intent?.action) {
             ACTION_RETRY -> {
                 scope.launch {
@@ -366,21 +374,46 @@ class AlertService : Service() {
     private fun startForegroundCompat() {
         val s = Strings.get(AppLanguage.EN)
         val notif = notificationManager.buildMonitorNotification(s.notifOngoingTitle, "")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                // API 34+ requires the location type for background fixes; Android 15 caps
-                // dataSync at 6h/24h, so keep specialUse as the 24/7 monitor type.
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-            } else {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-            }
-            ServiceCompat.startForeground(this, NOTIF_MONITOR, notif, fgsType)
-        } else {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             startForeground(NOTIF_MONITOR, notif)
+            locationFgsActive = true
+            return
         }
+        val baseType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        } else {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        }
+        // API 34+ rejects the location type when the start lacks the exemption (e.g. an
+        // ACTION_MY_PACKAGE_REPLACED background start) or the runtime permission. Try it, then
+        // fall back to the base type so monitoring survives; onStartCommand re-promotes later.
+        val wantLocation = hasLocationPermission()
+        if (wantLocation && startForegroundTyped(baseType or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION, notif)) {
+            locationFgsActive = true
+            return
+        }
+        if (startForegroundTyped(baseType, notif)) {
+            locationFgsActive = false
+            return
+        }
+        // Even the base type was refused — surface the dead state like startResilient intends.
+        AlertNotificationManager(applicationContext).postMonitoringPaused()
+        stopSelf()
     }
+
+    /** Attempts [ServiceCompat.startForeground]; returns false if the platform refused the type. */
+    private fun startForegroundTyped(type: Int, notif: android.app.Notification): Boolean = try {
+        ServiceCompat.startForeground(this, NOTIF_MONITOR, notif, type)
+        true
+    } catch (_: SecurityException) {
+        false
+    }
+
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun startMonitoring() {

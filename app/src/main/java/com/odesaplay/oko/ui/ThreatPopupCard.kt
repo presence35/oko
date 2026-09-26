@@ -321,16 +321,13 @@ fun ThreatPopupCard(
                             verticalAlignment = Alignment.Top,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                ThreatIcon(
-                                    type = threat.type.toThreatType(),
-                                    set = iconSet,
-                                    size = fontAware(44.dp),
-                                    contentDescription = typeLabel,
-                                    dimmed = stale
-                                )
-                                if (stale) StalePill(s.staleLabel)
-                            }
+                            ThreatIcon(
+                                type = threat.type.toThreatType(),
+                                set = iconSet,
+                                size = fontAware(44.dp),
+                                contentDescription = typeLabel,
+                                dimmed = stale
+                            )
                             Spacer(Modifier.width(8.dp))
                             Column(
                                 verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -416,12 +413,14 @@ fun ThreatPopupCard(
                         Spacer(Modifier.height(4.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             ThreatElapsedBadge(
                                 updatedAtMillis = threat.updatedAtMillis,
                                 strings = s
                             )
+                            if (stale) StalePill(s.staleLabel)
                         }
                     }
                 }
@@ -437,16 +436,13 @@ fun ThreatPopupCard(
                     Column(modifier = Modifier.weight(1f)) {
                         // Header: icon, type, status chips, region, and elapsed time on top-right
                         Row(verticalAlignment = Alignment.Top) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                ThreatIcon(
-                                    type = threat.type.toThreatType(),
-                                    set = iconSet,
-                                    size = fontAware(40.dp),
-                                    contentDescription = typeLabel,
-                                    dimmed = stale
-                                )
-                                if (stale) StalePill(s.staleLabel)
-                            }
+                            ThreatIcon(
+                                type = threat.type.toThreatType(),
+                                set = iconSet,
+                                size = fontAware(40.dp),
+                                contentDescription = typeLabel,
+                                dimmed = stale
+                            )
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(
@@ -466,6 +462,10 @@ fun ThreatPopupCard(
                                     if (threat.simulated) {
                                         Spacer(Modifier.width(6.dp))
                                         SimulationChip(s)
+                                    }
+                                    if (stale) {
+                                        Spacer(Modifier.width(6.dp))
+                                        StalePill(s.staleLabel)
                                     }
                                     Spacer(Modifier.weight(1f))
                                     ThreatElapsedBadge(
