@@ -159,6 +159,7 @@ internal val Russian: Strings.StringSet = Strings.StringSet(
         notifUpdateChannelDesc = "Уведомления о доступных обновлениях приложения.",
         attributionText = "Карта воздушных угроз — NEPTUN",
         madeBy = "Создано Presaince",
+        privacyPolicy = "Privacy Policy",
         connOnline = "В сети",
         connOff = "Выкл",
         connOffline = "Не в сети",

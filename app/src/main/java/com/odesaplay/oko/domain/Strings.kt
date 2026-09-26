@@ -166,6 +166,7 @@ object Strings {
         val notifUpdateChannelDesc: String,
         val attributionText: String,
         val madeBy: String,
+        val privacyPolicy: String,
         val connOnline: String,
         val connOffline: String,
         val connOff: String,
@@ -894,6 +895,7 @@ object Strings {
         val notifUpdateChannelDesc: String get() = status.notifUpdateChannelDesc
         val attributionText: String get() = status.attributionText
         val madeBy: String get() = status.madeBy
+        val privacyPolicy: String get() = status.privacyPolicy
         val connOnline: String get() = status.connOnline
         val connOff: String get() = status.connOff
         val connOffline: String get() = status.connOffline

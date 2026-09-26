@@ -159,6 +159,7 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         notifUpdateChannelDesc = "Сповіщення про доступні оновлення застосунку.",
         attributionText = "Карта повітряних тривог — NEPTUN",
         madeBy = "Зроблено Presaince",
+        privacyPolicy = "Privacy Policy",
         connOnline = "Онлайн",
         connOff = "Off",
         connOffline = "Офлайн",

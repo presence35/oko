@@ -40,6 +40,23 @@ android {
         resourceConfigurations += listOf("en", "uk", "ru")
     }
 
+    // Two distribution channels from one codebase:
+    //  - play     → Google Play. No self-update: the APK-download/install path and its
+    //               REQUEST_INSTALL_PACKAGES permission are not compiled in (R8 strips the
+    //               dead branches; the permission/provider live only in the sideload manifest).
+    //  - sideload → the beta APK feed on odesaplay.com.ua, with in-app self-update intact.
+    flavorDimensions += "channel"
+    productFlavors {
+        create("play") {
+            dimension = "channel"
+            buildConfigField("boolean", "SELF_UPDATE", "false")
+        }
+        create("sideload") {
+            dimension = "channel"
+            buildConfigField("boolean", "SELF_UPDATE", "true")
+        }
+    }
+
     signingConfigs {
         getByName("debug") {
             storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")
@@ -181,8 +198,8 @@ tasks.register<GradleBuild>("release") {
 
 tasks.register("uploadRelease") {
     group = "versioning"
-    description = "Builds the release APK, generates version.json from version.properties + notes files, and uploads both to the FTP server."
-    dependsOn("assembleRelease")
+    description = "Builds the beta-release APK (sideload flavor), generates version.json from version.properties + CHANGELOG.md, and uploads both to the FTP server."
+    dependsOn("assembleSideloadRelease")
     doLast {
         val uploadPropsFile = file("upload.properties")
         if (!uploadPropsFile.exists()) {
@@ -194,8 +211,8 @@ tasks.register("uploadRelease") {
         val pass = up.getProperty("password") ?: throw GradleException("upload.properties: missing 'password'")
         val remoteDir = up.getProperty("remoteDir").orEmpty().trim().trim('/')
 
-        val apk = file("build/outputs/apk/release/app-release.apk")
-        if (!apk.exists()) throw GradleException("Release APK not found: $apk")
+        val apk = file("build/outputs/apk/sideload/release/app-sideload-release.apk")
+        if (!apk.exists()) throw GradleException("Sideload release APK not found: $apk")
 
         val vProps = Properties().apply { versionPropsFile.inputStream().use { load(it) } }
         val vc = vProps.getProperty("versionCode") ?: "0"

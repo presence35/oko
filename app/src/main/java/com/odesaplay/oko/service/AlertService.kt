@@ -53,6 +53,7 @@ import com.odesaplay.oko.engine.inOblast
 import com.odesaplay.oko.engine.alertRegionName
 import com.odesaplay.oko.engine.threatBody
 import com.odesaplay.oko.UpdateInfo
+import com.odesaplay.oko.BuildConfig
 import com.odesaplay.oko.UpdateManager
 import com.odesaplay.oko.UpdateState
 import com.odesaplay.oko.engine.ZoneParams
@@ -427,8 +428,10 @@ class AlertService : Service() {
         val svcState = ServiceState(applicationContext)
         LocationTracker.start(applicationContext)
 
-        scope.launch {
-            dailyUpdateCheckLoop()
+        if (BuildConfig.SELF_UPDATE) {
+            scope.launch {
+                dailyUpdateCheckLoop()
+            }
         }
 
         scope.launch {

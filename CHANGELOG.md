@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- Added Play/sideload build flavors: the Play AAB has no self-update and never requests install-APK permission, while the sideload beta keeps in-app updates 09-26_16:05:00
+- Removed the unused full-screen-intent permission 09-26_16:05:00
+- The test simulator no longer ships in release builds 09-26_16:05:00
+- Added the release ProGuard rules (release shrinking could not build without them) 09-26_16:05:00
+- Added a Privacy Policy link in Settings 09-26_16:05:00
 - A new official alert now clears the previous all-clear notification and its stuck debris countdown; the last episode's replay stays tappable while the new alert is live 09-26_15:37:41
 - Stale pill sits by the threat type (and beside the timer on the small card) so a threat going stale no longer nudges the card layout 09-26_15:01:26
 - Fixed a crash on first launch after an app update (the monitoring service no longer demands location access when Android starts it in the background) 09-26_15:10:00

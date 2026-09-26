@@ -55,6 +55,7 @@ import com.odesaplay.oko.engine.ZoneParams
 import com.odesaplay.oko.service.ServiceState
 import com.odesaplay.oko.service.MonitoringStatus
 import com.odesaplay.oko.ShelterIndex
+import com.odesaplay.oko.BuildConfig
 import com.odesaplay.oko.UpdateManager
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
@@ -483,7 +484,8 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         LocationTracker.start(getApplication())
         loadShelters()
         // Auto-check for updates at most once per day; pops only when no alert is active.
-        autoCheckForUpdates(allowPopup = true)
+        // Play flavor has no self-update, so the whole check path is compiled out.
+        if (BuildConfig.SELF_UPDATE) autoCheckForUpdates(allowPopup = true)
     }
 
     override fun onCleared() {
@@ -1802,6 +1804,7 @@ fun setAlertsArmed(armed: Boolean) {
 
     /** Auto-check at most once per day. [allowPopup] pops the dialog on start when no alert is active. */
     fun autoCheckForUpdates(allowPopup: Boolean) {
+        if (!BuildConfig.SELF_UPDATE) return
         viewModelScope.launch {
             val lastCheck = svcState.lastUpdateCheck().first()
             if (System.currentTimeMillis() - lastCheck >= DAILY_CHECK_INTERVAL_MS) {
@@ -1816,6 +1819,7 @@ fun setAlertsArmed(armed: Boolean) {
      * reminder is surfaced by MainScreen as a snackbar with a Download action.
      */
     fun checkForUpdatesOnSettingsOpen() {
+        if (!BuildConfig.SELF_UPDATE) return
         if (latestVersionFlow.value != null) {
             updateReminderFlow.value++
         } else {
@@ -1832,6 +1836,7 @@ fun setAlertsArmed(armed: Boolean) {
     private fun hasActiveAlert(): Boolean = uiState.value.alertActive
 
     fun checkForUpdates(notify: Boolean = true, popupAvailable: Boolean = true, popupOnlyWithoutAlert: Boolean = false, remindOnAvailable: Boolean = false) {
+        if (!BuildConfig.SELF_UPDATE) return
         if (isChecking) return
         val current = updateStateFlow.value
         if (current is UpdateState.Downloading || current is UpdateState.Downloaded) return

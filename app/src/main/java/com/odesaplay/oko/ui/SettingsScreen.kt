@@ -248,8 +248,11 @@ fun SettingsScreen(
         else emptySet()
     }
     val matchedStandalone = remember(searchNormalized, searchDb) {
-        if (searching) searchDb.standaloneDirect.filterValues { matchesSearch(searchWords, it) }.keys
-        else emptySet()
+        val matched =
+            if (searching) searchDb.standaloneDirect.filterValues { matchesSearch(searchWords, it) }.keys
+            else emptySet()
+        // Play flavor has no self-update button, so drop it from search results too.
+        if (BuildConfig.SELF_UPDATE) matched else matched - StandaloneSetting.UPDATE
     }
     val relatedChips = remember(searchNormalized, searchDb) {
         if (!searching) emptyList()
@@ -1293,7 +1296,7 @@ fun SettingsScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
 
-            if (searching.not() || StandaloneSetting.UPDATE in matchedStandalone) {
+            if (BuildConfig.SELF_UPDATE && (searching.not() || StandaloneSetting.UPDATE in matchedStandalone)) {
             item(key = "action_update", contentType = "action") {
                 val updateState by updateFlow.collectAsState()
                 val latestVersion by latestVersionFlow.collectAsState()
@@ -1391,6 +1394,15 @@ fun SettingsScreen(
                         "v$versionName",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        s.privacyPolicy,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.hapticClickable {
+                            uriHandler.openUri("https://odesaplay.com.ua/other_apps/ukrainedrones/privacy.html")
+                        }
                     )
                 }
             }

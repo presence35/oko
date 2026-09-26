@@ -12,8 +12,9 @@ import com.odesaplay.oko.source.SourceRegistry
 import com.odesaplay.oko.source.sim.TestSource
 
 /** App-wide source composition root: builds and owns the [SourceRegistry] with the single
- *  production source (NEPTUN) plus the peace-time Test simulator. Consumers only ever read
- *  [registry]; the underlying transports/decoders stay private to each source. */
+ *  production source (NEPTUN) plus, in debug builds only, the peace-time Test simulator.
+ *  Consumers only ever read [registry]; the underlying transports/decoders stay private to
+ *  each source. */
 object AppSources {
     private var _registry: SourceRegistry? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -31,7 +32,9 @@ object AppSources {
         appContext = context.applicationContext
         val registry = SourceRegistry()
         registry.register(NeptunSource(context), scope)
-        registry.register(TestSource(), scope)
+        // Peace-time simulator is a dev tool only — it plays fake threats/alerts through the
+        // real pipeline, so it must never ship in a release build (Play flavor included).
+        if (BuildConfig.DEBUG) registry.register(TestSource(), scope)
         _registry = registry
     }
 

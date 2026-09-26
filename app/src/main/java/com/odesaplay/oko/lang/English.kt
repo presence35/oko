@@ -159,6 +159,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
         notifUpdateChannelDesc = "Notifications about available app updates.",
         attributionText = "Air threat map — NEPTUN",
         madeBy = "Made by Presaince",
+        privacyPolicy = "Privacy Policy",
         connOnline = "Online",
         connOff = "Off",
         connOffline = "Offline",

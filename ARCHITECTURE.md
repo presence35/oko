@@ -7,11 +7,16 @@ change a documented invariant, update the relevant section.
 ## Quick facts
 
 - Single-module Android app (`:app`) — a live air-threat map for Ukraine.
+- Two build flavors from one codebase: **`play`** (Google Play, AAB — no self-update, no
+  `REQUEST_INSTALL_PACKAGES`/FileProvider) and **`sideload`** (beta APK feed on
+  `odesaplay.com.ua` with in-app self-update). `BuildConfig.SELF_UPDATE` is the compile-time
+  gate; R8 strips the dead branch in `play` release.
 - Jetpack Compose (Material 3, dark-only) + MapLibre Native SDK (OpenGL/Vulkan hardware-accelerated raster & vector tiles). Kotlin 1.9.24, JDK 17, minSdk 26 /
   targetSdk 35, namespace `com.odesaplay.oko`.
 - No runtime backend of ours: data comes straight from the public
   [NEPTUN](https://neptun.in.ua) API (WebSocket stream). No Firebase, no push.
-- Update feed: static `version.json` + APK on `odesaplay.com.ua`, self-checked daily, in-app install is temporary while in beta mode, eventually it will be deprecated for official Google Play route.
+- Update feed: static `version.json` + APK on `odesaplay.com.ua`, self-checked daily,
+  `sideload` flavor only; `play` ships through Google Play.
 - Coroutines + flows throughout; singletons expose `StateFlow`s.
 
 ## Package structure
@@ -86,10 +91,12 @@ LocationTracker ──┬──► MainViewModel        NightMode.kt / Cities.kt
   clears on a 20s grace. Inbound staging (`domain/ThreatBehavior.kt`) re-tags the tiers both
   consumers use, so an approximate track heading to your city rides the yellow ring instead of
   parking on the position (a fast one still sounds red).
-- **Update flow.** `UpdateManager.check()` → `Available` → `download()` (progress) →
-  `buildInstallIntent()` → system installer. `AlertService` also checks silently every day at
-  16:20 while it runs and posts one "new version available" notification per new build
-  (deduped by `last_notified_update_code`); tapping it re-opens the app and pops the update dialog.
+- **Update flow (sideload flavor only).** `UpdateManager.check()` → `Available` → `download()`
+  (progress) → `buildInstallIntent()` → system installer. `AlertService` also checks silently
+  every day at 16:20 while it runs and posts one "new version available" notification per new
+  build (deduped by `last_notified_update_code`); tapping it re-opens the app and pops the
+  update dialog. All of this is compiled out of the `play` flavor (`BuildConfig.SELF_UPDATE`),
+  which ships via Google Play.
 
 ## Module map
 
@@ -112,7 +119,7 @@ detail that matters when editing that file.
 | `connection/ValidatedNetworkTracker.kt` | Tracks currently attached INTERNET+VALIDATED networks (generic over the key type). The supervisor only tears the socket down when this set drains, so losing one interface (Wi-Fi while LTE is up) is not an outage. Unit-tested without Android types. |
 | `connection/ConnectionState.kt` | Sealed interface state machine: `Disconnected` → `Connecting` → `Connected` → `Degraded` → `Offline`; `ConnectionMilestone` (M3/M5_CRITICAL/M6/M10/M20_GAVE_UP, once per episode, **owned by `SourceRegistry`**); convenience extensions `isConnected`, `isDegraded`, `isOffline`, `offlineSinceOrNull`, `reconnectStartMillisOrZero`. Transport-internal (not the consumer SPI). |
 | `connection/ResilientConnectionSupervisor.kt` | The only production connection supervisor — **transport-only**. OS network gating (no spin while offline; transient validation loss never tears the socket — only `onLost`/socket failure does; validation-restore reconnects only when down, never mid-flight), 168 s byte-silence watchdog (4× the 42 s degraded threshold, so a quiet-but-alive socket is never killed on the orange edge), full-jitter backoff (`backoffDelayMs`, tested), single-generation socket lifecycle (only `executeConnect` mints; intentional closes claim the disconnect one-shot and cancel in-flight handshakes via the client's dispatcher), and stuck-offline watchdog (force retry past max-backoff + timeout with a live network). Publishes raw `ConnectionState` (`reconnectStartMillis` is a plain wall stamp, no flap stitching) and `connEvents`; never computes episode age or milestones — that is `SourceRegistry`'s job. Owned by `NeptunSource`. |
-| `AppSources.kt` | App-wide composition root (`object`): builds and owns the `SourceRegistry` with `NeptunSource` + the peace-time `TestSource`, exposes `registry`, `appForeground`/`setAppForeground`; `init(context)`/`clear()`. Replaces the old `ConnectionHolder`/`AppPluginHolder` singletons. |
+| `AppSources.kt` | App-wide composition root (`object`): builds and owns the `SourceRegistry` with `NeptunSource` + (debug builds only) the peace-time `TestSource`, exposes `registry`, `appForeground`/`setAppForeground`; `init(context)`/`clear()`. Replaces the old `ConnectionHolder`/`AppPluginHolder` singletons. |
 | `Threat.kt` | NEPTUN display metadata + JSON parsing: `ThreatType`/`ThreatTypeCatalog`/`Reliability` (labels, staleness, nominal speeds), `translateCourseAssessment` (EN course text, word-level common-word translation), `normalizedThreatFromJson` — NEPTUN JSON → `NormalizedThreat` directly (the engine currency; no `Threat` display DTO). The alert currency + matching gates moved out to `engine/OblastAlert.kt`. |
 
 ### Source SPI (source-agnostic ingestion layer)
@@ -136,7 +143,7 @@ private inside each `Source`. Every source reports normalized engine currency
 | `source/SourceRegistry.kt` | Health authority over all sources; **every merge/health derivation reads `enabledSources` (registered sources the user switched on), never the raw registration list** — so a disabled source can't feed, own, or degrade anything. Merges threats/alerts with **takeover** semantics (authoritative source's snapshots are sole truth; stale holders fill only when nothing is authoritative); exposes `perSourceState`, `wsHealthy`, `degraded`, `degradedSince` (monotonic-stamped), `coveredByFallback`, `isOffline(now)`, `lastThreatUpdateAt` + `isThreatDataStale(now)` (**source-agnostic** staleness), `activeAlertSource`, aggregate `connectionState` (worst over enabled sources), merged `allThreats`/`allAlerts` + `typeCatalog`, `alertsReady` (true once any source delivers a second observed snapshot — episode ends gate on it, never on the initial empty; every emission merges), a `sourceEvents` SharedFlow (toggles + alert-owner handovers) and **owns the offline-episode** (`degradedSince` + `connectionMilestones` — the 3/5/6/10/20 min + GAVE_UP milestones, emitted once per episode and gated on `isOffline(now)`). For alerts only a **CONNECTED** WS socket is authoritative — `DEGRADED` (quiet >42s) is stale data and falls back to the union-hold. Reconnect diagnostics (`connEvents`/`retryState`/`dismissLogCard`/`annotateConnectionLog`/`setActiveAlertSource`) delegate to the registered `ConnectionLogSource`; controls (`retryNow`/`onAppForeground`/`markUserShot`/`wasUserShotRecently`) fan out to enabled sources, and `annotateConnectionLog` (log-only, no connection effect) lets consumers record one-shot rows like the Ignore tap. `siteUrl` = branding link of the primary source. |
 | `source/ConnectionLogSource.kt` | Optional `Source` capability: reports `connEvents`/`retryState` + reconnect-log card controls, so the registry can forward Logs-tab state from the WS source without knowing it. Milestones are owned by the registry, not the source. |
 | `source/NeptunSource.kt` | The only production `Source` for launch. Composition root owning `ResilientConnectionSupervisor` + `NeptunRawDecoder` + `MonitorCoreImpl`; owns NEPTUN's per-type `NEPTUN_TYPES` catalog (values as NEPTUN sends them; exposed as `Source.typeCatalog`) — the ONLY file that may reference that map; `start(scope)` launches `supervisor.start()` and a connectionState collector (`mapConnectionState` + `decoder.handleTransportDrop()` on Offline) plus threat/alert mirrors; forwards reconnect controls and user-shot API. |
-| `source/TestSource.kt` | Peace-time simulator (`sourceType = WS`, disabled by default). While enabled it fetches `testplugin.json` from the update server and plays a timed script of threat/alert events (movers, resolves, clears). Reports CONNECTED while running; `stop()`/disable clears its output exactly like a real source. |
+| `source/TestSource.kt` | Peace-time simulator (`sourceType = WS`, disabled by default, **registered in debug builds only**). While enabled it fetches `testplugin.json` from the update server and plays a timed script of threat/alert events (movers, resolves, clears). Reports CONNECTED while running; `stop()`/disable clears its output exactly like a real source. |
 | `source/ThreatRemoved.kt` | `ThreatRemoved` (map death animation + resolved tally currency) moved out of `connection/`; hosts `RESOLVED_REPLAY_GRACE_MS` (60 s). |
 
 ### State / orchestration
@@ -249,13 +256,13 @@ like the rest of the app). |
 
 | File | Responsibility |
 | --- | --- |
-| `UpdateManager.kt` | `UPDATE_BASE_URL`, `check()`/`download()`/`buildInstallIntent()` (FileProvider); `fetchSheltersJson()` pulls the daily shelter-list copy. |
+| `UpdateManager.kt` | `UPDATE_BASE_URL`, `check()`/`download()`/`buildInstallIntent()` (FileProvider); `fetchSheltersJson()` pulls the daily shelter-list copy. The download/install path is reachable only when `BuildConfig.SELF_UPDATE` (sideload flavor); `check()`/`fetchSheltersJson()` are shared. |
 
 ### Build / release
 
 | File | Responsibility |
 | --- | --- |
-| `app/build.gradle.kts` | Android config + custom tasks: `bumpVersion`, `release`, `uploadRelease`. |
+| `app/build.gradle.kts` | Android config + custom tasks: `bumpVersion`, `release`, `uploadRelease`, `uploadPrivacy`. Declares the `play`/`sideload` flavors (`BuildConfig.SELF_UPDATE`). |
 | `app/version.properties` | `versionCode`/`versionName` — source of truth for the build + `version.json`. |
 | `server/version.json` | Committed example of the generated update feed. |
 
