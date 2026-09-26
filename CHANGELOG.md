@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Removed the Telegram SDK-change notifier 09-26_14:09:49
 - Stale threats dim the icon and show a "Stale" pill beneath it on the threat card 09-26_14:22
 - Incoming threats heading to your city now ride the yellow ring instead of landing on your position, with an "Approaching" line on the card; fast ones still sound red 09-26_13:14:31
 - Area-level drone warnings now show as the area-level chip instead of repeating the type, region and "point unknown" as a sentence 09-26_13:05:06

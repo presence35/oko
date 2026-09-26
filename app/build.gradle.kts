@@ -23,14 +23,6 @@ val cartoApiKey: String = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }.getProperty("cartoApiKey") ?: ""
 
-/** Telegram bot credentials live in app/telegram.properties (git-ignored). */
-val telegramProps: Properties = Properties().apply {
-    val f = file("telegram.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
-}
-val telegramBotToken: String = telegramProps.getProperty("botToken") ?: ""
-val telegramChatId: String = telegramProps.getProperty("chatId") ?: ""
-
 android {
     namespace = "com.presaince.oko"
     compileSdk = 35
@@ -42,8 +34,6 @@ android {
         versionCode = (readVersionProps().getProperty("versionCode") ?: "1").toIntOrNull() ?: 1
         versionName = readVersionProps().getProperty("versionName") ?: "0.1.0"
         buildConfigField("String", "CARTO_API_KEY", "\"$cartoApiKey\"")
-        buildConfigField("String", "TELEGRAM_BOT_TOKEN", "\"$telegramBotToken\"")
-        buildConfigField("String", "TELEGRAM_CHAT_ID", "\"$telegramChatId\"")
         ndk {
             abiFilters.addAll(listOf("arm64-v8a"))
         }
@@ -248,7 +238,38 @@ tasks.register("uploadRelease") {
 
         upload(apk, "app-release.apk")
         upload(jsonFile, "version.json")
+        val privacyFile = rootProject.file("privacy.html")
+        if (privacyFile.exists()) upload(privacyFile, "privacy.html")
         println("Done. https://$host/other_apps/ukrainedrones/version.json")
+    }
+}
+
+tasks.register("uploadPrivacy") {
+    group = "versioning"
+    description = "Uploads the privacy policy (privacy.html) to the FTP server."
+    doLast {
+        val uploadPropsFile = file("upload.properties")
+        if (!uploadPropsFile.exists()) {
+            throw GradleException("Missing $uploadPropsFile — create it with host, user, password, remoteDir (it is git-ignored).")
+        }
+        val up = Properties().apply { uploadPropsFile.inputStream().use { load(it) } }
+        val host = up.getProperty("host") ?: throw GradleException("upload.properties: missing 'host'")
+        val user = up.getProperty("user") ?: throw GradleException("upload.properties: missing 'user'")
+        val pass = up.getProperty("password") ?: throw GradleException("upload.properties: missing 'password'")
+        val remoteDir = up.getProperty("remoteDir").orEmpty().trim().trim('/')
+
+        val local = rootProject.file("privacy.html")
+        if (!local.exists()) throw GradleException("privacy.html not found: $local")
+        val path = if (remoteDir.isEmpty()) "ftp://$host/privacy.html" else "ftp://$host/$remoteDir/privacy.html"
+
+        val result = ProcessBuilder(
+            listOf("curl", "-sS", "--ftp-create-dirs", "-T", local.absolutePath, path, "--user", "$user:$pass")
+        ).redirectErrorStream(true).start()
+        val output = result.inputStream.readBytes().toString(Charsets.UTF_8)
+        val code = result.waitFor()
+        if (output.isNotBlank()) println(output)
+        if (code != 0) throw GradleException("FTP upload of privacy.html failed (exit $code)")
+        println("Privacy policy: https://$host/other_apps/ukrainedrones/privacy.html")
     }
 }
 

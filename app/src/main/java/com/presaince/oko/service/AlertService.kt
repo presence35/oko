@@ -63,7 +63,6 @@ import com.presaince.oko.DebugLogReason
 import com.presaince.oko.data.ManifestResult
 import com.presaince.oko.data.SystemEntry
 import com.presaince.oko.data.SystemEntryKind
-import com.presaince.oko.data.TelegramNotifier
 import com.presaince.oko.NightZones
 import com.presaince.oko.Strings
 import com.presaince.oko.UserPrefs
@@ -307,7 +306,6 @@ class AlertService : Service() {
                             "SHA256: ${manifestResult.oldHash} -> ${manifestResult.newHash}"
                         )
                     )
-                    TelegramNotifier.sendSdkChanged(manifestResult.oldHash, manifestResult.newHash)
                 } else if (manifestResult is ManifestResult.Failed) {
                     ApiMonitor.record(
                         SystemEntry(
@@ -1313,7 +1311,6 @@ val mappedThreats = registry.allThreats.map { list ->
                         "SHA256: ${manifestResult.oldHash} -> ${manifestResult.newHash}"
                     )
                 )
-                TelegramNotifier.sendSdkChanged(manifestResult.oldHash, manifestResult.newHash)
             } else if (manifestResult is ManifestResult.Failed) {
                 ApiMonitor.record(
                     SystemEntry(
