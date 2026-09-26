@@ -24,11 +24,11 @@ val cartoApiKey: String = Properties().apply {
 }.getProperty("cartoApiKey") ?: ""
 
 android {
-    namespace = "com.presaince.oko"
+    namespace = "com.odesaplay.oko"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.presaince.oko"
+        applicationId = "com.odesaplay.oko"
         minSdk = 26
         targetSdk = 35
         versionCode = (readVersionProps().getProperty("versionCode") ?: "1").toIntOrNull() ?: 1

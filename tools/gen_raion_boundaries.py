@@ -237,7 +237,7 @@ def main():
 
     # Emit Kotlin — per-stem helper functions to stay under the JVM 64 KB clinit limit.
     lines = [
-        "package com.presaince.oko",
+        "package com.odesaplay.oko",
         "",
         "/**",
         " * Auto-generated post-2020 raion boundary polygons from OSM admin_level=6 relations",

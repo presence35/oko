@@ -219,7 +219,7 @@ def main():
     # Emit Kotlin
     keys = sorted(result.keys())
     lines = [
-        "package com.presaince.oko",
+        "package com.odesaplay.oko",
         "",
         "/**",
         " * Auto-generated: each city in Cities.kt mapped to its (post-2020) raion's Ukrainian",

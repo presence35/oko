@@ -8,7 +8,7 @@ change a documented invariant, update the relevant section.
 
 - Single-module Android app (`:app`) — a live air-threat map for Ukraine.
 - Jetpack Compose (Material 3, dark-only) + MapLibre Native SDK (OpenGL/Vulkan hardware-accelerated raster & vector tiles). Kotlin 1.9.24, JDK 17, minSdk 26 /
-  targetSdk 35, namespace `com.presaince.oko`.
+  targetSdk 35, namespace `com.odesaplay.oko`.
 - No runtime backend of ours: data comes straight from the public
   [NEPTUN](https://neptun.in.ua) API (WebSocket stream). No Firebase, no push.
 - Update feed: static `version.json` + APK on `odesaplay.com.ua`, self-checked daily, in-app install is temporary while in beta mode, eventually it will be deprecated for official Google Play route.
@@ -18,8 +18,8 @@ change a documented invariant, update the relevant section.
 
 Source files are grouped into subdirectories by subsystem (`data/ domain/ engine/ source/
 connection/ service/ ui/ widget/ flourish/ theme/ lang/`). The UI/domain/widget/flourish/lang
-layers share the root package `com.presaince.oko`; the subsystems keep their own packages
-(`com.presaince.oko.engine`, `.source`, `.connection`, `.service`, `.theme`, `.data`) where
+layers share the root package `com.odesaplay.oko`; the subsystems keep their own packages
+(`com.odesaplay.oko.engine`, `.source`, `.connection`, `.service`, `.theme`, `.data`) where
 isolation matters (the engine kernel, the source SPI, the connection layer). There is no
 single flat package — sub-packages are already the norm; keep adding files inside their
 subsystem's package rather than the root.
@@ -184,7 +184,7 @@ private inside each `Source`. Every source reports normalized engine currency
 | `WidgetSnapshot.kt` | `WidgetSnapshot` + pure `computeWidgetSnapshot(...)` — deterministic projection of threat state for the widget, computed via the engine (`ThreatEngine(typeCatalog).evaluate`, `engine.isStale`, `distanceHaversine`, `resolveFocus`); `officialAlert` comes from `eval.focusOblastAlertActive` and `officialYellowAlert` from `eval.focusOblastYellowAlertActive`. Counts + per-type `typeCounts` mirror the footer-strip semantics; `primaryThreat` = nearest live threat (id + position) so the widget can reveal it. Takes `degraded`/`offline` booleans derived by the caller from `SourceRegistry` (mirror rule) and maps them to the three-tier pill: `sourceOnline = !offline`, `sourceDegraded = degraded`. Takes `Map<String, NormalizedThreat>` + `List<OblastAlert>` + the registry `typeCatalog` directly (no `NeptunState`, no concrete source import). Tested by `WidgetSnapshotTest`. |
 | `IconCatalog.kt` | Single source for threat icons: vector/photo/army/comic/russian sets, per-set facing (`baseDeg`), `ThreatIcon` composable; assets in `app/src/main/iconpacks/`. |
 | `Toasts.kt` | Shared toast helper: one function decides placement — top (below the header banner, via `ToastHost(topInset)`) normally, bottom (above the floating zone/shelter buttons) when a card/popup is visible. Dark themed pill. Callers never hardcode gravity. |
-| `Compat.kt` | *(deleted — Session 6)* engine `LatLng`/`ThreatZone`/`ZoneParams` are now imported directly (`com.presaince.oko.engine.*`) instead of root-package typealiases. |
+| `Compat.kt` | *(deleted — Session 6)* engine `LatLng`/`ThreatZone`/`ZoneParams` are now imported directly (`com.odesaplay.oko.engine.*`) instead of root-package typealiases. |
 
 ### UI (Compose)
 

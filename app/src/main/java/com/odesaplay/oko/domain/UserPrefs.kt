@@ -1,0 +1,720 @@
+package com.odesaplay.oko
+
+import android.content.Context
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import com.odesaplay.oko.ThreatType
+
+private val Context.dataStore by preferencesDataStore(name = "user_prefs")
+
+class UserPrefs(private val context: Context) {
+
+    private val keyCache = mutableMapOf<String, Preferences.Key<Boolean>>()
+    private fun cachedBooleanKey(name: String): Preferences.Key<Boolean> =
+        keyCache.getOrPut(name) { booleanPreferencesKey(name) }
+
+    private val wizardCompletedKey = booleanPreferencesKey("wizard_completed")
+    private val slowRedKmKey = intPreferencesKey("slow_red_km")
+    private val slowYellowKmKey = intPreferencesKey("slow_yellow_km")
+    private val fastRedMinKey = intPreferencesKey("fast_red_min")
+    private val fastYellowMinKey = intPreferencesKey("fast_yellow_min")
+    private val slowRedArmedKey = booleanPreferencesKey("slow_red_armed")
+    private val slowYellowArmedKey = booleanPreferencesKey("slow_yellow_armed")
+    private val fastRedArmedKey = booleanPreferencesKey("fast_red_armed")
+    private val fastYellowArmedKey = booleanPreferencesKey("fast_yellow_armed")
+    private val officialRedAlertsKey = booleanPreferencesKey("official_red_alerts_enabled")
+    private val officialYellowAlertsKey = booleanPreferencesKey("yellow_alerts_enabled")
+    private val sirenOverrideKey = booleanPreferencesKey("siren_override")
+    private val fallingDebrisDelaySecKey = intPreferencesKey("falling_debris_delay_sec")
+    private val disclaimerCollapsedKey = booleanPreferencesKey("disclaimer_collapsed")
+    private val disclaimerReadCountKey = intPreferencesKey("disclaimer_read_count")
+    private val followMeKey = booleanPreferencesKey("follow_me")
+    private val pinnedCityKey = stringPreferencesKey("pinned_city")
+    private val criticalOfflineOverrideKey = booleanPreferencesKey("critical_offline_override")
+    private val criticalOfflineBypassSilentKey = booleanPreferencesKey("critical_offline_bypass_silent")
+    private val settingsHintRemainingKey = intPreferencesKey("settings_hint_remaining")
+    private val threatToggleHintRemainingKey = intPreferencesKey("threat_toggle_hint_remaining")
+    private val shelterTipRemainingKey = intPreferencesKey("shelter_tip_remaining")
+    private val threatCardSizeKey = stringPreferencesKey("threat_card_size")
+    private val threatIconSetKey = stringPreferencesKey("threat_icon_set")
+    private val overlapModeKey = stringPreferencesKey("threat_overlap_mode")
+    private val moraleVoiceKey = stringPreferencesKey("morale_voice")
+    private val showMapScaleKey = booleanPreferencesKey("show_map_scale")
+    private val showMediumCitiesKey = booleanPreferencesKey("show_medium_cities")
+    private val showSmallCitiesKey = booleanPreferencesKey("show_small_cities")
+    private val deathAnimationEnabledKey = booleanPreferencesKey("death_animation_enabled")
+    private val followBulletKey = booleanPreferencesKey("follow_bullet")
+    private val highQualityExplosionsKey = booleanPreferencesKey("high_quality_explosions")
+    private val neutralizedTallyEnabledKey = booleanPreferencesKey("neutralized_tally_enabled")
+    private val neutralizedTallyAllUkraineKey = booleanPreferencesKey("neutralized_tally_all_ukraine")
+    private val alarmEpisodeTallyEnabledKey = booleanPreferencesKey("alarm_episode_tally_enabled")
+    private val legacyCacheCleanedKey = booleanPreferencesKey("legacy_osmdroid_cleaned")
+    private val fastGroupCollapsedKey = booleanPreferencesKey("fast_group_collapsed")
+    private val slowGroupCollapsedKey = booleanPreferencesKey("slow_group_collapsed")
+    private val batteryOnboardShownKey = booleanPreferencesKey("battery_onboard_shown")
+    private val serviceResurrectedKey = booleanPreferencesKey("service_resurrected")
+    private val permissionPromptDeferredKey = booleanPreferencesKey("permission_prompt_deferred")
+    private val nightEnabledKey = booleanPreferencesKey("night_enabled")
+    private val nightStartMinKey = intPreferencesKey("night_start_min")
+    private val nightEndMinKey = intPreferencesKey("night_end_min")
+    private val nightUseCustomZonesKey = booleanPreferencesKey("night_use_custom_zones")
+    private val nightSlowRedKmKey = intPreferencesKey("night_slow_red_km")
+    private val nightSlowYellowKmKey = intPreferencesKey("night_slow_yellow_km")
+    private val nightFastRedMinKey = intPreferencesKey("night_fast_red_min")
+    private val nightFastYellowMinKey = intPreferencesKey("night_fast_yellow_min")
+    private val nightSlowRedArmedKey = booleanPreferencesKey("night_slow_red_armed")
+    private val nightSlowYellowArmedKey = booleanPreferencesKey("night_slow_yellow_armed")
+    private val nightFastRedArmedKey = booleanPreferencesKey("night_fast_red_armed")
+    private val nightFastYellowArmedKey = booleanPreferencesKey("night_fast_yellow_armed")
+    private val nightZoneSirenOverrideKey = booleanPreferencesKey("night_zone_siren_override")
+    private val nightOfficialSirenOverrideKey = booleanPreferencesKey("night_official_siren_override")
+    private val nightOfficialAlertCityScopeKey = booleanPreferencesKey("night_official_alert_city_scope")
+    private val nightOfficialRedEnabledKey = booleanPreferencesKey("night_official_red_enabled")
+    private val nightOfficialYellowEnabledKey = booleanPreferencesKey("night_official_yellow_enabled")
+    private val nightSleepRestoreKey = stringPreferencesKey("night_sleep_restore")
+    private val flybyAnimationEnabledKey = booleanPreferencesKey("flyby_animation_enabled")
+    private val threatIconZoomKey = booleanPreferencesKey("threat_icon_zoom")
+    private val sheltersEnabledKey = booleanPreferencesKey("shelters_enabled")
+    private val sheltersWithKidsEnabledKey = booleanPreferencesKey("shelters_with_kids_enabled")
+    private val periodicGpsKey = booleanPreferencesKey("periodic_gps_enabled")
+    private val calmMessagesEnabledKey = booleanPreferencesKey("calm_messages_enabled")
+    private val hapticsEnabledKey = booleanPreferencesKey("haptics_enabled")
+    private val officialAlertCityScopeKey = booleanPreferencesKey("official_alert_city_scope")
+    private val moraleMasterEnabledKey = booleanPreferencesKey("morale_master_enabled")
+    private val welcomeShootdownPlayedKey = booleanPreferencesKey("welcome_shootdown_played")
+    private val bootRestartEnabledKey = booleanPreferencesKey("boot_restart_enabled")
+    private val fillAlertRegionsKey = booleanPreferencesKey("fill_alert_regions")
+    private val alertRegionModeKey = stringPreferencesKey("alert_region_mode")
+    private val showBordersKey = booleanPreferencesKey("show_borders")
+    private val showRegionBordersKey = booleanPreferencesKey("show_region_borders")
+    private val showLargeCitiesKey = booleanPreferencesKey("show_large_cities")
+    private val showThreatIdsOnMapKey = booleanPreferencesKey("show_threat_ids_on_map")
+    private val notifyPolicyEnabledKey = booleanPreferencesKey("notify_policy_enabled")
+    private val zonePolicyKey = stringPreferencesKey("zone_policy")
+    private val digestMaxKey = intPreferencesKey("digest_max")
+    private val digestWindowKey = stringPreferencesKey("digest_window")
+    private val digestPerTypeKey = booleanPreferencesKey("digest_per_type")
+
+    val preferences: Flow<UserPreferences> = context.dataStore.data.map { it.toUserPreferences() }.distinctUntilChanged()
+
+    private fun Preferences.toUserPreferences(): UserPreferences {
+        // No stored override: the language is the phone locale, resolved fresh on every startup.
+        val lang = systemLanguage()
+        val d = UserPreferences.DEFAULT
+        val cardSize = this[threatCardSizeKey]?.let { stored ->
+            ThreatCardSize.values().firstOrNull { it.name == stored }
+        } ?: d.threatCardSize
+        val iconSet = this[threatIconSetKey]?.let { stored ->
+            ThreatIconSet.values().firstOrNull { it.name == stored }
+        } ?: d.threatIconSet
+        val overlap = this[overlapModeKey]?.let { stored ->
+            OverlapMode.values().firstOrNull { it.name == stored }
+        } ?: d.overlapMode
+        val moraleVoice = this[moraleVoiceKey]?.let { stored ->
+            MoraleVoice.values().firstOrNull { it.name == stored }
+        } ?: d.moraleVoice
+        val zonePolicy = this[zonePolicyKey]?.let { stored ->
+            ZonePolicy.values().firstOrNull { it.name == stored }
+        } ?: d.zonePolicy
+        val digestWindow = this[digestWindowKey]?.let { stored ->
+            DigestWindow.values().firstOrNull { it.name == stored }
+        } ?: d.digestWindow
+        val alertRegionMode = when (val stored = this[alertRegionModeKey]) {
+            null -> this[fillAlertRegionsKey]?.let { if (it) AlertRegionMode.FILL else AlertRegionMode.CITY_LABELS }
+                ?: d.alertRegionMode
+            else -> AlertRegionMode.values().firstOrNull { it.name == stored } ?: d.alertRegionMode
+        }
+        val mapVisible = ThreatType.values().filter { type ->
+            this[cachedBooleanKey("threat_map_${type.name}")] ?: d.mapVisibleTypes.contains(type)
+        }.toSet()
+        val alertEnabled = ThreatType.values().filter { type ->
+            this[cachedBooleanKey("threat_alert_${type.name}")] ?: d.alertEnabledTypes.contains(type)
+        }.toSet()
+
+        return UserPreferences(
+            language = lang,
+            wizardCompleted = this[wizardCompletedKey] ?: d.wizardCompleted,
+            welcomeShootdownPlayed = this[welcomeShootdownPlayedKey] ?: d.welcomeShootdownPlayed,
+            slowRedKm = this[slowRedKmKey] ?: d.slowRedKm,
+            slowYellowKm = this[slowYellowKmKey] ?: d.slowYellowKm,
+            fastRedMin = this[fastRedMinKey] ?: d.fastRedMin,
+            fastYellowMin = this[fastYellowMinKey] ?: d.fastYellowMin,
+            slowRedArmed = this[slowRedArmedKey] ?: d.slowRedArmed,
+            slowYellowArmed = this[slowYellowArmedKey] ?: d.slowYellowArmed,
+            fastRedArmed = this[fastRedArmedKey] ?: d.fastRedArmed,
+            fastYellowArmed = this[fastYellowArmedKey] ?: d.fastYellowArmed,
+            notifyPolicyEnabled = this[notifyPolicyEnabledKey] ?: d.notifyPolicyEnabled,
+            zonePolicy = zonePolicy,
+            digestMax = (this[digestMaxKey] ?: d.digestMax).coerceIn(1, 10),
+            digestWindow = digestWindow,
+            digestPerType = this[digestPerTypeKey] ?: d.digestPerType,
+            officialRedAlertsEnabled = this[officialRedAlertsKey] ?: d.officialRedAlertsEnabled,
+            officialYellowAlertsEnabled = this[officialYellowAlertsKey] ?: d.officialYellowAlertsEnabled,
+            sirenOverride = this[sirenOverrideKey] ?: d.sirenOverride,
+            fallingDebrisDelaySec = this[fallingDebrisDelaySecKey] ?: d.fallingDebrisDelaySec,
+            disclaimerCollapsed = this[disclaimerCollapsedKey] ?: d.disclaimerCollapsed,
+            disclaimerReadCount = this[disclaimerReadCountKey] ?: d.disclaimerReadCount,
+            followMe = this[followMeKey] ?: d.followMe,
+            pinnedCity = this[pinnedCityKey],
+            criticalOfflineOverride = this[criticalOfflineOverrideKey] ?: d.criticalOfflineOverride,
+            criticalOfflineBypassSilent = this[criticalOfflineBypassSilentKey] ?: d.criticalOfflineBypassSilent,
+            threatCardSize = cardSize,
+            threatIconSet = iconSet,
+            overlapMode = overlap,
+            moraleVoice = moraleVoice,
+            showMapScale = this[showMapScaleKey] ?: d.showMapScale,
+            showMediumCities = this[showMediumCitiesKey] ?: d.showMediumCities,
+            showSmallCities = this[showSmallCitiesKey] ?: d.showSmallCities,
+            showLargeCities = this[showLargeCitiesKey] ?: d.showLargeCities,
+            showThreatIdsOnMap = this[showThreatIdsOnMapKey] ?: d.showThreatIdsOnMap,
+            highQualityExplosions = this[highQualityExplosionsKey] ?: d.highQualityExplosions,
+            deathAnimationEnabled = this[deathAnimationEnabledKey] ?: d.deathAnimationEnabled,
+            followBullet = this[followBulletKey] ?: d.followBullet,
+            neutralizedTallyEnabled = this[neutralizedTallyEnabledKey] ?: d.neutralizedTallyEnabled,
+            neutralizedTallyAllUkraine = this[neutralizedTallyAllUkraineKey] ?: d.neutralizedTallyAllUkraine,
+            alarmEpisodeTallyEnabled = this[alarmEpisodeTallyEnabledKey] ?: d.alarmEpisodeTallyEnabled,
+            legacyCacheCleaned = this[legacyCacheCleanedKey] ?: d.legacyCacheCleaned,
+            fastGroupCollapsed = this[fastGroupCollapsedKey] ?: d.fastGroupCollapsed,
+            slowGroupCollapsed = this[slowGroupCollapsedKey] ?: d.slowGroupCollapsed,
+            batteryOnboardShown = this[batteryOnboardShownKey] ?: d.batteryOnboardShown,
+            serviceResurrected = this[serviceResurrectedKey] ?: d.serviceResurrected,
+            permissionPromptDeferred = this[permissionPromptDeferredKey] ?: d.permissionPromptDeferred,
+            nightEnabled = this[nightEnabledKey] ?: d.nightEnabled,
+            nightStartMin = this[nightStartMinKey] ?: d.nightStartMin,
+            nightEndMin = this[nightEndMinKey] ?: d.nightEndMin,
+            nightUseCustomZones = this[nightUseCustomZonesKey] ?: d.nightUseCustomZones,
+            nightSlowRedKm = this[nightSlowRedKmKey] ?: d.nightSlowRedKm,
+            nightSlowYellowKm = this[nightSlowYellowKmKey] ?: d.nightSlowYellowKm,
+            nightFastRedMin = this[nightFastRedMinKey] ?: d.nightFastRedMin,
+            nightFastYellowMin = this[nightFastYellowMinKey] ?: d.nightFastYellowMin,
+            nightSlowRedArmed = this[nightSlowRedArmedKey] ?: d.nightSlowRedArmed,
+            nightSlowYellowArmed = this[nightSlowYellowArmedKey] ?: d.nightSlowYellowArmed,
+            nightFastRedArmed = this[nightFastRedArmedKey] ?: d.nightFastRedArmed,
+            nightFastYellowArmed = this[nightFastYellowArmedKey] ?: d.nightFastYellowArmed,
+            nightZoneSirenOverride = this[nightZoneSirenOverrideKey] ?: d.nightZoneSirenOverride,
+            nightOfficialSirenOverride = this[nightOfficialSirenOverrideKey] ?: d.nightOfficialSirenOverride,
+            nightOfficialAlertCityScope = this[nightOfficialAlertCityScopeKey] ?: d.nightOfficialAlertCityScope,
+            nightOfficialRedEnabled = this[nightOfficialRedEnabledKey] ?: d.nightOfficialRedEnabled,
+            nightOfficialYellowEnabled = this[nightOfficialYellowEnabledKey] ?: d.nightOfficialYellowEnabled,
+            nightSleepRestore = this[nightSleepRestoreKey] ?: d.nightSleepRestore,
+            flybyAnimationEnabled = this[flybyAnimationEnabledKey] ?: d.flybyAnimationEnabled,
+            threatIconZoom = this[threatIconZoomKey] ?: d.threatIconZoom,
+            sheltersEnabled = this[sheltersEnabledKey] ?: d.sheltersEnabled,
+            sheltersWithKidsEnabled = this[sheltersWithKidsEnabledKey] ?: d.sheltersWithKidsEnabled,
+            periodicGps = this[periodicGpsKey] ?: d.periodicGps,
+            calmMessagesEnabled = this[calmMessagesEnabledKey] ?: d.calmMessagesEnabled,
+            hapticsEnabled = this[hapticsEnabledKey] ?: d.hapticsEnabled,
+            officialAlertCityScope = this[officialAlertCityScopeKey] ?: d.officialAlertCityScope,
+            moraleMasterEnabled = this[moraleMasterEnabledKey] ?: d.moraleMasterEnabled,
+            bootRestartEnabled = this[bootRestartEnabledKey] ?: d.bootRestartEnabled,
+            alertRegionMode = alertRegionMode,
+            showBorders = this[showBordersKey] ?: d.showBorders,
+            showRegionBorders = this[showRegionBordersKey] ?: d.showRegionBorders,
+            settingsHintRemaining = this[settingsHintRemainingKey] ?: d.settingsHintRemaining,
+            threatToggleHintRemaining = this[threatToggleHintRemainingKey] ?: d.threatToggleHintRemaining,
+            shelterTipStage = (this[shelterTipRemainingKey] ?: d.shelterTipStage).coerceIn(0, 6),
+            mapVisibleTypes = mapVisible,
+            alertEnabledTypes = alertEnabled
+        )
+    }
+
+    suspend fun setSlowRedKm(km: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[slowRedKmKey] = km.coerceIn(1, 20)
+            val red = prefs[slowRedKmKey] ?: UserPreferences.DEFAULT.slowRedKm
+            val yellow = prefs[slowYellowKmKey] ?: UserPreferences.DEFAULT.slowYellowKm
+            prefs[slowYellowKmKey] = yellow.coerceIn(red + 2, 50)
+        }
+    }
+
+    suspend fun setSlowYellowKm(km: Int) {
+        context.dataStore.edit { prefs ->
+            val red = prefs[slowRedKmKey] ?: UserPreferences.DEFAULT.slowRedKm
+            prefs[slowYellowKmKey] = km.coerceIn(red + 2, 50)
+        }
+    }
+
+    suspend fun setFastRedMin(min: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[fastRedMinKey] = min.coerceIn(1, 5)
+            val red = prefs[fastRedMinKey] ?: UserPreferences.DEFAULT.fastRedMin
+            val yellow = prefs[fastYellowMinKey] ?: UserPreferences.DEFAULT.fastYellowMin
+            prefs[fastYellowMinKey] = yellow.coerceIn(red + 2, 20)
+        }
+    }
+
+    suspend fun setFastYellowMin(min: Int) {
+        context.dataStore.edit { prefs ->
+            val red = prefs[fastRedMinKey] ?: UserPreferences.DEFAULT.fastRedMin
+            prefs[fastYellowMinKey] = min.coerceIn(red + 2, 20)
+        }
+    }
+
+    suspend fun setSlowRedZoneArmed(armed: Boolean) {
+        context.dataStore.edit { it[slowRedArmedKey] = armed }
+    }
+
+    suspend fun setSlowYellowZoneArmed(armed: Boolean) {
+        context.dataStore.edit { it[slowYellowArmedKey] = armed }
+    }
+
+    suspend fun setFastRedZoneArmed(armed: Boolean) {
+        context.dataStore.edit { it[fastRedArmedKey] = armed }
+    }
+
+    suspend fun setFastYellowZoneArmed(armed: Boolean) {
+        context.dataStore.edit { it[fastYellowArmedKey] = armed }
+    }
+
+    suspend fun setAlertsArmed(armed: Boolean) {
+        context.dataStore.edit {
+            it[slowRedArmedKey] = armed
+            it[slowYellowArmedKey] = armed
+            it[fastRedArmedKey] = armed
+            it[fastYellowArmedKey] = armed
+        }
+    }
+
+    suspend fun setOfficialRedAlertsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[officialRedAlertsKey] = enabled }
+    }
+
+    suspend fun setOfficialYellowAlertsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[officialYellowAlertsKey] = enabled }
+    }
+
+    suspend fun setOfficialAlertsEnabled(enabled: Boolean) {
+        context.dataStore.edit {
+            it[officialRedAlertsKey] = enabled
+            it[officialYellowAlertsKey] = enabled
+        }
+    }
+
+    suspend fun setSirenOverride(override: Boolean) {
+        context.dataStore.edit { it[sirenOverrideKey] = override }
+    }
+
+    suspend fun setFallingDebrisDelaySec(sec: Int) {
+        context.dataStore.edit { it[fallingDebrisDelaySecKey] = sec.coerceIn(0, 600) }
+    }
+
+    suspend fun setThreatMapVisible(type: ThreatType, visible: Boolean) {
+        context.dataStore.edit { it[cachedBooleanKey("threat_map_${type.name}")] = visible }
+    }
+
+    suspend fun setThreatAlertsEnabled(type: ThreatType, enabled: Boolean) {
+        context.dataStore.edit {
+            it[cachedBooleanKey("threat_alert_${type.name}")] = enabled
+            if (enabled) it[cachedBooleanKey("threat_map_${type.name}")] = true
+        }
+    }
+
+    suspend fun setThreatMapVisibleBatch(types: Set<ThreatType>, visible: Boolean) {
+        context.dataStore.edit { prefs ->
+            for (type in types) prefs[cachedBooleanKey("threat_map_${type.name}")] = visible
+        }
+    }
+
+    suspend fun setThreatAlertsEnabledBatch(types: Set<ThreatType>, enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            for (type in types) {
+                prefs[cachedBooleanKey("threat_alert_${type.name}")] = enabled
+                if (enabled) prefs[cachedBooleanKey("threat_map_${type.name}")] = true
+            }
+        }
+    }
+
+    fun explainerSeen(id: String): Flow<Boolean> {
+        val key = cachedBooleanKey("explainer_seen_$id")
+        return context.dataStore.data.map { prefs -> prefs[key] ?: false }
+    }
+
+    suspend fun setExplainerSeen(id: String, seen: Boolean) {
+        context.dataStore.edit { it[cachedBooleanKey("explainer_seen_$id")] = seen }
+    }
+
+    suspend fun resetAllTips() {
+        context.dataStore.edit { prefs ->
+            prefs[settingsHintRemainingKey] = 3
+            prefs[threatToggleHintRemainingKey] = 3
+            prefs[shelterTipRemainingKey] = 0
+            listOf("followMe", "nightMode", "officialAlerts", "sirenOverride", "threatToggles", "cardSize")
+                .forEach { id -> prefs.remove(booleanPreferencesKey("explainer_seen_$id")) }
+        }
+    }
+
+    suspend fun setDisclaimerCollapsed(collapsed: Boolean) {
+        context.dataStore.edit { it[disclaimerCollapsedKey] = collapsed }
+    }
+
+    suspend fun setDisclaimerReadCount(count: Int) {
+        context.dataStore.edit { it[disclaimerReadCountKey] = count }
+    }
+
+    suspend fun setFollowMe(follow: Boolean) {
+        context.dataStore.edit { it[followMeKey] = follow }
+    }
+
+    suspend fun setPinnedCity(nameUa: String?) {
+        context.dataStore.edit {
+            if (nameUa == null) it.remove(pinnedCityKey) else it[pinnedCityKey] = nameUa
+        }
+    }
+
+    suspend fun setPinnedCityWithFollow(nameUa: String?) {
+        context.dataStore.edit {
+            if (nameUa == null) it.remove(pinnedCityKey) else it[pinnedCityKey] = nameUa
+            if (nameUa != null) it[followMeKey] = false
+        }
+    }
+
+    suspend fun setCriticalOfflineOverride(enabled: Boolean) {
+        context.dataStore.edit { it[criticalOfflineOverrideKey] = enabled }
+    }
+
+    suspend fun setCriticalOfflineBypassSilent(enabled: Boolean) {
+        context.dataStore.edit { it[criticalOfflineBypassSilentKey] = enabled }
+    }
+
+    suspend fun setWizardCompleted(done: Boolean) {
+        context.dataStore.edit { it[wizardCompletedKey] = done }
+    }
+
+    suspend fun setSettingsHintRemaining(remaining: Int) {
+        context.dataStore.edit { it[settingsHintRemainingKey] = remaining.coerceAtLeast(0) }
+    }
+
+    suspend fun setThreatToggleHintRemaining(remaining: Int) {
+        context.dataStore.edit { it[threatToggleHintRemainingKey] = remaining.coerceAtLeast(0) }
+    }
+
+    suspend fun setShelterTipStage(stage: Int) {
+        context.dataStore.edit { it[shelterTipRemainingKey] = stage.coerceIn(0, 6) }
+    }
+
+    suspend fun setThreatCardSize(size: ThreatCardSize) {
+        context.dataStore.edit { it[threatCardSizeKey] = size.name }
+    }
+
+    suspend fun setThreatIconSet(set: ThreatIconSet) {
+        context.dataStore.edit { it[threatIconSetKey] = set.name }
+    }
+
+    suspend fun setOverlapMode(mode: OverlapMode) {
+        context.dataStore.edit { it[overlapModeKey] = mode.name }
+    }
+
+    suspend fun setMoraleVoice(voice: MoraleVoice) {
+        context.dataStore.edit { it[moraleVoiceKey] = voice.name }
+    }
+
+    suspend fun setShowMapScale(show: Boolean) {
+        context.dataStore.edit { it[showMapScaleKey] = show }
+    }
+
+    suspend fun setShowMediumCities(show: Boolean) {
+        context.dataStore.edit { it[showMediumCitiesKey] = show }
+    }
+
+    suspend fun setShowSmallCities(show: Boolean) {
+        context.dataStore.edit { it[showSmallCitiesKey] = show }
+    }
+
+    suspend fun setSheltersEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[sheltersEnabledKey] = enabled }
+    }
+
+    suspend fun setSheltersWithKidsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[sheltersWithKidsEnabledKey] = enabled }
+    }
+
+    suspend fun setPeriodicGps(enabled: Boolean) {
+        context.dataStore.edit { it[periodicGpsKey] = enabled }
+    }
+
+    suspend fun setCalmMessagesEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[calmMessagesEnabledKey] = enabled }
+    }
+
+    suspend fun setHapticsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[hapticsEnabledKey] = enabled }
+    }
+
+    suspend fun setOfficialAlertCityScope(enabled: Boolean) {
+        context.dataStore.edit { it[officialAlertCityScopeKey] = enabled }
+    }
+
+    suspend fun setMoraleMasterEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[moraleMasterEnabledKey] = enabled }
+    }
+
+    suspend fun setWelcomeShootdownPlayed(played: Boolean) {
+        context.dataStore.edit { it[welcomeShootdownPlayedKey] = played }
+    }
+
+    suspend fun setBootRestartEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[bootRestartEnabledKey] = enabled }
+    }
+
+    suspend fun setAlertRegionMode(mode: AlertRegionMode) {
+        context.dataStore.edit { it[alertRegionModeKey] = mode.name }
+    }
+
+    suspend fun setShowBorders(enabled: Boolean) {
+        context.dataStore.edit { it[showBordersKey] = enabled }
+    }
+
+    suspend fun setShowRegionBorders(enabled: Boolean) {
+        context.dataStore.edit { it[showRegionBordersKey] = enabled }
+    }
+
+    suspend fun setShowLargeCities(show: Boolean) {
+        context.dataStore.edit { it[showLargeCitiesKey] = show }
+    }
+
+    suspend fun setNotifyPolicyEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[notifyPolicyEnabledKey] = enabled }
+    }
+
+    suspend fun setZonePolicy(policy: ZonePolicy) {
+        context.dataStore.edit { it[zonePolicyKey] = policy.name }
+    }
+
+    suspend fun setDigestMax(max: Int) {
+        context.dataStore.edit { it[digestMaxKey] = max.coerceIn(1, 10) }
+    }
+
+    suspend fun setDigestWindow(window: DigestWindow) {
+        context.dataStore.edit { it[digestWindowKey] = window.name }
+    }
+
+    suspend fun setDigestPerType(perType: Boolean) {
+        context.dataStore.edit { it[digestPerTypeKey] = perType }
+    }
+
+    suspend fun setShowThreatIdsOnMap(show: Boolean) {
+        context.dataStore.edit { it[showThreatIdsOnMapKey] = show }
+    }
+
+    suspend fun setHighQualityExplosions(enabled: Boolean) {
+        context.dataStore.edit { it[highQualityExplosionsKey] = enabled }
+    }
+
+    suspend fun setDeathAnimationEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[deathAnimationEnabledKey] = enabled }
+    }
+
+    suspend fun setFlybyAnimationEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[flybyAnimationEnabledKey] = enabled }
+    }
+
+    suspend fun setFollowBullet(enabled: Boolean) {
+        context.dataStore.edit { it[followBulletKey] = enabled }
+    }
+
+    suspend fun setThreatIconZoom(enabled: Boolean) {
+        context.dataStore.edit { it[threatIconZoomKey] = enabled }
+    }
+
+    suspend fun setNeutralizedTallyEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[neutralizedTallyEnabledKey] = enabled }
+    }
+
+    suspend fun setNeutralizedTallyAllUkraine(enabled: Boolean) {
+        context.dataStore.edit { it[neutralizedTallyAllUkraineKey] = enabled }
+    }
+
+    suspend fun setAlarmEpisodeTallyEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[alarmEpisodeTallyEnabledKey] = enabled }
+    }
+
+    suspend fun setLegacyCacheCleaned(cleaned: Boolean) {
+        context.dataStore.edit { it[legacyCacheCleanedKey] = cleaned }
+    }
+
+    suspend fun setFastGroupCollapsed(collapsed: Boolean) {
+        context.dataStore.edit { it[fastGroupCollapsedKey] = collapsed }
+    }
+
+    suspend fun setSlowGroupCollapsed(collapsed: Boolean) {
+        context.dataStore.edit { it[slowGroupCollapsedKey] = collapsed }
+    }
+
+    suspend fun setBatteryOnboardShown(shown: Boolean) {
+        context.dataStore.edit { it[batteryOnboardShownKey] = shown }
+    }
+
+    suspend fun setServiceResurrected(resurrected: Boolean) {
+        context.dataStore.edit { it[serviceResurrectedKey] = resurrected }
+    }
+
+    suspend fun setPermissionPromptDeferred(deferred: Boolean) {
+        context.dataStore.edit { it[permissionPromptDeferredKey] = deferred }
+    }
+
+    suspend fun setWizardDeferred(deferred: Boolean) {
+        context.dataStore.edit {
+            it[wizardCompletedKey] = deferred
+            it[batteryOnboardShownKey] = deferred
+            it[serviceResurrectedKey] = false
+            it[permissionPromptDeferredKey] = deferred
+        }
+    }
+
+    suspend fun setNightEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[nightEnabledKey] = enabled }
+    }
+
+    suspend fun setNightStartMin(min: Int) {
+        context.dataStore.edit { it[nightStartMinKey] = min.coerceIn(0, 1439) }
+    }
+
+    suspend fun setNightEndMin(min: Int) {
+        context.dataStore.edit { it[nightEndMinKey] = min.coerceIn(0, 1439) }
+    }
+
+    suspend fun setNightUseCustomZones(use: Boolean) {
+        context.dataStore.edit { it[nightUseCustomZonesKey] = use }
+    }
+
+    suspend fun setNightSlowRedKm(km: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[nightSlowRedKmKey] = km.coerceIn(1, 20)
+            val red = prefs[nightSlowRedKmKey] ?: UserPreferences.DEFAULT.nightSlowRedKm
+            val yellow = prefs[nightSlowYellowKmKey] ?: UserPreferences.DEFAULT.nightSlowYellowKm
+            prefs[nightSlowYellowKmKey] = yellow.coerceIn(red + 2, 50)
+        }
+    }
+
+    suspend fun setNightSlowYellowKm(km: Int) {
+        context.dataStore.edit { prefs ->
+            val red = prefs[nightSlowRedKmKey] ?: UserPreferences.DEFAULT.nightSlowRedKm
+            prefs[nightSlowYellowKmKey] = km.coerceIn(red + 2, 50)
+        }
+    }
+
+    suspend fun setNightFastRedMin(min: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[nightFastRedMinKey] = min.coerceIn(1, 5)
+            val red = prefs[nightFastRedMinKey] ?: UserPreferences.DEFAULT.nightFastRedMin
+            val yellow = prefs[nightFastYellowMinKey] ?: UserPreferences.DEFAULT.nightFastYellowMin
+            prefs[nightFastYellowMinKey] = yellow.coerceIn(red + 2, 20)
+        }
+    }
+
+    suspend fun setNightFastYellowMin(min: Int) {
+        context.dataStore.edit { prefs ->
+            val red = prefs[nightFastRedMinKey] ?: UserPreferences.DEFAULT.nightFastRedMin
+            prefs[nightFastYellowMinKey] = min.coerceIn(red + 2, 20)
+        }
+    }
+
+    suspend fun setNightSlowRedArmed(armed: Boolean) {
+        context.dataStore.edit { it[nightSlowRedArmedKey] = armed }
+    }
+    suspend fun setNightSlowRedZoneArmed(armed: Boolean) = setNightSlowRedArmed(armed)
+
+    suspend fun setNightSlowYellowArmed(armed: Boolean) {
+        context.dataStore.edit { it[nightSlowYellowArmedKey] = armed }
+    }
+    suspend fun setNightSlowYellowZoneArmed(armed: Boolean) = setNightSlowYellowArmed(armed)
+
+    suspend fun setNightFastRedArmed(armed: Boolean) {
+        context.dataStore.edit { it[nightFastRedArmedKey] = armed }
+    }
+    suspend fun setNightFastRedZoneArmed(armed: Boolean) = setNightFastRedArmed(armed)
+
+    suspend fun setNightFastYellowArmed(armed: Boolean) {
+        context.dataStore.edit { it[nightFastYellowArmedKey] = armed }
+    }
+    suspend fun setNightFastYellowZoneArmed(armed: Boolean) = setNightFastYellowArmed(armed)
+
+    suspend fun setNightZoneSirenOverride(override: Boolean) {
+        context.dataStore.edit { it[nightZoneSirenOverrideKey] = override }
+    }
+
+    suspend fun setNightOfficialSirenOverride(override: Boolean) {
+        context.dataStore.edit { it[nightOfficialSirenOverrideKey] = override }
+    }
+
+    suspend fun setNightOfficialAlertCityScope(enabled: Boolean) {
+        context.dataStore.edit { it[nightOfficialAlertCityScopeKey] = enabled }
+    }
+
+    suspend fun setNightOfficialRedEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[nightOfficialRedEnabledKey] = enabled }
+    }
+
+    suspend fun setNightOfficialYellowEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[nightOfficialYellowEnabledKey] = enabled }
+    }
+
+    /**
+     * "Just let me sleep!" — mute every night alert, remembering exactly what the night
+     * settings were so the next tap puts them back. One atomic edit: the snapshot and the
+     * muted values either both land or neither does.
+     */
+    suspend fun setNightSleep(enabled: Boolean) {
+        context.dataStore.edit { p ->
+            if (enabled) {
+                p[nightSleepRestoreKey] = nightSleepPresetOf(p).encode()
+                applyNightSleep(p, NightSleepPreset.MUTED)
+            } else {
+                applyNightSleep(p, NightSleepPreset.decode(p[nightSleepRestoreKey]) ?: NORMAL_NIGHT)
+                p.remove(nightSleepRestoreKey)
+            }
+        }
+    }
+
+    /** The night settings currently stored, as the preset the sleep button snapshots. */
+    private fun nightSleepPresetOf(p: Preferences): NightSleepPreset {
+        val d = UserPreferences.DEFAULT
+        return NightSleepPreset(
+            useCustomZones = p[nightUseCustomZonesKey] ?: d.nightUseCustomZones,
+            slowRedArmed = p[nightSlowRedArmedKey] ?: d.nightSlowRedArmed,
+            slowYellowArmed = p[nightSlowYellowArmedKey] ?: d.nightSlowYellowArmed,
+            fastRedArmed = p[nightFastRedArmedKey] ?: d.nightFastRedArmed,
+            fastYellowArmed = p[nightFastYellowArmedKey] ?: d.nightFastYellowArmed,
+            zoneSirenOverride = p[nightZoneSirenOverrideKey] ?: d.nightZoneSirenOverride,
+            officialSirenOverride = p[nightOfficialSirenOverrideKey] ?: d.nightOfficialSirenOverride,
+            officialRed = p[nightOfficialRedEnabledKey] ?: d.nightOfficialRedEnabled,
+            officialYellow = p[nightOfficialYellowEnabledKey] ?: d.nightOfficialYellowEnabled
+        )
+    }
+
+    /** Write all nine night-sleep keys at once. */
+    private fun applyNightSleep(p: MutablePreferences, preset: NightSleepPreset) {
+        p[nightUseCustomZonesKey] = preset.useCustomZones
+        p[nightSlowRedArmedKey] = preset.slowRedArmed
+        p[nightSlowYellowArmedKey] = preset.slowYellowArmed
+        p[nightFastRedArmedKey] = preset.fastRedArmed
+        p[nightFastYellowArmedKey] = preset.fastYellowArmed
+        p[nightZoneSirenOverrideKey] = preset.zoneSirenOverride
+        p[nightOfficialSirenOverrideKey] = preset.officialSirenOverride
+        p[nightOfficialRedEnabledKey] = preset.officialRed
+        p[nightOfficialYellowEnabledKey] = preset.officialYellow
+    }
+
+    private companion object {
+        /** Normal night, used when the silent state was reached without the button (no snapshot). */
+        val NORMAL_NIGHT = NightSleepPreset(
+            useCustomZones = false,
+            slowRedArmed = true, slowYellowArmed = true,
+            fastRedArmed = true, fastYellowArmed = false,
+            zoneSirenOverride = false, officialSirenOverride = false,
+            officialRed = true, officialYellow = true
+        )
+    }
+
+    suspend fun clearAll() {
+        context.dataStore.edit { it.clear() }
+    }
+}
