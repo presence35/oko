@@ -131,7 +131,6 @@ class ResilientConnectionSupervisor(
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
             transport = transportOf(capabilities)
-            ConnectionLog.setPendingTransport(transport)
             val valid = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                     capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             if (valid) {
@@ -287,7 +286,6 @@ class ResilientConnectionSupervisor(
             connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
         }.getOrNull() ?: return
         transport = transportOf(caps)
-        ConnectionLog.setPendingTransport(transport)
         val valid = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                 caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         if (!valid) return

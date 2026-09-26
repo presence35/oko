@@ -579,8 +579,8 @@ private fun buildRows(
     showFlourish: Boolean
 ): List<LogRow> {
     if (!isDecisions) {
-        val live = ConnectionLog.currentEpisode(now)?.takeIf { now - it.atMillis >= ConnectionLog.LIVE_GRACE_MS }
-        val connRows = (live?.let { listOf(ConnectionRow(it)) } ?: emptyList()) + connEntries.map { ConnectionRow(it) }
+        val connRows = (ConnectionLog.currentEpisode(now)?.let { listOf(ConnectionRow(it)) }
+            ?: emptyList()) + connEntries.map { ConnectionRow(it) }
         return if (newestFirst) connRows.sortedByDescending { it.atMillis } else connRows.sortedBy { it.atMillis }
     }
     var filtered: List<DebugLogEntry> = decisions

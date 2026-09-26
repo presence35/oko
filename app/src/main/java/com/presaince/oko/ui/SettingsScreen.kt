@@ -1170,29 +1170,6 @@ fun SettingsScreen(
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertToggleRow(title = s.threatIconZoomTitle, description = s.threatIconZoomDesc, checked = threatIconZoom, onCheckedChange = onThreatIconZoomChange, icon = rememberVectorPainter(Icons.Default.ZoomIn), iconTint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    // Reset tip counters
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                        OutlinedButton(
-                            onClick = onResetTips,
-                            interactionSource = rememberHapticInteractionSource(),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Text(s.resetTipsTitle, fontWeight = FontWeight.SemiBold)
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            s.resetTipsDesc,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
             }
 
@@ -1278,6 +1255,24 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.width(10.dp))
                     Text(s.relaunchSetupTitle, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            }
+            if (searching.not() || StandaloneSetting.RESET_TIPS in matchedStandalone) {
+            item(key = "action_reset_tips", contentType = "action") {
+                OutlinedButton(
+                    onClick = onResetTips,
+                    interactionSource = rememberHapticInteractionSource(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(s.resetTipsTitle, fontWeight = FontWeight.SemiBold)
                 }
             }
 

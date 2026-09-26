@@ -535,11 +535,12 @@ private fun firstSentence(text: String): String {
 private val WhitespaceRun = Regex("\\s+")
 
 /** True when the course line carries nothing beyond the type label and the place names
- *  already shown in the header: deleting those leaves no real words behind. Both operands
- *  must already be rendered in the card's language (a translated course compared against a
- *  raw region never matched, so duplicates survived in EN/RU). */
+ *  already shown in the header: deleting those leaves no real words behind. Both operands are
+ *  canonicalized (Cyrillic → Latin, case- and punctuation-insensitive) so the same name written
+ *  in either script collapses — a translated course compared against a raw region never matched,
+ *  which is how duplicates survived in EN/RU. */
 internal fun repeatsShownInfo(course: String, typeLabel: String, labelEn: String, shownRegion: String): Boolean {
-    fun norm(s: String): String = s.lowercase()
+    fun norm(s: String): String = Transliteration.transliterate(s).lowercase()
         .map { if (it.isLetterOrDigit()) it else ' ' }
         .joinToString("")
         .replace(WhitespaceRun, " ")

@@ -88,4 +88,12 @@ class ThreatCardDedupeTest {
         val region = Transliteration.transliterate("Олександрія · Кіровоградська область")
         assertTrue(repeatsShownInfo(course, "Drone", "Drone", region))
     }
+
+    @Test
+    fun transliteratedTypeNameHidden() {
+        // The glossary has no "дрон" entry, so "FPV-дрон" reaches the EN course by
+        // transliteration ("FPV-dron"). Canonicalizing script makes it match the UA label.
+        val course = translateCourseAssessment("FPV-дрон — Радківка", AppLanguage.EN)!!
+        assertTrue(repeatsShownInfo(course, "FPV drone", "FPV drone", "Radkivka"))
+    }
 }

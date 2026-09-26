@@ -40,7 +40,7 @@ internal enum class SettingsSection(val index: Int) {
 }
 
 /** Standalone action buttons below the section cards, also matched by the search box. */
-internal enum class StandaloneSetting { RELAUNCH, GUIDE, UPDATE, EXIT }
+internal enum class StandaloneSetting { RELAUNCH, RESET_TIPS, GUIDE, UPDATE, EXIT }
 
 /** A suggestion chip shown by the search box: a tappable hint that fills the query with a
  *  keyword that resolves to its setting. */
@@ -172,6 +172,9 @@ internal fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
     val standaloneDirect = mapOf(
         StandaloneSetting.RELAUNCH to kw(
             "relaunch", "replay", "wizard", "setup", "перезапуск", "повторити", "початкове"
+        ),
+        StandaloneSetting.RESET_TIPS to kw(
+            "tips", "hints", "reset", "onboarding", "підказки", "скинути", "підказка"
         ),
         StandaloneSetting.GUIDE to kw(
             "guide", "help", "features", "путівник", "допомога", "функції"

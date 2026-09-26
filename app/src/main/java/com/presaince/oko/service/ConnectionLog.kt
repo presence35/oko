@@ -41,9 +41,9 @@ object ConnectionLog {
     private const val MAX_ENTRIES = 50
     private const val LINE_SEP = '\n'
 
-    /** Minimum offline duration for an episode to be shown live and committed; shorter flaps
-     *  never hit the log or disk (overnight battery guard on flaky connections). */
-    const val LIVE_GRACE_MS = 15_000L
+    /** Minimum offline duration for an episode to be committed; shorter flaps never hit the
+     *  log or disk (overnight battery guard on flaky connections). */
+    private const val LIVE_GRACE_MS = 15_000L
 
     private val _entries = MutableStateFlow<List<ConnLogEntry>>(emptyList())
     val entries: StateFlow<List<ConnLogEntry>> = _entries.asStateFlow()
@@ -104,14 +104,6 @@ object ConnectionLog {
         val p = pending ?: return
         if (p.status == ConnStatus.ONLINE) return
         pending = p.copy(activeSource = source)
-    }
-
-    /** Update the transport of the in-progress episode when the device switches networks
-     *  mid-outage (e.g. WiFi drops to cellular), so the committed entry reflects it. */
-    fun setPendingTransport(transport: NetTransport?) {
-        val p = pending ?: return
-        if (p.status == ConnStatus.ONLINE || p.transport == transport) return
-        pending = p.copy(transport = transport)
     }
 
     private fun persist() {
