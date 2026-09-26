@@ -11,8 +11,8 @@ change a documented invariant, update the relevant section.
   `REQUEST_INSTALL_PACKAGES`/FileProvider) and **`sideload`** (beta APK feed on
   `odesaplay.com.ua` with in-app self-update). `BuildConfig.SELF_UPDATE` is the compile-time
   gate; R8 strips the dead branch in `play` release.
-- Jetpack Compose (Material 3, dark-only) + MapLibre Native SDK (OpenGL/Vulkan hardware-accelerated raster & vector tiles). Kotlin 1.9.24, JDK 17, minSdk 26 /
-  targetSdk 35, namespace `com.odesaplay.oko`.
+- Jetpack Compose (Material 3, dark-only) + MapLibre Native SDK (OpenGL/Vulkan hardware-accelerated raster & vector tiles). Kotlin 2.2.10 (AGP 9.4 built-in Kotlin), JDK 17, minSdk 26 /
+  targetSdk 36, namespace `com.odesaplay.oko`.
 - No runtime backend of ours: data comes straight from the public
   [NEPTUN](https://neptun.in.ua) API (WebSocket stream). No Firebase, no push.
 - Update feed: static `version.json` + APK on `odesaplay.com.ua`, self-checked daily,

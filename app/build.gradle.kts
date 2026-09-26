@@ -2,7 +2,7 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 val versionPropsFile = file("version.properties")
@@ -25,12 +25,12 @@ val cartoApiKey: String = Properties().apply {
 
 android {
     namespace = "com.odesaplay.oko"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.odesaplay.oko"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = (readVersionProps().getProperty("versionCode") ?: "1").toIntOrNull() ?: 1
         versionName = readVersionProps().getProperty("versionName") ?: "0.1.0"
         buildConfigField("String", "CARTO_API_KEY", "\"$cartoApiKey\"")
@@ -91,10 +91,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
@@ -104,10 +100,6 @@ android {
         getByName("main") {
             res.srcDirs("src/main/res", "src/main/iconpacks/classic", "src/main/iconpacks/photo", "src/main/iconpacks/army", "src/main/iconpacks/comic", "src/main/iconpacks/russian")
         }
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
     }
 
     splits {
