@@ -1276,16 +1276,15 @@ val mappedThreats = registry.allThreats.map { list ->
                     threats = state.rawThreats.ifEmpty { all },
                     focus = state.focusLocation,
                     token = state.focusToken,
-                    enabledTypes = state.enabled,
-                    zoneThreats = state.zoneThreats,
-                    alertable = alertable,
-                    verdicts = verdicts,
+                    enabledTypes = state.enabled,                    zoneThreats = state.zoneThreats,
+                    alertable = alertable,                    verdicts = verdicts,
                     winnerId = primary?.zone?.let { primary.revealThreat?.id },
                     night = state.nightActive,
                     sirenOverride = state.zoneSirenOverride,
                     fastVibrationLevel = state.fastVibrationLevel,
                     slowVibrationLevel = state.slowVibrationLevel,
                     now = now,
+                    focusToken = state.focusToken,
                     typeCatalog = typeCatalog
                 )
             )

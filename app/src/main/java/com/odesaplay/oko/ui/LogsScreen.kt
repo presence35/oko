@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.HourglassBottom
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.AccessTime
@@ -143,7 +144,6 @@ private enum class LogsMode { STORY, LIST }
 
 /** Scope of the Decisions feed: only the current focus oblast, or the whole feed. */
 private enum class LogScope { MINE, ALL }
-
 /** One of the three outcomes every event ends in — the feed's primary visual axis. */
 enum class NotifyOutcome { RANG, COVERED, NOT_NOTIFIED }
 
@@ -233,6 +233,7 @@ fun LogsDropDownSheet(
     var outcomeFilter by rememberSaveable { mutableStateOf<NotifyOutcome?>(null) }
     var mode by rememberSaveable { mutableStateOf(LogsMode.STORY) }
     var groupMode by rememberSaveable { mutableStateOf(LogGroupMode.TIME) }
+    var filtersOpen by rememberSaveable { mutableStateOf(false) }
     var newestFirst by rememberSaveable { mutableStateOf(true) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var legendExpanded by rememberSaveable { mutableStateOf(false) }
@@ -442,12 +443,13 @@ private fun LogsTabPage(
     val isDecisions = pageFilter == LogsFilter.DECISIONS
     val rows: List<LogRow> = if (pageFilter == LogsFilter.SOURCES) emptyList() else
         buildRows(window, connEntries, now, isDecisions, newestFirst, scopeMode, focusToken, outcomeFilter, searchQuery, lang)
-    // Story mode is the default read: cluster the same filtered events into raids, then drop
-    // sessions that aren't "mine" by their majority oblast — a raid is in or out, never mixed.
+    // Story mode is the default read: cluster the same filtered events into raids. "My oblast"
+    // is the write-time aboutMe flag — in my oblast, or something I would have heard — never a
+    // guess from the threat's own place.
     val storySessions = if (isDecisions && mode == LogsMode.STORY) {
         buildSessions(rows.filterIsInstance<DecisionRow>().map { it.entry })
             .filter { outcomeFilter == null || it.entries.any { e -> notifyOutcome(e) == outcomeFilter } }
-            .filter { scopeMode == LogScope.ALL || focusToken == null || it.oblastId() == focusToken }
+            .filter { scopeMode == LogScope.ALL || it.aboutMe() }
     } else emptyList()
     // Paginate decisions in GROUP order (not a raw row slice) so a newly-arrived decision
     // can't shift the boundary and inject a fresh trailing row on every "Show more".
@@ -640,9 +642,9 @@ fun LogsScreen(
 
 /**
  * Assemble the row list for the active filter, ordered per [newestFirst]. The Decisions view
- * applies, in order: scope (Mine = event oblast == focus oblast), outcome (rang / covered /
- * not notified), then a free-text search over place, type and id. Connection rows include the
- * live in-progress episode and ignore the decision filters.
+ * applies, in order: scope ("My oblast" = the write-time aboutMe flag), outcome (notified /
+ * covered / not notified), then a free-text search over place, type and id. Connection rows
+ * include the live in-progress episode and ignore the decision filters.
  */
 private fun buildRows(
     decisions: List<DebugLogEntry>,
@@ -662,9 +664,7 @@ private fun buildRows(
         return if (newestFirst) connRows.sortedByDescending { it.atMillis } else connRows.sortedBy { it.atMillis }
     }
     var filtered: List<DebugLogEntry> = decisions
-    if (scopeMode == LogScope.MINE && focusToken != null) {
-        filtered = filtered.filter { it.scopeOblastId == focusToken }
-    }
+    if (scopeMode == LogScope.MINE) filtered = filtered.filter { it.aboutMe }
     if (outcomeFilter != null) filtered = filtered.filter { notifyOutcome(it) == outcomeFilter }
     val q = searchQuery.trim().lowercase()
     if (q.isNotEmpty()) {
@@ -798,64 +798,119 @@ private fun LogControlsRow(
     onSortToggle: () -> Unit,
     onSearchChange: (String) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(
+    // One row, nothing hidden off-screen: the two lenses you switch constantly, plus a Filters
+    // button that reveals the rest. The old horizontal chip scroller buried controls silently.
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        SegmentToggle(
+            options = listOf(LogsMode.STORY to s.logsModeStory, LogsMode.LIST to s.logsModeList),
+            selected = mode,
+            onSelect = onModeChange
+        )
+        SegmentToggle(
+            options = listOf(LogScope.MINE to s.logsScopeMine, LogScope.ALL to s.logsScopeAll),
+            selected = scopeMode,
+            onSelect = onScopeChange
+        )
+        Spacer(Modifier.weight(1f))
+        var open by remember { mutableStateOf(false) }
+        IconButton(
+            onClick = { open = !open },
+            interactionSource = rememberHapticInteractionSource()
+        ) {
+            Icon(
+                Icons.Filled.Search,
+                contentDescription = s.logsFilters,
+                tint = if (open || searchQuery.isNotEmpty()) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        if (open) {
+            FilterSheet(
+                mode = mode,
+                groupMode = groupMode,
+                newestFirst = newestFirst,
+                searchQuery = searchQuery,
+                s = s,
+                onDismiss = { open = false },
+                onGroupModeChange = onGroupModeChange,
+                onSortToggle = onSortToggle,
+                onSearchChange = onSearchChange
+            )
+        }
+    }
+}
+
+/** Compact popup for the less-used controls, so the header stays one clean row. */
+@Composable
+private fun FilterSheet(
+    mode: LogsMode,
+    groupMode: LogGroupMode,
+    newestFirst: Boolean,
+    searchQuery: String,
+    s: Strings.StringSet,
+    onDismiss: () -> Unit,
+    onGroupModeChange: (LogGroupMode) -> Unit,
+    onSortToggle: () -> Unit,
+    onSearchChange: (String) -> Unit
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(AppPalette.Card))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Story is the default read; List is the raw audit trail.
-            SegmentToggle(
-                options = listOf(LogsMode.STORY to s.logsModeStory, LogsMode.LIST to s.logsModeList),
-                selected = mode,
-                onSelect = onModeChange
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchChange,
+                singleLine = true,
+                placeholder = { Text(s.logsSearchPlaceholder) },
+                modifier = Modifier.fillMaxWidth()
             )
-            LogScope.entries.forEach { value ->
-                FilterChip(
-                    selected = scopeMode == value,
-                    onClick = { onScopeChange(value) },
-                    label = { Text(if (value == LogScope.MINE) s.logsScopeMine else s.logsScopeAll) },
-                    leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                    interactionSource = rememberHapticInteractionSource()
-                )
-            }
             if (mode == LogsMode.LIST) {
-                val groupLabel = mapOf(
-                    LogGroupMode.NONE to s.logsGroupNone,
-                    LogGroupMode.TIME to s.logsGroupTime,
-                    LogGroupMode.OBLAST to s.logsGroupOblasts,
-                    LogGroupMode.TYPE to s.logsGroupType
+                Text(
+                    s.logsGroupByLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                LogGroupMode.entries.forEach { value ->
-                    FilterChip(
-                        selected = groupMode == value,
-                        onClick = { onGroupModeChange(value) },
-                        label = { Text(groupLabel[value]!!) },
-                        leadingIcon = { Icon(Icons.Outlined.Category, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                        interactionSource = rememberHapticInteractionSource()
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val groupLabel = mapOf(
+                        LogGroupMode.NONE to s.logsGroupNone,
+                        LogGroupMode.TIME to s.logsGroupTime,
+                        LogGroupMode.OBLAST to s.logsGroupOblasts,
+                        LogGroupMode.TYPE to s.logsGroupType
                     )
+                    LogGroupMode.entries.forEach { value ->
+                        FilterChip(
+                            selected = groupMode == value,
+                            onClick = { onGroupModeChange(value) },
+                            label = { Text(groupLabel[value]!!) },
+                            interactionSource = rememberHapticInteractionSource()
+                        )
+                    }
                 }
-                val sortRotation by animateFloatAsState(targetValue = if (newestFirst) 0f else 180f, label = "sortRotation")
-                FilterChip(
-                    selected = newestFirst,
+                TextButton(
                     onClick = onSortToggle,
-                    label = { Text(if (newestFirst) s.logsSortNewest else s.logsSortOldest) },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null, modifier = Modifier.graphicsLayer { rotationZ = sortRotation }.size(16.dp)) },
                     interactionSource = rememberHapticInteractionSource()
-                )
+                ) {
+                    Text(if (newestFirst) s.logsSortNewest else s.logsSortOldest)
+                }
+            }
+            TextButton(
+                onClick = onDismiss,
+                interactionSource = rememberHapticInteractionSource(),
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text(s.alertActionOk)
             }
         }
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchChange,
-            singleLine = true,
-            placeholder = { Text(s.logsSearchPlaceholder) },
-            textStyle = MaterialTheme.typography.bodySmall,
-            leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null, modifier = Modifier.size(16.dp)) },
-            modifier = Modifier.fillMaxWidth().height(44.dp)
-        )
     }
 }
 
@@ -949,11 +1004,12 @@ private fun SessionCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 session.official?.let { level ->
                     if (level != AlertLevel.NONE) {
-                        Text(
-                            level.name.lowercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = if (level == AlertLevel.RED) DebugRed else DebugAmber
+                        // No "red"/"yellow" word — the card's colour already says it.
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (level == AlertLevel.RED) DebugRed else DebugAmber)
                         )
                         Spacer(Modifier.width(6.dp))
                     }
@@ -1475,27 +1531,23 @@ private fun DecisionCard(
                 Spacer(Modifier.weight(1f))
                 if (entry.notified) {
                     Icon(
-                        Icons.Filled.CheckCircle,
-                        contentDescription = s.debugLogShown,
+                        Icons.Filled.Notifications,
+                        contentDescription = s.logsOutcomeRang,
                         tint = DebugGreen,
                         modifier = Modifier.size(14.dp)
                     )
                 } else {
-                    if (entry.reason == DebugLogReason.STALE) {
-                        Icon(
-                            Icons.Outlined.History,
-                            contentDescription = s.debugReasonStale,
-                            tint = DebugAmber,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    } else {
-                        Image(
-                            painter = painterResource(R.drawable.ic_notifications_off),
-                            contentDescription = String.format(s.debugLogSuppressed, entry.reason.label(s)),
-                            colorFilter = ColorFilter.tint(DebugAmber),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
+                    // One suppressed mark, tinted by whether it was covered or declined — the
+                    // stale case is already carried by the row's own stale pill.
+                    Image(
+                        painter = painterResource(R.drawable.ic_notifications_off),
+                        contentDescription = String.format(s.debugLogSuppressed, entry.reason.label(s)),
+                        colorFilter = ColorFilter.tint(
+                            if (outcome == NotifyOutcome.COVERED) DebugAmber
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        ),
+                        modifier = Modifier.size(14.dp)
+                    )
                 }
             }
         }

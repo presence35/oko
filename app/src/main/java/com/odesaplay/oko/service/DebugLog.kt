@@ -59,9 +59,13 @@ data class DebugLogEntry(
     val locality: String?,
     val level: AlertLevel? = null,
     /** Canonical oblast id of the EVENT (from its locality: the alerted oblast for official
-     *  rows, the threat's place for threat rows). Powers the Logs "Mine" scope — an event is
-     *  "mine" iff this equals the user's current focus oblast. Null when unresolvable. */
-    val scopeOblastId: String? = null
+     *  rows, the threat's place for threat rows). Null when unresolvable. */
+    val scopeOblastId: String? = null,
+    /** True when the event was evaluated AGAINST THE USER — the only honest "about me" test.
+     *  Set at write time, where the service already knows the focus: in the focus oblast, or
+     *  it rang, or it was declined for a reason that only applies to the user (bells off, type
+     *  off, in-zone-coalesced). Never inferred from the threat's own place at read time. */
+    val aboutMe: Boolean = false
 )
 
 /**
@@ -85,6 +89,8 @@ data class DebugLogContext(
     val fastVibrationLevel: Int,
     val slowVibrationLevel: Int,
     val now: Long,
+    /** Focus oblast token for this tick — the write-time "about me" test. */
+    val focusToken: String? = null,
     /** Merged per-type props from SourceRegistry.typeCatalog — never a concrete source map. */
     val typeCatalog: Map<String, ThreatProps> = emptyMap()
 )
@@ -164,7 +170,7 @@ object DebugLog {
             DebugLogEntry(
                 now, kind, night, sirenOverride, vibrationLevel, notified, reason,
                 threatId, threatType, null, distanceKm, locality, level,
-                scopeOblastId = resolveOblastId(locality)
+                scopeOblastId = resolveOblastId(locality), aboutMe = true
             )
         )
     }
@@ -205,7 +211,7 @@ object DebugLog {
         val entry = DebugLogEntry(
             now, DebugLogKind.ZONE_ENTER, night, sirenOverride, vibrationLevel,
             true, DebugLogReason.FIRED, threatId, threatType, tier, distanceKm, locality,
-            scopeOblastId = resolveOblastId(locality)
+            scopeOblastId = resolveOblastId(locality), aboutMe = true
         )
         synchronized(verdictsLock) { verdicts[threatId] = fingerprintOf(entry) }
         record(entry)
@@ -272,11 +278,12 @@ object DebugLog {
         val tier = effective ?: spatial
         val fast = isFastType(t.type.toThreatType(), ctx.typeCatalog)
         val place = t.locality ?: t.district ?: t.region
+        val mine = aboutUser(reason, notified = notified, inFocusOblast = inFocusOblast(t, ctx))
         return DebugLogEntry(
             ctx.now, DebugLogKind.ZONE_ENTER, ctx.night, ctx.sirenOverride,
             if (fast) ctx.fastVibrationLevel else ctx.slowVibrationLevel,
             notified, reason, t.id, t.type.toThreatType(), tier, distKm,
-            place, scopeOblastId = resolveOblastId(place)
+            place, scopeOblastId = resolveOblastId(place), aboutMe = mine
         )
     }
 
@@ -290,11 +297,12 @@ object DebugLog {
         }
         val fast = isFastType(t.type.toThreatType(), ctx.typeCatalog)
         val place = t.locality ?: t.district ?: t.region
+        val mine = aboutUser(reason, notified = false, inFocusOblast = inFocusOblast(t, ctx))
         return DebugLogEntry(
             ctx.now, DebugLogKind.REGION_THREAT, ctx.night, ctx.sirenOverride,
             if (fast) ctx.fastVibrationLevel else ctx.slowVibrationLevel,
             false, reason, t.id, t.type.toThreatType(), null, distKm,
-            place, scopeOblastId = resolveOblastId(place)
+            place, scopeOblastId = resolveOblastId(place), aboutMe = mine
         )
     }
 
@@ -334,12 +342,38 @@ object DebugLog {
     }
 }
 
-/** Drop entries older than [maxAgeMs] — the 24-hour auto-clear. Pure, unit-tested. */
+    /** Drop entries older than [maxAgeMs] — the 24-hour auto-clear. Pure, unit-tested. */
 internal fun pruneDebugEntries(
     entries: List<DebugLogEntry>,
     now: Long,
     maxAgeMs: Long
 ): List<DebugLogEntry> = entries.filter { now - it.atMillis < maxAgeMs }
+
+/**
+ * The one "is this about the user?" rule, applied at write time. In the focus oblast counts,
+ * and so does anything the user would have heard — it rang, or it was declined for a reason
+ * that is personal (bells off, type off, in-zone coalesced). A threat sitting in someone
+ * else's oblast, outside the zones, is not about the user. Pure, unit-tested.
+ */
+internal fun aboutUser(
+    reason: DebugLogReason,
+    notified: Boolean,
+    inFocusOblast: Boolean
+): Boolean = when {
+    inFocusOblast -> true
+    notified -> true
+    reason == DebugLogReason.BELL_MUTED -> true
+    reason == DebugLogReason.TYPE_OFF -> true
+    reason == DebugLogReason.COALESCED -> true
+    reason == DebugLogReason.RATE_LIMITED -> true
+    reason == DebugLogReason.ONCE_PER_THREAT -> true
+    reason == DebugLogReason.ONCE_PER_TYPE -> true
+    else -> false
+}
+
+/** Whether a threat's own place sits in the user's focus oblast. */
+private fun inFocusOblast(t: NormalizedThreat, ctx: DebugLogContext): Boolean =
+    inOblast(t.region, t.district, t.locality, ctx.token)
 
 /**
  * Pure verdict sweep: given the per-tick context and the current threat-id → fingerprint
@@ -397,7 +431,8 @@ internal fun serializeDebugLog(entries: List<DebugLogEntry>): String =
             entry.distanceKm?.toString() ?: "",
             entry.locality ?: "",
             entry.level?.name ?: "",
-            entry.scopeOblastId ?: ""
+            entry.scopeOblastId ?: "",
+            entry.aboutMe
         ).joinToString("|")
     }
 
@@ -420,5 +455,8 @@ internal fun parseDebugLog(raw: String, maxEntries: Int = DebugLog.MAX_ENTRIES):
         val locality = parts[11].takeIf { it.isNotEmpty() }
         val level = parts.getOrNull(12)?.let { name -> AlertLevel.entries.firstOrNull { it.name == name } }
         val scope = parts.getOrNull(13)?.takeIf { it.isNotEmpty() }
-        DebugLogEntry(at, kind, night, siren, vibr, notified, reason, threatId, type, tier, dist, locality, level, scope)
+        // Backward compatible: older rows predate aboutMe; the field's absence is not a
+        // failure, so it defaults to false rather than dropping the whole line.
+        val aboutMe = parts.getOrNull(14)?.toBooleanStrictOrNull() ?: false
+        DebugLogEntry(at, kind, night, siren, vibr, notified, reason, threatId, type, tier, dist, locality, level, scope, aboutMe)
     }.takeLast(maxEntries)

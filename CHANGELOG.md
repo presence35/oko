@@ -7,7 +7,7 @@
 - City labels now carry a crisp outline instead of a blurred drop shadow, so they stay readable at small sizes 09-29_14:00:56
 - City labels are de-cluttered and claimed in importance order — a big city can no longer end up underneath a smaller town's name, and overlapping labels are dropped instead of stacked 09-29_14:30:36
 - During a shoot-down show only large and medium cities are revealed; small towns keep their normal zoom 09-29_14:35:18
-- Map credit shortened to "© OpenStreetMap" in the corner, with the full OpenFreeMap / OpenMapTiles / OpenStreetMap attribution moved to the first-launch wizard 09-29_14:35:18
+- Map credit shortened to "© OSM" in the corner, with the full OpenFreeMap / OpenMapTiles / OpenStreetMap attribution moved to the first-launch wizard 09-29_14:35:18
 - Logs: added an Oblasts group-by, fixed the Type grouping (it showed no headers), replaced the mislabeled "Resolved" toggle with Notified / Not notified filters, and made "Show more" paginate in group order so a new row no longer appears at the bottom 09-29_12:00:00
 - Logs: ages now literally read "15 min ago" on both decisions and connections; connection rows also read "<datetime> for <duration>" 09-29_12:00:00
 - Logs: every section (Oblasts, Type, Proximity groups) is now collapsible, so you can fold away regions you don't care about 09-29_12:00:00

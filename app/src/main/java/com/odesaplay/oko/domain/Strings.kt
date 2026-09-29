@@ -379,6 +379,8 @@ object Strings {
         val logsSessionTold: String,
         val logsSessionSilent: String,
         val logsSessionEvents: String,
+        val logsFilters: String,
+        val logsGroupByLabel: String,
         val debugLogEmpty: String,
         val debugLogClear: String,
         val debugLogOpen: String,
@@ -1128,6 +1130,8 @@ object Strings {
         val logsSessionTold: String get() = misc.logsSessionTold
         val logsSessionSilent: String get() = misc.logsSessionSilent
         val logsSessionEvents: String get() = misc.logsSessionEvents
+        val logsFilters: String get() = misc.logsFilters
+        val logsGroupByLabel: String get() = misc.logsGroupByLabel
         val debugLogEmpty: String get() = misc.debugLogEmpty
         val debugLogClear: String get() = misc.debugLogClear
         val debugLogOpen: String get() = misc.debugLogOpen

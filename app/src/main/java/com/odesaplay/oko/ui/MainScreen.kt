@@ -981,7 +981,7 @@ private fun MapScreen(
                     // first-launch wizard, re-armable from Settings → Reset tips.
                     if (!flourishActive) {
                         Text(
-                            "© OpenStreetMap",
+                            "© OSM",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White.copy(alpha = 0.40f),
                             modifier = Modifier

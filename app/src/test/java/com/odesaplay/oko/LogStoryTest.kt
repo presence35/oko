@@ -18,14 +18,71 @@ class LogStoryTest {
         reason: DebugLogReason = DebugLogReason.FIRED,
         scope: String? = "odeska",
         level: AlertLevel? = null,
-        locality: String? = "Одеса"
+        locality: String? = "Одеса",
+        aboutMe: Boolean = true
     ) = DebugLogEntry(
         atMillis = atMin * minute,
         kind = kind, night = false, sirenOverride = false, vibrationLevel = 3,
         notified = notified, reason = reason, threatId = "t$atMin",
         threatType = ThreatType.SHAHED, tier = null, distanceKm = 5.0,
-        locality = locality, level = level, scopeOblastId = scope
+        locality = locality, level = level, scopeOblastId = scope, aboutMe = aboutMe
     )
+
+    @Test
+    fun `a drone just before the alarm is adopted into the session`() {
+        val sessions = buildSessions(
+            listOf(
+                entry(0, notified = true),
+                entry(1, kind = DebugLogKind.OFFICIAL_ON, level = AlertLevel.RED)
+            )
+        )
+        assertEquals(1, sessions.size)
+        assertEquals(2, sessions.single().size)
+        assertEquals(0 * minute, sessions.single().startMs)
+    }
+
+    @Test
+    fun `a drone long before the alarm stays its own session`() {
+        val sessions = buildSessions(
+            listOf(
+                entry(0, notified = true),
+                entry(10, kind = DebugLogKind.OFFICIAL_ON, level = AlertLevel.RED)
+            )
+        )
+        assertEquals(2, sessions.size)
+    }
+
+    @Test
+    fun `two alarms are never merged by the adoption window`() {
+        val sessions = buildSessions(
+            listOf(
+                entry(0, kind = DebugLogKind.OFFICIAL_ON, level = AlertLevel.RED),
+                entry(1, kind = DebugLogKind.OFFICIAL_ON, level = AlertLevel.YELLOW)
+            )
+        )
+        assertEquals(2, sessions.size)
+    }
+
+    @Test
+    fun `a session is about me when any event was evaluated against me`() {
+        val mine = buildSessions(
+            listOf(entry(0, aboutMe = false), entry(1, aboutMe = true))
+        ).single()
+        assertTrue(mine.aboutMe())
+        val theirs = buildSessions(listOf(entry(0, aboutMe = false))).single()
+        assertEquals(false, theirs.aboutMe())
+    }
+
+    @Test
+    fun `about-me rule keeps personal suppressions and drops foreign ones`() {
+        assertTrue(aboutUser(DebugLogReason.BELL_MUTED, notified = false, inFocusOblast = false))
+        assertTrue(aboutUser(DebugLogReason.TYPE_OFF, notified = false, inFocusOblast = false))
+        assertTrue(aboutUser(DebugLogReason.FIRED, notified = true, inFocusOblast = false))
+        assertTrue(aboutUser(DebugLogReason.OUTSIDE_ZONES, notified = false, inFocusOblast = true))
+        assertEquals(false, aboutUser(DebugLogReason.OUTSIDE_ZONES, notified = false, inFocusOblast = false))
+        assertEquals(false, aboutUser(DebugLogReason.STALE, notified = false, inFocusOblast = false))
+        assertEquals(false, aboutUser(DebugLogReason.ADVISORY, notified = false, inFocusOblast = false))
+    }
 
     @Test
     fun `an alarm and its quiet gap form one session`() {

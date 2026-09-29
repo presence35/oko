@@ -7,9 +7,9 @@ import com.odesaplay.oko.engine.resolveOblastId
  * A raid — one continuous span of activity, told as a story rather than a row dump.
  *
  * Sessions are the unit of meaning in the Logs screen: each one answers "what happened, was I
- * told, and if not, why" in a single card. The official alert is the spine ([official]) — when
- * the source announces an alarm, its boundaries define the session; other events group by a time
- * gap around it.
+ * told, and if not, why" in a single card. A session is anchored by the official alert — it
+ * runs from the ON to the OFF. Threats the source reports just before the alarm (a drone ahead
+ * of the siren) are adopted into the session so the story stays whole.
  *
  * Pure and unit-tested: it reads the already-recorded audit rows and never re-derives a decision.
  */
@@ -45,32 +45,52 @@ data class LogSession(
 const val SESSION_GAP_MS = 20L * 60 * 1000
 
 /**
+ * A track reported this long before an alarm is adopted into it — NEPTUN sometimes carries a
+ * drone minutes ahead of the siren, and that drone belongs to the raid it precedes.
+ */
+const val SESSION_ADOPT_LEAD_MS = 2L * 60 * 1000
+
+/**
  * Cluster decision rows into raid sessions, newest first.
  *
- * The official alert is authoritative: an [DebugLogKind.OFFICIAL_ON]/[OFFICIAL_OFF] pair always
- * opens/closes its own session, so a raid reads as one story even when its cause drones arrive
- * earlier and its all-clear lands later. Everything else groups by a [SESSION_GAP_MS] gap.
- * An event belongs to the session it starts; nothing is dropped.
+ * The official alert is the spine: a session runs ON → OFF. Events before the ON within
+ * [SESSION_ADOPT_LEAD_MS] are adopted into it (the siren-catching-up case); everything else
+ * groups by a [SESSION_GAP_MS] gap. Nothing is ever dropped.
  */
 fun buildSessions(entries: List<DebugLogEntry>): List<LogSession> {
     if (entries.isEmpty()) return emptyList()
     val sorted = entries.sortedBy { it.atMillis }
-    val sessions = mutableListOf<MutableList<DebugLogEntry>>()
 
+    // Walk once, cutting a new session at every ON and after every OFF.
+    val groups = mutableListOf<MutableList<DebugLogEntry>>()
     for (e in sorted) {
-        val current = sessions.lastOrNull()
-        val previous = current?.lastOrNull()
-        // An ON starts a story; a new ON can never append to an existing one. An OFF closes
-        // the story it belongs to, so anything after it must start fresh.
-        val previousClosed = previous?.kind == DebugLogKind.OFFICIAL_OFF
-        val continues = previous != null &&
-            e.atMillis - previous.atMillis <= SESSION_GAP_MS &&
+        val current = groups.lastOrNull()
+        val previousClosed = current?.lastOrNull()?.kind == DebugLogKind.OFFICIAL_OFF
+        val continues = current != null && !previousClosed &&
             e.kind != DebugLogKind.OFFICIAL_ON &&
-            !previousClosed
-        if (continues) current!!.add(e) else sessions.add(mutableListOf(e))
+            e.atMillis - current.last().atMillis <= SESSION_GAP_MS
+        if (continues) current!!.add(e) else groups.add(mutableListOf(e))
     }
 
-    return sessions.map { group ->
+    // Adopt each alarm's immediate lead-in: a session that starts with an ON swallows the
+    // preceding session's tail when it sits within the lead window AND that tail is ordinary
+    // activity (never another alarm's ON/OFF).
+    val byAlarm = groups.toMutableList()
+    val merged = mutableListOf<MutableList<DebugLogEntry>>()
+    for (g in byAlarm) {
+        val startsWithAlarm = g.first().kind == DebugLogKind.OFFICIAL_ON
+        val prev = merged.lastOrNull()
+        if (startsWithAlarm && prev != null &&
+            !prev.any { it.kind == DebugLogKind.OFFICIAL_ON || it.kind == DebugLogKind.OFFICIAL_OFF } &&
+            g.first().atMillis - prev.last().atMillis <= SESSION_ADOPT_LEAD_MS
+        ) {
+            prev.addAll(g)
+        } else {
+            merged.add(g)
+        }
+    }
+
+    return merged.map { group ->
         val official = group.firstNotNullOfOrNull { it.level } ?: officialFromKind(group)
         LogSession(
             id = "s-${group.first().atMillis}-${group.last().atMillis}",
@@ -82,7 +102,6 @@ fun buildSessions(entries: List<DebugLogEntry>): List<LogSession> {
     }.sortedByDescending { it.startMs }
 }
 
-/** A session already anchored by an alarm is closed — the next event starts a fresh story. */
 private fun officialFromKind(group: List<DebugLogEntry>): AlertLevel? = when {
     group.any { it.kind == DebugLogKind.OFFICIAL_OFF } -> AlertLevel.NONE
     else -> null
@@ -90,9 +109,11 @@ private fun officialFromKind(group: List<DebugLogEntry>): AlertLevel? = when {
 
 /**
  * Session-level place id: the oblast the session is about, from its most populated entry place.
- * Used by the Mine scope so a whole raid is in or out — never a mix.
  */
 fun LogSession.oblastId(): String? =
     entries.mapNotNull { it.scopeOblastId ?: resolveOblastId(it.locality) }
         .groupingBy { it }.eachCount()
         .maxByOrNull { it.value }?.key
+
+/** True when ANY event in the session was evaluated against the user — the honest "about me". */
+fun LogSession.aboutMe(): Boolean = entries.any { it.aboutMe }
