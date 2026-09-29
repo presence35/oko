@@ -23,7 +23,7 @@ import com.odesaplay.oko.engine.isFastType
 import com.odesaplay.oko.engine.AlertLevel
 
 /** Event kinds shown in the Debug log screen. */
-enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, REGION_THREAT, FLOURISH }
+enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, REGION_THREAT, FLOURISH, SECTION_TOGGLE }
 
 /**
  * Why a decision landed the way it did. [FIRED] = a notification was actually posted
@@ -169,6 +169,22 @@ object DebugLog {
      * started; every other reason is a "why not". [detail] is a short locale-neutral
      * suffix (e.g. "7x2" = records×groups) shown as grey text on the row.
      */
+    /**
+     * Log-only audit row for a user collapsing/expanding a group section. Never rendered as
+     * a decision card — it exists so the "what did I just tap" question has an answer in the
+     * persisted trail. [detail] is the context line surfaced in the Logs section view.
+     */
+    fun recordSectionToggle(log: String, sectionId: String, collapsed: Boolean, now: Long) {
+        record(
+            DebugLogEntry(
+                now, DebugLogKind.SECTION_TOGGLE, night = false, sirenOverride = false,
+                vibrationLevel = null, notified = false, reason = DebugLogReason.FIRED,
+                threatId = null, threatType = null, tier = null, distanceKm = null,
+                locality = "$log/$sectionId=${if (collapsed) "collapsed" else "expanded"}"
+            )
+        )
+    }
+
     fun recordFlourish(reason: DebugLogReason, detail: String? = null, now: Long) {
         record(
             DebugLogEntry(

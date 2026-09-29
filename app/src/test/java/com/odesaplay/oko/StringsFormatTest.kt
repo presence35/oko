@@ -39,11 +39,11 @@ class StringsFormatTest {
         val ua = Strings.get(AppLanguage.UA)
         val en = Strings.get(AppLanguage.EN)
 
-        assertEquals("50 сек", formatAlertAge(100_000L, 50_000L, ua))
-        assertEquals("15 min", formatAlertAge(1_000_000L, 60_000L, en))
-        assertEquals("2 hr", formatAlertAge(100_000_000L, 92_800_000L, en))
-        assertEquals("5 сек", formatAlertAge(5_000L, 0L, ua))
-        assertEquals("1 min", formatAlertAge(60_000L, 0L, en))
+        assertEquals("50 сек тому", formatAlertAge(100_000L, 50_000L, ua))
+        assertEquals("15 min ago", formatAlertAge(1_000_000L, 60_000L, en))
+        assertEquals("2 hr ago", formatAlertAge(100_000_000L, 92_800_000L, en))
+        assertEquals("5 сек тому", formatAlertAge(5_000L, 0L, ua))
+        assertEquals("1 min ago", formatAlertAge(60_000L, 0L, en))
     }
 
     @Test

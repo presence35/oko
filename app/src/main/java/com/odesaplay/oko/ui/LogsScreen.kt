@@ -49,6 +49,7 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.CloudOff
@@ -436,6 +437,18 @@ private fun LogsTabPage(
     val visible = if (isDecisions) rows else rows.take(visibleCount)
     val hasMore = if (isDecisions) shownEntries.size < decisionEntries.size else visible.size < rows.size
     val subtitle = if (isDecisions) String.format(s.logsSubtitleFormat, rows.size) else null
+    // Collapsed section ids are keyed by group id so a section survives data churn; emptied
+    // automatically when its rows scroll out, so a stale id can never linger.
+    val collapsed = remember { mutableStateMapOf<String, Boolean>() }
+    LaunchedEffect(groups.map { it.id }) {
+        val live = groups.map { it.id }.toSet()
+        collapsed.keys.retainAll(live)
+    }
+    val pageId = pageFilter.name
+    fun toggle(id: String) {
+        collapsed[id] = !(collapsed[id] ?: false)
+        DebugLog.recordSectionToggle(pageId, id, collapsed[id] ?: false, System.currentTimeMillis())
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -494,15 +507,17 @@ modifier = Modifier
             }
         } else if (groups.isNotEmpty()) {
             groups.forEach { group ->
+                val collapsedNow = collapsed[group.id] == true
                 if (group.title != null) {
                     item(key = "header-${group.id}") {
-                        GroupHeader(group, s)
+                        GroupHeader(group, s, collapsedNow) { toggle(group.id) }
                     }
                 } else if (group.headerType != null) {
                     item(key = "header-${group.id}") {
-                        TypeGroupHeader(group.headerType, group.entries.size, lang, iconSet, s)
+                        TypeGroupHeader(group.headerType, group.entries.size, lang, iconSet, s, collapsedNow) { toggle(group.id) }
                     }
                 }
+                if (collapsedNow) return@forEach
                 if (group.subTypes) {
                     group.entries.groupBy { it.threatType ?: ThreatType.UNKNOWN }
                         .entries
@@ -872,7 +887,12 @@ private fun LegendItem(painter: Painter, label: String, tint: Color = MaterialTh
 }
 
 @Composable
-private fun GroupHeader(group: LogGroupSpec, s: Strings.StringSet) {
+private fun GroupHeader(
+    group: LogGroupSpec,
+    s: Strings.StringSet,
+    collapsed: Boolean,
+    onToggle: () -> Unit
+) {
     val accent = when (group.accent) {
         GroupAccent.RED -> DebugRed
         GroupAccent.YELLOW -> DebugAmber
@@ -890,9 +910,17 @@ private fun GroupHeader(group: LogGroupSpec, s: Strings.StringSet) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp, bottom = 4.dp),
+            .hapticClickable(onClick = onToggle)
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Icon(
+            imageVector = if (collapsed) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
+            contentDescription = if (collapsed) s.logsSectionExpand else s.logsSectionCollapse,
+            tint = accent,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(4.dp))
         Box(
             modifier = Modifier
                 .size(8.dp)
@@ -925,15 +953,25 @@ private fun TypeGroupHeader(
     count: Int,
     lang: AppLanguage,
     iconSet: ThreatIconSet,
-    s: Strings.StringSet
+    s: Strings.StringSet,
+    collapsed: Boolean,
+    onToggle: () -> Unit
 ) {
     val label = typeInfo(type).label(lang)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp, bottom = 4.dp),
+            .hapticClickable(onClick = onToggle)
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Icon(
+            imageVector = if (collapsed) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
+            contentDescription = if (collapsed) s.logsSectionExpand else s.logsSectionCollapse,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(4.dp))
         ThreatIcon(type = type, set = iconSet, size = 16.dp, contentDescription = label)
         Spacer(Modifier.width(8.dp))
         Text(
@@ -1026,6 +1064,7 @@ private fun LogRowCard(
             ThreatZone.OUTER -> DebugAmber
             null -> MaterialTheme.colorScheme.onSurfaceVariant
         }
+        DebugLogKind.SECTION_TOGGLE -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -1035,6 +1074,7 @@ private fun DebugLogKind.icon(): ImageVector = when (this) {
     DebugLogKind.ZONE_ENTER -> Icons.Filled.Warning
     DebugLogKind.REGION_THREAT -> Icons.Filled.Place
     DebugLogKind.FLOURISH -> Icons.Filled.Star
+    DebugLogKind.SECTION_TOGGLE -> Icons.Filled.ExpandMore
 }
 
 private fun DebugLogKind.label(
@@ -1077,6 +1117,7 @@ private fun DebugLogKind.label(
         }
     }
     DebugLogKind.FLOURISH -> s.debugKindFlourish
+    DebugLogKind.SECTION_TOGGLE -> locality ?: s.debugKindSectionToggle
 }
 
 private fun localityText(locality: String?, lang: AppLanguage): String? =

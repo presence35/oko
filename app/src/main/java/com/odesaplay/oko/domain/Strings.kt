@@ -351,6 +351,9 @@ object Strings {
         val logsSortNewest: String,
         val logsSortOldest: String,
         val logsFlourishToggle: String,
+        val logsSectionExpand: String,
+        val logsSectionCollapse: String,
+        val debugKindSectionToggle: String,
         val logsSubtitleFormat: String,
         val logsSortDistance: String,
         val logsSortAge: String,
@@ -1075,6 +1078,9 @@ object Strings {
         val logsSortNewest: String get() = misc.logsSortNewest
         val logsSortOldest: String get() = misc.logsSortOldest
         val logsFlourishToggle: String get() = misc.logsFlourishToggle
+        val logsSectionExpand: String get() = misc.logsSectionExpand
+        val logsSectionCollapse: String get() = misc.logsSectionCollapse
+        val debugKindSectionToggle: String get() = misc.debugKindSectionToggle
         val logsSubtitleFormat: String get() = misc.logsSubtitleFormat
         val logsSortDistance: String get() = misc.logsSortDistance
         val logsSortAge: String get() = misc.logsSortAge
@@ -1428,8 +1434,8 @@ fun formatRelativeTime(updatedAtIso: String?, lang: AppLanguage): String {
 }
 
 /**
- * Age of an alert-history entry in compact buckets: "1-59 sec", "1-59 min", "1-6 hr"
- * (older entries are pruned at 6 hours). Rendered per the selected language.
+ * Age of an alert-history entry in compact buckets: "1-59 sec ago", "1-59 min ago",
+ * "1-6 hr ago" (older entries are pruned at 24 hours). Rendered per the selected language.
  */
 fun formatAlertAge(nowMillis: Long, atMillis: Long, s: Strings.StringSet): String {
     val secs = ((nowMillis - atMillis) / 1000).coerceAtLeast(1)
@@ -1438,7 +1444,7 @@ fun formatAlertAge(nowMillis: Long, atMillis: Long, s: Strings.StringSet): Strin
         secs < 3600 -> "${secs / 60}${s.alertAgeMinSuffix}"
         else -> "${secs / 3600}${s.alertAgeHrSuffix}"
     }
-    return compact
+    return "$compact ${s.alertAgeAgo}"
 }
 
 /**

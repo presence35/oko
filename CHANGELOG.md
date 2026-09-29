@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 - Logs: added an Oblasts group-by, fixed the Type grouping (it showed no headers), replaced the mislabeled "Resolved" toggle with Notified / Not notified filters, and made "Show more" paginate in group order so a new row no longer appears at the bottom 09-29_12:00:00
-- Logs: connection rows now read "<datetime> for <duration>" alongside the age 09-29_12:00:00
+- Logs: ages now literally read "15 min ago" on both decisions and connections; connection rows also read "<datetime> for <duration>" 09-29_12:00:00
+- Logs: every section (Oblasts, Type, Proximity groups) is now collapsible, so you can fold away regions you don't care about 09-29_12:00:00
+- Logs: an official-alert row now names the official area only — the drone/threat that caused it stays its own separate row, linked by id, so cause and alert are two real events 09-29_12:00:00
 - Logs: every official alert is now recorded even when notifications are off, muted, or "let me sleep" is on 09-29_12:00:00
 - Fixed an all-clear appearing together with a new official alert in the same city/raion 09-29_12:00:00
 - Fixed wrong-city official alerts after switching to GPS: a focus change now drops the stale episode, and enabling follow-me clears the old pin 09-29_12:00:00

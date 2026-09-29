@@ -1037,16 +1037,22 @@ val mappedThreats = registry.allThreats.map { list ->
                 val vibration = reasonThreat?.let {
                     if (isFastType(it.type.toThreatType(), typeCatalog)) state.fastVibrationLevel else state.slowVibrationLevel
                 } ?: VIBRATION_STRONG
-                val locality = reasonThreat?.let { it.locality ?: it.district ?: it.region }
-                    ?: state.officialRegion ?: state.focusCityUa
+                // The official row names the OFFICIAL area only — the cause is linked by
+                // threatId to its own swept zone/region row (a separate event), never
+                // borrowed into this one as locality/distance. threatId is attached only
+                // when a focus exists, so the cause row actually appears (computeSweep
+                // emits nothing without a focus point) and the link can't dangle.
+                val locality = state.officialRegion ?: state.focusCityUa
+                val attachCause = state.focusLocation != null
                 when {
                     // A zone alert won the shared slot — the official episode still happened.
                     primary?.zone != null -> DebugLog.recordOfficial(
                         DebugLogKind.OFFICIAL_ON, night = state.nightActive,
                         sirenOverride = state.officialSirenOverride, vibrationLevel = vibration,
                             notified = false, reason = DebugLogReason.COALESCED,
-                            threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
-                            locality = locality, distanceKm = distanceFromFocusKm(reasonThreat, state),
+                            threatId = if (attachCause) reasonThreat?.id else null,
+                            threatType = reasonThreat?.type?.toThreatType(),
+                            locality = locality, distanceKm = null,
                             level = state.focusOblastLevel,
                             now = System.currentTimeMillis()
                     )
@@ -1056,8 +1062,9 @@ val mappedThreats = registry.allThreats.map { list ->
                             DebugLogKind.OFFICIAL_ON, night = state.nightActive,
                             sirenOverride = state.officialSirenOverride, vibrationLevel = vibration,
                             notified = true, reason = DebugLogReason.FIRED,
-                            threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
-                            locality = locality, distanceKm = distanceFromFocusKm(reasonThreat, state),
+                            threatId = if (attachCause) reasonThreat?.id else null,
+                            threatType = reasonThreat?.type?.toThreatType(),
+                            locality = locality, distanceKm = null,
                             level = state.focusOblastLevel,
                             now = System.currentTimeMillis()
                         )
@@ -1067,8 +1074,9 @@ val mappedThreats = registry.allThreats.map { list ->
                         DebugLogKind.OFFICIAL_ON, night = state.nightActive,
                         sirenOverride = state.officialSirenOverride, vibrationLevel = vibration,
                             notified = false, reason = DebugLogReason.TOGGLE_OFF,
-                            threatId = reasonThreat?.id, threatType = reasonThreat?.type?.toThreatType(),
-                            locality = locality, distanceKm = distanceFromFocusKm(reasonThreat, state),
+                            threatId = if (attachCause) reasonThreat?.id else null,
+                            threatType = reasonThreat?.type?.toThreatType(),
+                            locality = locality, distanceKm = null,
                             level = state.focusOblastLevel,
                             now = System.currentTimeMillis()
                     )
