@@ -64,12 +64,18 @@ data class NormalizedThreat(
     val destination: LatLng? = null,
     val destinationName: String? = null
 ) {
+    /** The course the source reported for this track, or null when it reported none. An
+     *  area-level advisory names a region, not a track, so it never has one — and the id-hash
+     *  [fallbackCourse] is an icon-orientation convenience, never evidence of motion. */
+    val reportedCourseDeg: Double?
+        get() = if (areaOnly) null else bearingDeg ?: heading
+
     /** A track is dead-reckonable when the source gave it a course (authoritative velocity
      *  `bearingDeg` or reported `heading`) and an anchor (`confirmedAt`, or `updatedAt` when the
      *  confirmation time is missing). Movement additionally needs a speed and, in [predictPosition],
      *  a heading the engine can resolve — it never fabricates a course for a source that reports none. */
     val flying: Boolean
-        get() = (bearingDeg != null || heading != null) &&
+        get() = reportedCourseDeg != null &&
             (confirmedAtMillis != null || updatedAtMillis != null) &&
             status == "active"
 }

@@ -15,7 +15,6 @@ import com.odesaplay.oko.engine.MonitorCore
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.OblastAlert
 import com.odesaplay.oko.engine.TrailPoint
-import com.odesaplay.oko.engine.fallbackCourse
 import com.odesaplay.oko.engine.toEngineString
 import com.odesaplay.oko.engine.toThreatType
 import com.odesaplay.oko.source.ThreatRemoved
@@ -217,7 +216,7 @@ class NeptunDecoder(
                         _removedThreats.tryEmit(
                             ThreatRemoved(
                                 t.id, t.lat, t.lon, t.type.toThreatType(),
-                                t.bearingDeg ?: t.heading ?: fallbackCourse(t.id),
+                                t.reportedCourseDeg,
                                 t.region, t.district, t.locality
                             )
                         )
@@ -235,7 +234,7 @@ class NeptunDecoder(
                             _removedThreats.tryEmit(
                                 ThreatRemoved(
                                     existing.id, existing.lat, existing.lon, existing.type.toThreatType(),
-                                    existing.bearingDeg ?: existing.heading ?: fallbackCourse(existing.id),
+                                    existing.reportedCourseDeg,
                                     existing.region, existing.district, existing.locality
                                 )
                             )

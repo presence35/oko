@@ -1,6 +1,7 @@
 package com.odesaplay.oko
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -52,10 +53,22 @@ class SilentReasonTest {
     }
 
     @Test
-    fun `isMute is true only for the mute reasons`() {
-        assertEquals(false, SilentReason.ZonesOff.isMute)
-        assertEquals(false, SilentReason.NotificationsDisabled.isMute)
-        assertEquals(true, SilentReason.MutedForRaid.isMute)
-        assertEquals(true, SilentReason.MutedFor(1L).isMute)
+    fun `each reason maps to the affordance that can actually clear it`() {
+        assertEquals(
+            SilentNoticeAction.OpenNotificationSettings,
+            SilentReason.NotificationsDisabled.action
+        )
+        assertEquals(SilentNoticeAction.OpenZones, SilentReason.ZonesOff.action)
+        assertEquals(SilentNoticeAction.Unmute, SilentReason.MutedForRaid.action)
+        assertEquals(SilentNoticeAction.Unmute, SilentReason.MutedFor(1L).action)
+    }
+
+    @Test
+    fun `the notification reason never points at the in-app zones panel`() {
+        // The zones panel's bells cannot lift a system-wide block — routing there was the bug.
+        assertNotEquals(
+            SilentNoticeAction.OpenZones,
+            resolve(zonesArmed = false, notificationsDisabled = true)!!.action
+        )
     }
 }

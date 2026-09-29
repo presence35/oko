@@ -410,7 +410,7 @@ class ThreatEngine(
     }
 
     fun motionHeading(t: NormalizedThreat): Double? =
-        t.bearingDeg ?: t.heading ?: speedCache.measuredHeading(t.id)
+        t.reportedCourseDeg ?: speedCache.measuredHeading(t.id)
 
     fun courseDeg(t: NormalizedThreat): Double =
         motionHeading(t) ?: fallbackCourse(t.id)

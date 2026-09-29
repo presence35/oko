@@ -1,7 +1,5 @@
 package com.odesaplay.oko
 
-import android.content.Intent
-import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -70,6 +68,7 @@ import com.odesaplay.oko.theme.AppPalette
 fun SettingsScreen(
     state: SettingsState,
     hapticsEnabled: Boolean,
+    notificationsDisabled: Boolean,
     updateFlow: StateFlow<UpdateState>,
     latestVersionFlow: StateFlow<String?>,
     nightActive: Boolean,
@@ -549,10 +548,7 @@ fun SettingsScreen(
                     ),
                     onToggle = { onCollapseChange(collapse.copy(alerts = !collapse.alerts)) }
                 ) {
-                    val notifsEnabled = remember(Unit) {
-                        AlertNotificationManager.areNotificationsEnabled(appContext)
-                    }
-                    if (!notifsEnabled) {
+                    if (notificationsDisabled) {
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -589,13 +585,7 @@ fun SettingsScreen(
                                 )
                                 Spacer(Modifier.height(10.dp))
                                 Button(
-                                    onClick = {
-                                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                            putExtra(Settings.EXTRA_APP_PACKAGE, appContext.packageName)
-                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                        }
-                                        appContext.startActivity(intent)
-                                    },
+                                    onClick = { AlertNotificationManager.openNotificationSettings(appContext) },
                                     interactionSource = rememberHapticInteractionSource(),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.error

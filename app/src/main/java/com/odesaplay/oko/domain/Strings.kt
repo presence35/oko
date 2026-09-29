@@ -25,6 +25,14 @@ object Strings {
         val onboardingTipGradual: String,
         val onboardingFeaturesTitle: String,
         val onboardingIntro: String,
+        val wizardIsTitle: String,
+        val wizardIs1: String,
+        val wizardIs2: String,
+        val wizardIs3: String,
+        val wizardNotTitle: String,
+        val wizardNot1: String,
+        val wizardNot2: String,
+        val wizardNot3: String,
         val relaunchSetupTitle: String,
         val wizardCareTitle: String,
         val wizardCareSubtitle: String,
@@ -200,7 +208,6 @@ object Strings {
         val mixedTimeFormat: String,
         val noThreatsMessage: String,
         val serviceOfflineBanner: String,
-        val protectionReduced: String,
         val sirenOverrideWarning: String,
         val bootRestartPaused: String
     )
@@ -240,7 +247,6 @@ object Strings {
         val etaUnit: String,
         val approxNote: String,
         val pillDistanceCd: String,
-        val gpsOffLabel: String,
         val inRedZone: String,
         val inYellowZone: String,
         val outsideZones: String,
@@ -522,6 +528,13 @@ object Strings {
         val gpsFixStale: String,
         val updatingPreciseGpsToast: String,
         val gpsUnavailableFollowMe: String,
+        val problemNotificationsBlocked: String,
+        val problemGpsUnreliable: String,
+        val problemAllChannelsOff: String,
+        val problemAllTypesSilenced: String,
+        val problemSourceOffline: String,
+        val problemFixHint: String,
+        val problemFixA11y: String,
         val shelterLongPressTip: String,
         val shelterTapTip: String,
         val shelterViewListLabel: String,
@@ -733,6 +746,14 @@ object Strings {
         val onboardingTipGradual: String get() = onboarding.onboardingTipGradual
         val onboardingFeaturesTitle: String get() = onboarding.onboardingFeaturesTitle
         val onboardingIntro: String get() = onboarding.onboardingIntro
+        val wizardIsTitle: String get() = onboarding.wizardIsTitle
+        val wizardIs1: String get() = onboarding.wizardIs1
+        val wizardIs2: String get() = onboarding.wizardIs2
+        val wizardIs3: String get() = onboarding.wizardIs3
+        val wizardNotTitle: String get() = onboarding.wizardNotTitle
+        val wizardNot1: String get() = onboarding.wizardNot1
+        val wizardNot2: String get() = onboarding.wizardNot2
+        val wizardNot3: String get() = onboarding.wizardNot3
         val relaunchSetupTitle: String get() = onboarding.relaunchSetupTitle
         val wizardCareTitle: String get() = onboarding.wizardCareTitle
         val wizardCareSubtitle: String get() = onboarding.wizardCareSubtitle
@@ -938,7 +959,6 @@ object Strings {
         val connOff: String get() = status.connOff
         val connOffline: String get() = status.connOffline
         val serviceOfflineBanner: String get() = status.serviceOfflineBanner
-        val protectionReduced: String get() = status.protectionReduced
         val sirenOverrideWarning: String get() = status.sirenOverrideWarning
         val bootRestartPaused: String get() = status.bootRestartPaused
         val connDegraded: String get() = status.connDegraded
@@ -998,7 +1018,6 @@ object Strings {
         val etaUnit: String get() = threat.etaUnit
         val approxNote: String get() = threat.approxNote
         val pillDistanceCd: String get() = threat.pillDistanceCd
-        val gpsOffLabel: String get() = threat.gpsOffLabel
         val inRedZone: String get() = threat.inRedZone
         val inYellowZone: String get() = threat.inYellowZone
         val outsideZones: String get() = threat.outsideZones
@@ -1269,6 +1288,13 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val gpsOpenSettings: String get() = misc.gpsOpenSettings
         val gpsFixFresh: String get() = misc.gpsFixFresh
         val gpsUnavailableFollowMe: String get() = misc.gpsUnavailableFollowMe
+        val problemNotificationsBlocked: String get() = misc.problemNotificationsBlocked
+        val problemGpsUnreliable: String get() = misc.problemGpsUnreliable
+        val problemAllChannelsOff: String get() = misc.problemAllChannelsOff
+        val problemAllTypesSilenced: String get() = misc.problemAllTypesSilenced
+        val problemSourceOffline: String get() = misc.problemSourceOffline
+        val problemFixHint: String get() = misc.problemFixHint
+        val problemFixA11y: String get() = misc.problemFixA11y
         val gpsStatusTitle: String get() = misc.gpsStatusTitle
         val networkLocationOnly: String get() = misc.networkLocationOnly
         val gpsFixStale: String get() = misc.gpsFixStale

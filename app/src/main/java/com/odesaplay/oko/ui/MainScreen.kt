@@ -8,6 +8,12 @@ import com.odesaplay.oko.DigestWindow
 import com.odesaplay.oko.ZonePolicy
 import com.odesaplay.oko.RaidMute
 import com.odesaplay.oko.SilentReason
+import com.odesaplay.oko.SilentNoticeAction
+import com.odesaplay.oko.AlertNotificationManager
+import com.odesaplay.oko.Problem
+import com.odesaplay.oko.ProblemFix
+import com.odesaplay.oko.ProblemId
+import com.odesaplay.oko.ProblemSeverity
 import com.odesaplay.oko.engine.AlertLevel
 import com.odesaplay.oko.engine.toThreatType
 import com.odesaplay.oko.engine.distanceFlat
@@ -16,11 +22,14 @@ import com.odesaplay.oko.service.FallingDebrisBuffer
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.app.Activity
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -353,6 +362,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             SettingsScreen(
                 state = settingsState,
                 hapticsEnabled = uiState.hapticsEnabled,
+                notificationsDisabled = uiState.notificationsDisabledBySystem,
                 updateFlow = viewModel.updateFlow,
                 latestVersionFlow = viewModel.latestVersionState,
                 nightActive = uiState.nightActive,
@@ -700,11 +710,45 @@ private fun MapScreen(
     // suppressed while the shelter overlay is up.
     LaunchedEffect(showNearbyShelters) { onShelterModeChange(showNearbyShelters) }
 
+    // Android stops showing the dialog once the user picks "don't ask again" — the only way back
+    // is the app's settings page, so a denied request flips this and the next tap opens Settings.
+    var gpsSettingsFallback by remember { mutableStateOf(false) }
+    // FINE and COARSE together: Android 12+ silently drops a re-request of FINE alone once the
+    // user already picked approximate, so the Precise/Approximate upgrade dialog never appears.
     val fineLocLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
-        if (granted) {
+        if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
+            gpsSettingsFallback = false
             LocationTracker.forceRefresh()
+        } else if (context is Activity &&
+            !ActivityCompat.shouldShowRequestPermissionRationale(
+                context, Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        ) {
+            gpsSettingsFallback = true
+        }
+    }
+
+    /** The GPS problem's fix: ask for precision, refresh if already held, else fall back to Settings. */
+    val requestLocationFix: () -> Unit = {
+        val fineGranted = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        when {
+            fineGranted -> {
+                showToast(s.updatingPreciseGpsToast, cardVisible = false)
+                LocationTracker.forceRefresh()
+            }
+            gpsSettingsFallback -> context.startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", context.packageName, null)
+                )
+            )
+            else -> fineLocLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
         }
     }
 
@@ -739,7 +783,9 @@ private fun MapScreen(
                     Manifest.permission.ACCESS_FINE_LOCATION
                 ) == PackageManager.PERMISSION_GRANTED
                 if (!hasFine) {
-                    fineLocLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                    fineLocLauncher.launch(
+                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                    )
                 }
                 LocationTracker.forceRefresh()
             }
@@ -757,6 +803,37 @@ private fun MapScreen(
 
     // Tapping the muted notice (not a zone-bells-off notice) cancels the service's mute.
     val unmuteRaid: () -> Unit = onClearRaidMute
+
+    // A system notification block is only liftable from the OS page — never from the zones panel,
+    // whose bell toggles cannot affect it.
+    val openNotificationSettings: () -> Unit = remember(context) {
+        { AlertNotificationManager.openNotificationSettings(context) }
+    }
+
+    /** The one dispatch for a problem's fix — the header glyph and the map notice share it, so a
+     *  cause can never point somewhere different depending on which surface you tapped. */
+    val onProblemFix: (ProblemFix) -> Unit = { fix ->
+        when (fix) {
+            ProblemFix.NotificationSettings -> openNotificationSettings()
+            ProblemFix.LocationPermission -> requestLocationFix()
+            ProblemFix.ZonesPanel -> openZonesPanel()
+            ProblemFix.OpenLogs -> onOpenLogs()
+        }
+    }
+
+    // One-shot guidance for a problem that has just appeared: the glyph says something is wrong,
+    // this says what. Ticked so conflation can never swallow it, and keyed to the tick so an
+    // ordinary resume that changes nothing never re-fires it.
+    val problemAlert = uiState.problemAlert
+    LaunchedEffect(problemAlert) {
+        if (problemAlert != null) {
+            showToast(
+                problemAlert.ids.joinToString(" · ") { problemLabel(it, s) } + " — " + s.problemFixHint,
+                cardVisible = showZonesSheet || selectedShelter != null ||
+                    source.flow.value.selected != null
+            )
+        }
+    }
 
 
     // Drop the measured sheet height when it closes so a stale cover never shrinks the framing.
@@ -799,20 +876,19 @@ private fun MapScreen(
                 ThreatZone.INNER -> s.redZoneAlert
                 ThreatZone.OUTER -> s.yellowZoneAlert
                 null -> when {
-                    uiState.gpsFixMissing -> s.gpsUnavailableFollowMe
                     uiState.focusOblastAlertActive -> uiState.focusBannerCity
                     uiState.focusOblastYellowAlertActive -> uiState.focusBannerCity
                     pinnedCityName != null -> pinnedCityName
                     else -> s.appTitle
                 }
             }
-            when (uiState.protectionState) {
-                ProtectionState.OFFLINE -> MonitoringOffBanner(
+            if (!uiState.monitoringRunning) {
+                MonitoringOffBanner(
                     text = s.serviceOfflineBanner,
                     onClick = onReactivateMonitoring,
                     onHeightChange = onHeaderHeightChange
                 )
-                else -> {
+            } else {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -863,17 +939,42 @@ private fun MapScreen(
                     s = s,
                     modifier = Modifier.padding(end = 4.dp)
                 )
-                if (uiState.protectionState == ProtectionState.REDUCED) {
-                    Surface(
-                        color = Color(AppPalette.WarningBg),
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = Modifier.padding(end = 4.dp)
+                // A problem that needs fixing must distract: a severity-tinted warning glyph with
+                // a soft halo. Glyph-only so it needs no copy in any language, and tapping it goes
+                // wherever the cause actually lives (out of the app for a permission).
+                val worstProblem = uiState.problems.firstOrNull()
+                if (worstProblem != null) {
+                    val problemInteraction = remember { MutableInteractionSource() }
+                    val accent = when (worstProblem.severity) {
+                        ProblemSeverity.Critical -> Color(AppPalette.AlertRed)
+                        ProblemSeverity.Warn -> Color(AppPalette.WarningOrange)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .size(32.dp)
+                            .pressTick(problemInteraction)
+                            .clickable(
+                                interactionSource = problemInteraction,
+                                indication = ripple(bounded = false),
+                                onClick = { onProblemFix(worstProblem.fix) }
+                            )
+                            .semantics { semanticsContentDescription = s.problemFixA11y },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = s.protectionReduced,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(AppPalette.WarningOrange)
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .background(accent.copy(alpha = 0.18f), CircleShape)
+                        )
+                        // One glyph, optically centred. A second icon stacked on the first
+                        // merged with it into one unreadable silhouette; the "this is fixable,
+                        // tap it" part is the ripple plus the content description.
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -892,7 +993,6 @@ private fun MapScreen(
                         modifier = Modifier.size(22.dp)
                     )
                 }
-            }
             }
             }
         }
@@ -976,6 +1076,33 @@ private fun MapScreen(
                             lang = uiState.language
                         )
                     }
+                    // No position at all (not merely a stale fix — that one still has a dot): mark
+                    // the absence where the centre should be, so the map never implies a location
+                    // it does not have. The fix itself is the header glyph and the notice line.
+                    if (!flourishActive && uiState.gpsUnreliable &&
+                        uiState.userLocation == null && uiState.focusLocation == null
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(50))
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = Color(AppPalette.WarningOrange),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = s.problemGpsUnreliable,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.9f)
+                            )
+                        }
+                    }
                     // OSMF allows the corner credit to be short provided the full "contributors"
                     // form (plus OpenMapTiles and OpenFreeMap) stays reachable — it lives in the
                     // first-launch wizard, re-armable from Settings → Reset tips.
@@ -1039,23 +1166,25 @@ private fun MapScreen(
                                     .padding(bottom = 8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                val notice = rememberSilentNotice(
+                                val notice = rememberMapNotice(
+                                    problems = uiState.problems,
                                     zonesArmed = uiState.activeSlowRedArmed || uiState.activeFastRedArmed ||
                                         uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
                                     notificationsDisabled = uiState.notificationsDisabledBySystem,
                                     mute = uiState.raidMute,
-                                    s = s
+                                    s = s,
+                                    onFix = onProblemFix,
+                                    onUnmute = unmuteRaid,
+                                    onOpenZones = openZonesPanel,
+                                    onOpenNotificationSettings = openNotificationSettings
                                 )
                                 if (notice != null) {
-                                    AllAlertsOffWarning(
-                                        label = notice.label,
-                                        onClick = if (notice.isMute) unmuteRaid else openZonesPanel
-                                    )
+                                    AllAlertsOffWarning(label = notice.label, onClick = notice.onClick)
                                     Spacer(Modifier.height(6.dp))
                                 }
                                 Row(
                                     verticalAlignment = Alignment.Bottom,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(FLOATING_ICON_ROW_GAP)
                                 ) {
                                     if (sheltersVisible) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1118,7 +1247,17 @@ private fun MapScreen(
                 val landscape = LocalConfiguration.current.orientation ==
                     Configuration.ORIENTATION_LANDSCAPE
                 val notice = if (landscape) {
-                    rememberSilentNotice(!alertsOff, uiState.notificationsDisabledBySystem, uiState.raidMute, s)
+                    rememberMapNotice(
+                        problems = uiState.problems,
+                        zonesArmed = !alertsOff,
+                        notificationsDisabled = uiState.notificationsDisabledBySystem,
+                        mute = uiState.raidMute,
+                        s = s,
+                        onFix = onProblemFix,
+                        onUnmute = unmuteRaid,
+                        onOpenZones = openZonesPanel,
+                        onOpenNotificationSettings = openNotificationSettings
+                    )
                 } else null
                 if (notice != null) {
                     Box(
@@ -1127,10 +1266,7 @@ private fun MapScreen(
                             .padding(start = 20.dp, end = 20.dp, bottom = FOOTER_BAND_DP + 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        AllAlertsOffWarning(
-                            label = notice.label,
-                            onClick = if (notice.isMute) unmuteRaid else openZonesPanel
-                        )
+                        AllAlertsOffWarning(label = notice.label, onClick = notice.onClick)
                     }
                 }
             }
@@ -1714,6 +1850,14 @@ internal fun TeardropShelterIcon(modifier: Modifier = Modifier, tint: Color) {
     })
 }
 
+/**
+ * One gap for the whole floating map-icon cluster. The buttons are laid out by *two* nested rows
+ * (the map's container row, and ZoneButtons' own row), so a single constant is the only way the
+ * sequence stays evenly spaced — the shelter group used to sit 2.dp closer than the rest.
+ * Horizontal only: the stacked (vertical) cluster uses its own tighter rhythm.
+ */
+private val FLOATING_ICON_ROW_GAP = 12.dp
+
 @Composable
 internal fun ZoneButtons(
     redArmed: Boolean,
@@ -1738,7 +1882,7 @@ internal fun ZoneButtons(
     } else {
         Row(
             modifier = modifier,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(FLOATING_ICON_ROW_GAP),
             verticalAlignment = Alignment.Bottom
         ) {
             ZoneButton(ThreatZone.INNER, redArmed, s.zoneButtonRed, onZoneTap)
@@ -1783,8 +1927,63 @@ private fun ZoneGearButton(onClick: () -> Unit, label: String) {
     }
 }
 
-/** Resolved notice text + whether the tap should unmute (vs open the zones panel). */
-private data class SilentNoticeText(val label: String, val isMute: Boolean)
+/** Resolved notice text + the affordance its tap must offer (see [SilentReason.action]). */
+private data class SilentNoticeText(val label: String, val action: SilentNoticeAction)
+
+/** The map notice slot's single entry: what is shown, and where a tap goes. */
+private data class MapNotice(val label: String, val onClick: () -> Unit)
+
+/** The one reason → affordance mapping, shared by both notice sites. */
+private fun silentNoticeOnClick(
+    action: SilentNoticeAction,
+    unmute: () -> Unit,
+    openZones: () -> Unit,
+    openNotificationSettings: () -> Unit
+): () -> Unit = when (action) {
+    SilentNoticeAction.Unmute -> unmute
+    SilentNoticeAction.OpenZones -> openZones
+    SilentNoticeAction.OpenNotificationSettings -> openNotificationSettings
+}
+
+/** Human-readable, localized name of a problem — the map notice line and the guidance toast. */
+private fun problemLabel(id: ProblemId, s: Strings.StringSet): String = when (id) {
+    ProblemId.NotificationsDisabled -> s.problemNotificationsBlocked
+    ProblemId.GpsUnreliable -> s.problemGpsUnreliable
+    ProblemId.AllChannelsOff -> s.problemAllChannelsOff
+    ProblemId.AllTypesSilenced -> s.problemAllTypesSilenced
+    ProblemId.SourceOffline -> s.problemSourceOffline
+}
+
+/**
+ * The map's notice slot: the most actionable reason nothing is alerting.
+ *
+ * Problems outrank [SilentReason] on purpose — a system block or an unusable position is *why the
+ * bells cannot work*, while a mute is only why they are quiet right now. Everything the user can
+ * act on therefore comes first, and the naive ordering problem is resolved in one place instead of
+ * each notice site deciding for itself.
+ */
+@Composable
+private fun rememberMapNotice(
+    problems: List<Problem>,
+    zonesArmed: Boolean,
+    notificationsDisabled: Boolean,
+    mute: RaidMute,
+    s: Strings.StringSet,
+    onFix: (ProblemFix) -> Unit,
+    onUnmute: () -> Unit,
+    onOpenZones: () -> Unit,
+    onOpenNotificationSettings: () -> Unit
+): MapNotice? {
+    val problem = problems.firstOrNull()
+    if (problem != null) {
+        return MapNotice(problemLabel(problem.id, s)) { onFix(problem.fix) }
+    }
+    val silent = rememberSilentNotice(zonesArmed, notificationsDisabled, mute, s) ?: return null
+    return MapNotice(
+        label = silent.label,
+        onClick = silentNoticeOnClick(silent.action, onUnmute, onOpenZones, onOpenNotificationSettings)
+    )
+}
 
 /**
  * The one reason the map explains silent bells (see [SilentReason]). Ticks only while a
@@ -1812,7 +2011,7 @@ private fun rememberSilentNotice(
         SilentReason.MutedForRaid -> s.silentMutedForRaid
         is SilentReason.MutedFor -> String.format(s.silentMutedTimedFormat, countdownText(reason.deadlineMs - now))
     }
-    return SilentNoticeText(label, reason.isMute)
+    return SilentNoticeText(label, reason.action)
 }
 
 /** Ceil to whole seconds so a fresh 10-min mute reads "10:00". */

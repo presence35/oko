@@ -232,9 +232,23 @@ private val AREA_ADVISORY_REGEX = Regex(
     "(?iu)^\\s*[^:]{0,120}:\\s*попередженн\\p{L}*\\s+по\\s+(?:област|територ)\\p{L}*\\s*,?\\s*точка\\s+не\\s*відом\\p{L}*\\.?\\s*$"
 )
 
-/** True when [text] is solely NEPTUN's area-level advisory; the card renders it as a chip. */
+/**
+ * True when [text] is solely NEPTUN's area-level advisory; the card renders it as a chip.
+ * Reads [firstSentence], the same slice the card renders — NEPTUN appends a confirmation count
+ * ("…точка невідома. Підтвердень: 2.") that is not part of the advisory, and a whole-string match
+ * would silently stop recognising the template the moment that suffix appeared.
+ */
 fun isAreaAdvisory(text: String?): Boolean =
-    text != null && AREA_ADVISORY_REGEX.matches(text.trim())
+    text != null && AREA_ADVISORY_REGEX.matches(firstSentence(text).trim())
+
+/** NEPTUN's explanation, up to its first sentence — the trailing confirmation count it appends
+ *  ("…Підтвердень: 2.") is already shown beside the reliability bar, never as prose. */
+fun firstSentence(text: String): String {
+    for (c in text) {
+        if (c == '.' || c == '!' || c == '?') return text.substringBefore(c).trim()
+    }
+    return text.trim()
+}
 
 /** The heading-to sentence patterns only (a destination, not a source/loiter): a threat that
  *  "goes toward {X}" orbits {X} on the map, so we need the captured place to resolve it. */

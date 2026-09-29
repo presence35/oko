@@ -19,13 +19,14 @@ enum class SourceState {
 }
 
 /** A threat just disappeared from a source's feed (resolved or a remove frame) — drives the
- *  map death animation and the resolved-tally. Source-agnostic removal currency. */
+ *  map death animation and the resolved-tally. Source-agnostic removal currency. `courseDeg` is
+ *  the course the source reported for the track, null when it reported none. */
 data class ThreatRemoved(
     val id: String,
     val lat: Double,
     val lon: Double,
     val type: ThreatType,
-    val courseDeg: Double = 0.0,
+    val courseDeg: Double? = null,
     val region: String? = null,
     val district: String? = null,
     val locality: String? = null

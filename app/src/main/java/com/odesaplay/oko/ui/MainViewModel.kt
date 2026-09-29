@@ -63,11 +63,9 @@ import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.random.Random
 
-enum class ProtectionState {
-    ACTIVE,
-    REDUCED,
-    OFFLINE
-}
+/** A batch of problems that have just appeared, tagged with a tick so the toast fires exactly
+ *  once per appearance (the same shape as [AviationFlybyShow]'s tick). */
+data class ProblemAlert(val tick: Int, val ids: List<ProblemId>)
 
 @Immutable
 data class UiState(
@@ -81,7 +79,9 @@ data class UiState(
     val mapThreats: List<NormalizedThreat> = emptyList(),   // all active threats across Europe
     val userLocation: LatLng? = null,
     val gpsFixAvailable: Boolean = false,         // a GPS/cell fix has arrived at least once
-    val gpsFixMissing: Boolean = false,           // followMe on, no fix ever → persistent warning
+    val gpsUnreliable: Boolean = false,           // followMe on, position unusable (none/stale/outside UA)
+    val problems: List<Problem> = emptyList(),    // ordered degradations — first is the header's target
+    val problemAlert: ProblemAlert? = null,       // just-appeared problems, for the one-shot guidance toast
     val slowRedKm: Int = UserPreferences.DEFAULT.slowRedKm,      // slow threats: distance to the red (inner) zone, km
     val slowYellowKm: Int = UserPreferences.DEFAULT.slowYellowKm,  // slow threats: distance to the yellow (outer) zone, km
     val fastRedMin: Int = UserPreferences.DEFAULT.fastRedMin,     // fast threats: ETA to the red (inner) zone, minutes
@@ -187,8 +187,7 @@ data class UiState(
     val alertActive: Boolean = false,        // any threat or official alert live right now
     val threatDataStale: Boolean = false,
     val notificationsDisabledBySystem: Boolean = false,
-    val raidMute: RaidMute = RaidMute.None,
-    val protectionState: ProtectionState = ProtectionState.ACTIVE
+    val raidMute: RaidMute = RaidMute.None
 ) {
     /** Derived summary of the two sub-channels — the master toggle. Can never be ON while red
      *  and yellow are both OFF, so the row can never read enabled with nothing selected. */
@@ -433,6 +432,16 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     /** AVIATION ids whose flyby already played this process (concurrent — the state combine
      *  lambda runs on whichever dispatcher its upstream flows last emitted on). */
     private val flybyPlayedIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    /** Problems already surfaced to the user, so the guidance toast fires once per appearance.
+     *  Concurrent for the same reason as [flybyPlayedIds]. */
+    private val problemSeenIds: MutableSet<ProblemId> = ConcurrentHashMap.newKeySet()
+    private var problemAlertTick = 0
+    /** The last alert raised. Kept (not cleared on the next evaluation) so an emission pair that
+     *  lands between two recompositions can never swallow the toast — the UI reacts to the tick. */
+    private var lastProblemAlert: ProblemAlert? = null
+    /** Cold start has no fix for the first seconds — a GPS problem only counts once it has
+     *  outlasted this, so a launch that was about to get a fix never raises a toast. */
+    private val problemsArmedAtMono = Monotonic.now() + PROBLEM_GRACE_MS
     private val updateStateFlow = MutableStateFlow<UpdateState>(UpdateState.Idle)
     private val installPermissionFlow = MutableStateFlow(false)
     private val latestVersionFlow = MutableStateFlow<String?>(null)
@@ -475,6 +484,12 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
      *  the visible tab even when backgrounded) — the flyby auto-trigger only plays live, so an
      *  off-phone user gets it on notification-tap reveal instead of it firing unseen. */
     private val appForegroundFlow = MutableStateFlow(true)
+    /** Whether the OS is currently willing to show our notifications. A live source (not a read
+     *  sampled inside the uiState combine) so returning from the system notification page — or
+     *  flipping the toggle from the shade while we are still foregrounded — updates the header
+     *  status and the silent-bells pill. Equal re-reads are conflated by StateFlow, so the poll
+     *  below costs no recomposition when nothing changed. */
+    private val notifEnabledFlow = MutableStateFlow(AlertNotificationManager.areNotificationsEnabled(app))
     /** Whether the current neutralization is user-initiated (long-press) so we show the
      *  "fake" text instead of the real "neutralizing" copy. Cleared on selection change. */
     private val fakeNeutralizeFlow = MutableStateFlow(false)
@@ -490,6 +505,20 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         // Auto-check for updates at most once per day; pops only when no alert is active.
         // Play flavor has no self-update, so the whole check path is compiled out.
         if (BuildConfig.SELF_UPDATE) autoCheckForUpdates(allowPopup = true)
+        // Safety net for a toggle flipped from the shade while we never left the foreground.
+        // Returns from the system notification page are covered by setAppForeground instead.
+        viewModelScope.launch {
+            while (true) {
+                delay(NOTIF_PERMISSION_POLL_MS)
+                if (appForegroundFlow.value) refreshNotificationPermission()
+            }
+        }
+    }
+
+    /** Re-read the OS notification toggle into [notifEnabledFlow]. Cheap: the StateFlow
+     *  conflates an unchanged value, so this never churns the uiState. */
+    private fun refreshNotificationPermission() {
+        notifEnabledFlow.value = AlertNotificationManager.areNotificationsEnabled(app)
     }
 
     override fun onCleared() {
@@ -728,7 +757,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         MonitoringStatus.running,
         registry.degraded,
         registry.coveredByFallback,
-        RaidMuteState.state
+        RaidMuteState.state,
+        notifEnabledFlow
     ) { values ->
         val live = values[1] as LiveSnapshot
         val rawPrefs = values[2] as UserPreferences
@@ -738,6 +768,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val flyby = values[5] as AviationFlybyShow?
         val monitoringRunning = values[6] as Boolean
         val raidMute = values[9] as RaidMute
+        val notificationsDisabledBySystem = !(values[10] as Boolean)
         val bootRestartEnabled = rawPrefs.bootRestartEnabled
         // No 1s wall-clock flow: the model rebuild is event-driven, so stamp the build time
         // here. Per-second visuals (staleness dimming, marker motion) live in MapView's own
@@ -765,7 +796,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             ),
             nightZones, prefs.night.window.useCustomZones, nightActive
         )
-        val uiState = buildUiState(
+        val built = buildUiState(
             threats = live.threats,
             alerts = live.alerts,
             slowRedKm = live.slowRedKm,
@@ -789,7 +820,32 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             officialAlertCityScope = prefs.officialAlertCityScope || (nightActive && prefs.nightOfficialAlertCityScope),
             showBorders = prefs.showBorders,
             showRegionBorders = prefs.showRegionBorders
-        ).copy(
+        )
+        // One ordered problem list for every surface: the header's warning glyph acts on
+        // problems.first(), and only ids that have never been surfaced raise the guidance toast.
+        val problems = deriveProblems(
+            notificationsDisabled = notificationsDisabledBySystem,
+            gpsUnreliable = built.gpsUnreliable,
+            anyZoneArmed = activeArmed.slowRed || activeArmed.fastRed ||
+                activeArmed.slowYellow || activeArmed.fastYellow,
+            officialRedAlertsEnabled = prefs.officialRedAlertsEnabled,
+            officialYellowAlertsEnabled = prefs.officialYellowAlertsEnabled,
+            allTypesSilenced = (ThreatType.values().toSet() - prefs.alertEnabled).size ==
+                ThreatType.values().size,
+            criticalOfflineOverride = prefs.criticalOfflineOverride,
+            sourceOffline = registry.isOffline(nowMono)
+        )
+        val freshProblemIds = if (nowMono >= problemsArmedAtMono) {
+            problems.map { it.id }.filter { problemSeenIds.add(it) }
+        } else {
+            emptyList()
+        }
+        if (freshProblemIds.isNotEmpty()) {
+            problemAlertTick++
+            lastProblemAlert = ProblemAlert(problemAlertTick, freshProblemIds)
+        }
+        val problemAlert = lastProblemAlert
+        val uiState = built.copy(
             update = updateUi.update,
             needsInstallPermission = updateUi.needsInstallPermission,
             latestVersion = updateUi.latestVersion,
@@ -861,23 +917,12 @@ showBorders = prefs.showBorders,
             hapticsEnabled = resolveHaptics(prefs.hapticsEnabled),
             shelterIndex = shelterIndex,
             shelterOverlayUp = live.shelterModeActive,
-            notificationsDisabledBySystem = !AlertNotificationManager.areNotificationsEnabled(app),
+            notificationsDisabledBySystem = notificationsDisabledBySystem,
             raidMute = raidMute,
             monitoringRunning = monitoringRunning,
             bootRestartEnabled = bootRestartEnabled,
-            protectionState = deriveProtectionState(
-                monitoringRunning = monitoringRunning,
-                notificationsDisabledBySystem = !AlertNotificationManager.areNotificationsEnabled(app),
-                activeSlowRedArmed = activeArmed.slowRed,
-                activeFastRedArmed = activeArmed.fastRed,
-                activeSlowYellowArmed = activeArmed.slowYellow,
-                activeFastYellowArmed = activeArmed.fastYellow,
-                officialRedAlertsEnabled = prefs.officialRedAlertsEnabled,
-                officialYellowAlertsEnabled = prefs.officialYellowAlertsEnabled,
-                criticalOfflineOverride = prefs.criticalOfflineOverride,
-                silencedTypesCount = (ThreatType.values().toSet() - prefs.alertEnabled).size,
-                neptunOffline = registry.isOffline(nowMono)
-            )
+            problems = problems,
+            problemAlert = problemAlert
         )
         // A fresh INNER AVIATION (bell on) plays one full-size pass across the viewport; the
         // threat card opens when it lands (onFlybyFinished). Only while genuinely foregrounded
@@ -1163,7 +1208,7 @@ showBorders = prefs.showBorders,
             followMe = followMe,
             pinnedCity = pinnedCity,
             focusLocation = focusLocation,
-            gpsFixMissing = focus.gpsFixMissing,
+            gpsUnreliable = focus.gpsUnreliable,
             cityAlerts = evaluation.cityAlerts,
             alertOblastIds = evaluation.fillOblastTokens,
             alertRaionKeys = evaluation.fillRaionKeys,
@@ -1720,6 +1765,8 @@ fun setAlertsArmed(armed: Boolean) {
      *  REST-source polling cadence (foreground → faster polling). */
     fun setAppForeground(foreground: Boolean) {
         appForegroundFlow.value = foreground
+        // The user may have just come back from the system notification page.
+        if (foreground) refreshNotificationPermission()
         AppSources.setAppForeground(foreground)
     }
 
@@ -1942,26 +1989,8 @@ fun setAlertsArmed(armed: Boolean) {
     }
 }
 
-private fun deriveProtectionState(
-    monitoringRunning: Boolean,
-    notificationsDisabledBySystem: Boolean,
-    activeSlowRedArmed: Boolean,
-    activeFastRedArmed: Boolean,
-    activeSlowYellowArmed: Boolean,
-    activeFastYellowArmed: Boolean,
-    officialRedAlertsEnabled: Boolean,
-    officialYellowAlertsEnabled: Boolean,
-    criticalOfflineOverride: Boolean,
-    silencedTypesCount: Int,
-    neptunOffline: Boolean
-): ProtectionState {
-    if (!monitoringRunning) return ProtectionState.OFFLINE
-    val anyZoneArmed = activeSlowRedArmed || activeFastRedArmed || activeSlowYellowArmed || activeFastYellowArmed
-    val allChannelsOff = !anyZoneArmed &&
-        !(officialRedAlertsEnabled || officialYellowAlertsEnabled)
-    val reduced = notificationsDisabledBySystem ||
-        allChannelsOff ||
-        silencedTypesCount == ThreatType.values().size ||
-        (!criticalOfflineOverride && neptunOffline)
-    return if (reduced) ProtectionState.REDUCED else ProtectionState.ACTIVE
-}
+private const val NOTIF_PERMISSION_POLL_MS = 3_000L
+
+/** How long a problem must persist before it is allowed to raise a toast — a cold start has no
+ *  GPS fix for the first seconds and must not complain about it. */
+private const val PROBLEM_GRACE_MS = 20_000L

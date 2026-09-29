@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import kotlinx.coroutines.Dispatchers
@@ -79,6 +80,17 @@ const val NOTIF_MONITORING_PAUSED = 9
 
         fun areNotificationsEnabled(context: Context): Boolean {
             return NotificationManagerCompat.from(context).areNotificationsEnabled()
+        }
+
+        /**
+         * Deep-link to this app's OS notification page — the only place the enabled toggle
+         * lives, so it is the sole correct destination for a reason whose cause is there.
+         */
+        fun openNotificationSettings(context: Context) {
+            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            runCatching { context.startActivity(intent) }
         }
     }
 

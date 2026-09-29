@@ -44,7 +44,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -138,11 +140,7 @@ internal fun FirstLaunchWizard(
             ) {
                 when (step) {
                     0 -> {
-                        Text(
-                            s.onboardingIntro,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        WizardIsNotBlock(s)
                         if (!tipsRevealed) {
                             Spacer(Modifier.height(24.dp))
                             Button(
@@ -428,6 +426,123 @@ private fun WizardThreatGrid(
                 }
             }
         }
+    }
+}
+
+/** Step 0: what this app is / is not, above a real source-channel screenshot. */
+@Composable
+private fun WizardIsNotBlock(s: Strings.StringSet) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        WizardCard(borderColor = _ukraineYellow.copy(alpha = 0.3f)) {
+            WizardBlockHeader(s.wizardIsTitle, _ukraineYellow)
+            Spacer(Modifier.height(14.dp))
+            Image(
+                painter = painterResource(R.drawable.wizard_source),
+                contentDescription = null,
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+            )
+            Spacer(Modifier.height(16.dp))
+            WizardBullet(s.wizardIs1, _ukraineYellow)
+            WizardBullet(s.wizardIs2, _ukraineYellow)
+            WizardBullet(s.wizardIs3, _ukraineYellow)
+        }
+        Spacer(Modifier.height(12.dp))
+        WizardCard(borderColor = MaterialTheme.colorScheme.outlineVariant) {
+            WizardBlockHeader(s.wizardNotTitle, MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(14.dp))
+            WizardNotBullet(s.wizardNot1)
+            WizardNotBullet(s.wizardNot2)
+            WizardNotBullet(s.wizardNot3)
+        }
+    }
+}
+
+@Composable
+private fun WizardCard(borderColor: Color, content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Surface(
+        shape = shape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, borderColor, shape)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), content = content)
+    }
+}
+
+@Composable
+private fun WizardBlockHeader(text: String, accent: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(width = 3.dp, height = 16.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(accent)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+/** "Claim — detail": the claim is bold, the detail muted. */
+@Composable
+private fun WizardBullet(text: String, accent: Color) {
+    val head = text.substringBefore(" — ")
+    val tail = text.substringAfter(" — ", "")
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+        Box(
+            modifier = Modifier
+                .padding(top = 7.dp)
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(accent)
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            buildAnnotatedString {
+                withStyle(
+                    SpanStyle(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                ) { append(head) }
+                if (tail.isNotEmpty()) {
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
+                        append(" — $tail")
+                    }
+                }
+            },
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+/** Flat muted line — the ✕ carries the emphasis, so the text stays uniform. */
+@Composable
+private fun WizardNotBullet(text: String) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+        Icon(
+            Icons.Filled.Close,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp).size(15.dp)
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 

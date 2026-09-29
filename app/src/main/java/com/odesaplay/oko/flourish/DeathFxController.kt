@@ -8,10 +8,13 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -37,6 +40,50 @@ import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.random.Random
 
+/** How a neutralize plays for one threat. [StrikeFlight] is only legitimate when something in the
+ *  feed says the threat is actually flying along a known course; otherwise the marker explodes
+ *  where it sits. Without this the flourish extrapolates a trajectory out of a nominal type speed
+ *  and an id-derived bearing — a course the source never reported. */
+sealed interface StrikePlan {
+    val start: LatLng
+    val anchor: LatLng
+    val rotationDeg: Float
+}
+
+data class StrikeFlight(
+    override val start: LatLng,
+    override val anchor: LatLng,
+    override val rotationDeg: Float
+) : StrikePlan
+
+data class StrikeInPlace(
+    val at: LatLng,
+    override val rotationDeg: Float
+) : StrikePlan {
+    override val start: LatLng get() = at
+    override val anchor: LatLng get() = at
+}
+
+/**
+ * The course the flourish may fly along, or null when nothing says the threat is moving. The
+ * engine's verdict is the authority while the track is still on the map; [removalCourse] is what
+ * the source reported at removal, once it is gone from the map.
+ */
+fun strikeCourseDeg(outcome: BehaviorOutcome?, removalCourse: Double? = null): Double? =
+    if (outcome != null) outcome.headingDeg.toDouble().takeIf { outcome.moving } else removalCourse
+
+/** Single decision point for the neutralize flourish: flight only with a real course. */
+fun strikePlan(
+    at: LatLng,
+    courseDeg: Double?,
+    rotationDeg: Float,
+    nominalSpeedMps: Double
+): StrikePlan {
+    val distMeters = nominalSpeedMps * (DEATH_EXPLOSION_START_MS / 1000.0)
+    if (courseDeg == null || distMeters <= 0.0) return StrikeInPlace(at, rotationDeg)
+    return StrikeFlight(at, destinationPoint(at.lat, at.lon, distMeters, courseDeg), rotationDeg)
+}
+
 private val UA_MIN_LAT = UA_TIGHT_MIN_LAT
 private val UA_MAX_LAT = UA_TIGHT_MAX_LAT
 private val UA_MIN_LON = UA_TIGHT_MIN_LON
@@ -44,6 +91,16 @@ private val UA_MAX_LON = UA_TIGHT_MAX_LON
 
 /** Beat after an intermediate group's last impact before panning to the next one. */
 private const val REPLAY_PAN_BEAT_MS = 120L
+
+/** Beat held after a death flourish runs its course, before the struck markers come back —
+ *  the explosion's afterglow. An eject never waits: it has no afterglow left to show. */
+private const val DEATH_RESTORE_BEAT_MS = 2100L
+
+/** Marker ids released back to the map by a death flourish. [animate] is false for an eject,
+ *  which nullifies the whole show at once — the marker must be back with nothing left of it.
+ *  Purely cosmetic: correctness rides on [DeathFxController.struck], so a missed event costs
+ *  the fade, never the marker. */
+data class StruckRestored(val ids: List<String>, val animate: Boolean)
 
 /** Fixed zoom level during a single strike — wide enough to see the projectile path. */
 private const val STRIKE_ZOOM_LEVEL = 10.0
@@ -158,6 +215,17 @@ class DeathFxController(
                 cd != null || auto || death || replay != null
             }.collect { _flourishActive.value = it }
         }
+        // Whoever ends a flourish decides how its markers come back. This waiter only ever
+        // produces the natural ending, and needs no knowledge of ejects: an eject releases
+        // first, so by the time this wakes there is nothing left to release.
+        scope.launch {
+            while (true) {
+                overlay.active.first { it }
+                overlay.active.first { !it }
+                delay(DEATH_RESTORE_BEAT_MS)
+                releaseStruck(animate = true)
+            }
+        }
     }
 
     /** When true, city labels should show all tiers regardless of user settings — toggled
@@ -172,6 +240,29 @@ class DeathFxController(
     val isReplayActive: Boolean get() = replayJob?.isActive == true
 
     fun isActiveFor(id: String?): Boolean = overlay.isActiveFor(id)
+
+    /** Marker ids currently hidden because a death flourish is covering them. Engine-owned: the
+     *  UI renders membership, it never decides it, so the two sides cannot disagree about who is
+     *  shot. */
+    private val _struck = MutableStateFlow<Set<String>>(emptySet())
+    val struck: StateFlow<Set<String>> = _struck.asStateFlow()
+
+    private val _restored = MutableSharedFlow<StruckRestored>(
+        extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+
+    /** Emitted whenever [struck] is released, carrying how the markers may come back. */
+    val restored: Flow<StruckRestored> = _restored.asSharedFlow()
+
+    /** Hand every struck marker back to the map. Idempotent by emptiness, which is what lets the
+     *  natural ending and an eject share this one path: whichever fires first releases the ids,
+     *  the other finds nothing to do. Never suspends — an eject must not wait on a collector. */
+    private fun releaseStruck(animate: Boolean) {
+        val ids = _struck.value
+        if (ids.isEmpty()) return
+        _struck.value = emptySet()
+        _restored.tryEmit(StruckRestored(ids.toList(), animate))
+    }
 
     /** Drop every active death + cancel a pending camera return or running replay instantly —
      *  a red alert ejects the flourish (safety outranks the playful replay). If a strike/replay
@@ -209,6 +300,10 @@ class DeathFxController(
             vibrator?.cancel()
         }
         overlay.clear()
+        // Last, and part of the same teardown: the struck markers are the one piece of the show
+        // still standing, and an eject takes the whole thing down — no beat, no afterglow, them
+        // back on the map the instant the overlay goes.
+        releaseStruck(animate = false)
     }
 
     /** Launch the tally-tap replay on the controller's scope, replacing any show in flight. */
@@ -313,25 +408,29 @@ class DeathFxController(
                 val outcome = resolveOutcome(r.id)
                 val baseLat = outcome?.lat ?: r.lat
                 val baseLon = outcome?.lon ?: r.lon
-                val speedMps = AppSources.registry.typeCatalog.value[r.type.apiKey]?.nominalSpeedMps ?: 0.0
-                val course = outcome?.headingDeg?.toDouble() ?: r.courseDeg
-                val distMeters = speedMps * (DEATH_EXPLOSION_START_MS / 1000.0)
-                val intercept = if (distMeters > 0.0 && (course != 0.0 || outcome?.headingDeg != null)) {
-                    destinationPoint(baseLat, baseLon, distMeters, course)
-                } else {
-                    LatLng(baseLat, baseLon)
-                }
+                val type = r.type
+                val speedMps = AppSources.registry.typeCatalog.value[type.apiKey]?.nominalSpeedMps ?: 0.0
+                val plan = strikePlan(
+                    at = LatLng(baseLat, baseLon),
+                    courseDeg = strikeCourseDeg(outcome, r.courseDeg),
+                    rotationDeg = resolveRotation(r),
+                    nominalSpeedMps = speedMps
+                )
                 if (isActiveFor(r.id)) {
-                    strikeDud(r.id, intercept)
+                    strikeDud(r.id, plan.anchor)
                 } else {
-                    val type = r.type
-                    val icon = resolveIcon(type)
-                    val rotation = resolveRotation(r)
                     val id = r.id
-                    val startGeo = LatLng(baseLat, baseLon)
-                    startAutoCountdown(intercept, type) {
-                        followStrike(intercept)
-                        strike(id = id, geo = intercept, startGeo = startGeo, icon = icon, rotationDeg = rotation, alpha = 1f, type = type)
+                    startAutoCountdown(plan.anchor, type) {
+                        followStrike(plan.anchor)
+                        strike(
+                            id = id,
+                            geo = plan.anchor,
+                            startGeo = plan.start,
+                            icon = resolveIcon(type),
+                            rotationDeg = plan.rotationDeg,
+                            alpha = 1f,
+                            type = type
+                        )
                         strikeHaptics()
                     }
                 }
@@ -357,7 +456,7 @@ class DeathFxController(
     /** User-initiated or server-driven strike: spawn the projectile + explosion. The bullet
      *  takes off from a random point on the viewport edge (clamped to Ukraine). Returns true
      *  only when a strike actually launched — false when the Morale master is off, so the
-     *  caller can skip its side effects (marker hide, user-shot grace). */
+     *  caller can skip its side effects (user-shot grace). */
     fun strike(
         id: String? = null,
         geo: LatLng,
@@ -370,6 +469,7 @@ class DeathFxController(
         if (!moraleEnabled.value) return false
         _strikeAnchor.value = geo
         overlay.spawn(id, geo, startGeo, randomEdgeOrigin(), icon, rotationDeg, alpha, type = type)
+        if (id != null) _struck.update { it + id }
         return true
     }
 

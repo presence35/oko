@@ -68,7 +68,10 @@ data class NormalizedThreat(
 data class TrailPoint(val lat: Double, val lon: Double, val tMillis: Long?)
 ```
 
-`flying` is derived: `(bearingDeg != null || heading != null) && (confirmedAtMillis != null || updatedAtMillis != null) && status == "active"`.
+`reportedCourseDeg` is derived: `bearingDeg ?: heading`, or `null` for an area-only advisory
+(no real point ⇒ no course) — the `fallbackCourse(id)` pseudo-course is icon-facing only and never
+counts as motion. `flying` is derived: `reportedCourseDeg != null && (confirmedAtMillis != null ||
+updatedAtMillis != null) && status == "active"`.
 Movement additionally needs a resolvable course + speed; `ThreatEngine.canDrift(t, props, now) =
 !isStale(...) && t.flying` is the single gate both the map glide and [predictPosition](#predictpositionthreat-speedmps-now--dead-reckoning)
 use — dead-reckoning only ever moves a **fresh** track whose **source** reported a course
@@ -206,6 +209,7 @@ Priority chain:
   2. heading (reported heading)
   3. measuredHeading (from speed cache fix track)
 
+Area-only advisories stop at the top: `reportedCourseDeg` is null for them.
 Used for icon facing (courseDeg) and the map's measured fallback — the dead-reckon in
 predictPosition uses only the server-reported course (steps 1-2).
 ```

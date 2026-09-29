@@ -1,5 +1,6 @@
 package com.odesaplay.oko
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -104,6 +105,41 @@ class ThreatCardDedupeTest {
         )
         assertTrue(
             isAreaAdvisory("Drone — Chernihivska oblast: попередження по території, точка не відома")
+        )
+    }
+
+    @Test
+    fun areaAdvisoryWithAppendedConfirmationCountIsStillAnAdvisory() {
+        // Live NEPTUN payload: the confirmation count rides along after the advisory sentence and
+        // is shown as the card's source count. Matching the whole blob dropped the template into
+        // prose; the predicate must read the same first sentence the card renders.
+        assertTrue(
+            isAreaAdvisory(
+                "БпЛА — Чернігівська область: попередження по області, точка невідома. Підтверджень: 2."
+            )
+        )
+        assertTrue(
+            isAreaAdvisory(
+                "БпЛА — Чернігівська область: попередження по області, точка невідома. Підтверджень: 2"
+            )
+        )
+    }
+
+    @Test
+    fun firstSentenceDropsTheConfirmationCount() {
+        assertEquals(
+            "БпЛА — Чернігівська область: попередження по області, точка невідома",
+            firstSentence("БпЛА — Чернігівська область: попередження по області, точка невідома. Підтверджень: 2.")
+        )
+        assertEquals("Шахеди курсом на Чорноморськ", firstSentence("Шахеди курсом на Чорноморськ"))
+    }
+
+    @Test
+    fun areaAdvisorySuffixDoesNotSwallowARealCourse() {
+        assertFalse(
+            isAreaAdvisory(
+                "Шахеди курсом на Чорноморськ. Підтверджень: 2."
+            )
         )
     }
 

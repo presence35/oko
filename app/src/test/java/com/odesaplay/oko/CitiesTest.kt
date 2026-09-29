@@ -129,11 +129,11 @@ class CitiesTest {
         assertEquals("Одеса", f.attribution.bannerCityUa)
         assertEquals("Odesa", f.attribution.bannerCityEn)
         assertEquals(false, f.pinned)
-        assertEquals(false, f.gpsFixMissing)
+        assertEquals(false, f.gpsUnreliable)
     }
 
     @Test
-    fun `resolveFocus with no fix and no pin is country-wide with a fix-missing warning`() {
+    fun `resolveFocus with no fix and no pin is country-wide and flagged unreliable`() {
         val f = resolveFocus(
             followMe = true,
             lastGps = null,
@@ -143,20 +143,34 @@ class CitiesTest {
         assertEquals(null, f.attribution.token)
         assertEquals("Ukraine", f.attribution.bannerCityEn)
         assertEquals(null, f.location)
-        assertEquals(true, f.gpsFixMissing)
+        assertEquals(true, f.gpsUnreliable)
     }
 
     @Test
-    fun `resolveFocus keeps the last-known fix even when stale`() {
+    fun `resolveFocus keeps the last-known fix when stale but still flags it unreliable`() {
         val f = resolveFocus(
             followMe = true,
             lastGps = LatLng(46.3036, 30.6566),
             gpsFresh = false,
             pinnedName = null
         )
+        // The focus point survives (zones still have a centre) — but an old position is not a
+        // position, so it is reported as degraded rather than silently trusted.
         assertEquals(46.3036, f.location?.lat)
         assertEquals(30.6566, f.location?.lon)
-        assertEquals(false, f.gpsFixMissing)
+        assertEquals(true, f.gpsUnreliable)
+    }
+
+    @Test
+    fun `resolveFocus flags a position outside Ukraine as unreliable`() {
+        val f = resolveFocus(
+            followMe = true,
+            lastGps = LatLng(48.8566, 2.3522), // Paris — a real fix, but not a usable one
+            gpsFresh = true,
+            pinnedName = null
+        )
+        assertEquals(null, f.location)
+        assertEquals(true, f.gpsUnreliable)
     }
 
     @Test
@@ -164,11 +178,11 @@ class CitiesTest {
         val pinned = resolveFocus(followMe = false, lastGps = null, gpsFresh = false, pinnedName = "Одеса")
         assertEquals(true, pinned.pinned)
         assertEquals("odeska", pinned.attribution.token)
-        assertEquals(false, pinned.gpsFixMissing)
+        assertEquals(false, pinned.gpsUnreliable)
 
         val following = resolveFocus(followMe = true, lastGps = null, gpsFresh = false, pinnedName = "Одеса")
         assertEquals(false, following.pinned)
         assertEquals(null, following.location)
-        assertEquals(true, following.gpsFixMissing)
+        assertEquals(true, following.gpsUnreliable)
     }
 }

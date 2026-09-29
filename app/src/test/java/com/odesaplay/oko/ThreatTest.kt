@@ -5,6 +5,7 @@ import org.junit.Test
 import com.odesaplay.oko.engine.ThreatEngine
 import com.odesaplay.oko.source.neptun.NeptunSource.Companion.NEPTUN_TYPES
 import com.odesaplay.oko.engine.NormalizedThreat
+import com.odesaplay.oko.engine.fallbackCourse
 import com.odesaplay.oko.engine.toThreatType
 
 /**
@@ -125,6 +126,25 @@ class ThreatTest {
             status = "resolved"
         )
         assertFalse(threat.flying)
+    }
+
+    @Test
+    fun `flying - an area-level advisory never flies`() {
+        val threat = makeThreat(
+            bearingDeg = 180.0,
+            confirmedAtMillis = System.currentTimeMillis() - 10_000,
+            status = "active",
+            areaOnly = true
+        )
+        assertFalse(threat.flying)
+        assertEquals(null, threat.reportedCourseDeg)
+    }
+
+    @Test
+    fun `reported course - the id-hash fallback is not a course`() {
+        val threat = makeThreat(bearingDeg = null, heading = null, status = "active")
+        assertEquals(null, threat.reportedCourseDeg)
+        assertTrue(fallbackCourse(threat.id) > 0.0)
     }
 
     // ─────────────────────────────────────────────────────────────

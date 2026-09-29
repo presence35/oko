@@ -5,9 +5,9 @@ package com.odesaplay.oko
  * both notice sites (the controls column and the landscape overlay) agree, and so the
  * label/countdown never re-derives policy in the UI.
  *
- * Priority: system notifications disabled (nothing can show at all) → an explicit mute
- * (fresh, actionable — tap unmutes) → all zone bells off (tap opens the zones panel).
- * Null means the bells are on.
+ * Priority: system notifications disabled (nothing can show at all) → an explicit mute →
+ * all zone bells off. Null means the bells are on. The tap affordance for each reason is
+ * [SilentReason.action] — see [SilentNoticeAction].
  */
 sealed interface SilentReason {
     data object NotificationsDisabled : SilentReason
@@ -16,7 +16,16 @@ sealed interface SilentReason {
     /** Timed mute; [deadlineMs] feeds the countdown label. */
     data class MutedFor(val deadlineMs: Long) : SilentReason
 
-    val isMute: Boolean get() = this is MutedForRaid || this is MutedFor
+    /**
+     * The affordance a tap on the notice pill must offer. Owned here so a reason can never be
+     * paired with the wrong destination (the zones panel cannot restore a system-wide
+     * notification block) and so the mapping is exhaustive at compile time.
+     */
+    val action: SilentNoticeAction get() = when (this) {
+        NotificationsDisabled -> SilentNoticeAction.OpenNotificationSettings
+        ZonesOff -> SilentNoticeAction.OpenZones
+        MutedForRaid, is MutedFor -> SilentNoticeAction.Unmute
+    }
 
     companion object {
         fun resolve(
@@ -31,4 +40,16 @@ sealed interface SilentReason {
             else -> MutedForRaid
         }
     }
+}
+
+/** Where tapping the silent-bells notice sends the user. */
+enum class SilentNoticeAction {
+    /** System notifications are off — only the OS page can restore them. */
+    OpenNotificationSettings,
+
+    /** Every zone bell is off — the in-app zones panel owns those toggles. */
+    OpenZones,
+
+    /** A raid mute is live — the tap itself clears it. */
+    Unmute
 }

@@ -402,12 +402,6 @@ fun ThreatPopupCard(
                                         unit = s.kmUnit,
                                         contentDescription = distCd
                                     )
-                                } else {
-                                    Text(
-                                        s.gpsOffLabel,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color(AppPalette.TextSecondary)
-                                    )
                                 }
                             }
                             Spacer(Modifier.width(8.dp))
@@ -553,7 +547,8 @@ fun ThreatPopupCard(
                             Spacer(Modifier.height(4.dp))
                         }
 
-                        // Always-visible trio: distance + ETA + speed pills.
+                        // Distance + ETA + speed; absent without a user fix (SummaryPills
+                        // reports nothing then — a missing fix is a status, not a metric).
                         Spacer(Modifier.height(4.dp))
                         SummaryPills(
                             proximity = proximity,
@@ -609,14 +604,6 @@ private fun levelColor(level: Double): Color = when {
     level >= 6.0 -> DistUserRed
     level >= 3.0 -> DistUserAmber
     else -> DistUserGreen
-}
-
-/** Keep only the first sentence of NEPTUN's course text. */
-private fun firstSentence(text: String): String {
-    for (c in text) {
-        if (c == '.' || c == '!' || c == '?') return text.substringBefore(c).trim()
-    }
-    return text
 }
 
 /** Whitespace run matcher shared by [repeatsShownInfo] — hoisted so cards never recompile it. */
@@ -842,15 +829,9 @@ private fun SummaryPills(
     singleLine: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val distUser = proximity?.distToUserKm
-    if (distUser == null) {
-        Text(
-            s.gpsOffLabel,
-            style = MaterialTheme.typography.bodySmall,
-            color = Color(AppPalette.TextSecondary)
-        )
-        return
-    }
+    // No user fix, no pill: an unknown distance is not a metric, and the header's warning glyph
+    // already owns "your position is unusable" app-wide — a per-card note repeated that fact.
+    val distUser = proximity?.distToUserKm ?: return
     val cityName = pinnedCity?.name(lang)
     val distCd = if (cityName != null) {
         String.format(s.pillDistanceCd, cityName, distUser.roundToInt())
@@ -983,13 +964,19 @@ private fun formatEtaMinutes(min: Double): String =
 
 private fun formatKm(km: Double): String = km.roundToInt().toString()
 
-/** Maps uncertainty km to a 1–5 quality rating (more bars = tighter fix). */
-private fun uncertaintyBars(km: Double): Int {
+/**
+ * Maps uncertainty km to a 1–5 quality rating (more bars = tighter fix). Bands are calibrated
+ * to the values the feed actually reports (a snapshot ran 4, 10, 25 and 70 km): the old
+ * <1/<2/<4/<8 scale put 7 of 20 live tracks on "2 bars" and the other 13 on "1", so ±10 km and
+ * ±70 km were pixel-identical. The ±km caption beside the bar stays the authority — the feed's
+ * spread will drift and these bands should be re-checked against it, not treated as a law.
+ */
+internal fun uncertaintyBars(km: Double): Int {
     return when {
-        km < 1.0 -> 5
-        km < 2.0 -> 4
-        km < 4.0 -> 3
-        km < 8.0 -> 2
+        km < 2.0 -> 5
+        km < 8.0 -> 4
+        km < 20.0 -> 3
+        km < 40.0 -> 2
         else -> 1
     }
 }

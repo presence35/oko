@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+- Stop now wipes the shootdown flourish completely — the shot threat is back on the map the instant you press it, instead of after the explosion's pause 09-29_23:20:00
+
+- The card no longer repeats "GPS off — no zone data" on every threat; the header's warning icon already says it 09-29_23:20:00
+- The precision bar now spreads across the uncertainties the feed actually reports — ±10 km and ±70 km no longer look identical 09-29_23:20:00
+- The header's warning icon is a single clean glyph instead of a mangled overlap 09-29_23:20:00
+- The area-level pill is now just "Area only" 09-29_23:20:00
+- Area-level drone warnings show as the area-level chip again — the source now appends a confirmation count to the text, which slipped past the pattern that recognised it 09-29_22:55:00
+
+- The shootdown flourish no longer invents a flight path: area-level advisories and parked tracks now explode where they sit instead of flying off on a made-up course 09-29_22:05:00
+- A threat's course is now only what the source reported — the id-hash pseudo-course no longer counts as motion, so an area-level advisory stops drifting across the map 09-29_22:20:00
+
+- The header's status chip is now a tappable warning icon with no words — tap it and it takes you straight to whatever needs fixing (Android notification settings, the GPS permission, the zones panel); a toast on first appearance says what is wrong 09-29_17:40:00
+- A missing, stale or out-of-country position is now reported instead of silently trusted — the map marks "waiting for GPS access" where the position should be 09-29_17:40:00
+- Wizard's first screen now says what this app is and is not — two cards, with a real source-channel screenshot (replaces the intro paragraph) 09-29_21:1:29
+- The "Enable notifications" pill now opens Android's notification settings directly instead of the zones panel, whose bells could never lift a system-wide block 09-29_16:20:00
+- Notification enablement is now tracked live — re-enabling notifications in Android updates the app immediately, without needing an unrelated update to nudge it 09-29_16:20:00
+- The four floating map buttons are now evenly spaced (the shelter button used to sit 2.dp closer than the rest) 09-29_16:20:00
+- Logs: reads as a raid story now — the day is grouped into sessions (from the official alert's on to its off, adopting a drone reported in the 2 minutes before the siren), each a one-line headline ("21:10 – 21:47 · Notified", or why it stayed silent) that expands to the events inside; a Story/List switch keeps the raw trail 09-30_10:00:00
+- Logs: "My oblast" scope fixed — it now keys on whether an event was evaluated against you (in your oblast, or something you'd have heard), instead of guessing from where the threat itself was, so it no longer shows an empty list 09-30_10:00:00
+- Logs: header rebuilt as one clean row (Story/List · My oblast/All · Filters) so no control hides off-screen; fixed the clipped search placeholder; unified wording on "notified / covered / not notified"; dropped the redundant "red"/"yellow" word on coloured cards; removed the duplicate suppressed-bell glyph 09-30_10:00:00
+
+## [0.6.713]
+
 ## [0.6.708]
 - Map basemap switched to OpenFreeMap (dark) — no private API key any more, and the map gains real roads, water, landcover and shaded relief 09-29_14:00:56
 - City labels now carry a crisp outline instead of a blurred drop shadow, so they stay readable at small sizes 09-29_14:00:56
@@ -13,7 +36,6 @@
 - Logs: every section (Oblasts, Type, Proximity groups) is now collapsible, so you can fold away regions you don't care about 09-29_12:00:00
 - Logs: an official-alert row now names the official area only — the drone/threat that caused it stays its own separate row, linked by id, so cause and alert are two real events 09-29_12:00:00
 - Logs: rebuilt as outcome-first — a Mine/All scope (your oblast only), a tappable "N events · N rang · N covered · N not notified" summary that also filters, one-line diagnosis of why most didn't ring, outcome glyphs on every row, time-bucket grouping by default, and a search box; the old chip maze is gone 09-29_12:00:00
-- Logs: reads as a raid story now — the day is grouped into sessions (an alarm and everything around it), each a one-line headline ("21:10 – 21:47 · You were told", or why it stayed silent) that expands to the events inside; a Story/List switch keeps the raw trail 09-30_10:00:00
 - Logs: every official alert is now recorded even when notifications are off, muted, or "let me sleep" is on 09-29_12:00:00
 - Fixed an all-clear appearing together with a new official alert in the same city/raion 09-29_12:00:00
 - Fixed wrong-city official alerts after switching to GPS: a focus change now drops the stale episode, and enabling follow-me clears the old pin 09-29_12:00:00

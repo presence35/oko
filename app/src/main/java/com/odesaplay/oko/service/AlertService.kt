@@ -298,7 +298,7 @@ class AlertService : Service() {
         val fastVibrationLevel: Int,
         val slowVibrationLevel: Int,
         val focusLocation: LatLng?,
-        val gpsFixMissing: Boolean = false,
+        val gpsUnreliable: Boolean = false,
         val nightActive: Boolean,
         val enabled: Set<ThreatType>,
         val hiddenTypes: Set<String>,
@@ -634,7 +634,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     p.language.pick(ua, en, en)
                 }
                 val focusPinned = focus.pinned
-                val gpsFixMissing = focus.gpsFixMissing
+                val gpsUnreliable = focus.gpsUnreliable
                 val focusToken = focus.attribution.token
                 currentToken = focusToken
 
@@ -716,7 +716,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     fastVibrationLevel = fastVib,
                     slowVibrationLevel = slowVib,
                     focusLocation = focusLoc,
-                    gpsFixMissing = gpsFixMissing,
+                    gpsUnreliable = gpsUnreliable,
                     nightActive = nightActive,
                     enabled = enabled,
                     hiddenTypes = hiddenTypeStrings,
@@ -792,7 +792,7 @@ val mappedThreats = registry.allThreats.map { list ->
 
         val monitorText = when {
             isOfflineNow -> offlineLiveBody(s, offlineMinutes)
-            state.gpsFixMissing -> s.gpsUnavailableFollowMe
+            state.gpsUnreliable -> s.gpsUnavailableFollowMe
             isDegradedNow -> s.connDegradedBody
             else -> ""
         }

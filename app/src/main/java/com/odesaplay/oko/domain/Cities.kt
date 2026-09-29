@@ -684,7 +684,7 @@ data class Focus(
     val attribution: FocusAttribution,  // token = null + country-wide banner when location unknown
     val pinned: Boolean,                // true when the focus is the pinned city
     val gpsFresh: Boolean,              // caller-supplied freshness of the last fix (informational)
-    val gpsFixMissing: Boolean          // followMe on but no fix ever → persistent warning
+    val gpsUnreliable: Boolean          // followMe on but the position can't be trusted: none, stale, or outside Ukraine
 )
 
 /**
@@ -710,7 +710,7 @@ fun resolveFocus(
             ),
             pinned = true,
             gpsFresh = gpsFresh,
-            gpsFixMissing = false
+            gpsUnreliable = false
         )
     }
     val attribution = lastGps?.takeIf { isInsideUkraine(it.lat, it.lon) }?.let { gps ->
@@ -728,7 +728,7 @@ fun resolveFocus(
         attribution = attribution,
         pinned = false,
         gpsFresh = gpsFresh,
-        gpsFixMissing = followMe && usableGps == null
+        gpsUnreliable = followMe && (usableGps == null || !gpsFresh)
     )
 }
 

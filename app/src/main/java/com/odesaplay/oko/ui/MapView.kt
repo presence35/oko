@@ -56,7 +56,6 @@ import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.ThreatEngine
 import com.odesaplay.oko.engine.ThreatZone
 import com.odesaplay.oko.engine.coversCityRaion
-import com.odesaplay.oko.engine.destinationPoint
 import com.odesaplay.oko.engine.threatTypeInfoByString
 import com.odesaplay.oko.engine.toThreatType
 import com.odesaplay.oko.community.CompactOblastBoundaries
@@ -425,7 +424,6 @@ fun NeptunMapView(
     val didDefaultFit = remember { mutableStateOf(false) }
     val lastPinnedCity = remember { mutableStateOf<String?>(null) }
 
-    val hiddenByDeath = remember { mutableStateOf<MutableSet<String>>(mutableSetOf()) }
     val restoringScales = remember { mutableStateMapOf<String, Float>() }
 
     val pausedState by rememberUpdatedState(paused)
@@ -733,7 +731,8 @@ LaunchedEffect(selectedId) {
                 val outcome = threatOutcomes[r.id]
                 val base = IconCatalog.baseDeg(r.type, iconSetState)
                 outcome?.let { threatMarkerRotation(it.headingDeg, base) }
-                    ?: ((r.courseDeg.toFloat() - base + 360f) % 360f)
+                    ?: r.courseDeg?.let { ((it.toFloat() - base + 360f) % 360f) }
+                    ?: 0f
             }
         )
     }
@@ -806,7 +805,12 @@ LaunchedEffect(selectedId) {
         }
     }
 
-    LaunchedEffect(Unit) { deathFx.active.collect { active -> onDeathActiveChange(active) } }
+    LaunchedEffect(Unit) {
+        deathFx.active.collect { active ->
+            if (active) bridgeState.value?.invalidateOverlay()
+            onDeathActiveChange(active)
+        }
+    }
     LaunchedEffect(Unit) { deathFx.countdown.collect { c -> onCountdownChange(c) } }
     LaunchedEffect(Unit) { deathFx.autoStrikeActive.collect { active -> onAutoStrikeActiveChange(active) } }
     LaunchedEffect(Unit) { deathFx.strikeType.collect { type -> onStrikeTypeChange(type) } }
@@ -818,33 +822,25 @@ LaunchedEffect(selectedId) {
         deathFx.clear()
     }
 
-    // User-shot death animation restore flourish
+    // A struck marker comes back when the engine releases it. An eject releases with nothing
+    // left of the flourish, so those simply reappear; only the natural ending earns the fade.
     LaunchedEffect(Unit) {
-        var wasActive = false
-        deathFx.active.collect { active ->
-            if (active) {
-                bridgeState.value?.invalidateOverlay()
-            }
-            if (wasActive && !active) {
-                delay(2100)
-                val ids = hiddenByDeath.value.toList()
-                hiddenByDeath.value.clear()
-                for (id in ids) {
-                    val anim = ValueAnimator.ofFloat(0f, 1f)
-                    anim.duration = 300
-                    anim.interpolator = DecelerateInterpolator()
-                    anim.addUpdateListener {
-                        restoringScales[id] = it.animatedValue as Float
-                    }
-                    anim.addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) {
-                            restoringScales.remove(id)
-                        }
-                    })
-                    anim.start()
+        deathFx.restored.collect { released ->
+            if (!released.animate) return@collect
+            for (id in released.ids) {
+                val anim = ValueAnimator.ofFloat(0f, 1f)
+                anim.duration = 300
+                anim.interpolator = DecelerateInterpolator()
+                anim.addUpdateListener {
+                    restoringScales[id] = it.animatedValue as Float
                 }
+                anim.addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        restoringScales.remove(id)
+                    }
+                })
+                anim.start()
             }
-            wasActive = active
         }
     }
 
@@ -1017,7 +1013,7 @@ LaunchedEffect(selectedId) {
                     val matrix = Matrix()
                     val paint = Paint().apply { isAntiAlias = true }
                     for (t in mapThreatsState) {
-                        if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
+                        if (deathFx.isActiveFor(t.id) || t.id in deathFx.struck.value) continue
                         val placement = threatPlacements[t.id]
                         if (placement != null && !placement.visible) continue
                         val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)
@@ -1083,7 +1079,7 @@ LaunchedEffect(selectedId) {
 
                     val activeThreats = ArrayList<Pair<NormalizedThreat, PointF>>(mapThreatsState.size)
                     for (t in mapThreatsState) {
-                        if (deathFx.isActiveFor(t.id) || t.id in hiddenByDeath.value) continue
+                        if (deathFx.isActiveFor(t.id) || t.id in deathFx.struck.value) continue
                         val placement = threatPlacements[t.id]
                         if (placement != null && !placement.visible) continue
                         val outcome = threatOutcomes[t.id] ?: BehaviorOutcome(t.lat, t.lon, 0f, moving = false)
@@ -1198,29 +1194,26 @@ LaunchedEffect(selectedId) {
                         )
                         val base = IconCatalog.baseDeg(threatType, iconSetState)
                         val rotation = if (targetThreat.areaOnly) 0f else threatMarkerRotation(outcome?.headingDeg ?: engine.courseDeg(targetThreat).toFloat(), base)
+                        val plan = strikePlan(
+                            at = LatLng(strikeLat, strikeLon),
+                            courseDeg = strikeCourseDeg(outcome),
+                            rotationDeg = rotation,
+                            nominalSpeedMps = typeCatalog[threatType.apiKey]?.nominalSpeedMps ?: 0.0
+                        )
                         val played = if (deathFx.isActiveFor(threatId)) {
-                            deathFx.strikeDud(threatId, strikeLat, strikeLon)
+                            deathFx.strikeDud(threatId, plan.anchor)
                         } else {
-                            val speedMps = typeCatalog[threatType.apiKey]?.nominalSpeedMps ?: 0.0
-                            val course = outcome?.headingDeg?.toDouble() ?: engine.courseDeg(targetThreat)
-                            val distMeters = speedMps * (DEATH_EXPLOSION_START_MS / 1000.0)
-                            val intercept = if (distMeters > 0.0 && (course != 0.0 || outcome?.headingDeg != null)) {
-                                destinationPoint(strikeLat, strikeLon, distMeters, course)
-                            } else {
-                                LatLng(strikeLat, strikeLon)
-                            }
                             deathFx.strike(
                                 id = threatId,
-                                geo = intercept,
-                                startGeo = LatLng(strikeLat, strikeLon),
+                                geo = plan.anchor,
+                                startGeo = plan.start,
                                 icon = icon,
-                                rotationDeg = rotation,
+                                rotationDeg = plan.rotationDeg,
                                 alpha = 1f,
                                 type = threatType
                             )
                         }
                         if (played) {
-                            hiddenByDeath.value.add(threatId)
                             if (threatId == selectedThreatIdState) {
                                 onNeutralize(threatId)
                             }
