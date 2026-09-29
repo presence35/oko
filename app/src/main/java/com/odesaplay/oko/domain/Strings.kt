@@ -341,8 +341,11 @@ object Strings {
         val logsGroupTimeline: String,
         val logsGroupProximity: String,
         val logsGroupType: String,
+        val logsGroupOblasts: String,
+        val logsGroupOther: String,
         val logsShownOnly: String,
         val logsNotified: String,
+        val logsNotNotified: String,
         val logsProxOblast: String,
         val logsSortDesc: String,
         val logsSortNewest: String,
@@ -1062,8 +1065,11 @@ object Strings {
         val logsGroupTimeline: String get() = misc.logsGroupTimeline
         val logsGroupProximity: String get() = misc.logsGroupProximity
         val logsGroupType: String get() = misc.logsGroupType
+        val logsGroupOblasts: String get() = misc.logsGroupOblasts
+        val logsGroupOther: String get() = misc.logsGroupOther
         val logsShownOnly: String get() = misc.logsShownOnly
         val logsNotified: String get() = misc.logsNotified
+        val logsNotNotified: String get() = misc.logsNotNotified
         val logsProxOblast: String get() = misc.logsProxOblast
         val logsSortDesc: String get() = misc.logsSortDesc
         val logsSortNewest: String get() = misc.logsSortNewest

@@ -302,8 +302,10 @@ class ThreatEngineTest {
     @Test
     fun `speedCache - records and estimates speed`() {
         val now = System.currentTimeMillis()
+        // ~1.5 km over 10 s = 150 m/s — a plausible measured speed (the old 0.05° delta was
+        // ~2000 km/h, which the type-relative sanity ceiling now correctly rejects).
         engine.speedCache.record("t1", now - 10_000, 50.0, 30.0)
-        engine.speedCache.record("t1", now, 50.05, 30.0)
+        engine.speedCache.record("t1", now, 50.0135, 30.0)
         val threat = makeThreat(id = "t1", speedKmh = null)
         val props = NEPTUN_TYPES["shahed"]!!
         val speed = engine.speedCache.estimate("t1", threat, props)
@@ -331,6 +333,16 @@ class ThreatEngineTest {
         val result = engine.speedCache.estimateWithSource("t-crazy", threat, props)
         assertNotNull(result)
         // A corrupt field must not yield a near-zero ETA: fall through to the typical speed.
+        assertEquals(SpeedSource.TYPICAL, result!!.second)
+    }
+
+    @Test
+    fun `speedCache - implausible type-relative speed is rejected`() {
+        // A Shahed at 8471 km/h: >4x nominal, so the corrupt field is dropped for the nominal.
+        val threat = makeThreat(id = "t-drone", type = "shahed", speedKmh = 8471.0)
+        val props = NEPTUN_TYPES["shahed"]!!
+        val result = engine.speedCache.estimateWithSource("t-drone", threat, props)
+        assertNotNull(result)
         assertEquals(SpeedSource.TYPICAL, result!!.second)
     }
 

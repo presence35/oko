@@ -1026,35 +1026,53 @@ private fun MapScreen(
                                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp)
                             )
                         } else {
-                            Row(
+                            // Column (not just the button Row) so the "alerts off" notice
+                            // centers over the whole width instead of over the button cluster
+                            // (which shifts when the shelter button is present).
+                            Column(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .padding(bottom = 8.dp),
-                                verticalAlignment = Alignment.Bottom,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                if (sheltersVisible) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Box(modifier = Modifier.size(width = 16.dp, height = 18.dp))
-                                        ShelterCircle(
-                                            alertActive = uiState.focusOblastAlertActive,
-                                            active = showNearbyShelters,
-                                            contentDescription = s.shelterButtonLabel,
-                                            onClick = onToggleShelters,
-                                            onLongClick = onOpenShelters
-                                        )
-                                    }
-                                }
-                                ZoneButtons(
-                                    redArmed = uiState.activeSlowRedArmed || uiState.activeFastRedArmed,
-                                    yellowArmed = uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
-                                    lang = uiState.language,
+                                val notice = rememberSilentNotice(
+                                    zonesArmed = uiState.activeSlowRedArmed || uiState.activeFastRedArmed ||
+                                        uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
                                     notificationsDisabled = uiState.notificationsDisabledBySystem,
                                     mute = uiState.raidMute,
-                                    onZoneTap = zoneOnTap,
-                                    onEditZones = openZonesPanel,
-                                    onClearMute = unmuteRaid
+                                    s = s
                                 )
+                                if (notice != null) {
+                                    AllAlertsOffWarning(
+                                        label = notice.label,
+                                        onClick = if (notice.isMute) unmuteRaid else openZonesPanel
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.Bottom,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    if (sheltersVisible) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Box(modifier = Modifier.size(width = 16.dp, height = 18.dp))
+                                            ShelterCircle(
+                                                alertActive = uiState.focusOblastAlertActive,
+                                                active = showNearbyShelters,
+                                                contentDescription = s.shelterButtonLabel,
+                                                onClick = onToggleShelters,
+                                                onLongClick = onOpenShelters
+                                            )
+                                        }
+                                    }
+                                    ZoneButtons(
+                                        redArmed = uiState.activeSlowRedArmed || uiState.activeFastRedArmed,
+                                        yellowArmed = uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
+                                        lang = uiState.language,
+                                        onZoneTap = zoneOnTap,
+                                        onEditZones = openZonesPanel
+                                    )
+                                }
                             }
                         }
                     }
@@ -1697,12 +1715,9 @@ internal fun ZoneButtons(
     redArmed: Boolean,
     yellowArmed: Boolean,
     lang: AppLanguage,
-    notificationsDisabled: Boolean = false,
-    mute: RaidMute = RaidMute.None,
     vertical: Boolean = false,
     onZoneTap: (ThreatZone) -> Unit,
     onEditZones: () -> Unit,
-    onClearMute: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val s = Strings.get(lang)
@@ -1717,26 +1732,14 @@ internal fun ZoneButtons(
             ZoneGearButton(onClick = onEditZones, label = s.editZonesLabel)
         }
     } else {
-        Column(
+        Row(
             modifier = modifier,
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Bottom
         ) {
-            val notice = rememberSilentNotice(redArmed || yellowArmed, notificationsDisabled, mute, s)
-            if (notice != null) {
-                AllAlertsOffWarning(
-                    label = notice.label,
-                    onClick = if (notice.isMute) onClearMute else onEditZones
-                )
-                Spacer(Modifier.height(6.dp))
-            }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                ZoneButton(ThreatZone.INNER, redArmed, s.zoneButtonRed, onZoneTap)
-                ZoneButton(ThreatZone.OUTER, yellowArmed, s.zoneButtonYellow, onZoneTap)
-                ZoneGearButton(onClick = onEditZones, label = s.editZonesLabel)
-            }
+            ZoneButton(ThreatZone.INNER, redArmed, s.zoneButtonRed, onZoneTap)
+            ZoneButton(ThreatZone.OUTER, yellowArmed, s.zoneButtonYellow, onZoneTap)
+            ZoneGearButton(onClick = onEditZones, label = s.editZonesLabel)
         }
     }
 }

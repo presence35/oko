@@ -360,7 +360,12 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setFollowMe(follow: Boolean) {
-        context.dataStore.edit { it[followMeKey] = follow }
+        context.dataStore.edit {
+            it[followMeKey] = follow
+            // Follow-me replaces the pin: leaving a stale pin behind resurfaced the old
+            // city (and its latched official episode) after a later switch back.
+            if (follow) it.remove(pinnedCityKey)
+        }
     }
 
     suspend fun setPinnedCity(nameUa: String?) {

@@ -344,6 +344,10 @@ estimateSpeed(id, threat):
   4. Nominal from ThreatProps.nominalSpeedMps → TYPICAL
   5. null (no dead-reckon possible)
 
+  Sanity ceiling on 1–3: a speed above `4 × props.nominalSpeedMps` (absolute fallback
+  ~20 000 km/h) is treated as corrupt and falls through to the next source, so a bad
+  server field (e.g. "drone at 8471 km/h") can never fabricate a near-zero ETA.
+
   Exception: the national MiG-31K track (`isNationalMig`) always estimates null — its pin
   is a country centroid, not a position, so no speed/ETA may be derived from it.
   Null speed hides the card's speed and ETA pills; zone tiering is unaffected

@@ -159,11 +159,13 @@ private fun ThreatStatusRow(
     alertsOff: Boolean,
     simulated: Boolean,
     stale: Boolean,
+    advisory: Boolean,
+    areaOnly: Boolean,
     staleLabel: String,
     s: Strings.StringSet,
     modifier: Modifier = Modifier
 ) {
-    if (!alertsOff && !simulated && !stale) return
+    if (!alertsOff && !simulated && !stale && !advisory && !areaOnly) return
     FlowRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -171,7 +173,27 @@ private fun ThreatStatusRow(
     ) {
         if (alertsOff) AlertsOffChip(s)
         if (stale) StalePill(staleLabel)
+        if (advisory) AdvisoryPill(s.advisoryLabel)
+        if (areaOnly) AdvisoryPill(s.areaOnlyLabel)
         if (simulated) SimulationChip(s)
+    }
+}
+
+/** Amber advisory / area-level pill (Observation, Area-level (no precise point)). */
+@Composable
+private fun AdvisoryPill(label: String) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = AdvisoryAmber.copy(alpha = 0.18f)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = AdvisoryAmber,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+        )
     }
 }
 
@@ -458,6 +480,8 @@ fun ThreatPopupCard(
                             alertsOff = alertsOff,
                             simulated = threat.simulated,
                             stale = stale,
+                            advisory = threat.advisory,
+                            areaOnly = threat.areaOnly || areaAdvisory,
                             staleLabel = s.staleLabel,
                             s = s,
                             modifier = Modifier.padding(top = 4.dp)
@@ -539,35 +563,10 @@ fun ThreatPopupCard(
                             modifier = Modifier.padding(start = 52.dp)
                         )
                         Spacer(Modifier.height(6.dp))
-                        if (threat.advisory) {
-                            Surface(shape = RoundedCornerShape(12.dp), color = AdvisoryAmber.copy(alpha = 0.18f)) {
-                                Text(
-                                    s.advisoryLabel,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    color = AdvisoryAmber,
-                                    fontWeight = FontWeight.Medium,
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            }
-                            Spacer(Modifier.height(6.dp))
-                        }
 
                         // Precision (P) on its own line for accessibility and readability
                         threat.uncertaintyKm?.let { uKm ->
                             UncertaintyBar(uncertaintyKm = uKm, s = s)
-                            Spacer(Modifier.height(6.dp))
-                        }
-
-                        if (threat.areaOnly || areaAdvisory) {
-                            Surface(shape = RoundedCornerShape(12.dp), color = AdvisoryAmber.copy(alpha = 0.18f)) {
-                                Text(
-                                    s.areaOnlyLabel,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = AdvisoryAmber,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
                             Spacer(Modifier.height(6.dp))
                         }
 
@@ -589,6 +588,8 @@ fun ThreatPopupCard(
                             alertsOff = alertsOff,
                             simulated = threat.simulated,
                             stale = stale,
+                            advisory = threat.advisory,
+                            areaOnly = threat.areaOnly || areaAdvisory,
                             staleLabel = s.staleLabel,
                             s = s,
                             modifier = Modifier.padding(top = 8.dp)

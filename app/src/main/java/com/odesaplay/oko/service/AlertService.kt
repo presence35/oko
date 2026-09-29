@@ -176,6 +176,12 @@ class AlertService : Service() {
     /** Announced official episode for ANY level (red/yellow share it): LEVEL|token|since|city.
      *  Persisted pre-level as token|since|city — adopted silently on upgrade (see restore). */
     private var lastOfficialEpisode: String? = null
+    /** Raw (unscoped) official frontier last written to the audit log. Independent of the
+     *  notif scope and toggles, so EVERY official alert is logged even when its notifs are
+     *  off, muted or sleeping. */
+    private var lastLoggedOfficialBoundary: String? = null
+    /** Focus oblast token of the previous tick; a change drops a now-stale latched episode. */
+    private var lastFocusTokenSeen: String? = null
     /** True once the latched episode was observed raw-active on a ready feed in this
      *  lifetime. A restored latch starts unconfirmed: only a confirmed episode may end
      *  loudly; an unconfirmed one expires silently on its first inactive snapshot. */
@@ -260,6 +266,7 @@ class AlertService : Service() {
         val focusOblastYellowAlertActive: Boolean,
         val focusOblastLevel: AlertLevel,
         val focusOblastRawLevel: AlertLevel,
+        val focusOblastRawSince: String?,
         val focusToken: String?,
         val focusOblastAlertSince: String?,
         val focusBannerCity: String,
@@ -640,6 +647,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 val officialRaw = alerts.officialStateFor(focusToken, null, false)
                 val focusOblastLevel = official.level
                 val focusOblastRawLevel = officialRaw.level
+                val focusOblastRawSince = officialRaw.alert?.since
                 val focusOblastAlertSince = official.alert?.since
                 val focusOblastAlertActive = official.level == AlertLevel.RED
                 val focusOblastYellowAlertActive = official.level == AlertLevel.YELLOW
@@ -676,6 +684,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     focusOblastYellowAlertActive = focusOblastYellowAlertActive,
                     focusOblastLevel = focusOblastLevel,
                     focusOblastRawLevel = focusOblastRawLevel,
+                    focusOblastRawSince = focusOblastRawSince,
                     focusToken = focusToken,
                     focusOblastAlertSince = focusOblastAlertSince,
                     focusBannerCity = focusBannerCity,
@@ -729,6 +738,21 @@ val mappedThreats = registry.allThreats.map { list ->
         if (state.lang != lastChannelLang) {
             lastChannelLang = state.lang
             notificationManager.updateChannels(s)
+        }
+
+        // Focus moved (pinned <-> GPS, or a new pinned city): the latched official episode
+        // belongs to the old region, so it must not keep announcing/clearing for it. Drop it
+        // silently; the new focus can start a fresh episode on the next tick.
+        val prevFocusToken = lastFocusTokenSeen
+        if (state.focusToken != null) lastFocusTokenSeen = state.focusToken
+        if (prevFocusToken != null && state.focusToken != null && state.focusToken != prevFocusToken) {
+            if (lastOfficialEpisode != null) {
+                clearOfficialAnnounced()
+                lastOfficialEpisode = null
+                latchedConfirmedLive = false
+            }
+            lastLoggedOfficialBoundary = null
+            allClearSwipedAway = false
         }
 
         val latchedEarly = LatchedEpisode.parse(lastOfficialEpisode)
@@ -907,6 +931,21 @@ val mappedThreats = registry.allThreats.map { list ->
             return "${state.focusOblastLevel}|${state.focusToken}|${state.focusOblastAlertSince}|${state.focusBannerCity}"
         }
 
+        /** Audit-log frontier: the RAW (unscoped) official episode, so the Logs tab records
+         *  every official alert even when city-scope, notif toggles or sleep mute it. */
+        fun officialLogBoundary(state: MonitorState): String? {
+            if (state.focusOblastRawLevel == AlertLevel.NONE) return null
+            return "${state.focusOblastRawLevel}|${state.focusToken}|${state.focusOblastRawSince}|${state.focusBannerCity}"
+        }
+
+        /** True when the area of the last-shown all-clear matches the current focus area. When
+         *  the city is unknown (e.g. after a restart) fall back to "an all-clear is showing, so
+         *  a new alert must supersede it" — never leave one beside an active alert. */
+        fun allClearSameArea(state: MonitorState): Boolean {
+            val city = lastCleanAllClearCity ?: return notificationManager.isAllClearNotificationActive()
+            return city == state.focusBannerCity
+        }
+
         fun isNewEpisode(state: MonitorState): Boolean {
             val boundary = officialBoundary(state) ?: return false
             val stored = lastOfficialEpisode ?: return true
@@ -972,19 +1011,24 @@ val mappedThreats = registry.allThreats.map { list ->
          *  or a zone alert wins the tick), persistence, all-clear. */
         fun reconcileEpisode(primary: Primary?, state: MonitorState, all: Map<String, NormalizedThreat>) {
             val boundary = officialBoundary(state)
+            val logBoundary = officialLogBoundary(state)
+            var scopedOffLogged = false
             // Silent adopt of a legacy pre-level persisted row for the same episode.
             if (boundary != null && lastOfficialEpisode != null &&
                 lastOfficialEpisode != boundary && lastOfficialEpisode == boundary.substringAfter('|')
             ) {
                 lastOfficialEpisode = boundary
             }
-            if (boundary != null && lastOfficialEpisode != boundary) {
-                // A new official episode supersedes any lingering all-clear artifact: drop the
-                // notification and stop its debris countdown so the shade never shows an
-                // all-clear beside an active alert. Fires even when the new episode's own
-                // notification is toggled off, since the raw feed contradicts the all-clear.
-                notificationManager.cancelNotification(NOTIF_ALLCLEAR)
-                debrisBuffer.abort()
+            val startedNewEpisode = boundary != null && lastOfficialEpisode != boundary
+            if (startedNewEpisode) {
+                // A new official episode supersedes a lingering all-clear — but only for the
+                // SAME city/raion the all-clear declared; an unrelated region's all-clear is
+                // honest history and stays. Fires even when the new episode's own notification
+                // is toggled off, since the raw feed contradicts the all-clear.
+                if (allClearSameArea(state)) {
+                    notificationManager.cancelNotification(NOTIF_ALLCLEAR)
+                    debrisBuffer.abort()
+                }
                 val audible = if (state.focusOblastLevel == AlertLevel.RED) state.officialRedAlertsEnabled
                 else state.officialYellowAlertsEnabled
                 val reasonThreat = if (state.focusOblastLevel == AlertLevel.RED) {
@@ -1030,8 +1074,24 @@ val mappedThreats = registry.allThreats.map { list ->
                     )
                 }
                 lastOfficialEpisode = boundary
+                lastLoggedOfficialBoundary = logBoundary
+            } else if (logBoundary != null && logBoundary != lastLoggedOfficialBoundary) {
+                // Raw official alert outside the notif scope (city-scope on, raion not covering
+                // the focus city, or a muted/sleep window): record it silently so the Logs tab
+                // still carries EVERY official alert, even when no notif was posted.
+                DebugLog.recordOfficial(
+                    DebugLogKind.OFFICIAL_ON, night = state.nightActive,
+                    sirenOverride = state.officialSirenOverride, vibrationLevel = VIBRATION_STRONG,
+                    notified = false, reason = DebugLogReason.TOGGLE_OFF,
+                    threatId = null, threatType = null,
+                    locality = state.officialRegion ?: state.focusCityUa,
+                    distanceKm = null, level = state.focusOblastRawLevel,
+                    now = System.currentTimeMillis()
+                )
+                lastLoggedOfficialBoundary = logBoundary
             }
-            if (latched != null && !latchedAlive && state.officialAlertsEnabled) {
+            val suppressAllClear = startedNewEpisode && allClearSameArea(state)
+            if (!suppressAllClear && latched != null && !latchedAlive && state.officialAlertsEnabled) {
                 if (latched.resolveRestored(latchedConfirmedLive, EpisodeTransition.ENDED) == RestoredResolution.EXPIRE_SILENTLY) {
                     // Resurrected latch never observed live in this lifetime: the episode
                     // ended while we were dead. Drop it without notification, chime or log.
@@ -1068,6 +1128,20 @@ val mappedThreats = registry.allThreats.map { list ->
                 lastOfficialEpisode = null
                 latchedConfirmedLive = false
                 clearOfficialAnnounced()
+                scopedOffLogged = true
+                lastLoggedOfficialBoundary = null
+            }
+            if (!scopedOffLogged && logBoundary == null && lastLoggedOfficialBoundary != null) {
+                // Raw alert ended outside the notif scope: close its audit row silently.
+                DebugLog.recordOfficial(
+                    DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
+                    sirenOverride = state.officialSirenOverride, vibrationLevel = null,
+                    notified = false, reason = DebugLogReason.TOGGLE_OFF,
+                    threatId = null, threatType = null,
+                    locality = null, distanceKm = null,
+                    now = System.currentTimeMillis()
+                )
+                lastLoggedOfficialBoundary = null
             }
             val shownOfficial = lastShownId?.startsWith("red|") == true || lastShownId?.startsWith("yellow|") == true
             if (shownOfficial && primary == null &&

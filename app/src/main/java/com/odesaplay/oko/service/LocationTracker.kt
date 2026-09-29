@@ -35,24 +35,25 @@ import kotlinx.coroutines.launch
  * Shared, battery-first device location. One listener owned by the foreground service so the
  * UI and the alert logic read the same fix. The red/yellow zones are km-scale, so a coarse
  * fix is plenty: passive copies of fixes other apps request are always live (zero extra
- * radio). Our own network subscription is only kept while the screen is on (2-min / 0-m,
- * so it stays live while you're moving the phone) and dropped when the screen is off —
- * polling in your pocket all night adds no zone value. Falls back to the last known
- * persisted fix so zone circles keep drawing while indoors.
+ * radio). Our own network subscription is only kept while the screen is on (15-min /
+ * 500-m, so it stays live while you're actually moving) and dropped when the screen is
+ * off — polling while you sit still or in your pocket adds no zone value. Falls back to
+ * the last known persisted fix so zone circles keep drawing while indoors.
  *
  * When periodic GPS is enabled, wakes GPS for a few seconds every 15 minutes — and only
  * while the screen is on — to calibrate and prevent cell-tower drift.
  */
 object LocationTracker {
-    private const val UPDATE_INTERVAL_MS = 120_000L
+    private const val UPDATE_INTERVAL_MS = 15 * 60 * 1000L
     private const val MIN_DISTANCE_METERS = 250f
+    private const val NETWORK_MIN_DISTANCE_METERS = 500f
     private const val PERIODIC_GPS_INTERVAL_MS = 15 * 60 * 1000L // 15 minutes
     private const val GPS_ATTEMPT_MS = 8_000L
     private const val MAX_GPS_ATTEMPTS = 3
     private const val NETWORK_FALLBACK_MS = 6_000L
     private const val MAX_NETWORK_SEED_ATTEMPTS = 4
     private const val NETWORK_SEED_INTERVAL_MS = 8_000L
-    const val MAX_LOCATION_AGE_MS = 15 * 60 * 1000L // 15 minutes freshness threshold
+    const val MAX_LOCATION_AGE_MS = 30 * 60 * 1000L // 30 minutes freshness threshold
 
     // Last-known fix persisted so a force-stopped relaunch knows where the user was
     // instantly: the focus/token resolve from yesterday's fix (staleness is fine —
@@ -117,10 +118,10 @@ object LocationTracker {
             val lm = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
             val looper = Looper.getMainLooper()
 
-            // Passive copies of other apps' fixes are always live (zero extra radio).
-            // Our own network subscription is only kept while the screen is on — polling
-            // in your pocket all night adds no zone value and the cheap periodic GPS
-            // sync still covers the drift case.
+            // Passive copies of other apps' fixes are always live (zero extra radio/dot).
+            // Our own network subscription is only kept while the screen is on and is
+            // distance-gated, so a stationary phone never polls (no blue location dot);
+            // the cheap periodic GPS sync still covers the drift case.
             val passiveOk = subscribeProvider(lm, LocationManager.PASSIVE_PROVIDER, l, looper)
             if (passiveOk) started = true
             applyScreenState(lm, looper)
@@ -162,7 +163,7 @@ object LocationTracker {
             }
         }.getOrDefault(false)
 
-    /** Own network subscription: 2-min while the screen is on (responsive), dropped when off. */
+    /** Own network subscription: distance-gated while the screen is on, dropped when off. */
     private fun applyScreenState(lm: LocationManager, looper: Looper) {
         val ctx = appContext ?: return
         val on = isScreenOn(ctx)
@@ -171,7 +172,7 @@ object LocationTracker {
                 override fun onLocationChanged(loc: Location) { recordFix(loc) }
             }
             networkListener = net
-            subscribeProvider(lm, LocationManager.NETWORK_PROVIDER, net, looper, minDistance = 0f)
+            subscribeProvider(lm, LocationManager.NETWORK_PROVIDER, net, looper, minDistance = NETWORK_MIN_DISTANCE_METERS)
             if (!isFresh()) snapNow()
         } else if (!on && networkListener != null) {
             val net = networkListener

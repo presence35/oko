@@ -1,6 +1,19 @@
 # Changelog
 
 ## [Unreleased]
+- Logs: added an Oblasts group-by, fixed the Type grouping (it showed no headers), replaced the mislabeled "Resolved" toggle with Notified / Not notified filters, and made "Show more" paginate in group order so a new row no longer appears at the bottom 09-29_12:00:00
+- Logs: connection rows now read "<datetime> for <duration>" alongside the age 09-29_12:00:00
+- Logs: every official alert is now recorded even when notifications are off, muted, or "let me sleep" is on 09-29_12:00:00
+- Fixed an all-clear appearing together with a new official alert in the same city/raion 09-29_12:00:00
+- Fixed wrong-city official alerts after switching to GPS: a focus change now drops the stale episode, and enabling follow-me clears the old pin 09-29_12:00:00
+- Location polling backed off to 15 min / 500 m (was every 2 min even when still), so the OS location dot no longer shows while parked 09-29_12:00:00
+- Zone sliders now resize the zone live while dragging, not only on release 09-29_12:00:00
+- The "Area-level (no precise point)" pill moved into the threat card's bottom pill row 09-29_12:00:00
+- The "Zone alerts are off" notice is now centered on the screen 09-29_12:00:00
+- Fixed implausible threat speeds (e.g. a drone shown at 8471 km/h); the speed is now bounded per threat type 09-29_12:00:00
+- The map's silent-bells notice now names the reason (zone alerts off / notifications disabled / muted for this raid / "Muted for 9:34" counting down), and tapping a mute notice unmutes 09-27_00:13:24
+- Tapping Mute raid or Mute 10 min on an alert notification now dismisses it too, like OK 09-27_00:13:24
+- Retitled the map banner to "Zone alerts are off" — it never covered official alerts 09-27_00:13:24
 - Fixed release builds crashing on startup (WorkManager DB stripped by the new R8; upgraded WorkManager) 09-26_23:49:50
 - Fixed crash when parsing alert titles containing the pair/swarm/group keywords 09-26_23:49:50
 - Update server moved to /other_apps/oko/ (version feed, APK, privacy page) 09-26_23:15:00

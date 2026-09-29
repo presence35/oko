@@ -4,6 +4,7 @@ import com.odesaplay.oko.theme.AppPalette
 import com.odesaplay.oko.engine.ThreatZone
 import com.odesaplay.oko.engine.AlertLevel
 import com.odesaplay.oko.engine.toThreatType
+import com.odesaplay.oko.engine.resolveOblastId
 import android.content.Intent
 import android.net.Uri
 import com.odesaplay.oko.connection.ConnEvent
@@ -135,10 +136,13 @@ private const val VISIBLE_STEP = 50
 private enum class LogsFilter { DECISIONS, CONNECTIONS, SOURCES }
 
 /** How to group decision rows. */
-private enum class GroupBy { TIMELINE, PROXIMITY, TYPE }
+private enum class GroupBy { TIMELINE, PROXIMITY, TYPE, OBLASTS }
 
 /** Sort within Proximity groups. */
 private enum class ProximitySort { DISTANCE, AGE }
+
+/** Notification-shown filter for decision rows: all / only shown / only suppressed. */
+private enum class NotifyFilter { ALL, SHOWN, NOT_SHOWN }
 
 /** Accent for a group header. */
 private enum class GroupAccent { OFFICIAL, RED, YELLOW, OBLAST }
@@ -221,8 +225,7 @@ fun LogsDropDownSheet(
     var groupBy by rememberSaveable { mutableStateOf(GroupBy.TIMELINE) }
     var newestFirst by rememberSaveable { mutableStateOf(true) }
     var proximitySort by rememberSaveable { mutableStateOf(ProximitySort.DISTANCE) }
-    var shownOnly by rememberSaveable { mutableStateOf(false) }
-    var showFlourish by rememberSaveable { mutableStateOf(false) }
+    var notifyFilter by rememberSaveable { mutableStateOf(NotifyFilter.ALL) }
     var legendExpanded by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -347,14 +350,12 @@ fun LogsDropDownSheet(
                 groupBy = groupBy,
                 newestFirst = newestFirst,
                 proximitySort = proximitySort,
-                shownOnly = shownOnly,
-                showFlourish = showFlourish,
+                notifyFilter = notifyFilter,
                 visibleCount = visibleCount,
                 onGroupBy = { groupBy = it; visibleCount = VISIBLE_INITIAL },
                 onSortToggle = { newestFirst = !newestFirst },
                 onProximitySortChange = { proximitySort = it; visibleCount = VISIBLE_INITIAL },
-                onShownOnlyChange = { shownOnly = it; visibleCount = VISIBLE_INITIAL },
-                onShowFlourishChange = { showFlourish = it; visibleCount = VISIBLE_INITIAL },
+                onNotifyFilterChange = { notifyFilter = it; visibleCount = VISIBLE_INITIAL },
                 onShowMore = { visibleCount += VISIBLE_STEP }
             )
         }
@@ -410,23 +411,30 @@ private fun LogsTabPage(
     groupBy: GroupBy,
     newestFirst: Boolean,
     proximitySort: ProximitySort,
-    shownOnly: Boolean,
-    showFlourish: Boolean,
+    notifyFilter: NotifyFilter,
     visibleCount: Int,
     onGroupBy: (GroupBy) -> Unit,
     onSortToggle: () -> Unit,
     onProximitySortChange: (ProximitySort) -> Unit,
-    onShownOnlyChange: (Boolean) -> Unit,
-    onShowFlourishChange: (Boolean) -> Unit,
+    onNotifyFilterChange: (NotifyFilter) -> Unit,
     onShowMore: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val isDecisions = pageFilter == LogsFilter.DECISIONS
     val rows: List<LogRow> = if (pageFilter == LogsFilter.SOURCES) emptyList() else
-        buildRows(window, connEntries, now, isDecisions, newestFirst, shownOnly, showFlourish)
-    val visible = rows.take(visibleCount)
-    val hasMore = visibleCount < rows.size
-    val groups = if (isDecisions) buildGroups(visible.filterIsInstance<DecisionRow>().map { it.entry }, groupBy, showFlourish, proximitySort, newestFirst) else emptyList()
+        buildRows(window, connEntries, now, isDecisions, newestFirst, notifyFilter)
+    // Paginate decisions in GROUP order (not a raw row slice) so a newly-arrived decision
+    // can't shift the boundary and inject a fresh trailing row on every "Show more".
+    val decisionEntries = rows.filterIsInstance<DecisionRow>().map { it.entry }
+    val allGroups = if (isDecisions) buildGroups(decisionEntries, groupBy, lang, s, proximitySort, newestFirst) else emptyList()
+    val shownEntries = allGroups.asSequence().flatMap { it.entries.asSequence() }.take(visibleCount).toList()
+    val shownKeys = shownEntries.map { entryKey(it) }.toSet()
+    val groups = allGroups.mapNotNull { g ->
+        val kept = g.entries.filter { entryKey(it) in shownKeys }
+        if (kept.isEmpty()) null else g.copy(entries = kept)
+    }
+    val visible = if (isDecisions) rows else rows.take(visibleCount)
+    val hasMore = if (isDecisions) shownEntries.size < decisionEntries.size else visible.size < rows.size
     val subtitle = if (isDecisions) String.format(s.logsSubtitleFormat, rows.size) else null
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -439,14 +447,12 @@ private fun LogsTabPage(
                     groupBy = groupBy,
                     newestFirst = newestFirst,
                     proximitySort = proximitySort,
-                    shownOnly = shownOnly,
-                    showFlourish = showFlourish,
+                    notifyFilter = notifyFilter,
                     s = s,
                     onGroupBy = onGroupBy,
                     onSortToggle = onSortToggle,
                     onProximitySortChange = onProximitySortChange,
-                    onShownOnlyChange = onShownOnlyChange,
-                    onShowFlourishChange = onShowFlourishChange
+                    onNotifyFilterChange = onNotifyFilterChange
                 )
             }
             if (subtitle != null) {
@@ -491,6 +497,10 @@ modifier = Modifier
                 if (group.title != null) {
                     item(key = "header-${group.id}") {
                         GroupHeader(group, s)
+                    }
+                } else if (group.headerType != null) {
+                    item(key = "header-${group.id}") {
+                        TypeGroupHeader(group.headerType, group.entries.size, lang, iconSet, s)
                     }
                 }
                 if (group.subTypes) {
@@ -566,8 +576,7 @@ fun LogsScreen(
 
 /**
  * Assemble the row list for the active filter, ordered per [newestFirst]. The Decisions view
- * drops rows whose notification was not shown when [shownOnly] and hides shoot-down
- * flourish entries when [showFlourish] is false; connection rows include the live in-progress episode.
+ * filters by [notifyFilter]; connection rows include the live in-progress episode.
  */
 private fun buildRows(
     decisions: List<DebugLogEntry>,
@@ -575,31 +584,38 @@ private fun buildRows(
     now: Long,
     isDecisions: Boolean,
     newestFirst: Boolean,
-    shownOnly: Boolean,
-    showFlourish: Boolean
+    notifyFilter: NotifyFilter
 ): List<LogRow> {
     if (!isDecisions) {
         val connRows = (ConnectionLog.currentEpisode(now)?.let { listOf(ConnectionRow(it)) }
             ?: emptyList()) + connEntries.map { ConnectionRow(it) }
         return if (newestFirst) connRows.sortedByDescending { it.atMillis } else connRows.sortedBy { it.atMillis }
     }
-    var filtered: List<DebugLogEntry> = decisions
-    if (!showFlourish) filtered = filtered.filter { it.kind != DebugLogKind.FLOURISH }
-    if (shownOnly) filtered = filtered.filter { it.notified }
+    val filtered: List<DebugLogEntry> = when (notifyFilter) {
+        NotifyFilter.ALL -> decisions
+        NotifyFilter.SHOWN -> decisions.filter { it.notified }
+        NotifyFilter.NOT_SHOWN -> decisions.filter { !it.notified }
+    }
     val rows = filtered.map { DecisionRow(it) }
     return if (newestFirst) rows.sortedByDescending { it.atMillis } else rows.sortedBy { it.atMillis }
 }
 
+/** Stable identity for a decision row, matching the LazyColumn keys so pagination agrees. */
+private fun entryKey(e: DebugLogEntry): String =
+    "${e.atMillis}-${e.kind.name}-${e.threatId}-${e.tier?.name}-${e.reason.name}"
+
 /**
  * Build the ordered group specs from sorted decision rows. Canonical group order regardless of
- * sort direction: proximity = official / red / yellow / oblast / left; type = official / types /
- * left. Timeline returns a single header-less spec. Flourish group only included when [showFlourish].
- * In Proximity, entries inside each bucket are sorted by distance (closest first) or age per [proximitySort].
+ * sort direction: proximity = official / flourish / red / yellow / oblast; type = official /
+ * flourish / types / other; oblasts = one group per canonical oblast. Timeline returns a single
+ * header-less spec. In Proximity, entries inside each bucket are sorted by distance (closest
+ * first) or age per [proximitySort].
  */
 private fun buildGroups(
     rows: List<DebugLogEntry>,
     groupBy: GroupBy,
-    showFlourish: Boolean,
+    lang: AppLanguage,
+    s: Strings.StringSet,
     proximitySort: ProximitySort = ProximitySort.DISTANCE,
     newestFirst: Boolean = true
 ): List<LogGroupSpec> {
@@ -608,11 +624,13 @@ private fun buildGroups(
         ProximitySort.DISTANCE -> list.sortedWith(compareBy<DebugLogEntry> { it.distanceKm ?: Double.MAX_VALUE }.thenByDescending { it.atMillis })
         ProximitySort.AGE -> if (newestFirst) list.sortedByDescending { it.atMillis } else list.sortedBy { it.atMillis }
     }
+    fun byTime(list: List<DebugLogEntry>): List<DebugLogEntry> =
+        if (newestFirst) list.sortedByDescending { it.atMillis } else list.sortedBy { it.atMillis }
     return when (groupBy) {
         GroupBy.TIMELINE -> listOf(LogGroupSpec("timeline", null, null, null, rows, subTypes = false))
         GroupBy.PROXIMITY -> {
             val official = sortProximity(rows.filter { it.kind == DebugLogKind.OFFICIAL_ON || it.kind == DebugLogKind.OFFICIAL_OFF })
-            val flourish = if (showFlourish) sortProximity(rows.filter { it.kind == DebugLogKind.FLOURISH }) else emptyList()
+            val flourish = sortProximity(rows.filter { it.kind == DebugLogKind.FLOURISH })
             val threat = rows.filter {
                 it.kind == DebugLogKind.ZONE_ENTER ||
                     it.kind == DebugLogKind.REGION_THREAT
@@ -631,8 +649,9 @@ private fun buildGroups(
         }
         GroupBy.TYPE -> {
             val official = rows.filter { it.kind == DebugLogKind.OFFICIAL_ON || it.kind == DebugLogKind.OFFICIAL_OFF }
-            val flourish = if (showFlourish) rows.filter { it.kind == DebugLogKind.FLOURISH } else emptyList()
+            val flourish = rows.filter { it.kind == DebugLogKind.FLOURISH }
             val typed = rows.filter { it !in official && it.threatType != null && it.kind != DebugLogKind.FLOURISH }
+            val untyped = rows.filter { it !in official && it.threatType == null && it.kind != DebugLogKind.FLOURISH }
             buildList {
                 if (official.isNotEmpty()) add(LogGroupSpec("official", "official", GroupAccent.OFFICIAL, null, official, subTypes = false))
                 if (flourish.isNotEmpty()) add(LogGroupSpec("flourish", "flourish", null, null, flourish, subTypes = false))
@@ -642,8 +661,29 @@ private fun buildGroups(
                     .forEach { (type, groupRows) ->
                         add(LogGroupSpec("type-${type.name}", null, null, type, groupRows, subTypes = false))
                     }
+                if (untyped.isNotEmpty()) add(LogGroupSpec("type-other", s.logsGroupOther, null, null, untyped, subTypes = false))
             }
         }
+        GroupBy.OBLASTS -> {
+            rows.groupBy { resolveOblastId(it.locality) }
+                .entries
+                .map { (id, groupRows) -> id to byTime(groupRows) }
+                .sortedBy { (id, _) -> oblastTitle(id, lang, s) }
+                .map { (id, groupRows) ->
+                    LogGroupSpec("oblast-${id ?: "other"}", oblastTitle(id, lang, s), GroupAccent.OBLAST, null, groupRows, subTypes = false)
+                }
+        }
+    }
+}
+
+/** Display title for an oblast group key ([resolveOblastId] result; null = unresolvable/other). */
+private fun oblastTitle(id: String?, lang: AppLanguage, s: Strings.StringSet): String {
+    if (id == null) return s.logsGroupOther
+    val o = AdminHierarchy.getOblast(id)
+    return when (lang) {
+        AppLanguage.UA -> o?.nameUa ?: id
+        AppLanguage.EN -> o?.nameEn ?: id
+        AppLanguage.RU -> RussianToponyms.oblast(id)
     }
 }
 
@@ -652,24 +692,24 @@ private fun ViewOptionsRow(
     groupBy: GroupBy,
     newestFirst: Boolean,
     proximitySort: ProximitySort,
-    shownOnly: Boolean,
-    showFlourish: Boolean,
+    notifyFilter: NotifyFilter,
     s: Strings.StringSet,
     onGroupBy: (GroupBy) -> Unit,
     onSortToggle: () -> Unit,
     onProximitySortChange: (ProximitySort) -> Unit,
-    onShownOnlyChange: (Boolean) -> Unit,
-    onShowFlourishChange: (Boolean) -> Unit
+    onNotifyFilterChange: (NotifyFilter) -> Unit
 ) {
     val groupIcon = mapOf(
         GroupBy.TIMELINE to Icons.Outlined.AccessTime,
         GroupBy.PROXIMITY to Icons.Outlined.NearMe,
-        GroupBy.TYPE to Icons.Outlined.Category
+        GroupBy.TYPE to Icons.Outlined.Category,
+        GroupBy.OBLASTS to Icons.Filled.Place
     )
     val groupLabel = mapOf(
         GroupBy.TIMELINE to s.logsGroupTimeline,
         GroupBy.PROXIMITY to s.logsGroupProximity,
-        GroupBy.TYPE to s.logsGroupType
+        GroupBy.TYPE to s.logsGroupType,
+        GroupBy.OBLASTS to s.logsGroupOblasts
     )
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
@@ -724,17 +764,21 @@ private fun ViewOptionsRow(
                 )
             }
             FilterChip(
-                selected = shownOnly,
-                onClick = { onShownOnlyChange(!shownOnly) },
+                selected = notifyFilter == NotifyFilter.SHOWN,
+                onClick = {
+                    onNotifyFilterChange(if (notifyFilter == NotifyFilter.SHOWN) NotifyFilter.ALL else NotifyFilter.SHOWN)
+                },
                 label = { Text(s.logsNotified) },
                 leadingIcon = { Icon(Icons.Filled.CheckCircle, contentDescription = s.logsNotified, modifier = Modifier.size(16.dp)) },
                 interactionSource = rememberHapticInteractionSource()
             )
             FilterChip(
-                selected = showFlourish,
-                onClick = { onShowFlourishChange(!showFlourish) },
-                label = { Text(s.logsFlourishToggle) },
-                leadingIcon = { Icon(Icons.Filled.Star, contentDescription = s.logsFlourishToggle, modifier = Modifier.size(16.dp)) },
+                selected = notifyFilter == NotifyFilter.NOT_SHOWN,
+                onClick = {
+                    onNotifyFilterChange(if (notifyFilter == NotifyFilter.NOT_SHOWN) NotifyFilter.ALL else NotifyFilter.NOT_SHOWN)
+                },
+                label = { Text(s.logsNotNotified) },
+                leadingIcon = { Icon(Icons.Filled.Notifications, contentDescription = s.logsNotNotified, modifier = Modifier.size(16.dp)) },
                 interactionSource = rememberHapticInteractionSource()
             )
         }
@@ -871,10 +915,46 @@ private fun GroupHeader(group: LogGroupSpec, s: Strings.StringSet) {
     }
 }
 
+/** Unknown types can still reach the log (engine-string drift) — never throw on lookup. */
+private fun typeInfo(type: ThreatType): ThreatTypeInfo =
+    ThreatTypeCatalog.INFO[type] ?: ThreatTypeCatalog.INFO.getValue(ThreatType.UNKNOWN)
+
+@Composable
+private fun TypeGroupHeader(
+    type: ThreatType,
+    count: Int,
+    lang: AppLanguage,
+    iconSet: ThreatIconSet,
+    s: Strings.StringSet
+) {
+    val label = typeInfo(type).label(lang)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ThreatIcon(type = type, set = iconSet, size = 16.dp, contentDescription = label)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            String.format(s.debugBandCountFormat, count),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @Composable
 private fun TypeSubHeader(sub: TypeSubGroup, lang: AppLanguage, iconSet: ThreatIconSet) {
     val type = sub.type ?: return
-    val info = ThreatTypeCatalog.INFO.getValue(type)
+    val info = typeInfo(type)
     val label = info.label(lang)
     Row(
         modifier = Modifier
@@ -972,7 +1052,7 @@ private fun DebugLogKind.label(
         if (loc != null) "${s.debugKindOfficialOff} · $loc" else s.debugKindOfficialOff
     }
     DebugLogKind.ZONE_ENTER -> {        val typeLabel = threatType?.let {
-            val info = ThreatTypeCatalog.INFO.getValue(it)
+            val info = typeInfo(it)
             info.label(lang)
         }
         val loc = localityText(locality, lang)
@@ -985,7 +1065,7 @@ private fun DebugLogKind.label(
     }
     DebugLogKind.REGION_THREAT -> {
         val typeLabel = threatType?.let {
-            val info = ThreatTypeCatalog.INFO.getValue(it)
+            val info = typeInfo(it)
             info.label(lang)
         }
         val loc = localityText(locality, lang)
@@ -1129,7 +1209,7 @@ private fun DecisionLeadingIcon(entry: DebugLogEntry, accent: Color, lang: AppLa
         return
     }
     entry.threatType?.let { type ->
-        val info = ThreatTypeCatalog.INFO.getValue(type)
+        val info = typeInfo(type)
         val label = info.label(lang)
         ThreatIcon(type = type, set = iconSet, size = 22.dp, contentDescription = label)
         return
@@ -1587,7 +1667,7 @@ private fun SourceDataCard(
             )
             grouped.entries.sortedByDescending { it.value.size }.forEach { (typeStr, list) ->
                 val type = typeStr.toThreatType()
-                val info = ThreatTypeCatalog.INFO.getValue(type)
+                val info = typeInfo(type)
                 val label = info.label(lang)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     ThreatIcon(type = type, set = iconSet, size = 16.dp, contentDescription = label)

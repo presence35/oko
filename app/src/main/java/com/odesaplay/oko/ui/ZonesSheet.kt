@@ -253,7 +253,10 @@ internal fun ZoneRow(
     onCommit: (Int) -> Unit
 ) {
     var local by remember { mutableStateOf(value.toFloat()) }
-    LaunchedEffect(value) { local = value.toFloat() }
+    // While the finger is down we commit LIVE (the map zone follows the thumb) but ignore
+    // the incoming value so the parent's recomposition can't snap the thumb back mid-drag.
+    var dragging by remember { mutableStateOf(false) }
+    LaunchedEffect(value, dragging) { if (!dragging) local = value.toFloat() }
     Row(verticalAlignment = Alignment.CenterVertically) {
         // Per-zone alert bell + switch on the left: filled/colored while armed,
         // red crossed bell when muted.
@@ -309,8 +312,8 @@ Spacer(Modifier.width(8.dp))
         ) {
             Slider(
                 value = local,
-                onValueChange = { local = it },
-                onValueChangeFinished = { onCommit(local.roundToInt()) },
+                onValueChange = { dragging = true; local = it; onCommit(it.roundToInt()) },
+                onValueChangeFinished = { dragging = false; onCommit(local.roundToInt()) },
                 valueRange = range,
                 steps = 0,
                 colors = SliderDefaults.colors(
