@@ -207,6 +207,12 @@ internal fun FirstLaunchWizard(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                s.wizardMapAttribution,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
                         }
                     }
                     1 -> SetupLocationStep(current, mode = locationMode, pinnedCity = pinnedCity, onModeChange = { locationMode = it }, onFollowMeChange = onFollowMeChange, onPinnedCityChange = onPinnedCityChange)

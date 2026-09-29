@@ -46,6 +46,7 @@ object Strings {
         val wizardMoraleTitle: String,
         val wizardMoraleDesc: String,
         val wizardNeptunStatus: String,
+        val wizardMapAttribution: String,
         val settingsSearchHint: String,
         val settingsSearchClear: String,
         val settingsNoResults: String,
@@ -357,6 +358,27 @@ object Strings {
         val logsSubtitleFormat: String,
         val logsSortDistance: String,
         val logsSortAge: String,
+        val logsScopeMine: String,
+        val logsScopeAll: String,
+        val logsGroupNone: String,
+        val logsGroupTime: String,
+        val logsTimeNow: String,
+        val logsTimeHour: String,
+        val logsTimeToday: String,
+        val logsSearchPlaceholder: String,
+        val logsSummaryTotal: String,
+        val logsSummaryRang: String,
+        val logsSummaryCovered: String,
+        val logsSummaryNotNotified: String,
+        val logsDiagnosisFormat: String,
+        val logsOutcomeRang: String,
+        val logsOutcomeCovered: String,
+        val logsOutcomeNotNotified: String,
+        val logsModeStory: String,
+        val logsModeList: String,
+        val logsSessionTold: String,
+        val logsSessionSilent: String,
+        val logsSessionEvents: String,
         val debugLogEmpty: String,
         val debugLogClear: String,
         val debugLogOpen: String,
@@ -730,6 +752,7 @@ object Strings {
         val wizardMoraleTitle: String get() = onboarding.wizardMoraleTitle
         val wizardMoraleDesc: String get() = onboarding.wizardMoraleDesc
         val wizardNeptunStatus: String get() = onboarding.wizardNeptunStatus
+        val wizardMapAttribution: String get() = onboarding.wizardMapAttribution
         val fitMapLabel: String get() = onboarding.fitMapLabel
         val dayZonesTitle: String get() = settings.dayZonesTitle
         val nightZonesTitle: String get() = settings.nightZonesTitle
@@ -1084,6 +1107,27 @@ object Strings {
         val logsSubtitleFormat: String get() = misc.logsSubtitleFormat
         val logsSortDistance: String get() = misc.logsSortDistance
         val logsSortAge: String get() = misc.logsSortAge
+        val logsScopeMine: String get() = misc.logsScopeMine
+        val logsScopeAll: String get() = misc.logsScopeAll
+        val logsGroupNone: String get() = misc.logsGroupNone
+        val logsGroupTime: String get() = misc.logsGroupTime
+        val logsTimeNow: String get() = misc.logsTimeNow
+        val logsTimeHour: String get() = misc.logsTimeHour
+        val logsTimeToday: String get() = misc.logsTimeToday
+        val logsSearchPlaceholder: String get() = misc.logsSearchPlaceholder
+        val logsSummaryTotal: String get() = misc.logsSummaryTotal
+        val logsSummaryRang: String get() = misc.logsSummaryRang
+        val logsSummaryCovered: String get() = misc.logsSummaryCovered
+        val logsSummaryNotNotified: String get() = misc.logsSummaryNotNotified
+        val logsDiagnosisFormat: String get() = misc.logsDiagnosisFormat
+        val logsOutcomeRang: String get() = misc.logsOutcomeRang
+        val logsOutcomeCovered: String get() = misc.logsOutcomeCovered
+        val logsOutcomeNotNotified: String get() = misc.logsOutcomeNotNotified
+        val logsModeStory: String get() = misc.logsModeStory
+        val logsModeList: String get() = misc.logsModeList
+        val logsSessionTold: String get() = misc.logsSessionTold
+        val logsSessionSilent: String get() = misc.logsSessionSilent
+        val logsSessionEvents: String get() = misc.logsSessionEvents
         val debugLogEmpty: String get() = misc.debugLogEmpty
         val debugLogClear: String get() = misc.debugLogClear
         val debugLogOpen: String get() = misc.debugLogOpen

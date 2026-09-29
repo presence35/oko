@@ -10,6 +10,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.PointF
+import android.graphics.RectF
 import androidx.compose.runtime.Immutable
 
 /** Zoom-dependent label prominence: oblast seats early, big non-seat cities mid-zoom,
@@ -738,12 +739,21 @@ private const val ZOOM_MEDIUM = 7.0
 private const val ZOOM_MINOR = 8.5
 private const val ALERT_ZOOM_FACTOR = 0.75
 
+/** Breathing room around a label's text box when claiming map space, in dp. Covers the halo
+ *  stroke so two accepted labels never visually touch. */
+private const val LABEL_PAD = 3f
+
 /** Draws city names in the current language, sized to zoom level. MAJOR labels reveal
  *  progressively by [MajorReveal]: the top-5 overview set shows from the country view, MID
  *  majors from mid-zoom, the rest up close. MAJOR/MEDIUM/MINOR respect the Settings toggles
  *  ([showLargeCities] / [showMediumCities] / [showSmallCities], all on by default). Cities
  *  are colored only in city-labels mode; fill/border modes stay white. Alerted cities surface
- *  25% earlier. */
+ *  25% earlier.
+ *
+ *  Labels are claimed in importance order (tier, then reveal) and any label overlapping an
+ *  already-claimed one is dropped, so a major never disappears under a smaller town's name.
+ *  A show ([forceShowAllProvider]) forces MAJOR and MEDIUM on for its duration; MINOR is left
+ *  to its normal zoom. */
 class CityLabelOverlay(
     context: Context,
     private val lang: AppLanguage,
@@ -773,6 +783,28 @@ class CityLabelOverlay(
 
     private fun name(c: City) = c.name(lang)
 
+    /** Least-important first, so a MAJOR claims map space before anything it would collide
+     *  with — it can never end up underneath a smaller town. Stable within a tier by reveal
+     *  order, so country-view majors get first pick. */
+    private val ordered: List<City> = Cities.ALL.sortedWith(
+        compareBy({ it.tier.ordinal }, { it.reveal.ordinal })
+    )
+
+    // De-clutter state. Rectangles claimed so far this frame, reused across frames so panning
+    // doesn't allocate; only the first [placedCount] entries are live.
+    private val placed = ArrayList<RectF>(256)
+    private var placedCount = 0
+    private val textBounds = RectF()
+
+    /** Claims [textBounds] for the current label, or reports that a more important one already
+     *  owns that space — see [ordered]. */
+    private fun claimSpace(): Boolean {
+        for (i in 0 until placedCount) if (RectF.intersects(placed[i], textBounds)) return false
+        if (placedCount < placed.size) placed[placedCount].set(textBounds) else placed.add(RectF(textBounds))
+        placedCount++
+        return true
+    }
+
     fun draw(
         canvas: Canvas,
         zoom: Double,
@@ -783,7 +815,8 @@ class CityLabelOverlay(
         maxLon: Double = 180.0
     ) {
         val forceAll = forceShowAllProvider()
-        for (c in Cities.ALL) {
+        placedCount = 0
+        for (c in ordered) {
             val baseZoom = when (c.tier) {
                 CityTier.MAJOR -> if (forceAll || !showLargeCities) {
                     if (forceAll) ZOOM_MAJOR_OVERVIEW else Double.MAX_VALUE
@@ -793,7 +826,9 @@ class CityLabelOverlay(
                     MajorReveal.LATE -> ZOOM_MAJOR_LATE
                 }
                 CityTier.MEDIUM -> if (forceAll || showMediumCities) ZOOM_MEDIUM else Double.MAX_VALUE
-                CityTier.MINOR -> if (forceAll || showSmallCities) ZOOM_MINOR else Double.MAX_VALUE
+                // MINOR deliberately ignores [forceAll]: a shoot-down reveal is a 2-second beat
+                // and village names are noise in it.
+                CityTier.MINOR -> if (showSmallCities) ZOOM_MINOR else Double.MAX_VALUE
             }
             val isAlerted = cityAlertLevels[c.nameUa]?.let { it == AlertLevel.RED || it == AlertLevel.YELLOW } == true
             val minZoom = if (isAlerted && baseZoom != Double.MAX_VALUE) baseZoom * ALERT_ZOOM_FACTOR else baseZoom
@@ -821,6 +856,15 @@ class CityLabelOverlay(
             }
             val label = name(c)
             val baseline = pt.y - 6f * density
+            val halfWidth = paint.measureText(label) / 2f
+            val pad = LABEL_PAD * density
+            textBounds.set(
+                pt.x - halfWidth - pad,
+                baseline + paint.ascent() - pad,
+                pt.x + halfWidth + pad,
+                baseline + paint.descent() + pad
+            )
+            if (!claimSpace()) continue
             canvas.drawText(label, pt.x, baseline, haloPaint)
             canvas.drawText(label, pt.x, baseline, paint)
         }

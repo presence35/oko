@@ -72,7 +72,9 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
@@ -136,32 +138,35 @@ private const val VISIBLE_STEP = 50
 /** Which data source to show. */
 private enum class LogsFilter { DECISIONS, CONNECTIONS, SOURCES }
 
+/** Decisions read as a raid story (default) or the raw event list. */
+private enum class LogsMode { STORY, LIST }
+
+/** Scope of the Decisions feed: only the current focus oblast, or the whole feed. */
+private enum class LogScope { MINE, ALL }
+
+/** One of the three outcomes every event ends in — the feed's primary visual axis. */
+enum class NotifyOutcome { RANG, COVERED, NOT_NOTIFIED }
+
 /** How to group decision rows. */
-private enum class GroupBy { TIMELINE, PROXIMITY, TYPE, OBLASTS }
-
-/** Sort within Proximity groups. */
-private enum class ProximitySort { DISTANCE, AGE }
-
-/** Notification-shown filter for decision rows: all / only shown / only suppressed. */
-private enum class NotifyFilter { ALL, SHOWN, NOT_SHOWN }
+private enum class LogGroupMode { NONE, TIME, OBLAST, TYPE }
 
 /** Accent for a group header. */
 private enum class GroupAccent { OFFICIAL, RED, YELLOW, OBLAST }
 
-/** Rows of a single threat type inside a proximity group. */
+/** Rows of a single threat type inside a group. */
 private data class TypeSubGroup(
     val type: ThreatType?,
     val entries: List<DebugLogEntry>
 )
 
-/** One rendered group of decision rows. [title] null = timeline list, no header. */
+/** One rendered group of decision rows. [title] null = flat list, no header. */
 private data class LogGroupSpec(
     val id: String,
     val title: String?,
     val accent: GroupAccent?,
     val headerType: ThreatType?,
     val entries: List<DebugLogEntry>,
-    /** Threat-type sub-headers inside the group (proximity mode only). */
+    /** Threat-type sub-headers inside the group (type grouping only). */
     val subTypes: Boolean
 )
 
@@ -197,6 +202,7 @@ fun LogsDropDownSheet(
     iconSet: ThreatIconSet,
     neptunDown: Boolean,
     degraded: Boolean,
+    focusToken: String?,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -223,10 +229,12 @@ fun LogsDropDownSheet(
         val i = tabFilters.indexOf(filter)
         if (i != pagerState.currentPage) pagerState.scrollToPage(i)
     }
-    var groupBy by rememberSaveable { mutableStateOf(GroupBy.TIMELINE) }
+    var scopeMode by rememberSaveable { mutableStateOf(LogScope.MINE) }
+    var outcomeFilter by rememberSaveable { mutableStateOf<NotifyOutcome?>(null) }
+    var mode by rememberSaveable { mutableStateOf(LogsMode.STORY) }
+    var groupMode by rememberSaveable { mutableStateOf(LogGroupMode.TIME) }
     var newestFirst by rememberSaveable { mutableStateOf(true) }
-    var proximitySort by rememberSaveable { mutableStateOf(ProximitySort.DISTANCE) }
-    var notifyFilter by rememberSaveable { mutableStateOf(NotifyFilter.ALL) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     var legendExpanded by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -348,15 +356,20 @@ fun LogsDropDownSheet(
                 connEvents = connEvents,
                 connRetry = connRetry,
                 now = now,
-                groupBy = groupBy,
+                focusToken = focusToken,
+                scopeMode = scopeMode,
+                outcomeFilter = outcomeFilter,
+                mode = mode,
+                groupMode = groupMode,
                 newestFirst = newestFirst,
-                proximitySort = proximitySort,
-                notifyFilter = notifyFilter,
+                searchQuery = searchQuery,
                 visibleCount = visibleCount,
-                onGroupBy = { groupBy = it; visibleCount = VISIBLE_INITIAL },
+                onScopeChange = { scopeMode = it; visibleCount = VISIBLE_INITIAL },
+                onOutcomeFilterChange = { outcomeFilter = it; visibleCount = VISIBLE_INITIAL },
+                onModeChange = { mode = it; visibleCount = VISIBLE_INITIAL },
+                onGroupModeChange = { groupMode = it; visibleCount = VISIBLE_INITIAL },
                 onSortToggle = { newestFirst = !newestFirst },
-                onProximitySortChange = { proximitySort = it; visibleCount = VISIBLE_INITIAL },
-                onNotifyFilterChange = { notifyFilter = it; visibleCount = VISIBLE_INITIAL },
+                onSearchChange = { searchQuery = it; visibleCount = VISIBLE_INITIAL },
                 onShowMore = { visibleCount += VISIBLE_STEP }
             )
         }
@@ -409,25 +422,37 @@ private fun LogsTabPage(
     connEvents: List<ConnEvent>,
     connRetry: ConnRetryState?,
     now: Long,
-    groupBy: GroupBy,
+    focusToken: String?,
+    scopeMode: LogScope,
+    outcomeFilter: NotifyOutcome?,
+    mode: LogsMode,
+    groupMode: LogGroupMode,
     newestFirst: Boolean,
-    proximitySort: ProximitySort,
-    notifyFilter: NotifyFilter,
+    searchQuery: String,
     visibleCount: Int,
-    onGroupBy: (GroupBy) -> Unit,
+    onScopeChange: (LogScope) -> Unit,
+    onOutcomeFilterChange: (NotifyOutcome?) -> Unit,
+    onModeChange: (LogsMode) -> Unit,
+    onGroupModeChange: (LogGroupMode) -> Unit,
     onSortToggle: () -> Unit,
-    onProximitySortChange: (ProximitySort) -> Unit,
-    onNotifyFilterChange: (NotifyFilter) -> Unit,
+    onSearchChange: (String) -> Unit,
     onShowMore: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val isDecisions = pageFilter == LogsFilter.DECISIONS
     val rows: List<LogRow> = if (pageFilter == LogsFilter.SOURCES) emptyList() else
-        buildRows(window, connEntries, now, isDecisions, newestFirst, notifyFilter)
+        buildRows(window, connEntries, now, isDecisions, newestFirst, scopeMode, focusToken, outcomeFilter, searchQuery, lang)
+    // Story mode is the default read: cluster the same filtered events into raids, then drop
+    // sessions that aren't "mine" by their majority oblast — a raid is in or out, never mixed.
+    val storySessions = if (isDecisions && mode == LogsMode.STORY) {
+        buildSessions(rows.filterIsInstance<DecisionRow>().map { it.entry })
+            .filter { outcomeFilter == null || it.entries.any { e -> notifyOutcome(e) == outcomeFilter } }
+            .filter { scopeMode == LogScope.ALL || focusToken == null || it.oblastId() == focusToken }
+    } else emptyList()
     // Paginate decisions in GROUP order (not a raw row slice) so a newly-arrived decision
     // can't shift the boundary and inject a fresh trailing row on every "Show more".
     val decisionEntries = rows.filterIsInstance<DecisionRow>().map { it.entry }
-    val allGroups = if (isDecisions) buildGroups(decisionEntries, groupBy, lang, s, proximitySort, newestFirst) else emptyList()
+    val allGroups = if (isDecisions) buildGroups(decisionEntries, groupMode, lang, s, newestFirst, now) else emptyList()
     val shownEntries = allGroups.asSequence().flatMap { it.entries.asSequence() }.take(visibleCount).toList()
     val shownKeys = shownEntries.map { entryKey(it) }.toSet()
     val groups = allGroups.mapNotNull { g ->
@@ -437,6 +462,12 @@ private fun LogsTabPage(
     val visible = if (isDecisions) rows else rows.take(visibleCount)
     val hasMore = if (isDecisions) shownEntries.size < decisionEntries.size else visible.size < rows.size
     val subtitle = if (isDecisions) String.format(s.logsSubtitleFormat, rows.size) else null
+    // Every event falls into exactly one outcome — the summary counts come from the FULL
+    // filtered set (never the visible slice) so the numbers stay honest while scrolling.
+    val rang = decisionEntries.count { notifyOutcome(it) == NotifyOutcome.RANG }
+    val covered = decisionEntries.count { notifyOutcome(it) == NotifyOutcome.COVERED }
+    val notNotified = decisionEntries.count { notifyOutcome(it) == NotifyOutcome.NOT_NOTIFIED }
+    val diagnosis = diagnosisOf(decisionEntries, s)
     // Collapsed section ids are keyed by group id so a section survives data churn; emptied
     // automatically when its rows scroll out, so a stale id can never linger.
     val collapsed = remember { mutableStateMapOf<String, Boolean>() }
@@ -444,10 +475,8 @@ private fun LogsTabPage(
         val live = groups.map { it.id }.toSet()
         collapsed.keys.retainAll(live)
     }
-    val pageId = pageFilter.name
     fun toggle(id: String) {
         collapsed[id] = !(collapsed[id] ?: false)
-        DebugLog.recordSectionToggle(pageId, id, collapsed[id] ?: false, System.currentTimeMillis())
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -455,17 +484,31 @@ private fun LogsTabPage(
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         if (isDecisions) {
-            item(key = "viewopts") {
-                ViewOptionsRow(
-                    groupBy = groupBy,
+            item(key = "controls") {
+                LogControlsRow(
+                    mode = mode,
+                    scopeMode = scopeMode,
+                    groupMode = groupMode,
                     newestFirst = newestFirst,
-                    proximitySort = proximitySort,
-                    notifyFilter = notifyFilter,
+                    searchQuery = searchQuery,
                     s = s,
-                    onGroupBy = onGroupBy,
+                    onModeChange = onModeChange,
+                    onScopeChange = onScopeChange,
+                    onGroupModeChange = onGroupModeChange,
                     onSortToggle = onSortToggle,
-                    onProximitySortChange = onProximitySortChange,
-                    onNotifyFilterChange = onNotifyFilterChange
+                    onSearchChange = onSearchChange
+                )
+            }
+            item(key = "summary") {
+                SummaryBar(
+                    total = decisionEntries.size,
+                    rang = rang,
+                    covered = covered,
+                    notNotified = notNotified,
+                    selected = outcomeFilter,
+                    diagnosis = diagnosis,
+                    s = s,
+                    onSelect = onOutcomeFilterChange
                 )
             }
             if (subtitle != null) {
@@ -504,6 +547,10 @@ modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 24.dp, horizontal = 24.dp)
                 )
+            }
+        } else if (isDecisions && mode == LogsMode.STORY) {
+            itemsIndexed(storySessions, key = { _, session -> session.id }) { _, session ->
+                SessionCard(session, s, lang, iconSet, now)
             }
         } else if (groups.isNotEmpty()) {
             groups.forEach { group ->
@@ -576,6 +623,7 @@ fun LogsScreen(
     iconSet: ThreatIconSet,
     neptunDown: Boolean,
     degraded: Boolean,
+    focusToken: String?,
     onBack: () -> Unit,
 ) {
     LogsDropDownSheet(
@@ -584,6 +632,7 @@ fun LogsScreen(
         iconSet = iconSet,
         neptunDown = neptunDown,
         degraded = degraded,
+        focusToken = focusToken,
         onClose = onBack,
         modifier = Modifier.fillMaxHeight(1f),
     )
@@ -591,7 +640,9 @@ fun LogsScreen(
 
 /**
  * Assemble the row list for the active filter, ordered per [newestFirst]. The Decisions view
- * filters by [notifyFilter]; connection rows include the live in-progress episode.
+ * applies, in order: scope (Mine = event oblast == focus oblast), outcome (rang / covered /
+ * not notified), then a free-text search over place, type and id. Connection rows include the
+ * live in-progress episode and ignore the decision filters.
  */
 private fun buildRows(
     decisions: List<DebugLogEntry>,
@@ -599,20 +650,54 @@ private fun buildRows(
     now: Long,
     isDecisions: Boolean,
     newestFirst: Boolean,
-    notifyFilter: NotifyFilter
+    scopeMode: LogScope,
+    focusToken: String?,
+    outcomeFilter: NotifyOutcome?,
+    searchQuery: String,
+    lang: AppLanguage
 ): List<LogRow> {
     if (!isDecisions) {
         val connRows = (ConnectionLog.currentEpisode(now)?.let { listOf(ConnectionRow(it)) }
             ?: emptyList()) + connEntries.map { ConnectionRow(it) }
         return if (newestFirst) connRows.sortedByDescending { it.atMillis } else connRows.sortedBy { it.atMillis }
     }
-    val filtered: List<DebugLogEntry> = when (notifyFilter) {
-        NotifyFilter.ALL -> decisions
-        NotifyFilter.SHOWN -> decisions.filter { it.notified }
-        NotifyFilter.NOT_SHOWN -> decisions.filter { !it.notified }
+    var filtered: List<DebugLogEntry> = decisions
+    if (scopeMode == LogScope.MINE && focusToken != null) {
+        filtered = filtered.filter { it.scopeOblastId == focusToken }
+    }
+    if (outcomeFilter != null) filtered = filtered.filter { notifyOutcome(it) == outcomeFilter }
+    val q = searchQuery.trim().lowercase()
+    if (q.isNotEmpty()) {
+        filtered = filtered.filter { e ->
+            e.locality?.lowercase()?.contains(q) == true ||
+                e.threatId?.contains(q, ignoreCase = true) == true ||
+                e.threatType?.let { typeInfo(it).label(lang).lowercase().contains(q) } == true
+        }
     }
     val rows = filtered.map { DecisionRow(it) }
     return if (newestFirst) rows.sortedByDescending { it.atMillis } else rows.sortedBy { it.atMillis }
+}
+
+/**
+ * The three-outcome model, derived from the row's own facts — pure so the Logs screen and the
+ * tests share one definition. Covered = a louder alert/notification won the slot (the event was
+ * handled, not declined); everything else that didn't ring is Not notified.
+ */
+fun notifyOutcome(e: DebugLogEntry): NotifyOutcome = when {
+    e.notified -> NotifyOutcome.RANG
+    e.reason == DebugLogReason.COALESCED || e.reason == DebugLogReason.ALREADY_NOTIFIED ||
+        e.reason == DebugLogReason.RATE_LIMITED || e.reason == DebugLogReason.ONCE_PER_THREAT ||
+        e.reason == DebugLogReason.ONCE_PER_TYPE -> NotifyOutcome.COVERED
+    else -> NotifyOutcome.NOT_NOTIFIED
+}
+
+/** Dominant "why they didn't ring" among the not-notified events, in one plain sentence. */
+private fun diagnosisOf(entries: List<DebugLogEntry>, s: Strings.StringSet): String? {
+    val counts = entries.filter { notifyOutcome(it) == NotifyOutcome.NOT_NOTIFIED }
+        .groupingBy { it.reason }.eachCount()
+    if (counts.isEmpty()) return null
+    val top = counts.maxByOrNull { it.value }!!.key
+    return String.format(s.logsDiagnosisFormat, top.label(s))
 }
 
 /** Stable identity for a decision row, matching the LazyColumn keys so pagination agrees. */
@@ -620,73 +705,70 @@ private fun entryKey(e: DebugLogEntry): String =
     "${e.atMillis}-${e.kind.name}-${e.threatId}-${e.tier?.name}-${e.reason.name}"
 
 /**
- * Build the ordered group specs from sorted decision rows. Canonical group order regardless of
- * sort direction: proximity = official / flourish / red / yellow / oblast; type = official /
- * flourish / types / other; oblasts = one group per canonical oblast. Timeline returns a single
- * header-less spec. In Proximity, entries inside each bucket are sorted by distance (closest
- * first) or age per [proximitySort].
+ * Build the ordered group specs from sorted decision rows. Every mode is TOTAL — a row with no
+ * resolvable bucket lands in "Other", never disappears. NONE = single header-less spec; TIME =
+ * Now / Last hour / Today buckets; OBLAST = one group per event oblast ([DebugLogEntry.scopeOblastId]);
+ * TYPE = official / flourish / per-type / other, each with its own header.
  */
 private fun buildGroups(
     rows: List<DebugLogEntry>,
-    groupBy: GroupBy,
+    groupMode: LogGroupMode,
     lang: AppLanguage,
     s: Strings.StringSet,
-    proximitySort: ProximitySort = ProximitySort.DISTANCE,
-    newestFirst: Boolean = true
+    newestFirst: Boolean = true,
+    now: Long = System.currentTimeMillis()
 ): List<LogGroupSpec> {
     if (rows.isEmpty()) return emptyList()
-    fun sortProximity(list: List<DebugLogEntry>): List<DebugLogEntry> = when (proximitySort) {
-        ProximitySort.DISTANCE -> list.sortedWith(compareBy<DebugLogEntry> { it.distanceKm ?: Double.MAX_VALUE }.thenByDescending { it.atMillis })
-        ProximitySort.AGE -> if (newestFirst) list.sortedByDescending { it.atMillis } else list.sortedBy { it.atMillis }
-    }
     fun byTime(list: List<DebugLogEntry>): List<DebugLogEntry> =
         if (newestFirst) list.sortedByDescending { it.atMillis } else list.sortedBy { it.atMillis }
-    return when (groupBy) {
-        GroupBy.TIMELINE -> listOf(LogGroupSpec("timeline", null, null, null, rows, subTypes = false))
-        GroupBy.PROXIMITY -> {
-            val official = sortProximity(rows.filter { it.kind == DebugLogKind.OFFICIAL_ON || it.kind == DebugLogKind.OFFICIAL_OFF })
-            val flourish = sortProximity(rows.filter { it.kind == DebugLogKind.FLOURISH })
-            val threat = rows.filter {
-                it.kind == DebugLogKind.ZONE_ENTER ||
-                    it.kind == DebugLogKind.REGION_THREAT
+    return when (groupMode) {
+        LogGroupMode.NONE -> listOf(LogGroupSpec("none", null, null, null, byTime(rows), subTypes = false))
+        LogGroupMode.TIME -> {
+            val fiveMin = 5L * 60 * 1000
+            val hour = 60L * 60 * 1000
+            fun bucket(e: DebugLogEntry): String = when {
+                now - e.atMillis < fiveMin -> "now"
+                now - e.atMillis < hour -> "hour"
+                else -> "today"
             }
-            val rest = threat.filter { it.distanceKm != null }
-            val red = sortProximity(rest.filter { it.tier == ThreatZone.INNER })
-            val yellow = sortProximity(rest.filter { it.tier == ThreatZone.OUTER })
-            val oblast = sortProximity(rest.filter { it.tier == null })
-            buildList {
-                if (official.isNotEmpty()) add(LogGroupSpec("official", "official", GroupAccent.OFFICIAL, null, official, subTypes = false))
-                if (flourish.isNotEmpty()) add(LogGroupSpec("flourish", "flourish", null, null, flourish, subTypes = false))
-                if (red.isNotEmpty()) add(LogGroupSpec("red", "red", GroupAccent.RED, null, red, subTypes = true))
-                if (yellow.isNotEmpty()) add(LogGroupSpec("yellow", "yellow", GroupAccent.YELLOW, null, yellow, subTypes = true))
-                if (oblast.isNotEmpty()) add(LogGroupSpec("oblast", "oblast", GroupAccent.OBLAST, null, oblast, subTypes = true))
-            }
-        }
-        GroupBy.TYPE -> {
-            val official = rows.filter { it.kind == DebugLogKind.OFFICIAL_ON || it.kind == DebugLogKind.OFFICIAL_OFF }
-            val flourish = rows.filter { it.kind == DebugLogKind.FLOURISH }
-            val typed = rows.filter { it !in official && it.threatType != null && it.kind != DebugLogKind.FLOURISH }
-            val untyped = rows.filter { it !in official && it.threatType == null && it.kind != DebugLogKind.FLOURISH }
-            buildList {
-                if (official.isNotEmpty()) add(LogGroupSpec("official", "official", GroupAccent.OFFICIAL, null, official, subTypes = false))
-                if (flourish.isNotEmpty()) add(LogGroupSpec("flourish", "flourish", null, null, flourish, subTypes = false))
-                typed.groupBy { it.threatType!! }
-                    .entries
-                    .sortedBy { it.key.ordinal }
-                    .forEach { (type, groupRows) ->
-                        add(LogGroupSpec("type-${type.name}", null, null, type, groupRows, subTypes = false))
-                    }
-                if (untyped.isNotEmpty()) add(LogGroupSpec("type-other", s.logsGroupOther, null, null, untyped, subTypes = false))
+            listOf("now", "hour", "today").mapNotNull { key ->
+                val entries = byTime(rows.filter { bucket(it) == key })
+                if (entries.isEmpty()) null else LogGroupSpec(
+                    "time-$key",
+                    when (key) {
+                        "now" -> s.logsTimeNow
+                        "hour" -> s.logsTimeHour
+                        else -> s.logsTimeToday
+                    },
+                    null, null, entries, subTypes = false
+                )
             }
         }
-        GroupBy.OBLASTS -> {
-            rows.groupBy { resolveOblastId(it.locality) }
+        LogGroupMode.OBLAST -> {
+            rows.groupBy { it.scopeOblastId }
                 .entries
                 .map { (id, groupRows) -> id to byTime(groupRows) }
                 .sortedBy { (id, _) -> oblastTitle(id, lang, s) }
                 .map { (id, groupRows) ->
                     LogGroupSpec("oblast-${id ?: "other"}", oblastTitle(id, lang, s), GroupAccent.OBLAST, null, groupRows, subTypes = false)
                 }
+        }
+        LogGroupMode.TYPE -> {
+            val official = rows.filter { it.kind == DebugLogKind.OFFICIAL_ON || it.kind == DebugLogKind.OFFICIAL_OFF }
+            val flourish = rows.filter { it.kind == DebugLogKind.FLOURISH }
+            val typed = rows.filter { it !in official && it.threatType != null && it.kind != DebugLogKind.FLOURISH }
+            val untyped = rows.filter { it !in official && it.threatType == null && it.kind != DebugLogKind.FLOURISH }
+            buildList {
+                if (official.isNotEmpty()) add(LogGroupSpec("official", "official", GroupAccent.OFFICIAL, null, byTime(official), subTypes = false))
+                if (flourish.isNotEmpty()) add(LogGroupSpec("flourish", "flourish", null, null, byTime(flourish), subTypes = false))
+                typed.groupBy { it.threatType!! }
+                    .entries
+                    .sortedBy { it.key.ordinal }
+                    .forEach { (type, groupRows) ->
+                        add(LogGroupSpec("type-${type.name}", null, null, type, byTime(groupRows), subTypes = false))
+                    }
+                if (untyped.isNotEmpty()) add(LogGroupSpec("type-other", s.logsGroupOther, null, null, byTime(untyped), subTypes = false))
+            }
         }
     }
 }
@@ -703,29 +785,19 @@ private fun oblastTitle(id: String?, lang: AppLanguage, s: Strings.StringSet): S
 }
 
 @Composable
-private fun ViewOptionsRow(
-    groupBy: GroupBy,
+private fun LogControlsRow(
+    mode: LogsMode,
+    scopeMode: LogScope,
+    groupMode: LogGroupMode,
     newestFirst: Boolean,
-    proximitySort: ProximitySort,
-    notifyFilter: NotifyFilter,
+    searchQuery: String,
     s: Strings.StringSet,
-    onGroupBy: (GroupBy) -> Unit,
+    onModeChange: (LogsMode) -> Unit,
+    onScopeChange: (LogScope) -> Unit,
+    onGroupModeChange: (LogGroupMode) -> Unit,
     onSortToggle: () -> Unit,
-    onProximitySortChange: (ProximitySort) -> Unit,
-    onNotifyFilterChange: (NotifyFilter) -> Unit
+    onSearchChange: (String) -> Unit
 ) {
-    val groupIcon = mapOf(
-        GroupBy.TIMELINE to Icons.Outlined.AccessTime,
-        GroupBy.PROXIMITY to Icons.Outlined.NearMe,
-        GroupBy.TYPE to Icons.Outlined.Category,
-        GroupBy.OBLASTS to Icons.Filled.Place
-    )
-    val groupLabel = mapOf(
-        GroupBy.TIMELINE to s.logsGroupTimeline,
-        GroupBy.PROXIMITY to s.logsGroupProximity,
-        GroupBy.TYPE to s.logsGroupType,
-        GroupBy.OBLASTS to s.logsGroupOblasts
-    )
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier
@@ -734,69 +806,259 @@ private fun ViewOptionsRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            GroupBy.entries.forEach { value ->
+            // Story is the default read; List is the raw audit trail.
+            SegmentToggle(
+                options = listOf(LogsMode.STORY to s.logsModeStory, LogsMode.LIST to s.logsModeList),
+                selected = mode,
+                onSelect = onModeChange
+            )
+            LogScope.entries.forEach { value ->
                 FilterChip(
-                    selected = groupBy == value,
-                    onClick = { onGroupBy(value) },
-                    label = { Text(groupLabel[value]!!) },
-                    leadingIcon = {
-                        Icon(groupIcon[value]!!, contentDescription = groupLabel[value], modifier = Modifier.size(16.dp))
-                    },
+                    selected = scopeMode == value,
+                    onClick = { onScopeChange(value) },
+                    label = { Text(if (value == LogScope.MINE) s.logsScopeMine else s.logsScopeAll) },
+                    leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null, modifier = Modifier.size(16.dp)) },
                     interactionSource = rememberHapticInteractionSource()
                 )
             }
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            if (groupBy == GroupBy.PROXIMITY) {
-                FilterChip(
-                    selected = proximitySort == ProximitySort.DISTANCE,
-                    onClick = { onProximitySortChange(ProximitySort.DISTANCE) },
-                    label = { Text(s.logsSortDistance) },
-                    leadingIcon = { Icon(Icons.Filled.Place, contentDescription = s.logsSortDistance, modifier = Modifier.size(16.dp)) },
-                    interactionSource = rememberHapticInteractionSource()
+            if (mode == LogsMode.LIST) {
+                val groupLabel = mapOf(
+                    LogGroupMode.NONE to s.logsGroupNone,
+                    LogGroupMode.TIME to s.logsGroupTime,
+                    LogGroupMode.OBLAST to s.logsGroupOblasts,
+                    LogGroupMode.TYPE to s.logsGroupType
                 )
-                FilterChip(
-                    selected = proximitySort == ProximitySort.AGE,
-                    onClick = { onProximitySortChange(ProximitySort.AGE) },
-                    label = { Text(s.logsSortAge) },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = s.logsSortAge, modifier = Modifier.size(16.dp)) },
-                    interactionSource = rememberHapticInteractionSource()
-                )
-            } else {
+                LogGroupMode.entries.forEach { value ->
+                    FilterChip(
+                        selected = groupMode == value,
+                        onClick = { onGroupModeChange(value) },
+                        label = { Text(groupLabel[value]!!) },
+                        leadingIcon = { Icon(Icons.Outlined.Category, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        interactionSource = rememberHapticInteractionSource()
+                    )
+                }
                 val sortRotation by animateFloatAsState(targetValue = if (newestFirst) 0f else 180f, label = "sortRotation")
                 FilterChip(
                     selected = newestFirst,
                     onClick = onSortToggle,
                     label = { Text(if (newestFirst) s.logsSortNewest else s.logsSortOldest) },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = if (newestFirst) s.logsSortNewest else s.logsSortOldest, modifier = Modifier.graphicsLayer { rotationZ = sortRotation }.size(16.dp)) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null, modifier = Modifier.graphicsLayer { rotationZ = sortRotation }.size(16.dp)) },
                     interactionSource = rememberHapticInteractionSource()
                 )
             }
-            FilterChip(
-                selected = notifyFilter == NotifyFilter.SHOWN,
-                onClick = {
-                    onNotifyFilterChange(if (notifyFilter == NotifyFilter.SHOWN) NotifyFilter.ALL else NotifyFilter.SHOWN)
-                },
-                label = { Text(s.logsNotified) },
-                leadingIcon = { Icon(Icons.Filled.CheckCircle, contentDescription = s.logsNotified, modifier = Modifier.size(16.dp)) },
-                interactionSource = rememberHapticInteractionSource()
-            )
-            FilterChip(
-                selected = notifyFilter == NotifyFilter.NOT_SHOWN,
-                onClick = {
-                    onNotifyFilterChange(if (notifyFilter == NotifyFilter.NOT_SHOWN) NotifyFilter.ALL else NotifyFilter.NOT_SHOWN)
-                },
-                label = { Text(s.logsNotNotified) },
-                leadingIcon = { Icon(Icons.Filled.Notifications, contentDescription = s.logsNotNotified, modifier = Modifier.size(16.dp)) },
-                interactionSource = rememberHapticInteractionSource()
+        }
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchChange,
+            singleLine = true,
+            placeholder = { Text(s.logsSearchPlaceholder) },
+            textStyle = MaterialTheme.typography.bodySmall,
+            leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null, modifier = Modifier.size(16.dp)) },
+            modifier = Modifier.fillMaxWidth().height(44.dp)
+        )
+    }
+}
+
+/** Two-option pill row (Story | List) — the primary lens switch. */
+@Composable
+private fun <T> SegmentToggle(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color(AppPalette.CardAlt))
+            .padding(2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        options.forEach { (value, label) ->
+            val active = selected == value
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else Color.Transparent)
+                    .hapticClickable(onClick = { onSelect(value) })
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
             )
         }
+    }
+}
+
+/**
+ * One raid, told as a story: a headline verdict, when and where, and — expanded — the
+ * sub-events in order. Collapsed by default so the day reads as a handful of headlines.
+ */
+@Composable
+private fun SessionCard(
+    session: LogSession,
+    s: Strings.StringSet,
+    lang: AppLanguage,
+    iconSet: ThreatIconSet,
+    now: Long
+) {
+    var expanded by remember(session.id) { mutableStateOf(false) }
+    val accent = when (session.official) {
+        AlertLevel.RED -> DebugRed
+        AlertLevel.YELLOW -> DebugAmber
+        else -> if (session.told) DebugGreen else MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val verdict = if (session.told) s.logsSessionTold else s.logsSessionSilent
+    val verdictTint = if (session.told) DebugGreen else DebugAmber
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(accent.copy(alpha = 0.10f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .hapticClickable(onClick = { expanded = !expanded })
+                .padding(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    formatTimeRange(lang, session.startMs, session.endMs),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    formatDuration(s, session.durationMs),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    verdict,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = verdictTint
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(Modifier.height(3.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                session.official?.let { level ->
+                    if (level != AlertLevel.NONE) {
+                        Text(
+                            level.name.lowercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (level == AlertLevel.RED) DebugRed else DebugAmber
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
+                }
+                Text(
+                    sessionHeadline(session, s, lang),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+        if (expanded) {
+            Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
+                session.entries.forEach { entry ->
+                    Box(modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)) {
+                        DecisionCard(entry, s, lang, now, iconSet)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Plain sentence under a session headline: what it was, and why it stayed quiet. */
+private fun sessionHeadline(session: LogSession, s: Strings.StringSet, lang: AppLanguage): String {
+    val place = session.place
+    val where = place?.let { p ->
+        val en = Cities.byUa[p]?.nameEn ?: Transliteration.transliterate(p)
+        lang.pick(p, en, en)
+    }
+    val count = String.format(s.logsSessionEvents, session.size)
+    val why = session.silenceReason(s)
+    return listOfNotNull(where, count, why).joinToString(" · ")
+}
+
+/** "21:10 – 21:47" in the app language. */
+private fun formatTimeRange(lang: AppLanguage, startMs: Long, endMs: Long): String {
+    val zone = java.time.ZoneId.systemDefault()
+    val fmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+    val start = java.time.Instant.ofEpochMilli(startMs).atZone(zone).format(fmt)
+    if (endMs / 60_000 == startMs / 60_000) return start
+    val end = java.time.Instant.ofEpochMilli(endMs).atZone(zone).format(fmt)
+    return "$start – $end"
+}
+
+/** "37 min" / "1 hr 5 min" — human, short. */
+private fun formatDuration(s: Strings.StringSet, durationMs: Long): String {
+    val totalMin = (durationMs / 60_000).coerceAtLeast(0)
+    if (totalMin < 60) return "$totalMin${s.alertAgeMinSuffix.trim()}"
+    val h = totalMin / 60
+    val m = totalMin % 60
+    return if (m == 0L) "$h${s.alertAgeHrSuffix.trim()}" else "$h${s.alertAgeHrSuffix.trim()} $m${s.alertAgeMinSuffix.trim()}"
+}
+
+/** The tappable summary: total + one segment per outcome. Tapping a segment filters to it. */
+@Composable
+private fun SummaryBar(
+    total: Int,
+    rang: Int,
+    covered: Int,
+    notNotified: Int,
+    selected: NotifyOutcome?,
+    diagnosis: String?,
+    s: Strings.StringSet,
+    onSelect: (NotifyOutcome?) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            SummarySegment(label = String.format(s.logsSummaryTotal, total), active = selected == null) { onSelect(null) }
+            SummarySegment(label = String.format(s.logsSummaryRang, rang), active = selected == NotifyOutcome.RANG, tint = DebugGreen) { onSelect(NotifyOutcome.RANG) }
+            SummarySegment(label = String.format(s.logsSummaryCovered, covered), active = selected == NotifyOutcome.COVERED, tint = DebugAmber) { onSelect(NotifyOutcome.COVERED) }
+            SummarySegment(label = String.format(s.logsSummaryNotNotified, notNotified), active = selected == NotifyOutcome.NOT_NOTIFIED, tint = DebugAmber) { onSelect(NotifyOutcome.NOT_NOTIFIED) }
+        }
+        if (diagnosis != null) {
+            Text(
+                diagnosis,
+                style = MaterialTheme.typography.labelMedium,
+                color = DebugAmber,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SummarySegment(label: String, active: Boolean, tint: Color = DebugBlue, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = if (active) tint.copy(alpha = 0.25f) else Color.Transparent,
+        contentColor = if (active) tint else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.clip(RoundedCornerShape(50))
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier
+                .hapticClickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 5.dp)
+        )
     }
 }
 
@@ -1064,7 +1326,6 @@ private fun LogRowCard(
             ThreatZone.OUTER -> DebugAmber
             null -> MaterialTheme.colorScheme.onSurfaceVariant
         }
-        DebugLogKind.SECTION_TOGGLE -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -1074,7 +1335,6 @@ private fun DebugLogKind.icon(): ImageVector = when (this) {
     DebugLogKind.ZONE_ENTER -> Icons.Filled.Warning
     DebugLogKind.REGION_THREAT -> Icons.Filled.Place
     DebugLogKind.FLOURISH -> Icons.Filled.Star
-    DebugLogKind.SECTION_TOGGLE -> Icons.Filled.ExpandMore
 }
 
 private fun DebugLogKind.label(
@@ -1117,7 +1377,6 @@ private fun DebugLogKind.label(
         }
     }
     DebugLogKind.FLOURISH -> s.debugKindFlourish
-    DebugLogKind.SECTION_TOGGLE -> locality ?: s.debugKindSectionToggle
 }
 
 private fun localityText(locality: String?, lang: AppLanguage): String? =
@@ -1126,7 +1385,7 @@ private fun localityText(locality: String?, lang: AppLanguage): String? =
         lang.pick(it, en, en)
     }
 
-private fun DebugLogReason.label(s: Strings.StringSet): String = when (this) {
+internal fun DebugLogReason.label(s: Strings.StringSet): String = when (this) {
     DebugLogReason.BELL_MUTED -> s.debugReasonBellMuted
     DebugLogReason.ALREADY_NOTIFIED -> s.debugReasonAlreadyNotified
     DebugLogReason.COALESCED -> s.debugReasonCoalesced
@@ -1150,11 +1409,14 @@ private fun DecisionCard(
     iconSet: ThreatIconSet
 ) {
     val accent = entry.kind.accent(entry.tier, entry.level)
+    val outcome = notifyOutcome(entry)
+    // Dim cards that never reached the shade — the eye lands on the loud ones first.
+    val bgAlpha = if (outcome == NotifyOutcome.NOT_NOTIFIED) 0.045f else 0.10f
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(accent.copy(alpha = 0.10f))
+            .background(accent.copy(alpha = bgAlpha))
             .padding(12.dp),
         verticalAlignment = Alignment.Top
     ) {
@@ -1170,11 +1432,13 @@ private fun DecisionCard(
                     color = accent,
                     modifier = Modifier.weight(1f)
                 )
+                OutcomeGlyph(outcome, s)
+                Spacer(Modifier.width(6.dp))
                 Text(
                     formatAlertAge(now, entry.atMillis, s),
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (outcome == NotifyOutcome.NOT_NOTIFIED) 0.5f else 1f)
                 )
             }
             Spacer(Modifier.height(3.dp))
@@ -1235,6 +1499,32 @@ private fun DecisionCard(
                 }
             }
         }
+    }
+}
+
+/** The one glanceable signal: did this event reach the shade (RANG), get overtaken by a louder
+ *  one (COVERED), or was it declined (NOT_NOTIFIED)? */
+@Composable
+private fun OutcomeGlyph(outcome: NotifyOutcome, s: Strings.StringSet) {
+    when (outcome) {
+        NotifyOutcome.RANG -> Icon(
+            Icons.Filled.Notifications,
+            contentDescription = s.logsOutcomeRang,
+            tint = DebugGreen,
+            modifier = Modifier.size(16.dp)
+        )
+        NotifyOutcome.COVERED -> Image(
+            painter = painterResource(R.drawable.ic_notifications_off),
+            contentDescription = s.logsOutcomeCovered,
+            colorFilter = ColorFilter.tint(DebugAmber),
+            modifier = Modifier.size(16.dp)
+        )
+        NotifyOutcome.NOT_NOTIFIED -> Image(
+            painter = painterResource(R.drawable.ic_notifications_off),
+            contentDescription = s.logsOutcomeNotNotified,
+            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)),
+            modifier = Modifier.size(16.dp)
+        )
     }
 }
 

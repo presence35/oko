@@ -23,8 +23,49 @@ class DebugLogTest {
         tier: ThreatZone? = ThreatZone.INNER,
         dist: Double? = 12.5,
         locality: String? = "Одеса",
-        level: AlertLevel? = null
-    ) = DebugLogEntry(at, kind, night, siren, vibr, notified, reason, threatId, type, tier, dist, locality, level)
+        level: AlertLevel? = null,
+        scope: String? = null
+    ) = DebugLogEntry(at, kind, night, siren, vibr, notified, reason, threatId, type, tier, dist, locality, level, scope)
+
+    @Test
+    fun `scope oblast id survives a round trip`() {
+        val src = listOf(
+            entry(1_000, kind = DebugLogKind.OFFICIAL_ON, locality = "Одеська область", scope = "odeska")
+        )
+        assertEquals("odeska", parseDebugLog(serializeDebugLog(src)).single().scopeOblastId)
+    }
+
+    @Test
+    fun `outcome is rang when notified`() {
+        assertEquals(NotifyOutcome.RANG, notifyOutcome(entry(1, notified = true, reason = DebugLogReason.FIRED)))
+    }
+
+    @Test
+    fun `outcome is covered when a louder alert won the slot`() {
+        listOf(
+            DebugLogReason.COALESCED,
+            DebugLogReason.ALREADY_NOTIFIED,
+            DebugLogReason.RATE_LIMITED,
+            DebugLogReason.ONCE_PER_THREAT,
+            DebugLogReason.ONCE_PER_TYPE
+        ).forEach { reason ->
+            assertEquals(NotifyOutcome.COVERED, notifyOutcome(entry(1, notified = false, reason = reason)))
+        }
+    }
+
+    @Test
+    fun `outcome is not notified when the event was declined`() {
+        listOf(
+            DebugLogReason.TOGGLE_OFF,
+            DebugLogReason.TYPE_OFF,
+            DebugLogReason.BELL_MUTED,
+            DebugLogReason.OUTSIDE_ZONES,
+            DebugLogReason.STALE,
+            DebugLogReason.ADVISORY
+        ).forEach { reason ->
+            assertEquals(NotifyOutcome.NOT_NOTIFIED, notifyOutcome(entry(1, notified = false, reason = reason)))
+        }
+    }
 
     @Test
     fun `full round trip preserves every field`() {

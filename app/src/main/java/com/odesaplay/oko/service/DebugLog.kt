@@ -20,10 +20,11 @@ import com.odesaplay.oko.engine.LatLng
 import com.odesaplay.oko.engine.toThreatType
 import com.odesaplay.oko.engine.inOblast
 import com.odesaplay.oko.engine.isFastType
+import com.odesaplay.oko.engine.resolveOblastId
 import com.odesaplay.oko.engine.AlertLevel
 
 /** Event kinds shown in the Debug log screen. */
-enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, REGION_THREAT, FLOURISH, SECTION_TOGGLE }
+enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, REGION_THREAT, FLOURISH }
 
 /**
  * Why a decision landed the way it did. [FIRED] = a notification was actually posted
@@ -56,7 +57,11 @@ data class DebugLogEntry(
     val tier: ThreatZone?,
     val distanceKm: Double?,
     val locality: String?,
-    val level: AlertLevel? = null
+    val level: AlertLevel? = null,
+    /** Canonical oblast id of the EVENT (from its locality: the alerted oblast for official
+     *  rows, the threat's place for threat rows). Powers the Logs "Mine" scope — an event is
+     *  "mine" iff this equals the user's current focus oblast. Null when unresolvable. */
+    val scopeOblastId: String? = null
 )
 
 /**
@@ -158,7 +163,8 @@ object DebugLog {
         record(
             DebugLogEntry(
                 now, kind, night, sirenOverride, vibrationLevel, notified, reason,
-                threatId, threatType, null, distanceKm, locality, level
+                threatId, threatType, null, distanceKm, locality, level,
+                scopeOblastId = resolveOblastId(locality)
             )
         )
     }
@@ -169,22 +175,6 @@ object DebugLog {
      * started; every other reason is a "why not". [detail] is a short locale-neutral
      * suffix (e.g. "7x2" = records×groups) shown as grey text on the row.
      */
-    /**
-     * Log-only audit row for a user collapsing/expanding a group section. Never rendered as
-     * a decision card — it exists so the "what did I just tap" question has an answer in the
-     * persisted trail. [detail] is the context line surfaced in the Logs section view.
-     */
-    fun recordSectionToggle(log: String, sectionId: String, collapsed: Boolean, now: Long) {
-        record(
-            DebugLogEntry(
-                now, DebugLogKind.SECTION_TOGGLE, night = false, sirenOverride = false,
-                vibrationLevel = null, notified = false, reason = DebugLogReason.FIRED,
-                threatId = null, threatType = null, tier = null, distanceKm = null,
-                locality = "$log/$sectionId=${if (collapsed) "collapsed" else "expanded"}"
-            )
-        )
-    }
-
     fun recordFlourish(reason: DebugLogReason, detail: String? = null, now: Long) {
         record(
             DebugLogEntry(
@@ -214,7 +204,8 @@ object DebugLog {
     ) {
         val entry = DebugLogEntry(
             now, DebugLogKind.ZONE_ENTER, night, sirenOverride, vibrationLevel,
-            true, DebugLogReason.FIRED, threatId, threatType, tier, distanceKm, locality
+            true, DebugLogReason.FIRED, threatId, threatType, tier, distanceKm, locality,
+            scopeOblastId = resolveOblastId(locality)
         )
         synchronized(verdictsLock) { verdicts[threatId] = fingerprintOf(entry) }
         record(entry)
@@ -280,11 +271,12 @@ object DebugLog {
         // AlertService, which posts with the effective tier, never the raw spatial one.
         val tier = effective ?: spatial
         val fast = isFastType(t.type.toThreatType(), ctx.typeCatalog)
+        val place = t.locality ?: t.district ?: t.region
         return DebugLogEntry(
             ctx.now, DebugLogKind.ZONE_ENTER, ctx.night, ctx.sirenOverride,
             if (fast) ctx.fastVibrationLevel else ctx.slowVibrationLevel,
             notified, reason, t.id, t.type.toThreatType(), tier, distKm,
-            t.locality ?: t.district ?: t.region
+            place, scopeOblastId = resolveOblastId(place)
         )
     }
 
@@ -297,11 +289,12 @@ object DebugLog {
             else -> DebugLogReason.OUTSIDE_ZONES
         }
         val fast = isFastType(t.type.toThreatType(), ctx.typeCatalog)
+        val place = t.locality ?: t.district ?: t.region
         return DebugLogEntry(
             ctx.now, DebugLogKind.REGION_THREAT, ctx.night, ctx.sirenOverride,
             if (fast) ctx.fastVibrationLevel else ctx.slowVibrationLevel,
             false, reason, t.id, t.type.toThreatType(), null, distKm,
-            t.locality ?: t.district ?: t.region
+            place, scopeOblastId = resolveOblastId(place)
         )
     }
 
@@ -403,7 +396,8 @@ internal fun serializeDebugLog(entries: List<DebugLogEntry>): String =
             entry.tier?.name ?: "",
             entry.distanceKm?.toString() ?: "",
             entry.locality ?: "",
-            entry.level?.name ?: ""
+            entry.level?.name ?: "",
+            entry.scopeOblastId ?: ""
         ).joinToString("|")
     }
 
@@ -425,5 +419,6 @@ internal fun parseDebugLog(raw: String, maxEntries: Int = DebugLog.MAX_ENTRIES):
         val dist = parts[10].toDoubleOrNull()
         val locality = parts[11].takeIf { it.isNotEmpty() }
         val level = parts.getOrNull(12)?.let { name -> AlertLevel.entries.firstOrNull { it.name == name } }
-        DebugLogEntry(at, kind, night, siren, vibr, notified, reason, threatId, type, tier, dist, locality, level)
+        val scope = parts.getOrNull(13)?.takeIf { it.isNotEmpty() }
+        DebugLogEntry(at, kind, night, siren, vibr, notified, reason, threatId, type, tier, dist, locality, level, scope)
     }.takeLast(maxEntries)

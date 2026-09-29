@@ -501,6 +501,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 iconSet = uiState.iconSet,
                 neptunDown = uiState.neptunDown,
                 degraded = uiState.degraded,
+                focusToken = uiState.focusToken,
                 onBack = { screen = Screen.MAP },
             )
         }
@@ -975,9 +976,12 @@ private fun MapScreen(
                             lang = uiState.language
                         )
                     }
+                    // OSMF allows the corner credit to be short provided the full "contributors"
+                    // form (plus OpenMapTiles and OpenFreeMap) stays reachable — it lives in the
+                    // first-launch wizard, re-armable from Settings → Reset tips.
                     if (!flourishActive) {
                         Text(
-                            "© OpenFreeMap · © OpenMapTiles · © OpenStreetMap",
+                            "© OpenStreetMap",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White.copy(alpha = 0.40f),
                             modifier = Modifier

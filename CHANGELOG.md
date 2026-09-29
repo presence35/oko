@@ -1,13 +1,19 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.6.708]
 - Map basemap switched to OpenFreeMap (dark) — no private API key any more, and the map gains real roads, water, landcover and shaded relief 09-29_14:00:56
 - City labels now carry a crisp outline instead of a blurred drop shadow, so they stay readable at small sizes 09-29_14:00:56
-- Map credit updated to © OpenFreeMap · © OpenMapTiles · © OpenStreetMap 09-29_14:00:56
+- City labels are de-cluttered and claimed in importance order — a big city can no longer end up underneath a smaller town's name, and overlapping labels are dropped instead of stacked 09-29_14:30:36
+- During a shoot-down show only large and medium cities are revealed; small towns keep their normal zoom 09-29_14:35:18
+- Map credit shortened to "© OpenStreetMap" in the corner, with the full OpenFreeMap / OpenMapTiles / OpenStreetMap attribution moved to the first-launch wizard 09-29_14:35:18
 - Logs: added an Oblasts group-by, fixed the Type grouping (it showed no headers), replaced the mislabeled "Resolved" toggle with Notified / Not notified filters, and made "Show more" paginate in group order so a new row no longer appears at the bottom 09-29_12:00:00
 - Logs: ages now literally read "15 min ago" on both decisions and connections; connection rows also read "<datetime> for <duration>" 09-29_12:00:00
 - Logs: every section (Oblasts, Type, Proximity groups) is now collapsible, so you can fold away regions you don't care about 09-29_12:00:00
 - Logs: an official-alert row now names the official area only — the drone/threat that caused it stays its own separate row, linked by id, so cause and alert are two real events 09-29_12:00:00
+- Logs: rebuilt as outcome-first — a Mine/All scope (your oblast only), a tappable "N events · N rang · N covered · N not notified" summary that also filters, one-line diagnosis of why most didn't ring, outcome glyphs on every row, time-bucket grouping by default, and a search box; the old chip maze is gone 09-29_12:00:00
+- Logs: reads as a raid story now — the day is grouped into sessions (an alarm and everything around it), each a one-line headline ("21:10 – 21:47 · You were told", or why it stayed silent) that expands to the events inside; a Story/List switch keeps the raw trail 09-30_10:00:00
 - Logs: every official alert is now recorded even when notifications are off, muted, or "let me sleep" is on 09-29_12:00:00
 - Fixed an all-clear appearing together with a new official alert in the same city/raion 09-29_12:00:00
 - Fixed wrong-city official alerts after switching to GPS: a focus change now drops the stale episode, and enabling follow-me clears the old pin 09-29_12:00:00

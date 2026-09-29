@@ -133,6 +133,7 @@ data class UiState(
     val followMe: Boolean = true,
     val pinnedCity: City? = null,
     val focusLocation: LatLng? = null,            // camera + zone center: GPS (follow) or pinned city
+    val focusToken: String? = null,               // canonical oblast id of the focus point ("Mine" scope in Logs)
     val cityAlerts: Map<String, AlertLevel> = emptyMap(), // per-city alert level (RED > YELLOW > NONE)
     val threatLevel: Double = 0.0,                 // experimental 0..10 gauge for the popup
     val revealRequest: RevealRequest? = null,      // notification tap: pan the camera onto a threat
@@ -1157,6 +1158,7 @@ showBorders = prefs.showBorders,
             focusOblastAlertActive = focusOblastAlertActive,
             focusOblastYellowAlertActive = focusOblastYellowAlertActive,
             focusBannerCity = focusBannerCity,
+            focusToken = focusToken,
             language = language,
             followMe = followMe,
             pinnedCity = pinnedCity,
