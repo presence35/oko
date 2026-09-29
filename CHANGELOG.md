@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- Map basemap switched to OpenFreeMap (dark) — no private API key any more, and the map gains real roads, water, landcover and shaded relief 09-29_14:00:56
+- City labels now carry a crisp outline instead of a blurred drop shadow, so they stay readable at small sizes 09-29_14:00:56
+- Map credit updated to © OpenFreeMap · © OpenMapTiles · © OpenStreetMap 09-29_14:00:56
 - Logs: added an Oblasts group-by, fixed the Type grouping (it showed no headers), replaced the mislabeled "Resolved" toggle with Notified / Not notified filters, and made "Show more" paginate in group order so a new row no longer appears at the bottom 09-29_12:00:00
 - Logs: ages now literally read "15 min ago" on both decisions and connections; connection rows also read "<datetime> for <duration>" 09-29_12:00:00
 - Logs: every section (Oblasts, Type, Proximity groups) is now collapsible, so you can fold away regions you don't care about 09-29_12:00:00

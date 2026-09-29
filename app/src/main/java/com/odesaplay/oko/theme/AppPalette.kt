@@ -8,6 +8,10 @@ object AppPalette {
     const val AlertYellow: Long = 0xFFF59E0B
     const val CityTextDefault: Long = 0xFFE2E8F0
 
+    /** Outline behind every city label. Semi-transparent black darkens whatever the basemap
+     *  paints underneath it without asserting a colour the basemap may not use. */
+    const val CityHalo: Long = 0xE6000000
+
     const val RedFill: Long = 0x737F1D1D
     const val RedLine: Long = 0xE17F1D1D
     const val YellowFill: Long = 0x5AF59E0B

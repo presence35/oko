@@ -8,7 +8,6 @@ import com.odesaplay.oko.engine.distanceFlat
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PointF
 import androidx.compose.runtime.Immutable
@@ -759,8 +758,17 @@ class CityLabelOverlay(
     private val density = context.resources.displayMetrics.density
     private val paint = Paint().apply {
         isAntiAlias = true
-        setShadowLayer(3f, 1f, 1f, Color.BLACK)
         textAlign = Paint.Align.CENTER
+    }
+    /** Outline pass drawn under [paint]. A stroked halo stays crisp at 11sp where a blurred
+     *  offset drop shadow smears the thin strokes of Cyrillic glyphs into a grey haze. */
+    private val haloPaint = Paint().apply {
+        isAntiAlias = true
+        textAlign = Paint.Align.CENTER
+        style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.ROUND
+        strokeWidth = 2.2f * density
+        color = AppPalette.CityHalo.toInt()
     }
 
     private fun name(c: City) = c.name(lang)
@@ -803,6 +811,7 @@ class CityLabelOverlay(
                 CityTier.MEDIUM -> (9.5 + (zoom - 6.5) * 0.9).coerceIn(9.5, 15.0)
                 CityTier.MINOR -> (8.5 + (zoom - 10.0) * 0.7).coerceIn(8.5, 13.0)
             }).toFloat() * density
+            haloPaint.textSize = paint.textSize
             val level = cityAlertLevels[c.nameUa] ?: AlertLevel.NONE
             paint.color = when {
                 alertRegionMode != AlertRegionMode.CITY_LABELS -> AppPalette.CityTextDefault.toInt()
@@ -810,7 +819,10 @@ class CityLabelOverlay(
                 level == AlertLevel.YELLOW -> AppPalette.AlertYellow.toInt()
                 else -> AppPalette.CityTextDefault.toInt()
             }
-            canvas.drawText(name(c), pt.x, pt.y - 6f * density, paint)
+            val label = name(c)
+            val baseline = pt.y - 6f * density
+            canvas.drawText(label, pt.x, baseline, haloPaint)
+            canvas.drawText(label, pt.x, baseline, paint)
         }
     }
 }

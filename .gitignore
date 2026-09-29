@@ -16,7 +16,6 @@
 .cxx
 local.properties
 /app/upload.properties
-/app/carto.properties
 /app/telegram.properties
 /app/keystore.properties
 /app/release.keystore

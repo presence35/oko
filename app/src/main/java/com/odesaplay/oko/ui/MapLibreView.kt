@@ -386,7 +386,8 @@ fun MapLibreHostView(
                         .build()
                     mapLibreMap.cameraPosition = initialPos
 
-                    mapLibreMap.setStyle(Style.Builder().fromJson(MapLibreStyle.cartoDarkJson())) { loadedStyle ->
+                    mapLibreMap.setStyle(Style.Builder().fromUri(MapStyle.URI)) { loadedStyle ->
+                        MapStyle.reduceToGeometry(loadedStyle)
                         bridge.style = loadedStyle
                         // Layer sources attach asynchronously so the dark first frame
                         // isn't starved by border-GeoJSON string building on Main.

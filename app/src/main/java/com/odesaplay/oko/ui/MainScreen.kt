@@ -960,8 +960,8 @@ private fun MapScreen(
                             onFinished = onFlybyFinished
                         )
                     }
-                    // Basemap attribution (required by the CARTO basemap free tier) stacked
-                    // under the scale bar so the pair matches the floating buttons' height.
+                    // Basemap attribution, as specified by the OpenFreeMap TileJSON we load.
+                    // Stacked under the scale bar so the pair matches the floating buttons' height.
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
@@ -977,7 +977,7 @@ private fun MapScreen(
                     }
                     if (!flourishActive) {
                         Text(
-                            "© CARTO",
+                            "© OpenFreeMap · © OpenMapTiles · © OpenStreetMap",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White.copy(alpha = 0.40f),
                             modifier = Modifier
@@ -1600,7 +1600,7 @@ internal fun ScaleIndicator(metersPerPixel: Double, lang: AppLanguage, modifier:
     else "${chosen.roundToInt()} ${s.meterUnit}"
 
     // Google-Maps-style scale: label above a thin alternating bar. Muted white (same as the
-    // CARTO attribution) so the pair stays balanced and subtle over the map tiles.
+    // basemap attribution) so the pair stays balanced and subtle over the map tiles.
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             label,
