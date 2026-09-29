@@ -302,15 +302,15 @@ class ThreatEngineTest {
     @Test
     fun `speedCache - records and estimates speed`() {
         val now = System.currentTimeMillis()
-        // ~1.5 km over 10 s = 150 m/s — a plausible measured speed (the old 0.05° delta was
-        // ~2000 km/h, which the type-relative sanity ceiling now correctly rejects).
+        // ~0.6 km over 10 s = 60 m/s — plausible for a Shahed (ceiling 70 m/s). The old
+        // 0.05° delta was ~2000 km/h, which the declared ceiling now correctly rejects.
         engine.speedCache.record("t1", now - 10_000, 50.0, 30.0)
-        engine.speedCache.record("t1", now, 50.0135, 30.0)
+        engine.speedCache.record("t1", now, 50.0054, 30.0)
         val threat = makeThreat(id = "t1", speedKmh = null)
         val props = NEPTUN_TYPES["shahed"]!!
         val speed = engine.speedCache.estimate("t1", threat, props)
         assertNotNull(speed)
-        assertTrue(speed!! > 100.0)
+        assertTrue(speed!! > 50.0)
     }
 
     @Test

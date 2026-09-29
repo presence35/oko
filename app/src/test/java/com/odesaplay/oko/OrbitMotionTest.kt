@@ -16,7 +16,8 @@ class OrbitMotionTest {
     private val fastProps = ThreatProps(
         isFast = true, reachKm = 1500.0, alwaysInnerWithinReach = false,
         staleAfterMs = 180_000, ghostCapMs = 900_000,
-        nominalSpeedMps = 236.11, horizonSec = 180.0, maxGhostMeters = 30_000.0
+        nominalSpeedMps = 236.11, horizonSec = 180.0, maxGhostMeters = 30_000.0,
+        maxPlausibleSpeedMps = 500.0
     )
     private val slowProps = fastProps.copy(isFast = false, nominalSpeedMps = 50.0)
     private val fastEngine = ThreatEngine(mapOf("cruise" to fastProps))

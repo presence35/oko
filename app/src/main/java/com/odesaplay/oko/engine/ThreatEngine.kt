@@ -55,6 +55,19 @@ class ThreatEngine(
     fun propsFor(type: String): ThreatProps =
         typeCatalog[type] ?: DEFAULT_THREAT_PROPS
 
+    /**
+     * The one place a speed crosses into engine math. Both the server field and the engine's
+     * measured/trail estimates are bounded by the plugin-declared [ThreatProps.maxPlausibleSpeedMps]
+     * before anything derives ETA, zone tiering or a dead-reckoned position from them. Callers
+     * that hold only a raw server km/h (e.g. official-reason attribution) go through here too,
+     * so the rule is never enforced on one path and skipped on its twin.
+     */
+    fun plausibleSpeedKmh(speedKmh: Double?, props: ThreatProps): Double? {
+        if (speedKmh == null || speedKmh <= 0.0) return null
+        val ceilingKmh = props.maxPlausibleSpeedMps * 3.6
+        return if (speedKmh <= ceilingKmh) speedKmh else null
+    }
+
     fun evaluate(
         threats: List<NormalizedThreat>,
         focus: LatLng?,
@@ -286,7 +299,7 @@ class ThreatEngine(
             val distKm = distanceHaversine(focus.lat, focus.lon, t.lat, t.lon) / 1000.0
             // Only threats inside the user's configured zones qualify as the "reason" — a drone
             // 100km away in the same oblast must not be announced as if it were local.
-            val tier = zoneTier(props, distKm, t.speedKmh, params)
+            val tier = zoneTier(props, distKm, plausibleSpeedKmh(t.speedKmh, props), params)
             if (!reasonEligible(t, tier, token)) continue
             if (distKm < bestDistKm) {
                 bestDistKm = distKm

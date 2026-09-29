@@ -128,13 +128,20 @@ Consumers talk only to `SourceRegistry`; the source feed (WS socket, decoder, re
 private inside each `Source`. Every source reports normalized engine currency
 (`NormalizedThreat`/`OblastAlert`), never a source-specific format.
 
-**Fundamental Ownership & Invariant: Source Owns Reality**
+**Fundamental Ownership & Invariant: Source Owns Reality, Engine Owns the Rules**
 - The **Source** is the authoritative source of truth for raw tracks, reported fixes, course vectors,
-  and type properties (including `staleAfterMs`, `ghostCapMs`, nominal speed, and reach).
+  and type properties (including `staleAfterMs`, `ghostCapMs`, nominal speed, `maxPlausibleSpeedMps`,
+  and reach). What the source reports *happened* is not second-guessed.
 - The **Engine** (`ThreatEngine`) and **Consumers** (UI, `AlertService`) are strictly downstream readers.
-  They do NOT apply unauthorized track pruning, synthetic dead-reckoning caches, or custom timeouts
-  that contradict the active Source's declared contract. A track lives as long as the Source and its
-  catalog say it lives; the engine only evaluates zones/scores/staleness based on that catalog.
+  They do NOT apply unauthorized track pruning, or custom timeouts that contradict the active Source's
+  declared contract. A track lives as long as the Source and its catalog say it lives; the engine only
+  evaluates zones/scores/staleness based on that catalog.
+- **The split for plausibility.** "Is this value physically sane?" is a *type property* — so it is
+  **declared by the plugin** (`ThreatProps.maxPlausibleSpeedMps`) and merely **applied by the engine**
+  at its single choke point (`ThreatEngine.plausibleSpeedKmh`, `SpeedCache`). The engine holds no
+  type table and no magic ceilings of its own; it never invents a bound, only enforces the declared
+  one. This resolves the apparent tension with `SpeedCache`: the cache is a *rule applier* (engine-internal
+  mechanics, like `isStale`), not a second source of truth about the track.
 
 | File | Responsibility |
 | --- | --- |
@@ -165,9 +172,10 @@ private inside each `Source`. Every source reports normalized engine currency
 | File | Responsibility |
 | --- | --- |
 | `engine/NormalizedThreat.kt` | Mapping-library-agnostic `LatLng`, `TrailPoint`, `NormalizedThreat` (source-agnostic threat model; `type` is a plain String, `flying` gate, `simulated` watermark for simulator-emitted tracks — the engine never branches on it), `fallbackCourse` (NEPTUN's `A(id)` pseudo-course). |
-| `engine/ThreatProps.kt` | `ThreatProps` struct (isFast, reachKm, alwaysInnerWithinReach, staleAfterMs, ghostCapMs, nominalSpeedMps, horizonSec, maxGhostMeters) + `DEFAULT_THREAT_PROPS` fallback. Mechanics only — NO per-type values; every value lives in its `Source` impl and flows `Source.typeCatalog → SourceRegistry.typeCatalog`. |
+| `engine/ThreatProps.kt` | `ThreatProps` struct (isFast, reachKm, alwaysInnerWithinReach, staleAfterMs, ghostCapMs, nominalSpeedMps, horizonSec, maxGhostMeters, `maxPlausibleSpeedMps`, baseSeverity) + `DEFAULT_THREAT_PROPS` fallback. Mechanics only — NO per-type values; every value lives in its `Source` impl and flows `Source.typeCatalog → SourceRegistry.typeCatalog`. `maxPlausibleSpeedMps` is a *required* field (no default) so a type can't silently ship unbounded. |
+| `engine/ThreatEngine.plausibleSpeedKmh` | The single speed-sanitization choke point: bounds a km/h against `ThreatProps.maxPlausibleSpeedMps` (returns null when implausible). Used by the official-reason attribution so the bound is never applied on one path and skipped on its twin. |
 | `engine/Distance.kt` | Haversine `distanceHaversine`/`bearingHaversine`; equirectangular `distanceFlat`/`bearingFlat` (short-range display basis). |
-| `engine/SpeedCache.kt` | Engine-internal per-threat fix queue → measured speed/heading; `SpeedSource` (RECORDED/TYPICAL). Both server and measured speeds are bounded by a **type-relative sanity ceiling** (`4 × props.nominalSpeedMps`, absolute fallback ~20 000 km/h) so a corrupt value like a "drone at 8471 km/h" is dropped for the nominal instead of fabricating a near-zero ETA. |
+| `engine/SpeedCache.kt` | Engine-internal per-threat fix queue → measured speed/heading; `SpeedSource` (RECORDED/TYPICAL). Server, fix-pair and trail speeds are all bounded by the plugin-declared `ThreatProps.maxPlausibleSpeedMps`, so a corrupt value like a "drone at 8471 km/h" is dropped for the nominal instead of fabricating a near-zero ETA. The bound is never a literal here — the engine only applies what the plugin declared. |
 | `engine/OblastAlert.kt` | Source-agnostic alert currency + matching gates: `OblastAlert`, `inOblast` (canonical oblast-ID equality, so Crimea's republic form hits the "Крим" stem), `isOblastWide` (NEPTUN tag, fallback name heuristic), `coversCity` (canonical raion key or exact city name; oblast-wide covers every city in its oblast), `officialAlertActiveFor` scope gate. Engine-owned (moved from `data/Threat.kt`). |
 | `engine/ThreatEngine.kt` | The core: `evaluate` (inner/outer zones, mapThreats, scores, activeZone, threatLevel, **plus the engine-owned official-alert outputs** `redCities`/`focusOblastAlertActive`/`focusOblastYellowAlertActive`/`officialReason`/`reasonThreatId`), `zoneTier`, `predictPosition` (drift capped by a **distance** floor `DRIFT_MAX_METERS` ≈ 5 km so a marker never crosses the country while a track sits quiet), `motionHeading`, `isStale`/`isExpired`/`isGhost`, `canDrift`, `computeProximity`, `scoreThreat`/`aggregateScores` (severity is plugin-provided `ThreatProps.baseSeverity` — the engine holds no type table), `computeCityAlerts(alerts)` — region-precise city labels, indexed by canonical oblast (Crimea/Sevastopol share one coverage group), `computeFillKeys(alerts, fillRegions)` — the region-fill keys derived DIRECTLY from the alerts via pure canonical lookup (`isOblastWide` discriminator, `CompactOblastBoundaries.canonicalId` and `CompactRaionBoundaries.canonicalKey`/`get`; `fillOblastTokens` whole-oblast fills + `fillRaionKeys` raion fills, raions only when a boundary polygon exists; keys are canonical boundary IDs so UI layers compare with exact set equality), `deriveOfficialAlertReason` (nearest in-oblast, in-zone threat; silenced types are attributed, hidden ones never — `evaluate` folds the same rule into its main pass via `reasonEligible`); `ThreatZone`, `ZoneParams`, `ThreatEvaluationResult`, `ThreatProximity`. |
 | `engine/TypeMapping.kt` | `ThreatType`→engine string (`toEngineString`). No reverse mapper — `NormalizedThreat` is the app-wide currency; NEPTUN JSON parses straight to it (`data/Threat.kt`). |

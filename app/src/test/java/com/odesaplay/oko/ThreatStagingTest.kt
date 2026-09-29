@@ -16,7 +16,8 @@ class ThreatStagingTest {
     private val fast = ThreatProps(
         isFast = true, reachKm = 1500.0, alwaysInnerWithinReach = false,
         staleAfterMs = 180_000, ghostCapMs = 900_000,
-        nominalSpeedMps = null, horizonSec = 180.0, maxGhostMeters = 30_000.0
+        nominalSpeedMps = null, horizonSec = 180.0, maxGhostMeters = 30_000.0,
+        maxPlausibleSpeedMps = 500.0
     )
     private val slow = fast.copy(isFast = false)
     private val params = ZoneParams(slowRedKm = 20, slowYellowKm = 50, fastRedMin = 5, fastYellowMin = 20)

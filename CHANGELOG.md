@@ -10,7 +10,7 @@
 - Zone sliders now resize the zone live while dragging, not only on release 09-29_12:00:00
 - The "Area-level (no precise point)" pill moved into the threat card's bottom pill row 09-29_12:00:00
 - The "Zone alerts are off" notice is now centered on the screen 09-29_12:00:00
-- Fixed implausible threat speeds (e.g. a drone shown at 8471 km/h); the speed is now bounded per threat type 09-29_12:00:00
+- Fixed implausible threat speeds (e.g. a drone shown at 8471 km/h): each threat type now declares its own realistic ceiling, applied everywhere a speed feeds ETA or zone math 09-29_12:00:00
 - The map's silent-bells notice now names the reason (zone alerts off / notifications disabled / muted for this raid / "Muted for 9:34" counting down), and tapping a mute notice unmutes 09-27_00:13:24
 - Tapping Mute raid or Mute 10 min on an alert notification now dismisses it too, like OK 09-27_00:13:24
 - Retitled the map banner to "Zone alerts are off" — it never covered official alerts 09-27_00:13:24

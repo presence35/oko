@@ -55,10 +55,10 @@ class SpeedCache {
         // derived from it (a "MiG in N min" from centroid-distance ÷ nominal cruise speed is
         // fabricated precision; the missile hasn't launched). Null hides the speed/ETA pills.
         if (isNationalMig(t)) return null
-        // Sanity ceiling is type-relative: beyond ~4x the nominal cruise speed the value is
-        // corrupt (e.g. a "drone" reported at 8471 km/h) and would fabricate a near-zero ETA,
-        // so it falls through to trail/nominal speed instead of being displayed.
-        val maxMps = props.nominalSpeedMps?.let { it * 4.0 } ?: MAX_PLAUSIBLE_MPS
+        // Sanity ceiling is plugin-declared on the type (ThreatProps.maxPlausibleSpeedMps):
+        // a value beyond it is corrupt (e.g. a "drone" reported at 8471 km/h) and would
+        // fabricate a near-zero ETA, so it falls through to trail/nominal speed.
+        val maxMps = props.maxPlausibleSpeedMps
         val serverSpeed = t.speedKmh
         if (serverSpeed != null && serverSpeed in 5.0..(maxMps * 3.6)) {
             return serverSpeed / 3.6 to SpeedSource.RECORDED
@@ -101,8 +101,6 @@ class SpeedCache {
 
     companion object {
         private const val HEADING_MIN_METERS = 100.0
-        /** Absolute ceiling when a type declares no nominal speed (≈20 000 km/h). */
-        private const val MAX_PLAUSIBLE_MPS = 5_600.0
         private const val MAX_TRACKS = 500
         private const val SPEED_TTL_MS = 30 * 60 * 1000L
         private const val PRUNE_INTERVAL_MS = 60_000L

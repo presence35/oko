@@ -17,6 +17,13 @@ data class ThreatProps(
     val nominalSpeedMps: Double?,
     val horizonSec: Double,
     val maxGhostMeters: Double,
+    /** Highest speed this type can plausibly travel (m/s). A reported or measured speed above
+     *  this is corrupt and is rejected by [SpeedCache]. Required — every type must declare it,
+     *  so "forgot to bound it" cannot compile. Plausibility is a TYPE property, so the value
+     *  belongs here (plugin-owned), exactly like [nominalSpeedMps]; the engine only applies it.
+     *  For fast types use a generous ceiling (a cruise missile legitimately exceeds its cruise
+     *  speed late in flight); this guards corruption, not manoeuvring. */
+    val maxPlausibleSpeedMps: Double,
     /** Intrinsic danger weight (0–10) used by [ThreatEngine.scoreThreat]. Plugin-provided like
      *  every other per-type value — the engine holds no severity table of its own. */
     val baseSeverity: Double = 4.0
@@ -31,5 +38,6 @@ val DEFAULT_THREAT_PROPS = ThreatProps(
     nominalSpeedMps = null,
     horizonSec = 300.0,
     maxGhostMeters = 18_000.0,
+    maxPlausibleSpeedMps = 1_000.0,
     baseSeverity = 4.0
 )

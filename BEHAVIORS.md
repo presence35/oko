@@ -88,6 +88,7 @@ data class ThreatProps(
     val staleAfterMs: Long,        // when to dim
     val ghostCapMs: Long,          // when to remove entirely
     val nominalSpeedMps: Double?,  // fallback speed (null = no dead-reckon without real velocity)
+    val maxPlausibleSpeedMps: Double, // corrupt-value ceiling (required; plugin-declared)
     val horizonSec: Double,        // dead-reckon time cap
     val maxGhostMeters: Double,    // dead-reckon distance cap
 )
@@ -344,9 +345,13 @@ estimateSpeed(id, threat):
   4. Nominal from ThreatProps.nominalSpeedMps → TYPICAL
   5. null (no dead-reckon possible)
 
-  Sanity ceiling on 1–3: a speed above `4 × props.nominalSpeedMps` (absolute fallback
-  ~20 000 km/h) is treated as corrupt and falls through to the next source, so a bad
-  server field (e.g. "drone at 8471 km/h") can never fabricate a near-zero ETA.
+  Sanity ceiling on 1–3: a speed above `props.maxPlausibleSpeedMps` (plugin-declared per
+  type — see ThreatProps) is treated as corrupt and falls through to the next source, so a
+  bad server field (e.g. "drone at 8471 km/h") can never fabricate a near-zero ETA. The
+  same bound is applied to the raw server km/h wherever engine math consumes it directly
+  (official-reason attribution) via `ThreatEngine.plausibleSpeedKmh` — one rule, both paths.
+  Plausibility is a TYPE property, so the ceiling is declared by the plugin and only applied
+  by the engine; the engine holds no ceiling literals of its own.
 
   Exception: the national MiG-31K track (`isNationalMig`) always estimates null — its pin
   is a country centroid, not a position, so no speed/ETA may be derived from it.
