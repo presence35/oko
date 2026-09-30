@@ -112,6 +112,8 @@ object Strings {
         val fallingDebrisDelayTitle: String,
         val fallingDebrisDelayDesc: String,
         val fallingDebrisOffLabel: String,
+        val autoDismissAllClearTitle: String,
+        val autoDismissAllClearDesc: String,
         val nightModeLabel: String,
         val nightModeDesc: String,
         val nightStartTimeLabel: String,
@@ -825,6 +827,8 @@ object Strings {
         val fallingDebrisDelayTitle: String get() = settings.fallingDebrisDelayTitle
         val fallingDebrisDelayDesc: String get() = settings.fallingDebrisDelayDesc
         val fallingDebrisOffLabel: String get() = settings.fallingDebrisOffLabel
+        val autoDismissAllClearTitle: String get() = settings.autoDismissAllClearTitle
+        val autoDismissAllClearDesc: String get() = settings.autoDismissAllClearDesc
         val nightModeLabel: String get() = settings.nightModeLabel
         val nightModeDesc: String get() = settings.nightModeDesc
         val nightStartTimeLabel: String get() = settings.nightStartTimeLabel

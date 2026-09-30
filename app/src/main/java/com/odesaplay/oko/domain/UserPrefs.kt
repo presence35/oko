@@ -34,6 +34,7 @@ class UserPrefs(private val context: Context) {
     private val officialYellowAlertsKey = booleanPreferencesKey("yellow_alerts_enabled")
     private val sirenOverrideKey = booleanPreferencesKey("siren_override")
     private val fallingDebrisDelaySecKey = intPreferencesKey("falling_debris_delay_sec")
+    private val autoDismissAllClearKey = booleanPreferencesKey("auto_dismiss_all_clear")
     private val disclaimerCollapsedKey = booleanPreferencesKey("disclaimer_collapsed")
     private val disclaimerReadCountKey = intPreferencesKey("disclaimer_read_count")
     private val followMeKey = booleanPreferencesKey("follow_me")
@@ -160,6 +161,7 @@ class UserPrefs(private val context: Context) {
             officialYellowAlertsEnabled = this[officialYellowAlertsKey] ?: d.officialYellowAlertsEnabled,
             sirenOverride = this[sirenOverrideKey] ?: d.sirenOverride,
             fallingDebrisDelaySec = this[fallingDebrisDelaySecKey] ?: d.fallingDebrisDelaySec,
+            autoDismissAllClear = this[autoDismissAllClearKey] ?: d.autoDismissAllClear,
             disclaimerCollapsed = this[disclaimerCollapsedKey] ?: d.disclaimerCollapsed,
             disclaimerReadCount = this[disclaimerReadCountKey] ?: d.disclaimerReadCount,
             followMe = this[followMeKey] ?: d.followMe,
@@ -304,6 +306,10 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setFallingDebrisDelaySec(sec: Int) {
         context.dataStore.edit { it[fallingDebrisDelaySecKey] = sec.coerceIn(0, 600) }
+    }
+
+    suspend fun setAutoDismissAllClear(enabled: Boolean) {
+        context.dataStore.edit { it[autoDismissAllClearKey] = enabled }
     }
 
     suspend fun setThreatMapVisible(type: ThreatType, visible: Boolean) {

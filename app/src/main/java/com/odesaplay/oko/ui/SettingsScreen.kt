@@ -91,6 +91,7 @@ fun SettingsScreen(
     onOfficialAlertCityScopeChange: (Boolean) -> Unit,
     onSirenOverrideChange: (Boolean) -> Unit,
     onFallingDebrisDelayChange: (Int) -> Unit,
+    onAutoDismissAllClearChange: (Boolean) -> Unit,
     onCriticalOfflineOverrideChange: (Boolean) -> Unit,
     onCriticalOfflineBypassSilentChange: (Boolean) -> Unit,
     onBootRestartChange: (Boolean) -> Unit,
@@ -170,6 +171,7 @@ fun SettingsScreen(
     val officialAlertCityScope = state.officialAlertCityScope
     val sirenOverride = state.sirenOverride
     val fallingDebrisDelaySec = state.fallingDebrisDelaySec
+    val autoDismissAllClear = state.autoDismissAllClear
     val criticalOfflineOverride = state.criticalOfflineOverride
     val criticalOfflineBypassSilent = state.criticalOfflineBypassSilent
     val nightEnabled = state.nightEnabled
@@ -686,6 +688,15 @@ fun SettingsScreen(
                         description = s.fallingDebrisDelayDesc,
                         offLabel = s.fallingDebrisOffLabel,
                         onCommit = onFallingDebrisDelayChange
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AlertToggleRow(
+                        title = s.autoDismissAllClearTitle,
+                        description = s.autoDismissAllClearDesc,
+                        checked = autoDismissAllClear,
+                        onCheckedChange = onAutoDismissAllClearChange,
+                        icon = painterResource(R.drawable.ic_notifications_off),
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertToggleRow(

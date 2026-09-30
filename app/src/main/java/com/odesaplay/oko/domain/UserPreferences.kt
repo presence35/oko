@@ -62,6 +62,7 @@ data class UserPreferences(
     val officialYellowAlertsEnabled: Boolean = true,
     val sirenOverride: Boolean = false,
     val fallingDebrisDelaySec: Int = 0,
+    val autoDismissAllClear: Boolean = true,
     val disclaimerCollapsed: Boolean = false,
     val disclaimerReadCount: Int = 0,
     val followMe: Boolean = true,

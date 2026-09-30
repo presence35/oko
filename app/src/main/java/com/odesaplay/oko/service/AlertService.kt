@@ -121,6 +121,9 @@ class AlertService : Service() {
         const val CRITICAL_OFFLINE_MIN = 5
         const val CRITICAL_OFFLINE_ALARM_MIN = 1
         private const val ALL_CLEAR_GRACE_MS = 0L
+
+        /** How long an all-clear notification may sit in the shade before it is retired. */
+        private const val ALL_CLEAR_TTL_MS = 20 * 60_000L
         private const val MONITOR_TICK_MS = 1_000L
         private const val MONITOR_TICK_IDLE_MS = 30_000L
         private const val SWEEP_THROTTLE_MS = 10_000L
@@ -207,12 +210,21 @@ class AlertService : Service() {
     private val notificationManager by lazy { AlertNotificationManager(applicationContext) }
     private val wakeLockManager by lazy { AlertWakeLockManager(applicationContext) }
     private val audioAlarmDispatcher by lazy { AudioAlarmDispatcher(applicationContext) }
-    @Volatile private var allClearSwipedAway = false
+    /** The all-clear is off the shade and must not be brought back: swiped by the user,
+     *  superseded by a new episode, or retired by the TTL. */
+    @Volatile private var allClearClosed = false
+    /**
+     * TTL timer for the all-clear notification. Non-null ONLY while a live post's timer is
+     * pending: both [clearAllClearNotification] and the timer itself retire it, and
+     * [scheduleAllClearExpiry] retires it before arming a new one. That single-owner rule is
+     * what stops a stale timer from firing during a later episode and cancelling its all-clear.
+     */
+    @Volatile private var allClearExpiryJob: Job? = null
     private val debrisBuffer by lazy {
         FallingDebrisBuffer(
             scope = scope,
             onTick = { sec ->
-                if (!allClearSwipedAway && notificationManager.isAllClearNotificationActive()) {
+                if (!allClearClosed && notificationManager.isAllClearNotificationActive()) {
                     lastCleanAllClearCity?.let { city ->
                         val s = Strings.get(lastChannelLang ?: AppLanguage.EN)
                         postAllClear(s, city, debrisSeconds = sec, silent = true, muted = bellsMuted(), replay = lastEpisodeReplay)
@@ -220,7 +232,7 @@ class AlertService : Service() {
                 }
             },
             onCompleted = {
-                if (!allClearSwipedAway && notificationManager.isAllClearNotificationActive()) {
+                if (!allClearClosed && notificationManager.isAllClearNotificationActive()) {
                     lastCleanAllClearCity?.let { city ->
                         val s = Strings.get(lastChannelLang ?: AppLanguage.EN)
                         postAllClear(s, city, debrisSeconds = 0, silent = true, muted = bellsMuted(), replay = lastEpisodeReplay)
@@ -288,6 +300,7 @@ class AlertService : Service() {
         val zoneSirenOverride: Boolean,
         val officialSirenOverride: Boolean,
         val fallingDebrisDelaySec: Int,
+        val autoDismissAllClear: Boolean = true,
         val degraded: Boolean = false,
         val threats: Map<String, NormalizedThreat>,
         val rawThreats: Map<String, NormalizedThreat> = emptyMap(),
@@ -318,7 +331,6 @@ class AlertService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        notificationManager.createChannels()
         AppSources.init(applicationContext)
 
         scope.launch {
@@ -365,8 +377,24 @@ class AlertService : Service() {
         }
         registerReceiver(screenReceiver, filter)
 
+        // Promote before doing anything disk-backed: a startForegroundService has ~5s to reach
+        // startForeground, and channel setup reads DataStore (slow on a fresh install). The
+        // monitor channel must exist first or the platform rejects the notification outright,
+        // so it goes first (a plain binder call), then the rest off the main thread.
+        notificationManager.ensureMonitorChannel()
         startForegroundCompat()
+        scope.launch {
+            notificationManager.createChannels()
+            startForegroundCompat()
+        }
         startMonitoring()
+
+        // An all-clear that survived a process death has no episode behind it any more, so its
+        // TTL timer is gone and nothing would ever retire it. Drop it rather than leave a
+        // permanent "all clear" in the shade.
+        if (notificationManager.isAllClearNotificationActive()) {
+            notificationManager.cancelNotification(NOTIF_ALLCLEAR)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -404,7 +432,7 @@ class AlertService : Service() {
             NeutralizedTally.ACTION_NEUTRALIZED_DISMISS -> tally.reset()
             AlarmEpisodeTally.ACTION_ALARM_EPISODE_DISMISS -> episodeTally.reset()
             AlertNotificationManager.ACTION_ALLCLEAR_DISMISSED -> {
-                allClearSwipedAway = true
+                allClearClosed = true
                 debrisBuffer.abort()
             }
         }
@@ -706,6 +734,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     zoneSirenOverride = zoneSirenOverride,
                     officialSirenOverride = officialSirenOverride,
                     fallingDebrisDelaySec = p.fallingDebrisDelaySec,
+                    autoDismissAllClear = p.autoDismissAllClear,
                     degraded = registry.degraded.value,
                     threats = threats,
                     rawThreats = rawThreats,
@@ -732,7 +761,7 @@ val mappedThreats = registry.allThreats.map { list ->
         }
     }
 
-    private fun handleState(state: MonitorState, now: Long, engine: ThreatEngine) {
+    private suspend fun handleState(state: MonitorState, now: Long, engine: ThreatEngine) {
         val s = Strings.get(state.lang)
 
         if (state.lang != lastChannelLang) {
@@ -752,7 +781,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 latchedConfirmedLive = false
             }
             lastLoggedOfficialBoundary = null
-            allClearSwipedAway = false
+            allClearClosed = false
         }
 
         val latchedEarly = LatchedEpisode.parse(lastOfficialEpisode)
@@ -1026,8 +1055,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 // honest history and stays. Fires even when the new episode's own notification
                 // is toggled off, since the raw feed contradicts the all-clear.
                 if (allClearSameArea(state)) {
-                    notificationManager.cancelNotification(NOTIF_ALLCLEAR)
-                    debrisBuffer.abort()
+                    clearAllClearNotification()
                 }
                 val audible = if (state.focusOblastLevel == AlertLevel.RED) state.officialRedAlertsEnabled
                 else state.officialYellowAlertsEnabled
@@ -1109,7 +1137,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     return@reconcileEpisode
                 }
                 if (alertable.isEmpty()) cancelAlert()
-                allClearSwipedAway = false
+                scheduleAllClearExpiry(state.autoDismissAllClear)
                 val allClearCity = latched.city
                 lastCleanAllClearCity = allClearCity
                 lastChannelLang = state.lang
@@ -1167,7 +1195,7 @@ val mappedThreats = registry.allThreats.map { list ->
         }
 
         /** Reconcile NOTIF_ALERT post/cancel based on primary vs lastShownId. */
-        fun reconcileNotif(primary: Primary?, state: MonitorState) {
+        suspend fun reconcileNotif(primary: Primary?, state: MonitorState) {
             val s = Strings.get(state.lang)
             val actions = AlertActions(
                 ok = s.alertActionOk,
@@ -1380,7 +1408,7 @@ val mappedThreats = registry.allThreats.map { list ->
         return String.format(s.offlineLiveFormat, minutes)
     }
 
-    private fun postAlert(
+    private suspend fun postAlert(
         zone: ThreatZone?,
         level: String,
         title: String,
@@ -1447,6 +1475,45 @@ val mappedThreats = registry.allThreats.map { list ->
             muted = muted,
             replay = replay
         )
+    }
+
+    /**
+     * The ONLY way the all-clear is torn down, whatever the reason (swiped, superseded by a
+     * new episode, TTL expired). One owner for every teardown side-effect so none can leak
+     * into the next episode.
+     */
+    private fun clearAllClearNotification() {
+        allClearExpiryJob?.cancel()
+        allClearExpiryJob = null
+        debrisBuffer.abort()
+        allClearClosed = true
+        notificationManager.cancelNotification(NOTIF_ALLCLEAR)
+    }
+
+    /**
+     * Arms the all-clear TTL. Must be called exactly once at every all-clear post: it retires
+     * any previous timer first, so the field is non-null only while a live post's timer pends.
+     * The TTL runs from the first post, so the falling-debris countdown ticks stay inside the
+     * window instead of restarting it.
+     */
+    private fun scheduleAllClearExpiry(autoDismiss: Boolean) {
+        allClearExpiryJob?.cancel()
+        allClearExpiryJob = null
+        allClearClosed = false
+        if (!autoDismiss) return
+        allClearExpiryJob = scope.launch {
+            delay(ALL_CLEAR_TTL_MS)
+            allClearExpiryJob = null
+            if (allClearClosed) return@launch
+            clearAllClearNotification()
+            ApiMonitor.record(
+                SystemEntry(
+                    System.currentTimeMillis(),
+                    SystemEntryKind.ALL_CLEAR_EXPIRED,
+                    lastCleanAllClearCity ?: "unknown"
+                )
+            )
+        }
     }
 
     private fun nextUpdateCheckMillis(from: Long): Long {

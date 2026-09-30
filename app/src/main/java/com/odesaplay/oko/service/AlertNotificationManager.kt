@@ -16,9 +16,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import com.odesaplay.oko.AppLanguage
 import com.odesaplay.oko.MainActivity
 import com.odesaplay.oko.R
@@ -94,7 +92,9 @@ const val NOTIF_MONITORING_PAUSED = 9
         }
     }
 
-    fun createChannels() {
+    /** Suspend: the schema check reads DataStore, and a caller on the main thread would park
+     *  there (first-install file create is slow enough to ANR). Never call this synchronously. */
+    suspend fun createChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         enforceChannelSchema(nm)
@@ -122,13 +122,11 @@ const val NOTIF_MONITORING_PAUSED = 9
 
     /** Deletes + recreates managed channels when the schema (or the bypass-silent config
      *  baked into the critical channel's audio attrs) changed since last applied. */
-    private fun enforceChannelSchema(nm: NotificationManager) {
+    private suspend fun enforceChannelSchema(nm: NotificationManager) {
         val svc = ServiceState(context.applicationContext)
-        val appliedSchema = runBlocking(Dispatchers.IO) { svc.channelSchemaVersion().first() }
-        val bypassSilent = runBlocking(Dispatchers.IO) {
-            UserPrefs(context).preferences.first().criticalOfflineBypassSilent
-        }
-        val bypassApplied = runBlocking(Dispatchers.IO) { svc.criticalChannelBypassApplied().first() }
+        val appliedSchema = svc.channelSchemaVersion().first()
+        val bypassSilent = UserPrefs(context).preferences.first().criticalOfflineBypassSilent
+        val bypassApplied = svc.criticalChannelBypassApplied().first()
         if (appliedSchema != CHANNEL_SCHEMA_VERSION) {
             managedChannels.forEach { runCatching { nm.deleteNotificationChannel(it) } }
         } else if (bypassApplied == null || bypassApplied != bypassSilent) {
@@ -136,27 +134,38 @@ const val NOTIF_MONITORING_PAUSED = 9
         } else {
             return
         }
-        runBlocking(Dispatchers.IO) {
-            svc.setChannelSchemaVersion(CHANNEL_SCHEMA_VERSION)
-            svc.setCriticalChannelBypassApplied(bypassSilent)
-        }
+        svc.setChannelSchemaVersion(CHANNEL_SCHEMA_VERSION)
+        svc.setCriticalChannelBypassApplied(bypassSilent)
     }
 
     fun areNotificationsEnabled(): Boolean =
         NotificationManagerCompat.from(context).areNotificationsEnabled()
 
-    fun updateChannels(s: Strings.StringSet) {
+    suspend fun updateChannels(s: Strings.StringSet) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         defineChannels(nm, s)
     }
 
-    private fun defineChannels(nm: NotificationManager, s: Strings.StringSet) {
+    /** Blocking-safe, I/O-free: the platform *rejects* a startForeground notification whose
+     *  channel doesn't exist yet (crash on a fresh install), and this is the one channel the
+     *  monitor notification needs. Everything else waits for [createChannels]. */
+    fun ensureMonitorChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        defineMonitorChannel(nm, Strings.get(AppLanguage.EN))
+    }
+
+    private fun defineMonitorChannel(nm: NotificationManager, s: Strings.StringSet) {
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_MONITOR, s.notifChannelName, NotificationManager.IMPORTANCE_LOW).apply {
                 description = s.notifChannelDesc
             }
         )
+    }
+
+    private suspend fun defineChannels(nm: NotificationManager, s: Strings.StringSet) {
+        defineMonitorChannel(nm, s)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ALERTS_INNER, s.alertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.alertChannelDesc
@@ -200,9 +209,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             }
         )
 
-        val bypassSilent = runBlocking(Dispatchers.IO) {
-            UserPrefs(context).preferences.first().criticalOfflineBypassSilent
-        }
+        val bypassSilent = UserPrefs(context).preferences.first().criticalOfflineBypassSilent
         val criticalAttrs = if (bypassSilent) alarmAttributes() else notificationAttributes()
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_OFFLINE_CRITICAL, s.offlineCriticalChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
@@ -283,7 +290,7 @@ const val NOTIF_MONITORING_PAUSED = 9
 
     private fun yellowIconBitmap(): Bitmap = tintedIconBitmap(NotifYellow)
 
-    fun postAlertNotification(
+    suspend fun postAlertNotification(
         zone: ThreatZone,
         title: String,
         body: String,
@@ -301,10 +308,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             else -> CHANNEL_ALERTS_OUTER
         }
         val idSuffix = revealThreat?.let { t ->
-            val show = runBlocking(Dispatchers.IO) {
-                UserPrefs(context).preferences.first().showThreatIdsOnMap
-            }
-            if (show) " · #${t.id.takeLast(4)}" else ""
+            if (UserPrefs(context).preferences.first().showThreatIdsOnMap) " · #${t.id.takeLast(4)}" else ""
         }.orEmpty()
         val b = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_trident)

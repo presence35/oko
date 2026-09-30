@@ -385,6 +385,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onOfficialAlertCityScopeChange = remember { { viewModel.setOfficialAlertCityScope(it) } },
                 onSirenOverrideChange = remember { { viewModel.setSirenOverride(it) } },
                 onFallingDebrisDelayChange = remember { { viewModel.setFallingDebrisDelaySec(it) } },
+                onAutoDismissAllClearChange = remember { { viewModel.setAutoDismissAllClear(it) } },
                 onCriticalOfflineOverrideChange = remember { { viewModel.setCriticalOfflineOverride(it) } },
                 onCriticalOfflineBypassSilentChange = remember { { viewModel.setCriticalOfflineBypassSilent(it) } },
                 onBootRestartChange = remember { { viewModel.setBootRestartEnabled(it) } },

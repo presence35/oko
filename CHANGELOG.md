@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- The all-clear notification now retires itself 20 minutes after it appears, so an old one can't sit in the shade looking fresh; new "Auto-dismiss all-clear" toggle in Settings, and it's still logged either way 09-30_00:00:00
+
+- Fixed a freeze on first launch: the alert service used to read settings on the main thread while starting, which could lock the screen on a fresh install 09-29_23:52:00
+
 - Stop now wipes the shootdown flourish completely — the shot threat is back on the map the instant you press it, instead of after the explosion's pause 09-29_23:20:00
 
 - The card no longer repeats "GPS off — no zone data" on every threat; the header's warning icon already says it 09-29_23:20:00
