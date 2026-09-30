@@ -53,6 +53,7 @@ object LocationTracker {
     private const val NETWORK_FALLBACK_MS = 6_000L
     private const val MAX_NETWORK_SEED_ATTEMPTS = 4
     private const val NETWORK_SEED_INTERVAL_MS = 8_000L
+    private const val VERIFY_INTERVAL_MS = 15 * 60 * 1000L // 15 minutes
     const val MAX_LOCATION_AGE_MS = 30 * 60 * 1000L // 30 minutes freshness threshold
 
     // Last-known fix persisted so a force-stopped relaunch knows where the user was
@@ -78,8 +79,21 @@ object LocationTracker {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    /** Accuracy of the last fix in metres, when the platform reported one. Display only. */
+    private val _lastAccuracyM = MutableStateFlow<Float?>(null)
+    val lastAccuracyM: StateFlow<Float?> = _lastAccuracyM.asStateFlow()
+
+    /**
+     * Location access is definitively unusable: permission revoked, or every provider disabled.
+     * Read directly from the platform (never inferred from silence) — this is the only failure
+     * mode the user is actually expected to act on. A stale fix is NOT this; see [GpsIssue].
+     */
+    private val _accessBlocked = MutableStateFlow(false)
+    val accessBlocked: StateFlow<Boolean> = _accessBlocked.asStateFlow()
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var periodicJob: Job? = null
+    private var verifyJob: Job? = null
 
     @Volatile
     private var started = false
@@ -101,7 +115,11 @@ object LocationTracker {
         val app = ctx.applicationContext
         appContext = app
         if (started) return
-        if (!hasPermission(app)) return
+        if (!hasPermission(app)) {
+            _accessBlocked.value = true
+            return
+        }
+        refreshAccess(app)
 
         val l = object : LocationListener {
             override fun onLocationChanged(loc: Location) {
@@ -148,6 +166,7 @@ object LocationTracker {
             registerScreenReceiver(lm, app)
             // Periodic 15-min GPS sync loop when user enabled it
             startPeriodicGpsLoop(app)
+            startVerifyLoop(app)
         } catch (_: SecurityException) {
             _location.value = null
         }
@@ -208,6 +227,47 @@ object LocationTracker {
             }
         }
         runCatching { app.registerReceiver(screenReceiver, f) }
+    }
+
+    /**
+     * The check loop that makes [lastReceivedAtMs] mean something. Passive updates only copy fixes
+     * OTHER apps request, and our own network subscription is screen-gated — so a phone nobody
+     * touches goes quiet indefinitely, and "no fix lately" cannot be distinguished from "we are
+     * not being told". This loop closes that gap with the cheapest possible request (one coarse
+     * network one-shot, no GPS) every [VERIFY_INTERVAL_MS], which is also the OS's own background
+     * granularity. It runs screen-on and screen-off alike: a network fix is not a satellite lock,
+     * so the "no satellite lock in your pocket" rule is untouched.
+     *
+     * The first check is immediate so a cold start doesn't sit unverifiable for 15 minutes.
+     */
+    private fun startVerifyLoop(app: Context) {
+        verifyJob?.cancel()
+        val prefs = UserPrefs(app)
+        verifyJob = scope.launch {
+            // Only follow-me needs a verified position (a pinned city is not affected by a stale
+            // one), so a user who pins a city never pays for this. Mirrors the periodic loop's
+            // collectLatest shape: flipping follow-me off cancels the checks in flight.
+            prefs.preferences.map { it.followMe }.distinctUntilChanged().collectLatest { followMe ->
+                if (!followMe) return@collectLatest
+                while (isActive) {
+                    runCatching { requestNetworkFix(app) }
+                    refreshAccess(app)
+                    delay(VERIFY_INTERVAL_MS)
+                }
+            }
+        }
+    }
+
+    /** Re-read the two directly-observable access facts. Never inferred from silence. */
+    private fun refreshAccess(app: Context) {
+        if (!hasPermission(app)) {
+            _accessBlocked.value = true
+            return
+        }
+        val lm = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        _accessBlocked.value =
+            !lm.isProviderEnabled(LocationManager.GPS_PROVIDER) &&
+                !lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     }
 
     private fun startPeriodicGpsLoop(app: Context) {
@@ -335,6 +395,8 @@ object LocationTracker {
     fun stop() {
         periodicJob?.cancel()
         periodicJob = null
+        verifyJob?.cancel()
+        verifyJob = null
         val ctx = appContext ?: return
         listener?.let {
             runCatching {
@@ -362,6 +424,7 @@ object LocationTracker {
         val fixTime = if (loc.time > 0L) loc.time else now
         _lastFixAtMs.value = fixTime
         _lastReceivedAtMs.value = now
+        if (loc.hasAccuracy()) _lastAccuracyM.value = loc.accuracy
         val isGps = loc.provider == LocationManager.GPS_PROVIDER || (loc.hasAccuracy() && loc.accuracy < 35f)
         if (isGps) {
             _lastPreciseFixAtMs.value = fixTime

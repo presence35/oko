@@ -30,7 +30,9 @@ data class LogSession(
     fun silenceReason(s: Strings.StringSet): String? {
         if (told) return null
         val reason = entries.asSequence()
-            .filter { notifyOutcome(it) != NotifyOutcome.RANG }
+            // Only a declined event explains the silence: a COVERED one was handled by a louder
+            // alert, and an INFO lifecycle row isn't an alert at all.
+            .filter { notifyOutcome(it) == NotifyOutcome.NOT_NOTIFIED }
             .groupingBy { it.reason }.eachCount()
             .maxByOrNull { it.value }?.key
             ?: return null

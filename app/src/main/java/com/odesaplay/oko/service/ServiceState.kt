@@ -18,6 +18,7 @@ class ServiceState(private val context: Context) {
     private val keyCache = mutableMapOf<String, Preferences.Key<*>>()
 
     private val connLogKey = stringPreferencesKey("conn_log")
+    private val gpsLogKey = stringPreferencesKey("gps_log")
     private val offlinePendingSinceKey = longPreferencesKey("offline_pending_since")
     private val ignoreRetryUntilKey = longPreferencesKey("ignore_retry_until")
     private val reconnectStartMillisKey = longPreferencesKey("reconnect_start_millis")
@@ -39,6 +40,13 @@ class ServiceState(private val context: Context) {
 
     suspend fun setConnLog(serialized: String) {
         context.dataStore.edit { it[connLogKey] = serialized }
+    }
+
+    fun gpsLog(): Flow<String> =
+        context.dataStore.data.map { prefs -> prefs[gpsLogKey] ?: "" }
+
+    suspend fun setGpsLog(serialized: String) {
+        context.dataStore.edit { it[gpsLogKey] = serialized }
     }
 
     fun offlinePendingSince(): Flow<Long> =

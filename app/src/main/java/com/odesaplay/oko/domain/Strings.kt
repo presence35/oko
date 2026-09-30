@@ -189,6 +189,12 @@ object Strings {
         val connTransportWifi: String,
         val connTransportCellular: String,
         val connTransportOther: String,
+        val gpsNotVerifiedFormat: String,
+        val gpsLogUnverified: String,
+        val gpsLogVerified: String,
+        val gpsLogBlocked: String,
+        val gpsAccuracyFormat: String,
+        val gpsDriftFormat: String,
         val reliabilityLow: String,
         val reliabilityMedium: String,
         val reliabilityHigh: String,
@@ -382,6 +388,7 @@ object Strings {
         val logsOutcomeRang: String,
         val logsOutcomeCovered: String,
         val logsOutcomeNotNotified: String,
+        val logsOutcomeInfo: String,
         val logsModeStory: String,
         val logsModeList: String,
         val logsSessionTold: String,
@@ -428,11 +435,13 @@ object Strings {
         val debugReasonRateLimited: String,
         val debugReasonOncePerThreat: String,
         val debugReasonOncePerType: String,
+        val debugReasonNotifExpired: String,
         val debugKindOfficialOn: String,
         val debugKindOfficialOff: String,
         val debugKindZoneEnter: String,
         val debugKindRegionThreat: String,
         val debugKindFlourish: String,
+        val debugKindNotifExpired: String,
         val flourishLogDetailFormat: String,
         val debugKindRegionFormat: String,
         val debugTierRed: String,
@@ -690,7 +699,9 @@ object Strings {
         val nightZonesSuffix: String,
         val alertsOfficialPrefix: String,
         val alertsYellowOfficialPrefix: String,
-        val alertsSirenOverride: String,
+        val alertsCityScopePrefix: String,
+        val alertsAlwaysSoundPrefix: String,
+        val alertsMasterPrefix: String,
         val onWord: String,
         val offWord: String,
         val moraleAnimationPrefix: String,
@@ -895,13 +906,24 @@ object Strings {
                 "${subtitles.nightEnabledPrefix} · $timeStr$sirenStr$zonesStr"
             }
 
-        fun alertsSubtitle(officialAlerts: Boolean, officialYellowAlerts: Boolean, sirenOverride: Boolean): String {
+        fun alertsSubtitle(
+            officialAlertsEnabled: Boolean,
+            officialRedAlerts: Boolean,
+            officialYellowAlerts: Boolean,
+            cityScope: Boolean,
+            alwaysSound: Boolean
+        ): String {
             val parts = mutableListOf<String>()
-            parts.add(String.format(subtitles.alertsOfficialPrefix, if (officialAlerts) subtitles.onWord else subtitles.offWord))
-            parts.add(String.format(subtitles.alertsYellowOfficialPrefix, if (officialYellowAlerts) subtitles.onWord else subtitles.offWord))
-            if (sirenOverride) {
-                parts.add(subtitles.alertsSirenOverride)
+            if (officialAlertsEnabled) {
+                parts.add(String.format(subtitles.alertsOfficialPrefix, if (officialRedAlerts) subtitles.onWord else subtitles.offWord))
+                parts.add(String.format(subtitles.alertsYellowOfficialPrefix, if (officialYellowAlerts) subtitles.onWord else subtitles.offWord))
+                parts.add(String.format(subtitles.alertsCityScopePrefix, if (cityScope) subtitles.onWord else subtitles.offWord))
+            } else {
+                // The level toggles are hidden under the master, so naming them would describe
+                // settings the user cannot see.
+                parts.add(String.format(subtitles.alertsMasterPrefix, subtitles.offWord))
             }
+            parts.add(String.format(subtitles.alertsAlwaysSoundPrefix, if (alwaysSound) subtitles.onWord else subtitles.offWord))
             return parts.joinToString(" · ")
         }
 
@@ -971,6 +993,12 @@ object Strings {
         val connTransportWifi: String get() = status.connTransportWifi
         val connTransportCellular: String get() = status.connTransportCellular
         val connTransportOther: String get() = status.connTransportOther
+        val gpsNotVerifiedFormat: String get() = status.gpsNotVerifiedFormat
+        val gpsLogUnverified: String get() = status.gpsLogUnverified
+        val gpsLogVerified: String get() = status.gpsLogVerified
+        val gpsLogBlocked: String get() = status.gpsLogBlocked
+        val gpsAccuracyFormat: String get() = status.gpsAccuracyFormat
+        val gpsDriftFormat: String get() = status.gpsDriftFormat
         val reliabilityLow: String get() = status.reliabilityLow
         val reliabilityMedium: String get() = status.reliabilityMedium
         val reliabilityHigh: String get() = status.reliabilityHigh
@@ -1148,6 +1176,7 @@ object Strings {
         val logsOutcomeRang: String get() = misc.logsOutcomeRang
         val logsOutcomeCovered: String get() = misc.logsOutcomeCovered
         val logsOutcomeNotNotified: String get() = misc.logsOutcomeNotNotified
+        val logsOutcomeInfo: String get() = misc.logsOutcomeInfo
         val logsModeStory: String get() = misc.logsModeStory
         val logsModeList: String get() = misc.logsModeList
         val logsSessionTold: String get() = misc.logsSessionTold
@@ -1194,11 +1223,13 @@ object Strings {
         val debugReasonRateLimited: String get() = misc.debugReasonRateLimited
         val debugReasonOncePerThreat: String get() = misc.debugReasonOncePerThreat
         val debugReasonOncePerType: String get() = misc.debugReasonOncePerType
+        val debugReasonNotifExpired: String get() = misc.debugReasonNotifExpired
         val debugKindOfficialOn: String get() = misc.debugKindOfficialOn
         val debugKindOfficialOff: String get() = misc.debugKindOfficialOff
         val debugKindZoneEnter: String get() = misc.debugKindZoneEnter
         val debugKindRegionThreat: String get() = misc.debugKindRegionThreat
         val debugKindFlourish: String get() = misc.debugKindFlourish
+        val debugKindNotifExpired: String get() = misc.debugKindNotifExpired
         val flourishLogDetailFormat: String get() = misc.flourishLogDetailFormat
         val debugKindRegionFormat: String get() = misc.debugKindRegionFormat
         val debugTierRed: String get() = misc.debugTierRed

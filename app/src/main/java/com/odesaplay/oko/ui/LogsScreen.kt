@@ -144,8 +144,13 @@ private enum class LogsMode { STORY, LIST }
 
 /** Scope of the Decisions feed: only the current focus oblast, or the whole feed. */
 private enum class LogScope { MINE, ALL }
-/** One of the three outcomes every event ends in — the feed's primary visual axis. */
-enum class NotifyOutcome { RANG, COVERED, NOT_NOTIFIED }
+/**
+ * The outcome axis of the feed. Every ALERT event ends in one of three — RANG, COVERED (a louder
+ * alert won the slot), or NOT_NOTIFIED — and those three are the only segments the summary counts.
+ * [INFO] is the fourth, non-alert bucket: notification-lifecycle rows (see [DebugLogKind.NOTIF])
+ * that report a fact about a notification, not whether anything rang.
+ */
+enum class NotifyOutcome { RANG, COVERED, NOT_NOTIFIED, INFO }
 
 /** How to group decision rows. */
 private enum class LogGroupMode { NONE, TIME, OBLAST, TYPE }
@@ -183,12 +188,18 @@ private data class ConnectionRow(val entry: ConnLogEntry) : LogRow {
     override val atMillis: Long get() = entry.atMillis
 }
 
+/** A location-health row, shown in the same Connection view as the network rows. */
+private data class GpsRow(val entry: GpsLogEntry) : LogRow {
+    override val atMillis: Long get() = entry.atMillis
+}
+
 /** Stable list identity for a row. A live connection episode and its committed counterpart
  *  share atMillis + status, so Compose keeps the row in place and adds the new recovery row
  *  instead of remounting the list. */
 private fun LogRow.stableKey(): String = when (this) {
     is DecisionRow -> "dec-${entry.atMillis}-${entry.kind.name}-${entry.threatId}-${entry.tier?.name}-${entry.reason.name}"
     is ConnectionRow -> "conn-${entry.atMillis}-${entry.status.name}"
+    is GpsRow -> "gps-${entry.atMillis}-${entry.kind.name}"
 }
 
 /**
@@ -208,6 +219,7 @@ fun LogsDropDownSheet(
 ) {
     val entries by DebugLog.entries.collectAsState()
     val connEntries by ConnectionLog.entries.collectAsState()
+    val gpsEntries by GpsLog.entries.collectAsState()
     val context = LocalContext.current
     val registry = AppSources.registry
     val connRetry by registry.retryState.collectAsState()
@@ -354,6 +366,7 @@ fun LogsDropDownSheet(
                 iconSet = iconSet,
                 window = window,
                 connEntries = connEntries,
+                gpsEntries = gpsEntries,
                 connEvents = connEvents,
                 connRetry = connRetry,
                 now = now,
@@ -420,6 +433,7 @@ private fun LogsTabPage(
     iconSet: ThreatIconSet,
     window: List<DebugLogEntry>,
     connEntries: List<ConnLogEntry>,
+    gpsEntries: List<GpsLogEntry>,
     connEvents: List<ConnEvent>,
     connRetry: ConnRetryState?,
     now: Long,
@@ -442,7 +456,7 @@ private fun LogsTabPage(
     val scope = rememberCoroutineScope()
     val isDecisions = pageFilter == LogsFilter.DECISIONS
     val rows: List<LogRow> = if (pageFilter == LogsFilter.SOURCES) emptyList() else
-        buildRows(window, connEntries, now, isDecisions, newestFirst, scopeMode, focusToken, outcomeFilter, searchQuery, lang)
+        buildRows(window, connEntries, gpsEntries, now, isDecisions, newestFirst, scopeMode, focusToken, outcomeFilter, searchQuery, lang)
     // Story mode is the default read: cluster the same filtered events into raids. "My oblast"
     // is the write-time aboutMe flag — in my oblast, or something I would have heard — never a
     // guess from the threat's own place.
@@ -463,9 +477,13 @@ private fun LogsTabPage(
     }
     val visible = if (isDecisions) rows else rows.take(visibleCount)
     val hasMore = if (isDecisions) shownEntries.size < decisionEntries.size else visible.size < rows.size
-    val subtitle = if (isDecisions) String.format(s.logsSubtitleFormat, rows.size) else null
+    val subtitle = if (isDecisions) {
+        // Lifecycle rows aren't events, so they can't inflate the count the segments add up to.
+        String.format(s.logsSubtitleFormat, decisionEntries.count { notifyOutcome(it) != NotifyOutcome.INFO })
+    } else null
     // Every event falls into exactly one outcome — the summary counts come from the FULL
     // filtered set (never the visible slice) so the numbers stay honest while scrolling.
+    // The three segments deliberately exclude NotifyOutcome.INFO (see its doc).
     val rang = decisionEntries.count { notifyOutcome(it) == NotifyOutcome.RANG }
     val covered = decisionEntries.count { notifyOutcome(it) == NotifyOutcome.COVERED }
     val notNotified = decisionEntries.count { notifyOutcome(it) == NotifyOutcome.NOT_NOTIFIED }
@@ -649,6 +667,7 @@ fun LogsScreen(
 private fun buildRows(
     decisions: List<DebugLogEntry>,
     connEntries: List<ConnLogEntry>,
+    gpsEntries: List<GpsLogEntry>,
     now: Long,
     isDecisions: Boolean,
     newestFirst: Boolean,
@@ -659,9 +678,14 @@ private fun buildRows(
     lang: AppLanguage
 ): List<LogRow> {
     if (!isDecisions) {
-        val connRows = (ConnectionLog.currentEpisode(now)?.let { listOf(ConnectionRow(it)) }
+        // Network and location episodes are one timeline: the question a user opens this view
+        // with is "was I protected?", and both feeds answer it. Live in-progress episodes lead.
+        val connRows: List<LogRow> = (ConnectionLog.currentEpisode(now)?.let { listOf(ConnectionRow(it)) }
             ?: emptyList()) + connEntries.map { ConnectionRow(it) }
-        return if (newestFirst) connRows.sortedByDescending { it.atMillis } else connRows.sortedBy { it.atMillis }
+        val gpsRows: List<LogRow> = (GpsLog.currentEpisode(now)?.let { listOf(GpsRow(it)) }
+            ?: emptyList()) + gpsEntries.map { GpsRow(it) }
+        val rows = connRows + gpsRows
+        return if (newestFirst) rows.sortedByDescending { it.atMillis } else rows.sortedBy { it.atMillis }
     }
     var filtered: List<DebugLogEntry> = decisions
     if (scopeMode == LogScope.MINE) filtered = filtered.filter { it.aboutMe }
@@ -679,11 +703,14 @@ private fun buildRows(
 }
 
 /**
- * The three-outcome model, derived from the row's own facts — pure so the Logs screen and the
+ * The outcome of a row, derived from the row's own facts — pure so the Logs screen and the
  * tests share one definition. Covered = a louder alert/notification won the slot (the event was
- * handled, not declined); everything else that didn't ring is Not notified.
+ * handled, not declined); everything else that didn't ring is Not notified. [NotifyOutcome.INFO]
+ * is the non-alert bucket: a notification-lifecycle row reports a fact, not an outcome.
  */
 fun notifyOutcome(e: DebugLogEntry): NotifyOutcome = when {
+    // Lifecycle rows report no alert outcome, so they must never enter the three tallies.
+    e.kind == DebugLogKind.NOTIF -> NotifyOutcome.INFO
     e.notified -> NotifyOutcome.RANG
     e.reason == DebugLogReason.COALESCED || e.reason == DebugLogReason.ALREADY_NOTIFIED ||
         e.reason == DebugLogReason.RATE_LIMITED || e.reason == DebugLogReason.ONCE_PER_THREAT ||
@@ -754,7 +781,7 @@ private fun buildGroups(
                 }
         }
         LogGroupMode.TYPE -> {
-            val official = rows.filter { it.kind == DebugLogKind.OFFICIAL_ON || it.kind == DebugLogKind.OFFICIAL_OFF }
+            val official = rows.filter { it.kind == DebugLogKind.OFFICIAL_ON || it.kind == DebugLogKind.OFFICIAL_OFF || it.kind == DebugLogKind.NOTIF }
             val flourish = rows.filter { it.kind == DebugLogKind.FLOURISH }
             val typed = rows.filter { it !in official && it.threatType != null && it.kind != DebugLogKind.FLOURISH }
             val untyped = rows.filter { it !in official && it.threatType == null && it.kind != DebugLogKind.FLOURISH }
@@ -1370,6 +1397,7 @@ private fun LogRowCard(
     when (row) {
         is DecisionRow -> DecisionCard(row.entry, s, lang, now, iconSet)
         is ConnectionRow -> ConnectionCard(row.entry, s, lang, now)
+        is GpsRow -> GpsCard(row.entry, s, lang, now)
     }
 }
 
@@ -1391,6 +1419,7 @@ private fun DebugLogKind.icon(): ImageVector = when (this) {
     DebugLogKind.ZONE_ENTER -> Icons.Filled.Warning
     DebugLogKind.REGION_THREAT -> Icons.Filled.Place
     DebugLogKind.FLOURISH -> Icons.Filled.Star
+    DebugLogKind.NOTIF -> Icons.Filled.HourglassBottom
 }
 
 private fun DebugLogKind.label(
@@ -1433,6 +1462,10 @@ private fun DebugLogKind.label(
         }
     }
     DebugLogKind.FLOURISH -> s.debugKindFlourish
+    DebugLogKind.NOTIF -> {
+        val loc = localityText(locality, lang)
+        if (loc != null) "${s.debugKindNotifExpired} · $loc" else s.debugKindNotifExpired
+    }
 }
 
 private fun localityText(locality: String?, lang: AppLanguage): String? =
@@ -1442,6 +1475,7 @@ private fun localityText(locality: String?, lang: AppLanguage): String? =
     }
 
 internal fun DebugLogReason.label(s: Strings.StringSet): String = when (this) {
+    DebugLogReason.NOTIF_EXPIRED -> s.debugReasonNotifExpired
     DebugLogReason.BELL_MUTED -> s.debugReasonBellMuted
     DebugLogReason.ALREADY_NOTIFIED -> s.debugReasonAlreadyNotified
     DebugLogReason.COALESCED -> s.debugReasonCoalesced
@@ -1466,14 +1500,21 @@ private fun DecisionCard(
 ) {
     val accent = entry.kind.accent(entry.tier, entry.level)
     val outcome = notifyOutcome(entry)
+    // A lifecycle row is not an alert: grey, flat and tight, so it reads as a footnote under
+    // the episode it belongs to instead of competing with the real rows.
+    val info = outcome == NotifyOutcome.INFO
     // Dim cards that never reached the shade — the eye lands on the loud ones first.
-    val bgAlpha = if (outcome == NotifyOutcome.NOT_NOTIFIED) 0.045f else 0.10f
+    val bgAlpha = when (outcome) {
+        NotifyOutcome.NOT_NOTIFIED -> 0.045f
+        NotifyOutcome.INFO -> 0.04f
+        else -> 0.10f
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(accent.copy(alpha = bgAlpha))
-            .padding(12.dp),
+            .padding(horizontal = 12.dp, vertical = if (info) 5.dp else 12.dp),
         verticalAlignment = Alignment.Top
     ) {
         DecisionLeadingIcon(entry, accent, lang, iconSet)
@@ -1513,41 +1554,43 @@ private fun DecisionCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Spacer(Modifier.height(2.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = if (entry.night) Icons.Filled.DarkMode else Icons.Filled.LightMode,
-                    contentDescription = if (entry.night) s.debugLogNight else s.debugLogDay,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-                Icon(
-                    imageVector = if (entry.sirenOverride) Icons.AutoMirrored.Filled.VolumeUp else Icons.Filled.Notifications,
-                    contentDescription = if (entry.sirenOverride) s.debugLogSoundOverride else s.debugLogSoundFollows,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(Modifier.weight(1f))
-                if (entry.notified) {
+            if (!info) {
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Filled.Notifications,
-                        contentDescription = s.logsOutcomeRang,
-                        tint = DebugGreen,
+                        imageVector = if (entry.night) Icons.Filled.DarkMode else Icons.Filled.LightMode,
+                        contentDescription = if (entry.night) s.debugLogNight else s.debugLogDay,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(14.dp)
                     )
-                } else {
-                    // One suppressed mark, tinted by whether it was covered or declined — the
-                    // stale case is already carried by the row's own stale pill.
-                    Image(
-                        painter = painterResource(R.drawable.ic_notifications_off),
-                        contentDescription = String.format(s.debugLogSuppressed, entry.reason.label(s)),
-                        colorFilter = ColorFilter.tint(
-                            if (outcome == NotifyOutcome.COVERED) DebugAmber
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        ),
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        imageVector = if (entry.sirenOverride) Icons.AutoMirrored.Filled.VolumeUp else Icons.Filled.Notifications,
+                        contentDescription = if (entry.sirenOverride) s.debugLogSoundOverride else s.debugLogSoundFollows,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(14.dp)
                     )
+                    Spacer(Modifier.weight(1f))
+                    if (entry.notified) {
+                        Icon(
+                            Icons.Filled.Notifications,
+                            contentDescription = s.logsOutcomeRang,
+                            tint = DebugGreen,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    } else {
+                        // One suppressed mark, tinted by whether it was covered or declined — the
+                        // stale case is already carried by the row's own stale pill.
+                        Image(
+                            painter = painterResource(R.drawable.ic_notifications_off),
+                            contentDescription = String.format(s.debugLogSuppressed, entry.reason.label(s)),
+                            colorFilter = ColorFilter.tint(
+                                if (outcome == NotifyOutcome.COVERED) DebugAmber
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            ),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1575,6 +1618,12 @@ private fun OutcomeGlyph(outcome: NotifyOutcome, s: Strings.StringSet) {
             painter = painterResource(R.drawable.ic_notifications_off),
             contentDescription = s.logsOutcomeNotNotified,
             colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)),
+            modifier = Modifier.size(16.dp)
+        )
+        NotifyOutcome.INFO -> Icon(
+            imageVector = Icons.Filled.HourglassBottom,
+            contentDescription = s.logsOutcomeInfo,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.size(16.dp)
         )
     }
@@ -1782,6 +1831,89 @@ val accent = when (entry.status) {
                 Spacer(Modifier.height(2.dp))
                 Text(
                     "${s.sourceFallbackLabel}: $source",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = DebugAmber
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GpsCard(entry: GpsLogEntry, s: Strings.StringSet, lang: AppLanguage, now: Long) {
+    val blocked = entry.kind == GpsEventKind.BLOCKED
+    val accent = if (blocked) DebugRed else DebugBlue
+    val icon = when (entry.kind) {
+        GpsEventKind.VERIFIED -> Icons.Filled.CheckCircle
+        GpsEventKind.BLOCKED -> Icons.Filled.Warning
+        GpsEventKind.UNVERIFIED -> Icons.Filled.Warning
+    }
+    val label = when (entry.kind) {
+        GpsEventKind.UNVERIFIED -> s.gpsLogUnverified
+        GpsEventKind.VERIFIED -> s.gpsLogVerified
+        GpsEventKind.BLOCKED -> s.gpsLogBlocked
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(accent.copy(alpha = 0.10f))
+            .padding(12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = accent
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    formatAlertAge(now, entry.atMillis, s),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(Modifier.height(3.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    formatDateTime(lang, entry.atMillis),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                entry.durationSec?.let { sec ->
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        String.format(s.connLogDurFormat, sec / 60, sec % 60),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                entry.accuracyM?.let { acc ->
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        String.format(s.gpsAccuracyFormat, acc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            // Drift is the only reason to care about this row: it means the position the engine
+            // was evaluating was wrong, and by how much.
+            entry.detailKm?.let { km ->
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    String.format(s.gpsDriftFormat, km),
                     style = MaterialTheme.typography.bodySmall,
                     color = DebugAmber
                 )

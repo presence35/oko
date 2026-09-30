@@ -311,7 +311,8 @@ class AlertService : Service() {
         val fastVibrationLevel: Int,
         val slowVibrationLevel: Int,
         val focusLocation: LatLng?,
-        val gpsUnreliable: Boolean = false,
+        val gpsIssue: GpsIssue = GpsIssue.NONE,
+        val gpsUnverifiedMin: Int = 0,
         val nightActive: Boolean,
         val enabled: Set<ThreatType>,
         val hiddenTypes: Set<String>,
@@ -325,6 +326,10 @@ class AlertService : Service() {
          *  all-clear gate and the OFF log key on the same red||yellow fact the row shows. */
         val officialAlertsEnabled: Boolean
             get() = officialRedAlertsEnabled || officialYellowAlertsEnabled
+
+        /** Follow-me is on and we cannot vouch for the position. Kept as one derived fact so no
+         *  consumer can read the issue and re-derive a second, looser boolean. */
+        val gpsUnreliable: Boolean get() = gpsIssue != GpsIssue.NONE
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -335,6 +340,7 @@ class AlertService : Service() {
 
         scope.launch {
             ConnectionLog.attach(applicationContext)
+            GpsLog.attach(applicationContext)
             DebugLog.attach(applicationContext)
             ApiMonitor.attach(applicationContext)
             ConnectionLog.awaitAttached()
@@ -663,6 +669,18 @@ val mappedThreats = registry.allThreats.map { list ->
                 }
                 val focusPinned = focus.pinned
                 val gpsUnreliable = focus.gpsUnreliable
+                // Location health, derived from what LocationTracker can actually vouch for: a
+                // read accessBlocked, a received-time fed by the verify loop, and a position. A
+                // stale fix is NOT an access failure — see GpsIssue for why that distinction is
+                // the whole point.
+                val gpsIssue = resolveGpsIssue(
+                    followMe = p.followMe,
+                    hasPosition = focus.location != null,
+                    ageMs = LocationTracker.lastReceivedAtMs.value?.let { now - it },
+                    accessBlocked = LocationTracker.accessBlocked.value
+                )
+                val gpsUnverifiedMin = LocationTracker.lastReceivedAtMs.value
+                    ?.let { ((now - it) / 60_000L).toInt().coerceAtLeast(0) } ?: 0
                 val focusToken = focus.attribution.token
                 currentToken = focusToken
 
@@ -745,7 +763,8 @@ val mappedThreats = registry.allThreats.map { list ->
                     fastVibrationLevel = fastVib,
                     slowVibrationLevel = slowVib,
                     focusLocation = focusLoc,
-                    gpsUnreliable = gpsUnreliable,
+                    gpsIssue = gpsIssue,
+                    gpsUnverifiedMin = gpsUnverifiedMin,
                     nightActive = nightActive,
                     enabled = enabled,
                     hiddenTypes = hiddenTypeStrings,
@@ -763,6 +782,14 @@ val mappedThreats = registry.allThreats.map { list ->
 
     private suspend fun handleState(state: MonitorState, now: Long, engine: ThreatEngine) {
         val s = Strings.get(state.lang)
+
+        // One observation per tick; writes only on transition, so the 1s/30s loop is free.
+        GpsLog.observe(
+            state.gpsIssue,
+            now,
+            LocationTracker.lastAccuracyM.value?.toInt(),
+            state.focusLocation
+        )
 
         if (state.lang != lastChannelLang) {
             lastChannelLang = state.lang
@@ -821,7 +848,12 @@ val mappedThreats = registry.allThreats.map { list ->
 
         val monitorText = when {
             isOfflineNow -> offlineLiveBody(s, offlineMinutes)
-            state.gpsUnreliable -> s.gpsUnavailableFollowMe
+            // A stale position is NOT a GPS-access problem, and saying so was the bug: the phone
+            // may simply be still. Only a denied permission or a disabled provider earns that
+            // wording; anything else says what we can actually vouch for.
+            state.gpsIssue == GpsIssue.ACCESS_BLOCKED -> s.gpsUnavailableFollowMe
+            state.gpsIssue == GpsIssue.NOT_VERIFIED ->
+                String.format(s.gpsNotVerifiedFormat, state.gpsUnverifiedMin)
             isDegradedNow -> s.connDegradedBody
             else -> ""
         }
@@ -1506,13 +1538,7 @@ val mappedThreats = registry.allThreats.map { list ->
             allClearExpiryJob = null
             if (allClearClosed) return@launch
             clearAllClearNotification()
-            ApiMonitor.record(
-                SystemEntry(
-                    System.currentTimeMillis(),
-                    SystemEntryKind.ALL_CLEAR_EXPIRED,
-                    lastCleanAllClearCity ?: "unknown"
-                )
-            )
+            DebugLog.recordAllClearExpired(lastCleanAllClearCity, System.currentTimeMillis())
         }
     }
 

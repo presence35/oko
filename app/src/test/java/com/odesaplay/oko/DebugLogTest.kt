@@ -41,6 +41,30 @@ class DebugLogTest {
     }
 
     @Test
+    fun `a lifecycle row reports no alert outcome`() {
+        val row = entry(
+            1, kind = DebugLogKind.NOTIF, notified = false,
+            reason = DebugLogReason.NOTIF_EXPIRED, type = null, tier = null, dist = null
+        )
+        assertEquals(NotifyOutcome.INFO, notifyOutcome(row))
+    }
+
+    @Test
+    fun `a lifecycle row survives a round trip`() {
+        val src = listOf(
+            entry(
+                2_000, kind = DebugLogKind.NOTIF, notified = false,
+                reason = DebugLogReason.NOTIF_EXPIRED, type = null, tier = null, dist = null,
+                locality = "Одеса"
+            )
+        )
+        val back = parseDebugLog(serializeDebugLog(src)).single()
+        assertEquals(DebugLogKind.NOTIF, back.kind)
+        assertEquals(DebugLogReason.NOTIF_EXPIRED, back.reason)
+        assertEquals(NotifyOutcome.INFO, notifyOutcome(back))
+    }
+
+    @Test
     fun `outcome is covered when a louder alert won the slot`() {
         listOf(
             DebugLogReason.COALESCED,

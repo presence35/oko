@@ -24,7 +24,7 @@ import com.odesaplay.oko.engine.resolveOblastId
 import com.odesaplay.oko.engine.AlertLevel
 
 /** Event kinds shown in the Debug log screen. */
-enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, REGION_THREAT, FLOURISH }
+enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, REGION_THREAT, FLOURISH, NOTIF }
 
 /**
  * Why a decision landed the way it did. [FIRED] = a notification was actually posted
@@ -34,7 +34,7 @@ enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, REGION_THREAT, 
  */
 enum class DebugLogReason {
     FIRED, BELL_MUTED, ALREADY_NOTIFIED, COALESCED, TYPE_OFF, ADVISORY, STALE,
-    OUTSIDE_ZONES, TOGGLE_OFF, RATE_LIMITED, ONCE_PER_THREAT, ONCE_PER_TYPE
+    OUTSIDE_ZONES, TOGGLE_OFF, RATE_LIMITED, ONCE_PER_THREAT, ONCE_PER_TYPE, NOTIF_EXPIRED
 }
 
 /**
@@ -171,6 +171,22 @@ object DebugLog {
                 now, kind, night, sirenOverride, vibrationLevel, notified, reason,
                 threatId, threatType, null, distanceKm, locality, level,
                 scopeOblastId = resolveOblastId(locality), aboutMe = true
+            )
+        )
+    }
+
+    /**
+     * Notification-lifecycle row: the all-clear notification was retired by its TTL. Deliberately
+     * NOT an alert decision — the episode's own end is already logged by [recordOfficial] — so it
+     * carries no outcome ([notifyOutcome] -> INFO) and never enters the three tallies.
+     */
+    fun recordAllClearExpired(locality: String?, now: Long) {
+        record(
+            DebugLogEntry(
+                now, DebugLogKind.NOTIF, night = false, sirenOverride = false,
+                vibrationLevel = null, notified = false, reason = DebugLogReason.NOTIF_EXPIRED,
+                threatId = null, threatType = null, tier = null, distanceKm = null,
+                locality = locality, scopeOblastId = resolveOblastId(locality), aboutMe = true
             )
         )
     }

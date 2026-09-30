@@ -2,7 +2,15 @@
 
 ## [Unreleased]
 
-- The all-clear notification now retires itself 20 minutes after it appears, so an old one can't sit in the shade looking fresh; new "Auto-dismiss all-clear" toggle in Settings, and it's still logged either way 09-30_00:00:00
+- Fixed the monitoring notification falsely claiming "Location unavailable — check GPS access" whenever the last position was over 30 minutes old: a phone sitting still is fed by no one (passive fixes only copy what other apps ask for), so the app now re-checks its position every 15 minutes and only says "check location access" when permission is actually revoked or location is switched off — otherwise it says "not verified for N min" 09-30_00:00:00
+
+- The connection log now also records location health — unverified stretches, recoveries with the fix's accuracy, and how far the position had drifted — in the same timeline as network events 09-30_00:00:00
+
+- The "GPS check every 15 min" setting is now "Check position on long trips" and explains what Oko checks on its own 09-30_00:00:00
+
+- The collapsed Alerts card now lists City level and Always sound next to Red/Yellow, and drops to "Official alerts: OFF" when the master toggle is off 09-30_00:00:00
+
+- The all-clear notification now retires itself 20 minutes after it appears, so an old one can't sit in the shade looking fresh; toggle in Settings, and each retirement shows in the Decisions log as a dim one-line footnote 09-30_00:00:00
 
 - Fixed a freeze on first launch: the alert service used to read settings on the main thread while starting, which could lock the screen on a fresh install 09-29_23:52:00
 
