@@ -55,14 +55,4 @@ object AppSources {
     fun setAppForeground(foreground: Boolean) {
         _appForeground.value = foreground
     }
-
-    @Synchronized
-    fun clear() {
-        _registry?.let { reg ->
-            for (source in reg.sources.value) {
-                reg.unregister(source)
-            }
-        }
-        _registry = null
-    }
 }

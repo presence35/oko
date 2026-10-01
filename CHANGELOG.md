@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- The map and alerts no longer go dead when monitoring is restarted: stopping the service used to tear down the whole app's data feed, so a refused or restarted foreground service left the map empty and could take the death animation down with it 10-01_14:17:34
+
+- Auto-restart now respects the "Restart monitoring after reboot" switch everywhere — the emergency worker used to resurrect monitoring (and post a resume prompt every 15 minutes) even with the switch off 10-01_14:17:34
+
+- Threats that disappear between live snapshots now register as resolved (tally + death animation) instead of silently vanishing, except across a reconnect, where the held last-known threats stay quiet rather than fake a burst of kills 10-01_14:17:34
+
+- The resolved-threat tally no longer under-counts during a burst of kills 10-01_14:17:34
+
+- Fixed a false "NEPTUN SDK changed" row in the Decisions log on first launch 10-01_14:17:34
+
 - The all-clear notification now retires 20 minutes after it appears even if it gets posted twice — a repeated post used to restart that countdown and leave the all-clear sitting in the shade indefinitely 09-30_00:00:00
 
 - Fixed the connection log coming up empty after a location event: the location log's saved history was being overwritten by its own restore on service start 09-30_00:00:00

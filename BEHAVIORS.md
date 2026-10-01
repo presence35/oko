@@ -418,7 +418,7 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 | Offline bypass silent | Sub-toggle of offline critical | Plays sound in silent mode |
 | Night siren overrides | Night window active | Separate zone + official override flags |
 | Sleep mode ("Just let me sleep!") | Night toggles all off (preset) | Zone + official alerts muted by the prefs themselves; no service gate |
-| Resolved tally | Threat removed from stream | Scoped to focus oblast or all-Ukraine |
+| Resolved tally | Threat removed from stream (explicit `remove`/`resolved`, or absent from a live snapshot; the post-reconnect baseline snapshot emits nothing) | Scoped to focus oblast or all-Ukraine |
 
 ### Notification policy (NotifyPlugin — frequency, not capability)
 

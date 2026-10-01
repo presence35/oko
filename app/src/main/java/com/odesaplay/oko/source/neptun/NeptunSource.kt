@@ -48,6 +48,7 @@ class NeptunSource(private val context: Context) : Source, ConnectionLogSource {
         },
         onBaselineRequired = {
             core.onBaselineSyncRequired()
+            decoder.onBaselineRequired()
         },
         onWatchdogTick = { nowMono ->
             decoder.flushPendingAlertClear(nowMono)

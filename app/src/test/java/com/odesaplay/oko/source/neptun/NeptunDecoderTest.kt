@@ -6,13 +6,18 @@ import com.odesaplay.oko.engine.MonitorCore
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.OblastAlert
 import com.odesaplay.oko.engine.toThreatType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import java.time.Instant
+import java.util.concurrent.CopyOnWriteArrayList
 
 class NeptunDecoderTest {
 
@@ -299,6 +304,71 @@ class NeptunDecoderTest {
         val json = """{"type":"remove","data":{"id":"nonexistent"}}"""
         decoder.handleFrame(json)
         assertTrue(core.threats.value.isEmpty())
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Snapshot diff — resolved threats missing from a live snapshot
+    // ─────────────────────────────────────────────────────────────
+
+    private fun snapshotJson(vararg ids: String): String {
+        val threats = ids.joinToString(",") { id ->
+            """{"id":"$id","type":"shahed","title":"Test","lat":46.0,"lon":30.0,"status":"active","count":1}"""
+        }
+        return """{"type":"snapshot","data":{"threats":[$threats]}}"""
+    }
+
+    private fun collectRemovals(): Pair<CopyOnWriteArrayList<String>, Job> {
+        val seen = CopyOnWriteArrayList<String>()
+        // Unconfined subscribes before launch() returns, so emissions land without a latch.
+        val job = CoroutineScope(Dispatchers.Unconfined).launch { decoder.removedThreats.collect { seen.add(it.id) } }
+        return seen to job
+    }
+
+    private fun settle() { Thread.sleep(100) }
+
+    private fun awaitRemovals(seen: List<String>, expected: Int) {
+        val deadline = System.currentTimeMillis() + 2_000
+        while (seen.size < expected && System.currentTimeMillis() < deadline) Thread.sleep(2)
+    }
+
+    @Test
+    fun `snapshot missing an id emits it as removed, but the post-baseline snapshot does not`() {
+        val (seen, job) = collectRemovals()
+        try {
+            decoder.onBaselineRequired()
+            decoder.handleFrame(snapshotJson("t1", "t2"))
+            settle()
+            assertTrue("the post-baseline snapshot must not fabricate kills", seen.isEmpty())
+
+            decoder.handleFrame(snapshotJson("t1"))
+            awaitRemovals(seen, 1)
+            assertEquals(listOf("t2"), seen.toList())
+        } finally {
+            job.cancel()
+        }
+    }
+
+    @Test
+    fun `a snapshot right after a reconnect stays silent, the next live one resolves`() {
+        val (seen, job) = collectRemovals()
+        try {
+            decoder.onBaselineRequired()
+            decoder.handleFrame(snapshotJson("t1", "t2"))
+            settle()
+            assertTrue(seen.isEmpty())
+
+            // t2 resolved while the socket was down: the held set was never seen dying.
+            decoder.onBaselineRequired()
+            decoder.handleFrame(snapshotJson("t1"))
+            settle()
+            assertTrue("a reconnect must not fabricate a burst of kills", seen.isEmpty())
+
+            decoder.handleFrame(snapshotJson())
+            awaitRemovals(seen, 1)
+            assertEquals(listOf("t1"), seen.toList())
+        } finally {
+            job.cancel()
+        }
     }
 
     // ─────────────────────────────────────────────────────────────

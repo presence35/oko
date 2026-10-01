@@ -6,7 +6,7 @@ import com.odesaplay.oko.engine.LatLng
  * Simplified outline of Ukraine (incl. Crimea): the closed outer hull of the oblast
  * boundary polygons (OblastBoundaries.kt) — same source (EugeneBorshch/ukraine_geojson),
  * same simplification — so the silhouette coincides with the combined red oblast fills.
- * Regenerate with tools/gen_ukraine_border.py. Values are (lat, lon) GeoPoints.
+ * Regenerate with tools/gen_ukraine_border.py. Values are (lat, lon) LatLng.
  */
 val UKRAINE_BORDER: List<LatLng> = listOf(
     LatLng(47.735137939453125, 38.7532958984375), LatLng(47.819915771484375, 38.79620361328125), LatLng(47.861236572265625, 38.877227783203125), LatLng(47.856903076171875, 39.039093017578125),
@@ -231,7 +231,7 @@ val UKRAINE_BORDER: List<LatLng> = listOf(
 /**
  * The land border of Ukraine as an open polyline: the same country outer ring with
  * every sea-coastline edge removed (edges whose midpoint lies in the ocean polygon,
- * Natural Earth 10m). Drawn as an osmdroid Polyline so the map's white outline hugs
+ * Natural Earth 10m). Drawn as a MapLibre line layer so the map's white outline hugs
  * the land borders — including river borders — and never crosses the Black Sea or the
  * Sea of Azov. Regenerate with tools/gen_ukraine_border.py.
  */

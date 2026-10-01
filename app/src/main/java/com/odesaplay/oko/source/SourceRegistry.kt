@@ -111,7 +111,7 @@ class SourceRegistry {
     val sourceEvents: SharedFlow<SourceEvent> = _sourceEvents.asSharedFlow()
 
     /** Aggregated threat-resolution feed (map death animation + resolved tally). */
-    private val _removedThreats = MutableSharedFlow<ThreatRemoved>(extraBufferCapacity = 64)
+    private val _removedThreats = MutableSharedFlow<ThreatRemoved>(extraBufferCapacity = 256)
     val removedThreats: SharedFlow<ThreatRemoved> = _removedThreats.asSharedFlow()
 
     /** The registered source that exposes rich reconnect diagnostics (the WS transport). */

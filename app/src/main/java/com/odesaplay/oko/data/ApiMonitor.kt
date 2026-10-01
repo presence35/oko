@@ -96,6 +96,10 @@ object ApiMonitor {
                     }
                     if (newHash.isEmpty()) {
                         ManifestResult.Failed("No sha256 in manifest")
+                    } else if (oldHash.isBlank()) {
+                        // First run: seed the baseline silently — no stored hash is not a change.
+                        svcState.setLastSdkManifestHash(newHash)
+                        ManifestResult.Unchanged
                     } else if (newHash == oldHash) {
                         ManifestResult.Unchanged
                     } else {

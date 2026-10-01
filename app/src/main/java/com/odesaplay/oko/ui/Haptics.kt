@@ -120,8 +120,8 @@ private fun tick(context: Context) {
 }
 
 /**
- * Imperative one-shot for call sites with no interaction source to observe (e.g. osmdroid's
- * marker click listener, where a tap must feel instant before anything composes). Callers
+ * Imperative one-shot for call sites with no interaction source to observe (e.g. a MapLibre
+ * symbol click listener, where a tap must feel instant before anything composes). Callers
  * gate on [LocalHapticsEnabled] themselves.
  */
 internal fun hapticTick(context: Context) = tick(context)

@@ -10,7 +10,7 @@
    (edges whose midpoint falls inside the ocean polygon, Natural Earth 10m),
    chained into an open polyline. Used as the map's white outline, so it hugs
    the land borders tightly (incl. river borders) and never crosses water.
-   Drawn as an osmdroid Polyline, not a closed Polygon.
+   Drawn as a MapLibre line layer, not a closed Polygon.
 
 No shapely dependency. Interior edges of a coherent admin-1 tessellation are
 shared by two oblasts (they appear twice); exterior edges appear once. Counting
@@ -245,7 +245,7 @@ def emit_kt(border, land_border):
         lines = []
         row = []
         for lat, lon in points:
-            row.append(f"GeoPoint({lat}, {lon})")
+            row.append(f"LatLng({lat}, {lon})")
             if len(row) == 4:
                 lines.append("    " + ", ".join(row) + ",")
                 row = []
@@ -261,15 +261,15 @@ def emit_kt(border, land_border):
     lines = [
         "package com.odesaplay.oko",
         "",
-        "import org.osmdroid.util.GeoPoint",
+        "import com.odesaplay.oko.engine.LatLng",
         "",
         "/**",
         " * Simplified outline of Ukraine (incl. Crimea): the closed outer hull of the oblast",
         " * boundary polygons (OblastBoundaries.kt) — same source (EugeneBorshch/ukraine_geojson),",
         " * same simplification — so the silhouette coincides with the combined red oblast fills.",
-        " * Regenerate with tools/gen_ukraine_border.py. Values are (lat, lon) GeoPoints.",
+        " * Regenerate with tools/gen_ukraine_border.py. Values are (lat, lon) LatLng.",
         " */",
-        "val UKRAINE_BORDER: List<GeoPoint> = listOf(",
+        "val UKRAINE_BORDER: List<LatLng> = listOf(",
     ]
     lines.extend(geo_strs(border_pts))
     lines.append(")")
@@ -277,11 +277,11 @@ def emit_kt(border, land_border):
     lines.append("/**")
     lines.append(" * The land border of Ukraine as an open polyline: the same country outer ring with")
     lines.append(" * every sea-coastline edge removed (edges whose midpoint lies in the ocean polygon,")
-    lines.append(" * Natural Earth 10m). Drawn as an osmdroid Polyline so the map's white outline hugs")
+    lines.append(" * Natural Earth 10m). Drawn as a MapLibre line layer so the map's white outline hugs")
     lines.append(" * the land borders — including river borders — and never crosses the Black Sea or the")
     lines.append(" * Sea of Azov. Regenerate with tools/gen_ukraine_border.py.")
     lines.append(" */")
-    lines.append("val UKRAINE_LAND_BORDER: List<GeoPoint> = listOf(")
+    lines.append("val UKRAINE_LAND_BORDER: List<LatLng> = listOf(")
     lines.extend(geo_strs(land_pts))
     lines.append(")")
     lines.append("")

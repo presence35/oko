@@ -3,7 +3,7 @@ package com.odesaplay.oko.community
 /**
  * Normalized geographic coordinate (lat, lon) in WGS-84.
  * Latitude is strictly first; longitude is strictly second.
- * Named [LatLon] to avoid collisions with org.osmdroid.util.GeoPoint or other map engines.
+ * Named [LatLon] to avoid collisions with org.maplibre.geojson.Point or other map engines.
  */
 data class LatLon(val lat: Double, val lon: Double)
 

@@ -514,18 +514,18 @@ class AlertService : Service() {
 
         scope.launch {
             prefs.preferences
-                .map { it.neutralizedTallyEnabled }
+                .map { Triple(it.neutralizedTallyEnabled, it.neutralizedTallyAllUkraine, it.language) }
                 .distinctUntilChanged()
-                .flatMapLatest { enabled ->
-                    if (!enabled) emptyFlow() else AppSources.registry.removedThreats
+                .flatMapLatest { (enabled, allUkraine, lang) ->
+                    if (!enabled) emptyFlow()
+                    else AppSources.registry.removedThreats.map { Triple(it, allUkraine, lang) }
                 }
-                .collect { removed ->
-                    val p = prefs.preferences.first()
-                    if (!p.neutralizedTallyAllUkraine) {
+                .collect { (removed, allUkraine, lang) ->
+                    if (!allUkraine) {
                         val token = currentToken ?: return@collect
                         if (!inOblast(removed.region, removed.district, removed.locality, token)) return@collect
                     }
-                    tally.onResolved(removed, p.language)
+                    tally.onResolved(removed, lang)
                 }
         }
 
@@ -1617,8 +1617,6 @@ val mappedThreats = registry.allThreats.map { list ->
         screenReceiver = null
         monitoringJob?.cancel()
         wakeLockManager.release()
-        AppSources.clear()
-        LocationTracker.stop()
         tally.reset()
         episodeTally.reset()
         scope.cancel()

@@ -177,8 +177,34 @@ class NeptunDecoder(
         }
     }
 
-    private val _removedThreats = MutableSharedFlow<ThreatRemoved>(extraBufferCapacity = 16)
+    private val _removedThreats = MutableSharedFlow<ThreatRemoved>(extraBufferCapacity = 256)
     val removedThreats: SharedFlow<ThreatRemoved> = _removedThreats.asSharedFlow()
+
+    /** A NEPTUN snapshot is authoritative, so ids missing from it are resolved. The first
+     *  snapshot after a socket (re)connect is a fresh baseline instead: the held last-known
+     *  threats were never observed dying, and resolving them en masse would fabricate a burst
+     *  of kills the user never saw. */
+    @Volatile private var snapshotBaselineSeen = false
+
+    fun onBaselineRequired() {
+        snapshotBaselineSeen = false
+    }
+
+    private fun emitRemoved(t: NormalizedThreat) {
+        _removedThreats.tryEmit(
+            ThreatRemoved(
+                t.id, t.lat, t.lon, t.type.toThreatType(),
+                t.reportedCourseDeg,
+                t.region, t.district, t.locality
+            )
+        )
+    }
+
+    private fun emitMissing(previous: List<NormalizedThreat>, next: List<NormalizedThreat>) {
+        if (previous.isEmpty()) return
+        val nextIds = next.mapTo(HashSet()) { it.id }
+        for (old in previous) if (old.id !in nextIds) emitRemoved(old)
+    }
 
     @Volatile private var alertsPendingClear: List<OblastAlert>? = null
     @Volatile private var alertsPendingClearSinceMono: Long? = null
@@ -206,6 +232,7 @@ class NeptunDecoder(
                             Log.w(TAG, "Malformed threat in snapshot at index $i", e)
                         }
                     }
+                    if (snapshotBaselineSeen) emitMissing(core.threats.value, list) else snapshotBaselineSeen = true
                     core.updateThreats(list)
                 }
                 "upsert" -> {
@@ -213,13 +240,7 @@ class NeptunDecoder(
                     val t = parseNormalizedThreat(data, nowWall) ?: return
                     if (t.status == "resolved") {
                         core.removeThreat(t.id)
-                        _removedThreats.tryEmit(
-                            ThreatRemoved(
-                                t.id, t.lat, t.lon, t.type.toThreatType(),
-                                t.reportedCourseDeg,
-                                t.region, t.district, t.locality
-                            )
-                        )
+                        emitRemoved(t)
                     } else {
                         core.upsertThreat(t)
                     }
@@ -230,15 +251,7 @@ class NeptunDecoder(
                     if (id.isNotBlank()) {
                         val existing = core.threats.value.firstOrNull { it.id == id }
                         core.removeThreat(id)
-                        if (existing != null) {
-                            _removedThreats.tryEmit(
-                                ThreatRemoved(
-                                    existing.id, existing.lat, existing.lon, existing.type.toThreatType(),
-                                    existing.reportedCourseDeg,
-                                    existing.region, existing.district, existing.locality
-                                )
-                            )
-                        }
+                        if (existing != null) emitRemoved(existing)
                     }
                 }
                 "alerts" -> {

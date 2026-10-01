@@ -1,7 +1,7 @@
 # Ukraine Drones (NEPTUN)
 
 A live air-threat monitoring app for Ukraine. Single-module Android app (`:app`) built with
-Jetpack Compose (Material 3, dark-only) and OSMdroid, streaming from the public
+Jetpack Compose (Material 3, dark-only) and MapLibre, streaming from the public
 [NEPTUN](https://neptun.in.ua) API over WebSocket — no backend of our own, no Firebase, no
 push.
 
