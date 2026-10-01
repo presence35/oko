@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- The all-clear notification now retires 20 minutes after it appears even if it gets posted twice — a repeated post used to restart that countdown and leave the all-clear sitting in the shade indefinitely 09-30_00:00:00
+
+- Fixed the connection log coming up empty after a location event: the location log's saved history was being overwritten by its own restore on service start 09-30_00:00:00
+
+- Location events now appear in the connection log properly: access coming back gets its own row, and turning GPS off is picked up when you touch the screen instead of up to 15 minutes later 09-30_00:00:00
+
 - Fixed the monitoring notification falsely claiming "Location unavailable — check GPS access" whenever the last position was over 30 minutes old: a phone sitting still is fed by no one (passive fixes only copy what other apps ask for), so the app now re-checks its position every 15 minutes and only says "check location access" when permission is actually revoked or location is switched off — otherwise it says "not verified for N min" 09-30_00:00:00
 
 - The connection log now also records location health — unverified stretches, recoveries with the fix's accuracy, and how far the position had drifted — in the same timeline as network events 09-30_00:00:00

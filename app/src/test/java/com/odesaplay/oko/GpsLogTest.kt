@@ -126,6 +126,31 @@ class GpsLogTest {
     }
 
     @Test
+    fun `access coming back logs a recovery even with no episode open`() {
+        val t = step(
+            prev = GpsIssue.ACCESS_BLOCKED, issue = GpsIssue.NONE,
+            now = NOW + 3_600_000, accuracyM = 9
+        )!!
+        assertEquals(1, t.entries.size)
+        assertEquals(GpsEventKind.VERIFIED, t.entries[0].kind)
+        assertEquals(9, t.entries[0].accuracyM)
+    }
+
+    @Test
+    fun `drift while access was blocked is reported`() {
+        val t = step(
+            prev = GpsIssue.ACCESS_BLOCKED, issue = GpsIssue.NONE,
+            now = NOW + 3_600_000, accuracyM = 9, driftKm = 310.4
+        )!!
+        assertEquals(310.4, t.entries[0].detailKm!!, 0.01)
+    }
+
+    @Test
+    fun `a verified-to-verified tick stays silent`() {
+        assertNull(step(prev = GpsIssue.NONE, issue = GpsIssue.NONE, now = NOW + 1_000, accuracyM = 9))
+    }
+
+    @Test
     fun `the ring buffer is capped`() {
         val many = List(GpsLog.MAX_ENTRIES + 10) { GpsLogEntry(NOW - it, GpsEventKind.BLOCKED) }
         val opened = step(prev = GpsIssue.NONE, issue = GpsIssue.NOT_VERIFIED, now = NOW, entries = many)!!

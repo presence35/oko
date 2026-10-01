@@ -99,8 +99,8 @@ object GpsLog {
     @Volatile private var pending: GpsLogEntry? = null
     @Volatile private var issue: GpsIssue? = null
 
-    /** Where the held position was when the current unverified episode started, for drift. */
-    @Volatile private var pendingPos: LatLng? = null
+    /** Where the held position was when the current blind episode started, for drift. */
+    @Volatile private var blindPos: LatLng? = null
 
     @Volatile private var attached = false
     private var appContext: Context? = null
@@ -127,12 +127,14 @@ object GpsLog {
      */
     fun observe(issue: GpsIssue, now: Long, accuracyM: Int?, pos: LatLng?) {
         val prev = this.issue
-        // Drift is only knowable across a blind episode: the position we held when it started vs
-        // the one that ended it. Sub-threshold values are dropped here rather than in the caller,
-        // so no caller can report a coarse fix's own jitter as travel.
-        val driftKm = if (issue == GpsIssue.NONE && prev == GpsIssue.NOT_VERIFIED &&
-            pendingPos != null && pos != null) {
-            val km = distanceHaversine(pendingPos!!.lat, pendingPos!!.lon, pos.lat, pos.lon) / 1000.0
+        // Drift is only knowable across a blind episode — the position we held when it started vs
+        // the one that ended it — and "blind" includes a denied permission: a phone with location
+        // switched off moves just as far as one that is merely stale. Sub-threshold values are
+        // dropped here rather than in the caller, so no caller can report a coarse fix's own
+        // jitter as travel.
+        val driftKm = if (issue == GpsIssue.NONE && prev != null && prev != GpsIssue.NONE &&
+            blindPos != null && pos != null) {
+            val km = distanceHaversine(blindPos!!.lat, blindPos!!.lon, pos.lat, pos.lon) / 1000.0
             if (km >= DRIFT_REPORTED_KM) km else null
         } else null
         val t = commitGpsLogState(
@@ -146,7 +148,7 @@ object GpsLog {
             accuracyM = accuracyM,
             driftKm = driftKm
         )
-        if (issue == GpsIssue.NOT_VERIFIED && prev != GpsIssue.NOT_VERIFIED) pendingPos = pos
+        if (issue != GpsIssue.NONE && (prev == null || prev == GpsIssue.NONE)) blindPos = pos
         if (t == null) {
             this.issue = issue
             return
@@ -254,9 +256,12 @@ internal fun commitGpsLogState(
                 }
                 return GpsLogTransition(newEntries, null, dirty)
             }
-            // No episode to close: a drift report on its own still belongs in the log, because
-            // it means we evaluated a stale position and the user never heard about it.
-            if (driftKm != null) append(GpsLogEntry(now, GpsEventKind.VERIFIED, accuracyM = accuracyM, detailKm = driftKm))
+            // Nothing to close, but the exit still deserves an entry when access came back (a
+            // denied permission is a user action, and its end is the row they went looking for),
+            // or when we measured a real drift while blind.
+            if (prevIssue == GpsIssue.ACCESS_BLOCKED || driftKm != null) {
+                append(GpsLogEntry(now, GpsEventKind.VERIFIED, accuracyM = accuracyM, detailKm = driftKm))
+            }
             return if (dirty) GpsLogTransition(newEntries, null, true) else null
         }
     }

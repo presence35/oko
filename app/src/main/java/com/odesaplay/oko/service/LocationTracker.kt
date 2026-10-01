@@ -185,6 +185,10 @@ object LocationTracker {
     /** Own network subscription: distance-gated while the screen is on, dropped when off. */
     private fun applyScreenState(lm: LocationManager, looper: Looper) {
         val ctx = appContext ?: return
+        // A provider toggle has no public broadcast, so the screen is the cheap honest trigger:
+        // reaching for Settings means the screen just woke. Without this, a GPS-off/on window
+        // that opens and closes between two 15-min checks is never observed at all.
+        refreshAccess(ctx)
         val on = isScreenOn(ctx)
         if (on && networkListener == null) {
             val net = object : LocationListener {

@@ -192,6 +192,23 @@ object DebugLog {
     }
 
     /**
+     * Notification-lifecycle row: the all-clear was posted again while one was already in the
+     * shade. Same INFO bucket as [recordAllClearExpired] — not a second alert decision, so the
+     * episode still reads as exactly one clear. Exists because a repeated post is the reason a
+     * 20-min TTL can look like it never fired.
+     */
+    fun recordAllClearReposted(locality: String?, now: Long) {
+        record(
+            DebugLogEntry(
+                now, DebugLogKind.NOTIF, night = false, sirenOverride = false,
+                vibrationLevel = null, notified = false, reason = DebugLogReason.ALREADY_NOTIFIED,
+                threatId = null, threatType = null, tier = null, distanceKm = null,
+                locality = locality, scopeOblastId = resolveOblastId(locality), aboutMe = true
+            )
+        )
+    }
+
+    /**
      * Audit trail for the shoot-down flourish replay — tap OUTCOMES only (started /
      * blocked by the animation toggle), never per-bullet spam. [FIRED] = the show actually
      * started; every other reason is a "why not". [detail] is a short locale-neutral

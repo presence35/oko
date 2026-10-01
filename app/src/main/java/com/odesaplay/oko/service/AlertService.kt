@@ -344,6 +344,7 @@ class AlertService : Service() {
             DebugLog.attach(applicationContext)
             ApiMonitor.attach(applicationContext)
             ConnectionLog.awaitAttached()
+            GpsLog.awaitAttached()
             DebugLog.awaitAttached()
             ApiMonitor.awaitAttached()
 
@@ -1169,9 +1170,15 @@ val mappedThreats = registry.allThreats.map { list ->
                     return@reconcileEpisode
                 }
                 if (alertable.isEmpty()) cancelAlert()
+                // A second post for an all-clear that is already in the shade is a contract
+                // violation ("one clear per episode") and the reason a TTL used to look broken.
+                // Leave a lifecycle row for it — an INFO row, so the episode's single
+                // OFFICIAL_OFF record is untouched.
+                val reposted = notificationManager.isAllClearNotificationActive()
                 scheduleAllClearExpiry(state.autoDismissAllClear)
                 val allClearCity = latched.city
                 lastCleanAllClearCity = allClearCity
+                if (reposted) DebugLog.recordAllClearReposted(allClearCity, System.currentTimeMillis())
                 lastChannelLang = state.lang
                 val s = Strings.get(state.lang)
                 val delay = state.fallingDebrisDelaySec.coerceIn(0, 600)
@@ -1523,16 +1530,16 @@ val mappedThreats = registry.allThreats.map { list ->
     }
 
     /**
-     * Arms the all-clear TTL. Must be called exactly once at every all-clear post: it retires
-     * any previous timer first, so the field is non-null only while a live post's timer pends.
-     * The TTL runs from the first post, so the falling-debris countdown ticks stay inside the
-     * window instead of restarting it.
+     * Arms the all-clear TTL, at most once per live notification. Must be called at every
+     * all-clear post, but a repeated post (this runs per tick while the dead latch is still
+     * visible) must NOT restart the clock: the TTL is defined to run from the first post, and
+     * re-arming would leave the notification in the shade indefinitely. Returns true when it
+     * armed a new timer, false when one was already pends for the live notification.
      */
-    private fun scheduleAllClearExpiry(autoDismiss: Boolean) {
-        allClearExpiryJob?.cancel()
-        allClearExpiryJob = null
+    private fun scheduleAllClearExpiry(autoDismiss: Boolean): Boolean {
         allClearClosed = false
-        if (!autoDismiss) return
+        if (allClearExpiryJob != null) return false
+        if (!autoDismiss) return false
         allClearExpiryJob = scope.launch {
             delay(ALL_CLEAR_TTL_MS)
             allClearExpiryJob = null
@@ -1540,6 +1547,7 @@ val mappedThreats = registry.allThreats.map { list ->
             clearAllClearNotification()
             DebugLog.recordAllClearExpired(lastCleanAllClearCity, System.currentTimeMillis())
         }
+        return true
     }
 
     private fun nextUpdateCheckMillis(from: Long): Long {
