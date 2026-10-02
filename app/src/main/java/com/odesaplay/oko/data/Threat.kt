@@ -414,6 +414,43 @@ val COURSE_TYPE_NAMES: Set<String> = mutableSetOf<String>().apply {
 }
 
 /**
+ * Plural forms of every catalog label, for counting contexts ("15 Drones resolved"). EN has one
+ * form; UA/RU carry the two Slavic plural spellings (2–4 and 5+), indexed like
+ * `wordForms.resolvedThreats`. A type missing here falls back to its singular label, so a new
+ * type degrades to a slightly clumsy title instead of breaking the build (`EXHAUSTIVE_LABEL_TYPES`).
+ */
+private val PLURAL_LABEL: Map<ThreatType, List<String>> = mapOf(
+    ThreatType.SHAHED to listOf("Drones", "Дрони", "Дрони", "Дроны", "Дронів"),
+    ThreatType.FPV_LOITERING to listOf("FPV drones", "FPV-дрони", "FPV-дрони", "FPV-дроны", "FPV-дронов"),
+    ThreatType.CRUISE_MISSILE to listOf("Cruise missiles", "Крилаті ракети", "Крилаті ракети", "Крылатые ракеты", "Крылатых ракет"),
+    ThreatType.BALLISTIC to listOf("Ballistics", "Балістика", "Балістики", "Баллистика", "Баллистики"),
+    ThreatType.KAB to listOf("KABs", "КАБи", "КАБи", "КАБы", "КАБов"),
+    ThreatType.AVIATION to listOf("MiG-31K", "МіГ-31К", "МіГ-31К", "МиГ-31К", "МиГ-31К"),
+    ThreatType.RECON to listOf("Reconnaissance", "Розвідка", "Розвідки", "Разведка", "Разведки"),
+    ThreatType.UNKNOWN to listOf("Unknowns", "Невідомі", "Невідомих", "Неизвестные", "Неизвестных")
+)
+
+/** Plural label for a threat type: EN has one form; UA and RU each carry two (2–4 and 5+), laid
+ *  out in [PLURAL_LABEL] as EN, UA both, RU both. Falls back to the singular catalog label for any
+ *  type not yet in [PLURAL_LABEL]. */
+fun typePluralLabel(type: ThreatType, lang: AppLanguage, count: Int): String {
+    val forms = PLURAL_LABEL[type] ?: return ThreatTypeCatalog.INFO[type]?.label(lang) ?: type.name
+    return when (lang) {
+        AppLanguage.EN -> forms[0]
+        // 2–4 take form 1, everything else form 2; 12–14 are the exception that reads as 5+.
+        AppLanguage.UA -> forms[1 + if (slavicPluralIndex(count) == 1) 1 else 0]
+        AppLanguage.RU -> forms[3 + if (slavicPluralIndex(count) == 1) 1 else 0]
+    }
+}
+
+/** 0 for the 2–4 band (12–14 excluded), 1 for the 5+ / 1 band. */
+private fun slavicPluralIndex(count: Int): Int {
+    val n10 = count % 10
+    val n100 = count % 100
+    return if (n10 in 2..4 && n100 !in 12..14) 1 else 0
+}
+
+/**
  * Common (non-place) Ukrainian words that carry real meaning for an EN reader and are
  * translated, not transliterated — "морем" → "morem" would be pointless. Looked up
  * whole-phrase first in the course-template slot; applied word-by-word in the fallback.

@@ -160,12 +160,11 @@ private fun ThreatStatusRow(
     simulated: Boolean,
     stale: Boolean,
     advisory: Boolean,
-    areaOnly: Boolean,
     staleLabel: String,
     s: Strings.StringSet,
     modifier: Modifier = Modifier
 ) {
-    if (!alertsOff && !simulated && !stale && !advisory && !areaOnly) return
+    if (!alertsOff && !simulated && !stale && !advisory) return
     FlowRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -174,7 +173,6 @@ private fun ThreatStatusRow(
         if (alertsOff) AlertsOffChip(s)
         if (stale) StalePill(staleLabel)
         if (advisory) AdvisoryPill(s.advisoryLabel)
-        if (areaOnly) AdvisoryPill(s.areaOnlyLabel)
         if (simulated) SimulationChip(s)
     }
 }
@@ -384,12 +382,18 @@ fun ThreatPopupCard(
                                 dimmed = stale
                             )
                             Spacer(Modifier.width(8.dp))
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(3.dp),
-                                horizontalAlignment = Alignment.Start,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                if (distUser != null) {
+                            // The gauges' label column is the card's metric slot. An area-only
+                            // threat has no point, so the engine reports no proximity (see
+                            // computeProximity) and the number pills are absent — the chip takes
+                            // that empty slot instead of dangling in the status row below.
+                            if (threat.areaOnly || areaAdvisory) {
+                                AdvisoryPill(s.areaOnlyLabel)
+                            } else if (distUser != null) {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                                    horizontalAlignment = Alignment.Start,
+                                    modifier = Modifier.weight(1f)
+                                ) {
                                     etaMin?.let { eta ->
                                         MetricPill(
                                             number = formatEtaMinutes(eta),
@@ -403,27 +407,15 @@ fun ThreatPopupCard(
                                         contentDescription = distCd
                                     )
                                 }
+                            } else {
+                                Spacer(Modifier.weight(1f))
                             }
                             Spacer(Modifier.width(8.dp))
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 verticalAlignment = Alignment.Top
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        s.reliabilityShort,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(AppPalette.TextSecondary)
-                                    )
-                                    Spacer(Modifier.height(4.dp))
-                                    Box(
-                                        modifier = Modifier.height(fontAware(38.dp)),
-                                        contentAlignment = Alignment.BottomCenter
-                                    ) {
-                                        VerticalReliabilityBar(reliability = Reliability.fromApi(threat.reliability))
-                                    }
-                                }
+                                // Precision before reliability, matching the large card.
                                 threat.uncertaintyKm?.let { uKm ->
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
@@ -439,6 +431,21 @@ fun ThreatPopupCard(
                                         ) {
                                             VerticalUncertaintyBar(uncertaintyKm = uKm)
                                         }
+                                    }
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        s.reliabilityShort,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(AppPalette.TextSecondary)
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Box(
+                                        modifier = Modifier.height(fontAware(38.dp)),
+                                        contentAlignment = Alignment.BottomCenter
+                                    ) {
+                                        VerticalReliabilityBar(reliability = Reliability.fromApi(threat.reliability))
                                     }
                                 }
                                 Spacer(Modifier.width(8.dp))
@@ -475,7 +482,6 @@ fun ThreatPopupCard(
                             simulated = threat.simulated,
                             stale = stale,
                             advisory = threat.advisory,
-                            areaOnly = threat.areaOnly || areaAdvisory,
                             staleLabel = s.staleLabel,
                             s = s,
                             modifier = Modifier.padding(top = 4.dp)
@@ -549,14 +555,22 @@ fun ThreatPopupCard(
 
                         // Distance + ETA + speed; absent without a user fix (SummaryPills
                         // reports nothing then — a missing fix is a status, not a metric).
+                        // Area-only threats have no point at all, so the engine reports no
+                        // proximity either: the same empty slot carries the area-level chip.
                         Spacer(Modifier.height(4.dp))
-                        SummaryPills(
-                            proximity = proximity,
-                            pinnedCity = pinnedCity,
-                            s = s,
-                            lang = lang,
-                            modifier = Modifier.padding(start = 52.dp)
-                        )
+                        if (threat.areaOnly || areaAdvisory) {
+                            Box(modifier = Modifier.padding(start = 52.dp)) {
+                                AdvisoryPill(s.areaOnlyLabel)
+                            }
+                        } else {
+                            SummaryPills(
+                                proximity = proximity,
+                                pinnedCity = pinnedCity,
+                                s = s,
+                                lang = lang,
+                                modifier = Modifier.padding(start = 52.dp)
+                            )
+                        }
                         Spacer(Modifier.height(6.dp))
 
                         // Precision (P) on its own line for accessibility and readability
@@ -584,7 +598,6 @@ fun ThreatPopupCard(
                             simulated = threat.simulated,
                             stale = stale,
                             advisory = threat.advisory,
-                            areaOnly = threat.areaOnly || areaAdvisory,
                             staleLabel = s.staleLabel,
                             s = s,
                             modifier = Modifier.padding(top = 8.dp)

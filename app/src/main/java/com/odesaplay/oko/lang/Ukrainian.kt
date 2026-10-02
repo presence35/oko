@@ -1,5 +1,4 @@
 package com.odesaplay.oko
-
 internal val Ukrainian: Strings.StringSet = Strings.StringSet(
     language = AppLanguage.UA,
     onboarding = Strings.Onboarding(
@@ -732,6 +731,7 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
     wordForms = Strings.WordForms(
         sources = listOf("джерело", "джерела", "джерел"),
         resolvedThreats = listOf("Завершено %d загрозу", "Завершено %d загрози", "Завершено %d загроз"),
+        resolvedTypeThreats = listOf("%1\$d %2\$s resolved"),
         resolvingThreats = listOf("Знешкоджуємо %d загрозу", "Знешкоджуємо %d загрози", "Знешкоджуємо %d загроз"),
         preciseGps = listOf("Точний GPS: %d хвилину тому", "Точний GPS: %d хвилини тому", "Точний GPS: %d хвилин тому"),
     ),

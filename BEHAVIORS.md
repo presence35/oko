@@ -412,16 +412,17 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 |---|---|---|
 | Zone siren | Plugin verdict SOUND for the winning threat | Frequency preset, floor, digest (below) |
 | Zone silent update | Verdict SILENT (downgrade, steady, winner-switch) | Content refresh, no sound |
-| Official siren | `officialAlertActiveFor()` true | Region-latched, persists across restart |
+| Official siren | Official onset or escalation | Region-latched, persists across restart. One episode per canonical region — identity is the region, never the level or the feed's `since`, so yellow→red is an escalation inside the live episode and red→yellow is a silent rewrite. Level is always the live feed's, so a downgrade cannot leave a red announcement standing |
 | All-clear | Raw official episode ends for the latched focus region | One clear per episode: red, yellow, or red-then-yellow; never more than one. Keyed on the raw ending, so a mid-episode scope drop (alert narrowed away from your city) still gets its all-clear. A new official episode supersedes any lingering all-clear (notification removed, debris countdown aborted) even when the new episode's own notification is off; the all-clear also retires itself 20 min after posting (`auto_dismiss_all_clear`), logging a `NOTIF` lifecycle row into the Decisions feed (no alert outcome — the episode's own end is already logged), and a restart drops any all-clear it can no longer attribute to an episode; the just-ended episode's summary stays tappable for its replay until the new episode ends |
-| Offline critical | Offline 5 min, or 1 min while an official alert (red/yellow) is active on the focus oblast | Once per episode, honors the critical-offline toggle; milestone emission (SourceRegistry `degradedSince` + `connectionMilestones`) vs notification (service) |
+| Offline critical | Offline 5 min, or 1 min while an official alert (red/yellow) is active on the focus oblast | Once per episode, honors the critical-offline toggle; milestone emission (SourceRegistry `degradedSince` + `connectionMilestones`) vs notification (service). Both offline notifications are dismissed when the episode ends, whatever the toggle state |
 | Offline bypass silent | Sub-toggle of offline critical | Plays sound in silent mode |
 | Night siren overrides | Night window active | Separate zone + official override flags |
 | Sleep mode ("Just let me sleep!") | Night toggles all off (preset) | Zone + official alerts muted by the prefs themselves; no service gate |
-| Resolved tally | Threat removed from stream (explicit `remove`/`resolved`, or absent from a live snapshot; the post-reconnect baseline snapshot emits nothing) | Scoped to focus oblast or all-Ukraine |
+| Resolved tally | Threat removed from stream (explicit `remove`/`resolved`, or absent from a live snapshot; the post-reconnect baseline snapshot emits nothing) | Scoped to focus oblast or all-Ukraine. A single type in the tally is named in the title ("15 Drones resolved") with no breakdown line; several types keep the generic title plus a breakdown |
+| Notification grouping | Every notification is posted | Each notification belongs to an explicit group key — never the platform's automatic app-level bundle. The monitoring (and tap-to-resume) notification is a group of its own, so the always-on trident can never be collapsed behind another Oko notification. Alerts and all-clear share one group (they are mutually exclusive), the two offline notifications share another |
+
 
 ### Notification policy (NotifyPlugin — frequency, not capability)
-
 - Capability ("can it ever sound": armed bells, official toggles, per-type enables) is separate from frequency ("how often": the preset). The service executes verdicts; all judgment lives in the plugin.
 - Tiers carry a 10% spatial hysteresis band (`ZONE_HYSTERESIS_MARGIN`): upgrades immediate, downgrades/exits hold. Shared by map + service.
 - An episode opens on first zone sighting and closes only when the track dies (stale / resolved / gone). Flicker ticks never close it, so they never re-sound. A user-shot same-id respawn inside the grace is the same kill, never a new onset. ONCE_PER_TYPE memory is per-type per sitting on top of this: a sounded type stays gated across id flicker/re-keys and re-arms only when no live threat of that type remains.

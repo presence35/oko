@@ -718,6 +718,7 @@ object Strings {
     data class WordForms(
         val sources: List<String>,
         val resolvedThreats: List<String>,
+    val resolvedTypeThreats: List<String>,
         val resolvingThreats: List<String>,
         val preciseGps: List<String>,
     )
@@ -1484,6 +1485,14 @@ fun resolvedThreatsPhrase(count: Int, lang: AppLanguage): String {
     val s = Strings.get(lang)
     val form = s.wordForms.resolvedThreats[pluralIndex(count, lang).coerceAtMost(s.wordForms.resolvedThreats.lastIndex)]
     return String.format(form, count)
+}
+
+/** "15 Drones resolved" — the resolved count carrying the type's own plural label, so a
+ *  single-type tally needs no breakdown line under the title. */
+fun resolvedTypeThreatsPhrase(count: Int, pluralLabel: String, lang: AppLanguage): String {
+    val s = Strings.get(lang)
+    val form = s.wordForms.resolvedTypeThreats[pluralIndex(count, lang).coerceAtMost(s.wordForms.resolvedTypeThreats.lastIndex)]
+    return String.format(form, count, pluralLabel)
 }
 
 fun resolvingThreatsPhrase(count: Int, lang: AppLanguage): String {

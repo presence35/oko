@@ -39,6 +39,8 @@ import com.odesaplay.oko.engine.isFastType
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.LatLng
 import com.odesaplay.oko.engine.OblastAlert
+import com.odesaplay.oko.engine.OfficialFrontier
+import com.odesaplay.oko.engine.officialAnnouncementIsOnset
 import com.odesaplay.oko.engine.AlertLevel
 import com.odesaplay.oko.engine.LatchedEpisode
 import com.odesaplay.oko.engine.EpisodeTransition
@@ -111,6 +113,7 @@ class AlertService : Service() {
         const val NOTIF_MILESTONE = AlertNotificationManager.NOTIF_MILESTONE
         const val NOTIF_OFFLINE_CRITICAL = AlertNotificationManager.NOTIF_OFFLINE_CRITICAL
         const val NOTIF_UPDATE = AlertNotificationManager.NOTIF_UPDATE
+        const val NOTIF_MONITORING_PAUSED = AlertNotificationManager.NOTIF_MONITORING_PAUSED
 
         /** "Ignore 30 min": how long offline milestone/critical notifications stay muted. */
         private const val IGNORE_RETRY_MUTE_MS = 30 * 60_000L
@@ -173,16 +176,19 @@ class AlertService : Service() {
     private var lastZoneTiers: Map<String, ThreatZone> = emptyMap()
     private var lastNotifyPrefs: NotifyPrefs? = null
     private var lastPersistedPresence = ""
-    /** Cold start with restored presence: re-post the ongoing alert silently once. */
-    private var coldStartRepostDone = false
-    private var restoredPresence = false
-    /** Announced official episode for ANY level (red/yellow share it): LEVEL|token|since|city.
-     *  Persisted pre-level as token|since|city — adopted silently on upgrade (see restore). */
-    private var lastOfficialEpisode: String? = null
-    /** Raw (unscoped) official frontier last written to the audit log. Independent of the
+    /** Announced official episode for ANY level: identity + level (see [OfficialFrontier]).
+     *  Identity is the canonical region, persisted as the `LEVEL|token|since|city` row; level
+     *  rides along only to tell escalation from a fresh onset. Non-null ONLY while the episode
+     *  is alive — it is cleared when the episode ends, so "announced but ended" cannot exist. */
+    private var lastAnnouncedFrontier: OfficialFrontier? = null
+    /** The announcement row last persisted, verbatim. Held because the LATCH must keep reading the
+     *  level it was persisted with — a live-feed downgrade updates [lastAnnouncedFrontier] without
+     *  re-announcing, and re-persisting from live state would silently rewrite history. */
+    private var lastAnnouncedRow: String? = null
+    /** Raw (unscoped) official episode last written to the audit log. Independent of the
      *  notif scope and toggles, so EVERY official alert is logged even when its notifs are
-     *  off, muted or sleeping. */
-    private var lastLoggedOfficialBoundary: String? = null
+     *  off, muted or sleeping. Live truth, never a restored row. */
+    private var lastLoggedRawFrontier: OfficialFrontier? = null
     /** Focus oblast token of the previous tick; a change drops a now-stale latched episode. */
     private var lastFocusTokenSeen: String? = null
     /** True once the latched episode was observed raw-active on a ready feed in this
@@ -389,6 +395,9 @@ class AlertService : Service() {
         // monitor channel must exist first or the platform rejects the notification outright,
         // so it goes first (a plain binder call), then the rest off the main thread.
         notificationManager.ensureMonitorChannel()
+        // The monitor notification is live from here on: a tap-to-resume prompt left over from
+        // an earlier failed start has served its purpose and must not sit beside it.
+        notificationManager.cancelNotification(NOTIF_MONITORING_PAUSED)
         startForegroundCompat()
         scope.launch {
             notificationManager.createChannels()
@@ -548,16 +557,17 @@ class AlertService : Service() {
         }
 
         monitoringJob = scope.launch {
-            // Restore announced official-episode identity from persisted ServiceState
-            // keys. Pre-level rows store token|since|city; adopted silently against the
-            // first live boundary so an app update never re-sirens an ongoing alert.
+            // Restore the announced official-episode identity from persisted ServiceState keys.
+            // Only the identity is trusted back: the row's remembered LEVEL is dropped, because a
+            // level is a live feed fact, not history — restoring a stale "RED" would announce a
+            // red that the feed may have already downgraded or ended. The audit frontier is never
+            // restored at all (see [lastLoggedRawFrontier]), so a restart cannot double-log.
             val _annToken = svcState.officialAnnouncedToken().first().ifBlank { null }
-            val _annSince = svcState.officialAnnouncedSince().first().ifBlank { null }
             val _annCity = svcState.officialAnnouncedCity().first().ifBlank { null }
-            if (_annToken != null && _annSince != null && _annCity != null) {
-                lastOfficialEpisode = "$_annToken|$_annSince|$_annCity"
+            if (_annToken != null && _annCity != null) {
+                lastAnnouncedFrontier = OfficialFrontier(_annToken, AlertLevel.RED)
+                lastAnnouncedRow = "$_annToken|$_annCity"
             }
-
             // Restore open plugin episodes across restarts: ongoing threats stay
             // handled (no re-siren) and the cold-start repost makes them visible.
             val savedZonesJson = svcState.activeZoneAlerts().first()
@@ -572,7 +582,6 @@ class AlertService : Service() {
                     }
                     if (restored.isNotEmpty()) {
                         notifyPlugin.seedKnown(restored)
-                        restoredPresence = true
                     }
                 }
             }
@@ -803,23 +812,31 @@ val mappedThreats = registry.allThreats.map { list ->
         val prevFocusToken = lastFocusTokenSeen
         if (state.focusToken != null) lastFocusTokenSeen = state.focusToken
         if (prevFocusToken != null && state.focusToken != null && state.focusToken != prevFocusToken) {
-            if (lastOfficialEpisode != null) {
+            if (lastAnnouncedFrontier != null) {
                 clearOfficialAnnounced()
-                lastOfficialEpisode = null
+                lastAnnouncedFrontier = null
+                lastAnnouncedRow = null
                 latchedConfirmedLive = false
             }
-            lastLoggedOfficialBoundary = null
+            lastLoggedRawFrontier = null
             allClearClosed = false
         }
 
-        val latchedEarly = LatchedEpisode.parse(lastOfficialEpisode)
+        val latchedEarly = LatchedEpisode.parse(lastAnnouncedRow)
         // Unknown feed holds the episode: until the first real snapshot arrives the
         // latch counts as alive, so no all-clear, no notif teardown, no tally close.
         val latchedAliveEarly = latchedEarly?.resolve(state.alertsReady, state.alerts) == EpisodeTransition.STAY
         if (latchedEarly != null && state.alertsReady && latchedEarly.isRawActive(state.alerts)) {
             latchedConfirmedLive = true
         }
-        val effLevelEarly = if (latchedAliveEarly) latchedEarly!!.level else state.focusOblastLevel
+        // Both frontiers are live facts about the SAME episode: identity is the canonical
+        // region, so a level flip (yellow→red) is an escalation inside one episode, never a
+        // second one. Kept distinct only because they are scoped differently.
+        val liveScopedFrontier = OfficialFrontier.of(state.focusOblastLevel, state.focusToken)
+        val liveRawFrontier = OfficialFrontier.of(state.focusOblastRawLevel, state.focusToken)
+        // The live level beats the latch's remembered one, so a red → yellow downgrade
+        // rewrites the announcement instead of leaving a red notification standing.
+        val effLevelEarly = liveScopedFrontier?.level ?: if (latchedAliveEarly) latchedEarly!!.level else AlertLevel.NONE
 
         val registry = AppSources.registry
         val typeCatalog = registry.typeCatalog.value
@@ -892,8 +909,10 @@ val mappedThreats = registry.allThreats.map { list ->
             )
         }
         // Episode over (registry nulled the stamp on recovery — transient Connecting never
-        // does): clear the one-shot and any lingering milestone/critical notifications.
-        if (offlineSince == null && criticalFiredForEpisode != null) {
+        // does): clear the one-shot and any lingering milestone/critical notifications. Keyed
+        // on the episode having ENDED, never on the critical one-shot having fired: with
+        // critical-offline off nothing would ever clear the milestone notification.
+        if (offlineSince == null) {
             criticalFiredForEpisode = null
             notificationManager.cancelNotification(NOTIF_MILESTONE)
             notificationManager.cancelNotification(NOTIF_OFFLINE_CRITICAL)
@@ -903,7 +922,7 @@ val mappedThreats = registry.allThreats.map { list ->
 
         val latched = latchedEarly
         val latchedAlive = latchedAliveEarly
-        val effLevel = if (latchedAlive) latched!!.level else state.focusOblastLevel
+        val effLevel = effLevelEarly
         val effToken = if (latchedAlive) latched!!.token else state.focusToken
         val effCity = if (latchedAlive) latched!!.city else state.focusBannerCity
         val effSince = if (latchedAlive) latched!!.since else state.focusOblastAlertSince
@@ -985,20 +1004,30 @@ val mappedThreats = registry.allThreats.map { list ->
             val level: String,
         )
 
-        /** Unified official-episode boundary for ANY level: LEVEL|token|since|city.
-         *  Pre-level persisted rows hold token|since|city — [isNewEpisode] treats a
-         *  suffix-matching legacy row as the same episode (silent adopt, no re-siren). */
-        fun officialBoundary(state: MonitorState): String? {
+        /** Unified official-episode identity for ANY level: the canonical region only
+         *  (`token|city`). Level and `since` are deliberately absent — one episode per region,
+         *  "red, yellow, or red-then-yellow" included, and a re-stamped `since` is the same
+         *  episode, never a fresh onset. */
+        fun officialEpisodeId(state: MonitorState): String? {
             if (state.focusOblastLevel == AlertLevel.NONE) return null
-            return "${state.focusOblastLevel}|${state.focusToken}|${state.focusOblastAlertSince}|${state.focusBannerCity}"
+            val token = state.focusToken ?: return null
+            return "$token|${state.focusBannerCity}"
         }
 
-        /** Audit-log frontier: the RAW (unscoped) official episode, so the Logs tab records
-         *  every official alert even when city-scope, notif toggles or sleep mute it. */
-        fun officialLogBoundary(state: MonitorState): String? {
-            if (state.focusOblastRawLevel == AlertLevel.NONE) return null
-            return "${state.focusOblastRawLevel}|${state.focusToken}|${state.focusOblastRawSince}|${state.focusBannerCity}"
-        }
+        /** The persisted announcement row for an episode: the legacy `LEVEL|token|since|city`
+         *  shape, so [LatchedEpisode.parse] and older versions keep reading it. */
+        fun announcedRow(state: MonitorState): String =
+            "${state.focusOblastLevel}|${state.focusToken}|" +
+                "${state.focusOblastAlertSince}|${state.focusBannerCity}"
+
+        /** Scoped frontier (identity + live level) — the episode being announced. */
+        fun announcedFrontier(state: MonitorState): OfficialFrontier? =
+            OfficialFrontier.of(state.focusOblastLevel, state.focusToken)
+
+        /** Raw (unscoped) frontier: the audit-log equivalent, so an official alert outside the
+         *  notif scope is still logged — and a level flip there is still one episode. */
+        fun rawFrontier(state: MonitorState): OfficialFrontier? =
+            OfficialFrontier.of(state.focusOblastRawLevel, state.focusToken)
 
         /** True when the area of the last-shown all-clear matches the current focus area. When
          *  the city is unknown (e.g. after a restart) fall back to "an all-clear is showing, so
@@ -1008,13 +1037,8 @@ val mappedThreats = registry.allThreats.map { list ->
             return city == state.focusBannerCity
         }
 
-        fun isNewEpisode(state: MonitorState): Boolean {
-            val boundary = officialBoundary(state) ?: return false
-            val stored = lastOfficialEpisode ?: return true
-            if (stored == boundary) return false
-            // Legacy pre-level row for the same episode — adopt it below, not a new onset.
-            return stored != boundary.substringAfter('|')
-        }
+        fun isNewEpisode(state: MonitorState): Boolean =
+            officialAnnouncementIsOnset(lastAnnouncedFrontier, announcedFrontier(state))
 
         /** Build the desired notification end-state from current tick inputs. */
         fun buildPrimary(state: MonitorState, all: Map<String, NormalizedThreat>): Primary? {
@@ -1038,6 +1062,7 @@ val mappedThreats = registry.allThreats.map { list ->
             // Region-latched: while the announced oblast is still raw-active, the
             // effective official is the latched one, not the current focus (pinned -> follow-me).
             if (effLevel != AlertLevel.NONE) {
+                val announcedFrontier = announcedFrontier(state)
                 val announced = if (effLevel == AlertLevel.RED) state.officialRedAlertsEnabled
                 else state.officialYellowAlertsEnabled
                 if (announced) {
@@ -1045,7 +1070,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     if (effLevel == AlertLevel.RED) {
                         val reasonThreat = effReasonId?.let { all[it] }
                         return Primary(
-                            identity = "red|$effToken|$effSince|$effCity|$effReasonId",
+                            identity = "red|${announcedFrontier!!.token}|$effCity|$effReasonId",
                             title = String.format(s.alertBannerFormat, effCity),
                             body = (effReason ?: effRegion ?: state.focusRegion) + etaSuffix(reasonThreat, state),
                             revealThreat = reasonThreat,
@@ -1056,7 +1081,7 @@ val mappedThreats = registry.allThreats.map { list ->
                         )
                     }
                     return Primary(
-                        identity = "yellow|$effToken|$effSince|$effCity",
+                        identity = "yellow|${announcedFrontier!!.token}|$effCity",
                         title = String.format(s.alertYellowBannerFormat, effCity),
                         body = effReason ?: effRegion ?: state.focusRegion,
                         revealThreat = null, silent = !onset, vibration = VIBRATION_STRONG,
@@ -1072,17 +1097,13 @@ val mappedThreats = registry.allThreats.map { list ->
          *  (always — the log sees every official episode even when its notifs are off
          *  or a zone alert wins the tick), persistence, all-clear. */
         fun reconcileEpisode(primary: Primary?, state: MonitorState, all: Map<String, NormalizedThreat>) {
-            val boundary = officialBoundary(state)
-            val logBoundary = officialLogBoundary(state)
+            val frontier = announcedFrontier(state)
+            val raw = rawFrontier(state)
             var scopedOffLogged = false
-            // Silent adopt of a legacy pre-level persisted row for the same episode.
-            if (boundary != null && lastOfficialEpisode != null &&
-                lastOfficialEpisode != boundary && lastOfficialEpisode == boundary.substringAfter('|')
-            ) {
-                lastOfficialEpisode = boundary
-            }
-            val startedNewEpisode = boundary != null && lastOfficialEpisode != boundary
-            if (startedNewEpisode) {
+            // Onset OR escalation: a new region, or the same region gone red. A downgrade
+            // (red → yellow) is neither — it only rewrites the announcement below.
+            val sounding = officialAnnouncementIsOnset(lastAnnouncedFrontier, frontier)
+            if (sounding) {
                 // A new official episode supersedes a lingering all-clear — but only for the
                 // SAME city/raion the all-clear declared; an unrelated region's all-clear is
                 // honest history and stays. Fires even when the new episode's own notification
@@ -1142,12 +1163,14 @@ val mappedThreats = registry.allThreats.map { list ->
                             now = System.currentTimeMillis()
                     )
                 }
-                lastOfficialEpisode = boundary
-                lastLoggedOfficialBoundary = logBoundary
-            } else if (logBoundary != null && logBoundary != lastLoggedOfficialBoundary) {
+                lastAnnouncedFrontier = frontier
+                lastAnnouncedRow = announcedRow(state)
+                lastLoggedRawFrontier = raw
+            } else if (raw != null && raw != lastLoggedRawFrontier) {
                 // Raw official alert outside the notif scope (city-scope on, raion not covering
                 // the focus city, or a muted/sleep window): record it silently so the Logs tab
-                // still carries EVERY official alert, even when no notif was posted.
+                // still carries EVERY official alert, even when no notif was posted. A level
+                // flip here is the same episode, so identity alone decides — hence `raw !=`.
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_ON, night = state.nightActive,
                     sirenOverride = state.officialSirenOverride, vibrationLevel = VIBRATION_STRONG,
@@ -1157,15 +1180,16 @@ val mappedThreats = registry.allThreats.map { list ->
                     distanceKm = null, level = state.focusOblastRawLevel,
                     now = System.currentTimeMillis()
                 )
-                lastLoggedOfficialBoundary = logBoundary
+                lastLoggedRawFrontier = raw
             }
-            val suppressAllClear = startedNewEpisode && allClearSameArea(state)
+            val suppressAllClear = sounding && allClearSameArea(state)
             if (!suppressAllClear && latched != null && !latchedAlive && state.officialAlertsEnabled) {
                 if (latched.resolveRestored(latchedConfirmedLive, EpisodeTransition.ENDED) == RestoredResolution.EXPIRE_SILENTLY) {
                     // Resurrected latch never observed live in this lifetime: the episode
                     // ended while we were dead. Drop it without notification, chime or log.
                     clearOfficialAnnounced()
-                    lastOfficialEpisode = null
+                    lastAnnouncedFrontier = null
+                lastAnnouncedRow = null
                     latchedConfirmedLive = false
                     return@reconcileEpisode
                 }
@@ -1200,13 +1224,14 @@ val mappedThreats = registry.allThreats.map { list ->
                     locality = effRegion ?: allClearCity, distanceKm = null,
                     now = System.currentTimeMillis()
                 )
-                lastOfficialEpisode = null
+                lastAnnouncedFrontier = null
+                lastAnnouncedRow = null
                 latchedConfirmedLive = false
                 clearOfficialAnnounced()
                 scopedOffLogged = true
-                lastLoggedOfficialBoundary = null
+                lastLoggedRawFrontier = null
             }
-            if (!scopedOffLogged && logBoundary == null && lastLoggedOfficialBoundary != null) {
+            if (!scopedOffLogged && raw == null && lastLoggedRawFrontier != null) {
                 // Raw alert ended outside the notif scope: close its audit row silently.
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
@@ -1216,7 +1241,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     locality = null, distanceKm = null,
                     now = System.currentTimeMillis()
                 )
-                lastLoggedOfficialBoundary = null
+                lastLoggedRawFrontier = null
             }
             val shownOfficial = lastShownId?.startsWith("red|") == true || lastShownId?.startsWith("yellow|") == true
             if (shownOfficial && primary == null &&
@@ -1299,24 +1324,7 @@ val mappedThreats = registry.allThreats.map { list ->
         // sound/silent/suppress above; below only executes. Official paths untouched.
         val primary = buildPrimary(state, all)
         reconcileEpisode(primary, state, all)
-        // Cold start: an adopted episode (restored latch / seeded zone presence) is
-        // non-onset with lastShownId == null, which reconcileNotif would file under
-        // "dismissed, don't re-raise" — leaving the ongoing alert notification-less
-        // after every update/reboot/crash. Claim it here with one silent repost; a
-        // loud onset in between skips this (isOnset) and wins in reconcileNotif.
-        // A user swipe is never overridden: lastShownId is only null in a fresh process.
-        if (!coldStartRepostDone && lastShownId == null && primary != null && !primary.isOnset &&
-            (primary.zone == null || restoredPresence)
-        ) {
-            coldStartRepostDone = true
-            val cs = Strings.get(state.lang)
-            postAlert(primary.zone, primary.level, primary.title, primary.body,
-                state.zoneSirenOverride ?: state.officialSirenOverride,
-                revealThreat = primary.revealThreat, silent = true,
-                vibrationLevel = primary.vibration, muted = bellsMuted(),
-                actions = AlertActions(cs.alertActionOk, cs.alertActionMuteRaid, cs.alertActionMute10))
-            lastShownId = primary.identity
-        }
+        // cold start re-post suppression: never (see OFFICIAL_ALERT vs all-clear below).
         reconcileNotif(primary, state)
         // Morale-only episode window: region-latched, same gate as the all-clear.
         // An unconfirmed (never observed live) window closes silently — no summary

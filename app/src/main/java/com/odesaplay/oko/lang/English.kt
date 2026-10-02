@@ -731,6 +731,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
     wordForms = Strings.WordForms(
         sources = listOf("source", "sources"),
         resolvedThreats = listOf("1 threat resolved", "%d threats resolved"),
+        resolvedTypeThreats = listOf("%1\$d %2\$s resolved"),
         resolvingThreats = listOf("Resolving %d threat", "Resolving %d threats"),
         preciseGps = listOf("Precise GPS: 1 min ago", "Precise GPS: %d min ago"),
     ),

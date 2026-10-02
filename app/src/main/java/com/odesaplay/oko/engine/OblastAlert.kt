@@ -246,6 +246,43 @@ data class LatchedEpisode(
     }
 }
 
+/**
+ * Official-episode identity + severity for one tick: the canonical oblast region plus the level
+ * the feed currently reports for it. Identity is deliberately **level- and timestamp-insensitive**
+ * — the contract is one episode (hence one all-clear) per region, "red, yellow, or red-then-yellow"
+ * included (BEHAVIORS.md, Alert Service → All-clear), and a source re-stamping `since` must never
+ * read as a brand-new alert. The level rides along only so escalation can be told apart from a
+ * fresh episode.
+ */
+data class OfficialFrontier(val token: String, val level: AlertLevel) {
+
+    /** A different region (or no previous episode at all): a new episode, worthy of a sound. */
+    fun isNewEpisode(stored: OfficialFrontier?): Boolean = stored == null || stored.token != token
+
+    /** Same region, higher severity (yellow → red): re-alert, but it is still one episode. */
+    fun isEscalation(stored: OfficialFrontier?): Boolean =
+        stored != null && stored.token == token && level.ordinal > stored.level.ordinal
+
+    companion object {
+        /** `null` when there is no episode at all (no level, or no canonical region to name). */
+        fun of(level: AlertLevel, token: String?): OfficialFrontier? =
+            if (level == AlertLevel.NONE || token.isNullOrBlank()) null
+            else OfficialFrontier(token, level)
+
+        /** Identity + level from a persisted announcement row (`LEVEL|token|since|city`). Reads
+         *  through [LatchedEpisode.parse], so legacy pre-level rows (`token|since|city`) adopt
+         *  silently instead of sounding again after an upgrade. */
+        fun parse(row: String?): OfficialFrontier? =
+            LatchedEpisode.parse(row)?.let { OfficialFrontier(it.token, it.level) }
+    }
+}
+
+/** Whether this tick's official announcement should sound: a new episode, or an escalation inside
+ *  a live one. A downgrade only rewrites the announcement — one siren per onset/escalation, never
+ *  one per level flip. */
+fun officialAnnouncementIsOnset(stored: OfficialFrontier?, now: OfficialFrontier?): Boolean =
+    now != null && (now.isNewEpisode(stored) || now.isEscalation(stored))
+
 /** Highest severity present in [alerts] for the given focus. When [cityUa] is non-null and
  *  [scope] is true, only city-covered alerts count. Compares [OblastAlert.level] strings directly
  *  (the plugin layer already normalises them to "red"/"yellow"). */

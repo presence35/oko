@@ -161,7 +161,7 @@ class AlarmEpisodeTally(
                     "$label $count"
                 }
             val title = if (durationMin > 0) String.format(s.alarmEpisodeTitleFormat, city, durationMin) else String.format("%1\$s: alarm summary", city)
-            val builder = NotificationCompat.Builder(context, AlertNotificationManager.CHANNEL_ALARM_EPISODE)
+            val builder = AlertNotificationManager(context).buildNotification(NOTIF_ALARM_EPISODE, AlertNotificationManager.CHANNEL_ALARM_EPISODE)
                 .setSmallIcon(R.drawable.ic_trident)
                 .setContentTitle(title)
                 .setContentText(String.format(s.alarmEpisodeBodyFormat, resolvedThreatsPhrase(snapshot.count, lang)))
@@ -178,7 +178,7 @@ class AlarmEpisodeTally(
         scope.launch {
             val s = Strings.get(lang)
             val title = if (durationMin > 0) String.format(s.alarmEpisodeTitleFormat, city, durationMin) else String.format("%1\$s: alarm summary", city)
-            val builder = NotificationCompat.Builder(context, AlertNotificationManager.CHANNEL_ALARM_EPISODE)
+            val builder = AlertNotificationManager(context).buildNotification(NOTIF_ALARM_EPISODE, AlertNotificationManager.CHANNEL_ALARM_EPISODE)
                 .setSmallIcon(R.drawable.ic_trident)
                 .setContentTitle(title)
                 .setContentText(s.alarmEpisodeQuietText)

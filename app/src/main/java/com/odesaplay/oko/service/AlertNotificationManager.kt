@@ -76,6 +76,31 @@ const val NOTIF_MONITORING_PAUSED = 9
          *  frozen by Android at creation — this is the only way a change takes effect). */
         const val CHANNEL_SCHEMA_VERSION = 3
 
+        /**
+         * Every Oko notification carries an explicit group key, so the platform never folds
+         * unrelated ones into its automatic app-level bundle. The monitoring notification is
+         * its own group precisely so it can never be collapsed behind another Oko notification:
+         * the trident is the always-visible claim that Oko is running (BEHAVIORS.md,
+         * Consumer Behaviors → Notification grouping).
+         */
+        const val GROUP_MONITOR = "oko_monitoring"
+        const val GROUP_PAUSED = "oko_paused"
+        const val GROUP_ALERT = "oko_alert"
+        const val GROUP_OFFLINE = "oko_offline"
+        const val GROUP_TALLY = "oko_tally"
+        const val GROUP_EPISODE = "oko_episode"
+        const val GROUP_UPDATE = "oko_update"
+
+        /** The one place a notification id maps to its group: a producer can never invent a
+         *  group, and two ids can never share one by accident. */
+        fun groupFor(id: Int): String = when (id) {
+            NOTIF_MONITOR, NOTIF_MONITORING_PAUSED -> GROUP_MONITOR
+            NOTIF_ALERT, NOTIF_ALLCLEAR -> GROUP_ALERT
+            NOTIF_MILESTONE, NOTIF_OFFLINE_CRITICAL -> GROUP_OFFLINE
+            NOTIF_UPDATE -> GROUP_UPDATE
+            else -> GROUP_TALLY
+        }
+
         fun areNotificationsEnabled(context: Context): Boolean {
             return NotificationManagerCompat.from(context).areNotificationsEnabled()
         }
@@ -247,7 +272,7 @@ const val NOTIF_MONITORING_PAUSED = 9
         ignoreLabel: String? = null,
         alertLevel: AlertLevel = AlertLevel.NONE
     ): Notification {
-        val b = NotificationCompat.Builder(context, CHANNEL_MONITOR)
+        val b = buildNotification(NOTIF_MONITOR, CHANNEL_MONITOR)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
             .setContentText(text)
@@ -310,7 +335,7 @@ const val NOTIF_MONITORING_PAUSED = 9
         val idSuffix = revealThreat?.let { t ->
             if (UserPrefs(context).preferences.first().showThreatIdsOnMap) " · #${t.id.takeLast(4)}" else ""
         }.orEmpty()
-        val b = NotificationCompat.Builder(context, channel)
+        val b = buildNotification(NOTIF_ALERT, channel)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
             .setContentText(body + idSuffix)
@@ -338,7 +363,7 @@ const val NOTIF_MONITORING_PAUSED = 9
     ) {
         val tap = if (replay.isEmpty()) openAppIntent()
         else NeutralizedTally.flourishTapIntent(context, 7, replay, NeutralizedTally.SOURCE_ALLCLEAR)
-        val notif = NotificationCompat.Builder(context, CHANNEL_ALL_CLEAR)
+        val notif = buildNotification(NOTIF_ALLCLEAR, CHANNEL_ALL_CLEAR)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
             .setContentText(body)
@@ -374,7 +399,7 @@ const val NOTIF_MONITORING_PAUSED = 9
     }
 
     fun postOfflineNotification(title: String, text: String, retryLabel: String, ignoreLabel: String? = null) {
-        val notif = NotificationCompat.Builder(context, CHANNEL_OFFLINE)
+        val notif = buildNotification(NOTIF_MILESTONE, CHANNEL_OFFLINE)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
             .setContentText(text)
@@ -389,7 +414,7 @@ const val NOTIF_MONITORING_PAUSED = 9
     }
 
     fun postCriticalOfflineNotification(title: String, text: String, retryLabel: String, ignoreLabel: String? = null) {
-        val notif = NotificationCompat.Builder(context, CHANNEL_OFFLINE_CRITICAL)
+        val notif = buildNotification(NOTIF_OFFLINE_CRITICAL, CHANNEL_OFFLINE_CRITICAL)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
             .setContentText(text)
@@ -404,7 +429,7 @@ const val NOTIF_MONITORING_PAUSED = 9
     }
 
     fun postUpdateNotification(title: String, text: String) {
-        val notif = NotificationCompat.Builder(context, CHANNEL_UPDATE)
+        val notif = buildNotification(NOTIF_UPDATE, CHANNEL_UPDATE)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
             .setContentText(text)
@@ -430,6 +455,11 @@ const val NOTIF_MONITORING_PAUSED = 9
         }
     }
 
+    /** Build a notification belonging to [id]'s group. The single entrance for grouped
+     *  notifications: callers pass the notification id and never a group key. */
+    fun buildNotification(id: Int, channelId: String): NotificationCompat.Builder =
+        NotificationCompat.Builder(context, channelId).setGroup(groupFor(id))
+
     /**
      * Background monitoring could not be restarted (Android 12+ blocks starting a foreground
      * service from the background). Surface a tap-to-resume prompt: the tap brings the app to
@@ -437,7 +467,7 @@ const val NOTIF_MONITORING_PAUSED = 9
      */
     fun postMonitoringPaused() {
         val s = Strings.get(AppLanguage.EN)
-        val notif = NotificationCompat.Builder(context, CHANNEL_MONITOR)
+        val notif = buildNotification(NOTIF_MONITORING_PAUSED, CHANNEL_MONITOR)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(s.bootRestartPaused)
             .setOngoing(true)

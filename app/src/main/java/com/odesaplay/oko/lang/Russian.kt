@@ -1,5 +1,4 @@
 package com.odesaplay.oko
-
 internal val Russian: Strings.StringSet = Strings.StringSet(
     language = AppLanguage.RU,
     onboarding = Strings.Onboarding(
@@ -732,6 +731,7 @@ internal val Russian: Strings.StringSet = Strings.StringSet(
     wordForms = Strings.WordForms(
         sources = listOf("источник", "источника", "источников"),
         resolvedThreats = listOf("%d угроза нейтрализована", "%d угрозы нейтрализовано", "%d угроз нейтрализовано"),
+        resolvedTypeThreats = listOf("%1\$d %2\$s resolved"),
         resolvingThreats = listOf("Resolving %d threat", "Resolving %d threats", "Resolving %d threats"),
         preciseGps = listOf("Precise GPS: %d min ago", "Precise GPS: %d min ago", "Precise GPS: %d min ago"),
     ),

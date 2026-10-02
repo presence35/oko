@@ -150,6 +150,13 @@ class NeutralizedTally(
         scope.launch {
             val allUkraine = runCatching { UserPrefs(context).preferences.first().neutralizedTallyAllUkraine }.getOrDefault(false)
             val badge = if (allUkraine) "🇺🇦" else ""
+            // One distinct type: name it in the title ("15 Drones resolved") — the breakdown
+            // would only repeat the count. Several types: the generic phrase plus a breakdown.
+            val single = snapshot.typeCounts.entries.singleOrNull()
+            val title = when (single) {
+                null -> resolvedThreatsPhrase(snapshot.count, lang)
+                else -> resolvedTypeThreatsPhrase(single.value, typePluralLabel(single.key, lang, single.value), lang)
+            }
             val breakdown = snapshot.typeCounts.entries
                 .sortedWith(compareByDescending<Map.Entry<ThreatType, Int>> { it.value }.thenBy { it.key.ordinal })
                 .joinToString(" · ") { (type, count) ->
@@ -157,10 +164,12 @@ class NeutralizedTally(
                     val label = info?.label(lang) ?: type.name
                     "$label $count"
                 }
-            val builder = NotificationCompat.Builder(context, CHANNEL_NEUTRALIZED)
+            val builder = AlertNotificationManager(context).buildNotification(
+                NOTIF_NEUTRALIZED, CHANNEL_NEUTRALIZED
+            )
                 .setSmallIcon(R.drawable.ic_trident)
-                .setContentTitle("$badge ${resolvedThreatsPhrase(snapshot.count, lang)}")
-                .setContentText(breakdown)
+                .setContentTitle("$badge $title")
+                .setContentText(if (single == null) breakdown else null)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setContentIntent(neutralizedTapPendingIntent(snapshot.memory))
                 .setDeleteIntent(neutralizedDismissPendingIntent())

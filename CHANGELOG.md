@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+- The monitoring notification can no longer be collapsed behind another Oko notification: every notification now has its own group, and the trident one is a group of its own 10-02_15:40:00
+
+- Official alerts are one episode per region: a yellow→red escalation re-alerts, while red→yellow just updates the notification instead of logging a second alert and sounding twice 10-02_15:40:00
+
+- A red official alert notification no longer lingers after the alert is downgraded or over 10-02_15:40:00
+
+- The offline notification is dismissed once the connection is back, even with critical-offline switched off - it used to sit in the shade for hours 10-02_15:40:00
+
+- A tap-to-resume prompt no longer sits next to the monitoring notification after monitoring actually starts 10-02_15:40:00
+
+- Area-only threats show their "Area only" chip in the empty metric slot, and the small card's P now sits before R 10-02_15:40:00
+
+- A single-type resolved tally names the type in the title ("15 Drones resolved") instead of a separate breakdown line 10-02_15:40:00
+
 - The map and alerts no longer go dead when monitoring is restarted: stopping the service used to tear down the whole app's data feed, so a refused or restarted foreground service left the map empty and could take the death animation down with it 10-01_14:17:34
 
 - Auto-restart now respects the "Restart monitoring after reboot" switch everywhere — the emergency worker used to resurrect monitoring (and post a resume prompt every 15 minutes) even with the switch off 10-01_14:17:34
