@@ -59,45 +59,74 @@ class OblastAlertEpisodeTest {
 
     // --- OfficialFrontier: one episode per region, red-then-yellow included ------------------
 
-    private fun frontier(level: AlertLevel, token: String = "odeska") = OfficialFrontier(token, level)
+    private fun frontier(level: AlertLevel, token: String = "odeska", soundedRed: Boolean = false) =
+        OfficialFrontier(token, level, soundedRed)
 
     @Test
-    fun `same region at the same level is neither new nor escalation`() {
-        val stored = frontier(AlertLevel.RED)
+    fun `same region at the same level is neither new nor a first red`() {
+        val stored = frontier(AlertLevel.RED, soundedRed = true)
         val now = frontier(AlertLevel.RED)
         assertEquals(false, now.isNewEpisode(stored))
-        assertEquals(false, now.isEscalation(stored))
+        assertEquals(false, now.isFirstRed(stored))
     }
 
     @Test
     fun `red then yellow is one episode, not a new one`() {
-        val stored = frontier(AlertLevel.RED)
+        val stored = frontier(AlertLevel.RED, soundedRed = true)
         val now = frontier(AlertLevel.YELLOW)
         assertEquals(false, now.isNewEpisode(stored))
-        assertEquals(false, now.isEscalation(stored))
+        assertEquals(false, now.isFirstRed(stored))
     }
 
     @Test
-    fun `yellow to red escalates inside the same episode`() {
+    fun `yellow to red is the first red of the same episode`() {
         val stored = frontier(AlertLevel.YELLOW)
         val now = frontier(AlertLevel.RED)
         assertEquals(false, now.isNewEpisode(stored))
-        assertEquals(true, now.isEscalation(stored))
+        assertEquals(true, now.isFirstRed(stored))
     }
 
     @Test
-    fun `a different region is a new episode, never an escalation`() {
-        val stored = frontier(AlertLevel.YELLOW, "kyivska")
-        val now = frontier(AlertLevel.RED, "odeska")
+    fun `a red that already sounded never sounds again`() {
+        val stored = frontier(AlertLevel.RED, soundedRed = true)
+        val backToRed = frontier(AlertLevel.RED)
+        assertEquals(false, backToRed.isFirstRed(stored))
+        // The flap: a yellow tick in between must not launder the memory, because the service
+        // keeps announcing the SAME stored frontier (only its live level changes).
+        assertEquals(false, backToRed.isFirstRed(stored.copy(level = AlertLevel.YELLOW)))
+        // Only an episode that has genuinely never gone red may sound.
+        assertEquals(true, backToRed.isFirstRed(frontier(AlertLevel.YELLOW)))
+    }
+
+    @Test
+    fun `a different region is a new episode, never a first red`() {
+        val stored = frontier(AlertLevel.YELLOW, token = "kyivska")
+        val now = frontier(AlertLevel.RED, token = "odeska")
         assertEquals(true, now.isNewEpisode(stored))
-        assertEquals(false, now.isEscalation(stored))
+        assertEquals(false, now.isFirstRed(stored))
     }
 
     @Test
-    fun `no stored episode is new, not an escalation`() {
+    fun `no stored episode is new, not a first red`() {
         val now = frontier(AlertLevel.YELLOW)
         assertEquals(true, now.isNewEpisode(null))
-        assertEquals(false, now.isEscalation(null))
+        assertEquals(false, now.isFirstRed(null))
+    }
+
+    @Test
+    fun `remembering red sticks for the alert's life`() {
+        val yellow = frontier(AlertLevel.YELLOW)
+        val red = frontier(AlertLevel.RED)
+        // A RED always latches the memory, whatever the previous tick was.
+        assertEquals(true, red.rememberSounded(yellow).soundedRed)
+        // A red with no stored episode beats nothing: the region starts red and already sounded.
+        assertEquals(true, red.rememberSounded(null).soundedRed)
+        // After a red, the SAME region keeps the memory even on a yellow tick.
+        assertEquals(true, yellow.rememberSounded(OfficialFrontier("odeska", AlertLevel.RED, soundedRed = true)).soundedRed)
+        // A first yellow carries no memory of its own.
+        assertEquals(false, yellow.rememberSounded(null).soundedRed)
+        // A different region starts clean rather than inheriting the old memory.
+        assertEquals(false, yellow.rememberSounded(OfficialFrontier("kyivska", AlertLevel.RED, soundedRed = true)).soundedRed)
     }
 
     @Test
@@ -105,7 +134,16 @@ class OblastAlertEpisodeTest {
         val stored = OfficialFrontier.parse("RED|odeska|2026-10-01T18:54:00|Odesa")
         val now = OfficialFrontier.parse("YELLOW|odeska|2026-10-01T19:02:00|Odesa")
         assertEquals(false, now!!.isNewEpisode(stored))
-        assertEquals(false, now.isEscalation(stored))
+        assertEquals(false, now.isFirstRed(stored))
+    }
+
+    @Test
+    fun `a restored row is assumed already siren'd`() {
+        val restoredRed = OfficialFrontier.parse("RED|odeska|s|Odesa")
+        val restoredYellow = OfficialFrontier.parse("YELLOW|odeska|s|Odesa")
+        assertEquals(true, restoredRed!!.soundedRed)
+        // A restored yellow going red is a first red: the episode was restored, the red is new.
+        assertEquals(true, frontier(AlertLevel.RED).isFirstRed(restoredYellow))
     }
 
     @Test
@@ -114,9 +152,9 @@ class OblastAlertEpisodeTest {
         val red = OfficialFrontier.parse("RED|odeska|2026-10-01T18:54:00|Odesa")
         val yellow = OfficialFrontier.parse("YELLOW|odeska|2026-10-01T18:54:00|Odesa")
         assertEquals(false, red!!.isNewEpisode(stored))
-        assertEquals(false, red.isEscalation(stored))
+        assertEquals(false, red.isFirstRed(stored))
         assertEquals(false, yellow!!.isNewEpisode(stored))
-        assertEquals(false, yellow.isEscalation(stored))
+        assertEquals(false, yellow.isFirstRed(stored))
     }
 
     @Test
@@ -135,13 +173,22 @@ class OblastAlertEpisodeTest {
     }
 
     @Test
-    fun `only an onset or an escalation sounds`() {
+    fun `only an onset or a first red sounds`() {
         val red = "RED|odeska|s|Odesa"
         val yellow = "YELLOW|odeska|s|Odesa"
+        val storedRed = OfficialFrontier.parse(red)
+        val storedYellow = OfficialFrontier.parse(yellow)
+        assertEquals(true, officialAnnouncementIsOnset(null, OfficialFrontier.parse(yellow)))
         assertEquals(true, officialAnnouncementIsOnset(null, OfficialFrontier.parse(red)))
-        assertEquals(true, officialAnnouncementIsOnset(OfficialFrontier.parse(yellow), OfficialFrontier.parse(red)))
-        assertEquals(false, officialAnnouncementIsOnset(OfficialFrontier.parse(red), OfficialFrontier.parse(yellow)))
-        assertEquals(false, officialAnnouncementIsOnset(OfficialFrontier.parse(red), OfficialFrontier.parse(red)))
-        assertEquals(false, officialAnnouncementIsOnset(OfficialFrontier.parse(red), null))
+        // A first red sounds...
+        assertEquals(true, officialAnnouncementIsOnset(storedYellow, OfficialFrontier.parse(red)))
+        // ...a repeat red does not (the parsed row already remembers it)...
+        assertEquals(false, officialAnnouncementIsOnset(storedRed, OfficialFrontier.parse(red)))
+        // ...and carrying the memory through a yellow dip still suppresses the second red.
+        val afterFirstRed = OfficialFrontier.parse(red)!!.rememberSounded(storedYellow)
+        assertEquals(false, officialAnnouncementIsOnset(afterFirstRed, OfficialFrontier.parse(red)))
+        // A downgrade only rewrites.
+        assertEquals(false, officialAnnouncementIsOnset(storedRed, OfficialFrontier.parse(yellow)))
+        assertEquals(false, officialAnnouncementIsOnset(storedRed, null))
     }
 }

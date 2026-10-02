@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.security.MessageDigest
 
 plugins {
     id("com.android.application")
@@ -196,7 +197,7 @@ tasks.register<GradleBuild>("releasePlay") {
 
 tasks.register("uploadRelease") {
     group = "versioning"
-    description = "Builds the beta-release APK (sideload flavor), generates version.json from version.properties + CHANGELOG.md, and uploads both to the FTP server."
+    description = "Builds the beta-release APK (sideload flavor), generates version.json (version + sha256 read from the built APK, notes from CHANGELOG.md), uploads both, then verifies the live copy."
     dependsOn("assembleSideloadRelease")
     doLast {
         val uploadPropsFile = file("upload.properties")
@@ -209,19 +210,42 @@ tasks.register("uploadRelease") {
         val pass = up.getProperty("password") ?: throw GradleException("upload.properties: missing 'password'")
         val remoteDir = up.getProperty("remoteDir").orEmpty().trim().trim('/')
 
-        val apk = file("build/outputs/apk/sideload/release/app-sideload-release.apk")
-        if (!apk.exists()) throw GradleException("Sideload release APK not found: $apk")
+        // The APK is the source of truth for versionCode/versionName: version.properties is
+        // bumped before the build and could describe a different artifact than the one we are
+        // about to publish. AGP writes the built values into output-metadata.json.
+        val metadataFile = file("build/outputs/apk/sideload/release/output-metadata.json")
+        if (!metadataFile.exists()) throw GradleException("Missing build metadata: $metadataFile")
+        @Suppress("UNCHECKED_CAST")
+        val element = ((groovy.json.JsonSlurper().parse(metadataFile) as Map<String, Any>)["elements"] as? List<Any>)
+            ?.firstOrNull() as? Map<String, Any>
+            ?: throw GradleException("No APK entry in $metadataFile")
+        val vc = (element["versionCode"] as Number).toInt()
+        val vn = element["versionName"].toString()
+        val builtApk = file("build/outputs/apk/sideload/release/${element["outputFile"]}")
+        if (!builtApk.exists()) throw GradleException("Built APK not found: $builtApk")
 
-        val vProps = Properties().apply { versionPropsFile.inputStream().use { load(it) } }
-        val vc = vProps.getProperty("versionCode") ?: "0"
-        val vn = vProps.getProperty("versionName") ?: "0.0.0"
+        val vProps = readVersionProps()
+        val propsCode = (vProps.getProperty("versionCode") ?: "").toIntOrNull()
+        val propsName = vProps.getProperty("versionName")
+        if (propsCode != vc || propsName != vn) {
+            throw GradleException(
+                "Stale build: version.properties says $propsName ($propsCode) but the APK is $vn ($vc) — rebuild before releasing."
+            )
+        }
+        val sha256 = sha256Of(builtApk)
         val (notesEn, notesUa, notesRu) = buildNotesFromChangelog()
+
+        val publicDir = if (remoteDir.isEmpty()) "" else "$remoteDir/"
+        // Derived from the upload target so the URL the client verifies against cannot drift
+        // from where the file actually lands.
+        val apkUrl = "https://$host/${publicDir}app-release.apk"
 
         val versionJson = buildString {
             appendLine("{")
             append("  \"versionCode\": ").append(vc).appendLine(",")
             append("  \"versionName\": \"").append(escapeJson(vn)).appendLine("\",")
-            append("  \"apkUrl\": \"https://").append(host).append("/other_apps/oko/app-release.apk\",").appendLine()
+            append("  \"apkUrl\": \"").append(apkUrl).appendLine("\",")
+            append("  \"sha256\": \"").append(sha256).appendLine("\",")
             appendLine("  \"notes\": {")
             append("    \"en\": \"").append(escapeJson(notesEn)).appendLine("\",")
             append("    \"ua\": \"").append(escapeJson(notesUa)).appendLine("\",")
@@ -251,12 +275,54 @@ tasks.register("uploadRelease") {
             if (code != 0) throw GradleException("FTP upload of $remoteName failed (exit $code)")
         }
 
-        upload(apk, "app-release.apk")
+        // APK first, manifest second: a client must never read a new versionCode while the old
+        // file is still what that URL serves. The reverse order is unsafe.
+        upload(builtApk, "app-release.apk")
         upload(jsonFile, "version.json")
         val privacyFile = rootProject.file("privacy.html")
         if (privacyFile.exists()) upload(privacyFile, "privacy.html")
-        println("Done. https://$host/other_apps/oko/version.json")
+
+        // Prove the server serves what we just built. Without this, a bad upload only shows up
+        // as an app that silently refuses to install, forever. FTP→HTTPS propagation can lag,
+        // so retry before calling it broken.
+        val liveUrl = "https://$host/${publicDir}version.json"
+        var live: Map<*, *>? = null
+        for (attempt in 0 until 3) {
+            live = fetchLiveJson(liveUrl)
+            val ok = live != null &&
+                live["sha256"]?.toString() == sha256 &&
+                (live["versionCode"] as? Number)?.toInt() == vc
+            if (ok || attempt == 2) break
+            Thread.sleep(3_000)
+        }
+        val liveSha = live?.get("sha256")?.toString()
+        val liveVc = (live?.get("versionCode") as? Number)?.toInt()
+        if (liveSha != sha256 || liveVc != vc) {
+            throw GradleException("Post-upload check FAILED at $liveUrl: serves versionCode=$liveVc sha256=$liveSha, expected $vc / $sha256")
+        }
+        println("Verified live: $liveUrl (versionCode=$vc)")
+        println("Done. $liveUrl")
     }
+}
+
+private fun fetchLiveJson(url: String): Map<*, *>? = runCatching {
+    val proc = ProcessBuilder("curl", "-sS", "--fail", url).redirectErrorStream(true).start()
+    val body = proc.inputStream.readBytes().toString(Charsets.UTF_8)
+    if (proc.waitFor() != 0) return@runCatching null
+    groovy.json.JsonSlurper().parseText(body) as? Map<*, *>
+}.getOrNull()
+
+private fun sha256Of(file: File): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+        val buf = ByteArray(64 * 1024)
+        while (true) {
+            val read = input.read(buf)
+            if (read == -1) break
+            digest.update(buf, 0, read)
+        }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
 tasks.register("uploadPrivacy") {

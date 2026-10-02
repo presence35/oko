@@ -2,9 +2,13 @@
 
 ## [Unreleased]
 
+- App updates are now verified before installing: the download is checked against the checksum published with the release, and the APK is confirmed to be this app, signed with the same key, and actually newer 10-02_17:27:04
+
+- The release now takes the version from the built APK, publishes its checksum, and re-checks the live copy — a bad upload fails the release instead of shipping an update nobody can install 10-02_17:27:04
+
 - The monitoring notification can no longer be collapsed behind another Oko notification: every notification now has its own group, and the trident one is a group of its own 10-02_15:40:00
 
-- Official alerts are one episode per region: a yellow→red escalation re-alerts, while red→yellow just updates the notification instead of logging a second alert and sounding twice 10-02_15:40:00
+- Official alerts are one episode per region and siren once: yellow turning red sounds the siren a single time (a level that flaps never repeats it), and a downgrade just updates the notification instead of logging a second alert 10-02_15:40:00
 
 - A red official alert notification no longer lingers after the alert is downgraded or over 10-02_15:40:00
 

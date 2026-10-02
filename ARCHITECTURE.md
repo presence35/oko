@@ -15,8 +15,10 @@ change a documented invariant, update the relevant section.
   targetSdk 36, namespace `com.odesaplay.oko`.
 - No runtime backend of ours: data comes straight from the public
   [NEPTUN](https://neptun.in.ua) API (WebSocket stream). No Firebase, no push.
-- Update feed: static `version.json` + APK on `odesaplay.com.ua`, self-checked daily,
-  `sideload` flavor only; `play` ships through Google Play.
+- Update feed: static `version.json` (version + `sha256` + notes) + APK on `odesaplay.com.ua`,
+  self-checked daily, `sideload` flavor only; `play` ships through Google Play. The client only
+  downloads from that same origin, and checks the digest, the package, the version bump and the
+  signing key before handing the APK to the system installer.
 - Coroutines + flows throughout; singletons expose `StateFlow`s.
 
 ## Package structure
@@ -93,7 +95,12 @@ LocationTracker ──┬──► MainViewModel        NightMode.kt / Cities.kt
   consumers use, so an approximate track heading to your city rides the yellow ring instead of
   parking on the position (a fast one still sounds red).
 - **Update flow (sideload flavor only).** `UpdateManager.check()` → `Available` → `download()`
-  (progress) → `buildInstallIntent()` → system installer. `AlertService` also checks silently
+  (progress) → `buildInstallIntent()` → system installer. `check()` rejects an `apkUrl` that is
+  not the configured origin. `download()` checks the `sha256` from `version.json` (a mismatch is
+  fatal, an absent digest only warns) and then pre-flights the artifact itself — package name,
+  strictly-newer `versionCode`, and (API 28+) the same signing key as the installed app — so a
+  bad or tampered build is refused with a reason instead of failing inside the installer.
+  `AlertService` also checks silently
   every day at 16:20 while it runs and posts one "new version available" notification per new
   build (deduped by `last_notified_update_code`); tapping it re-opens the app and pops the
   update dialog. All of this is compiled out of the `play` flavor (`BuildConfig.SELF_UPDATE`),
@@ -271,15 +278,15 @@ like the rest of the app). |
 
 | File | Responsibility |
 | --- | --- |
-| `UpdateManager.kt` | `UPDATE_BASE_URL`, `check()`/`download()`/`buildInstallIntent()` (FileProvider); `fetchSheltersJson()` pulls the daily shelter-list copy. The download/install path is reachable only when `BuildConfig.SELF_UPDATE` (sideload flavor); `check()`/`fetchSheltersJson()` are shared. |
+| `UpdateManager.kt` | `UPDATE_BASE_URL`, `check()`/`download()`/`buildInstallIntent()` (FileProvider, `ACTION_INSTALL_PACKAGE` → system installer); `fetchSheltersJson()` pulls the daily shelter-list copy. Hardened self-update: `check()` accepts only the configured origin, `download()` requires a matching digest when one is published and always pre-flights the archive (package, newer `versionCode`, matching signing key) before the installer sees it. The download/install path is reachable only when `BuildConfig.SELF_UPDATE` (sideload flavor); `check()`/`fetchSheltersJson()` are shared. |
 
 ### Build / release
 
 | File | Responsibility |
 | --- | --- |
 | `app/build.gradle.kts` | Android config + custom tasks: `bumpVersion`, `releaseDirect`, `releasePlay`, `uploadRelease`, `uploadPrivacy`. Declares the `play`/`sideload` flavors (`BuildConfig.SELF_UPDATE`). |
-| `app/version.properties` | `versionCode`/`versionName` — source of truth for the build + `version.json`. |
-| `server/version.json` | Committed example of the generated update feed. |
+| `app/version.properties` | `versionCode`/`versionName` — bumped by `bumpVersion`; `uploadRelease` cross-checks them against the built APK's `output-metadata.json` and fails on drift. |
+| `app/build/release/version.json` | Generated update feed (build output, uploaded by `releaseDirect`; not committed — the live copy is on the server). |
 
 ## Key invariants
 
@@ -682,7 +689,7 @@ JUnit unit tests in `app/src/test/java/com/odesaplay/oko/`. Invariant → test: 
 - `CitiesTest.kt` — city-list integrity; majors-only `nearestCity`/`resolveFocus`.
 - `ThreatTest.kt` — JSON parsing, type mapping, course translation.
 - `TransliterationTest.kt` — КМУ №55 romanization, no semantic translation, digraph rules.
-- `UpdateManagerTest.kt` — `versionNameGreater`.
+- `UpdateManagerTest.kt` — `versionNameGreater`, `isTrustedApkUrl`, `sha256Matches`, `signersMatch`.
 - `NeptunClientTest.kt` — reconnect backoff (`ResilientConnectionSupervisor.backoffDelayMs`), `ConnectionState` degradation.
 - `NightModeTest.kt` — night-window resolution + effective params/armed.
 - `ConnectionLogTest.kt` — episode-commit rules (grace window, blips, recovery, ring-buffer cap).
@@ -696,9 +703,12 @@ Run: `.\gradlew.bat :app:testDebugUnitTest`
 ## Build & release
 
 - `.\gradlew.bat :app:assembleDebug` — debug APK (no secrets needed).
-- `.\gradlew.bat :app:release` — bumps version, builds release APK, uploads APK + generated
-  `version.json` over FTP. Requires git-ignored `app/keystore.properties` (signing) and
-  `app/upload.properties` (FTP creds). Release notes from `notes_en.txt` / `notes_ua.txt`.
+- `.\gradlew.bat :app:releaseDirect` — bumps the version, builds the sideload release APK,
+  generates `version.json` from the **built APK** (versionCode/versionName/`sha256`) plus the
+  `## [Unreleased]` CHANGELOG entries, uploads the APK first and the manifest second, then
+  re-fetches the live `version.json` and fails if the server does not serve what was just built.
+  Requires git-ignored `app/keystore.properties` (signing) and `app/upload.properties` (FTP creds).
+- `.\gradlew.bat :app:releasePlay` — bumps the version and builds the `play` App Bundle only.
 - Full release workflow is documented in `AGENTS.md` ("release it").
 
 ## State plumbing / recomposition contract (perf)

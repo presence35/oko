@@ -247,41 +247,61 @@ data class LatchedEpisode(
 }
 
 /**
- * Official-episode identity + severity for one tick: the canonical oblast region plus the level
- * the feed currently reports for it. Identity is deliberately **level- and timestamp-insensitive**
- * — the contract is one episode (hence one all-clear) per region, "red, yellow, or red-then-yellow"
- * included (BEHAVIORS.md, Alert Service → All-clear), and a source re-stamping `since` must never
- * read as a brand-new alert. The level rides along only so escalation can be told apart from a
- * fresh episode.
+ * Official-episode identity + severity for one tick, plus the one bit of memory the sound rule
+ * needs: whether this episode has already sounded at RED. Identity is deliberately **level- and
+ * timestamp-insensitive** — the contract is one episode (hence one all-clear) per region, "red,
+ * yellow, or red-then-yellow" included (BEHAVIORS.md, Alert Service → All-clear), and a source
+ * re-stamping `since` must never read as a brand-new alert. [soundedRed] is what limits the siren
+ * to once per alert: a level that flaps yellow↔red is one episode that has already been siren'd,
+ * so it never pulses. Same shape as the zone policy's `soundedInner` (NotifyPlugin): the memory
+ * lives with the episode, not with a wall-clock hold.
  */
-data class OfficialFrontier(val token: String, val level: AlertLevel) {
-
+data class OfficialFrontier(
+    val token: String,
+    val level: AlertLevel,
+    val soundedRed: Boolean = false
+) {
     /** A different region (or no previous episode at all): a new episode, worthy of a sound. */
     fun isNewEpisode(stored: OfficialFrontier?): Boolean = stored == null || stored.token != token
 
-    /** Same region, higher severity (yellow → red): re-alert, but it is still one episode. */
-    fun isEscalation(stored: OfficialFrontier?): Boolean =
-        stored != null && stored.token == token && level.ordinal > stored.level.ordinal
+    /** Same region, now red, and this episode has not been siren'd for red yet. The single
+     *  "escalation" question: [soundedRed] carries the memory, so a repeat red (or a feed
+     *  flapping yellow↔red) is a silent rewrite rather than another siren. */
+    fun isFirstRed(stored: OfficialFrontier?): Boolean =
+        stored != null && stored.token == token && level == AlertLevel.RED && !stored.soundedRed
+
+    /** This episode's next memory of having sounded. Latched by a red tick, and inherited from
+     *  the previously-stored frontier so the memory survives a downgrade: without the inherited
+     *  bit, a yellow tick straight after a red would drop it and the next red would siren again. */
+    fun rememberSounded(stored: OfficialFrontier?): OfficialFrontier {
+        val sameRegion = stored?.token == token
+        val latch = soundedRed || (level == AlertLevel.RED && (stored == null || sameRegion)) ||
+            (sameRegion && stored!!.soundedRed)
+        return if (latch) OfficialFrontier(token, level, soundedRed = true) else this
+    }
 
     companion object {
         /** `null` when there is no episode at all (no level, or no canonical region to name). */
-        fun of(level: AlertLevel, token: String?): OfficialFrontier? =
+        fun of(level: AlertLevel, token: String?, soundedRed: Boolean = false): OfficialFrontier? =
             if (level == AlertLevel.NONE || token.isNullOrBlank()) null
-            else OfficialFrontier(token, level)
+            else OfficialFrontier(token, level, soundedRed)
 
         /** Identity + level from a persisted announcement row (`LEVEL|token|since|city`). Reads
          *  through [LatchedEpisode.parse], so legacy pre-level rows (`token|since|city`) adopt
-         *  silently instead of sounding again after an upgrade. */
+         *  silently instead of sounding again after an upgrade. A restored row is assumed to have
+         *  sounded (it was announced before the process died), which makes a restart silent. */
         fun parse(row: String?): OfficialFrontier? =
-            LatchedEpisode.parse(row)?.let { OfficialFrontier(it.token, it.level) }
+            LatchedEpisode.parse(row)?.let {
+                OfficialFrontier(it.token, it.level, soundedRed = it.level == AlertLevel.RED)
+            }
     }
 }
 
-/** Whether this tick's official announcement should sound: a new episode, or an escalation inside
- *  a live one. A downgrade only rewrites the announcement — one siren per onset/escalation, never
- *  one per level flip. */
+/** Whether this tick's official announcement should sound: a new episode, or the first red inside
+ *  a live one. Any other change — a downgrade, a repeat red, a feed flapping yellow↔red — only
+ *  rewrites the announcement. Two sounds per alert at the very most. */
 fun officialAnnouncementIsOnset(stored: OfficialFrontier?, now: OfficialFrontier?): Boolean =
-    now != null && (now.isNewEpisode(stored) || now.isEscalation(stored))
+    now != null && (now.isNewEpisode(stored) || now.isFirstRed(stored))
 
 /** Highest severity present in [alerts] for the given focus. When [cityUa] is non-null and
  *  [scope] is true, only city-covered alerts count. Compares [OblastAlert.level] strings directly

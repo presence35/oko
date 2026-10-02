@@ -176,10 +176,11 @@ class AlertService : Service() {
     private var lastZoneTiers: Map<String, ThreatZone> = emptyMap()
     private var lastNotifyPrefs: NotifyPrefs? = null
     private var lastPersistedPresence = ""
-    /** Announced official episode for ANY level: identity + level (see [OfficialFrontier]).
-     *  Identity is the canonical region, persisted as the `LEVEL|token|since|city` row; level
-     *  rides along only to tell escalation from a fresh onset. Non-null ONLY while the episode
-     *  is alive — it is cleared when the episode ends, so "announced but ended" cannot exist. */
+    /** Announced official episode for ANY level: identity + level + whether it has already been
+     *  siren'd at red (see [OfficialFrontier]). Identity is the canonical region, persisted as the
+     *  `LEVEL|token|since|city` row; the sound memory is process-local, so a restart re-announces
+     *  silently rather than re-sirening. Non-null ONLY while the episode is alive — it is cleared
+     *  when the episode ends, so "announced but ended" cannot exist. */
     private var lastAnnouncedFrontier: OfficialFrontier? = null
     /** The announcement row last persisted, verbatim. Held because the LATCH must keep reading the
      *  level it was persisted with — a live-feed downgrade updates [lastAnnouncedFrontier] without
@@ -558,14 +559,15 @@ class AlertService : Service() {
 
         monitoringJob = scope.launch {
             // Restore the announced official-episode identity from persisted ServiceState keys.
-            // Only the identity is trusted back: the row's remembered LEVEL is dropped, because a
-            // level is a live feed fact, not history — restoring a stale "RED" would announce a
-            // red that the feed may have already downgraded or ended. The audit frontier is never
+            // Only the identity is trusted back, never the level or the sound memory: both are
+            // live-process facts. The episode therefore re-announces silently after a restart
+            // (see [OfficialFrontier.isFirstRed] and its parse), which is what stops a reboot from
+            // re-sirening an alert that was already announced. The audit frontier is never
             // restored at all (see [lastLoggedRawFrontier]), so a restart cannot double-log.
             val _annToken = svcState.officialAnnouncedToken().first().ifBlank { null }
             val _annCity = svcState.officialAnnouncedCity().first().ifBlank { null }
             if (_annToken != null && _annCity != null) {
-                lastAnnouncedFrontier = OfficialFrontier(_annToken, AlertLevel.RED)
+                lastAnnouncedFrontier = OfficialFrontier(_annToken, AlertLevel.RED, soundedRed = true)
                 lastAnnouncedRow = "$_annToken|$_annCity"
             }
             // Restore open plugin episodes across restarts: ongoing threats stay
@@ -1100,8 +1102,8 @@ val mappedThreats = registry.allThreats.map { list ->
             val frontier = announcedFrontier(state)
             val raw = rawFrontier(state)
             var scopedOffLogged = false
-            // Onset OR escalation: a new region, or the same region gone red. A downgrade
-            // (red → yellow) is neither — it only rewrites the announcement below.
+            // A new region, or the first red of a live one. A downgrade (red → yellow) and a
+            // repeat red (a level that flaps) are neither — they only rewrite the announcement.
             val sounding = officialAnnouncementIsOnset(lastAnnouncedFrontier, frontier)
             if (sounding) {
                 // A new official episode supersedes a lingering all-clear — but only for the
@@ -1163,14 +1165,14 @@ val mappedThreats = registry.allThreats.map { list ->
                             now = System.currentTimeMillis()
                     )
                 }
-                lastAnnouncedFrontier = frontier
+                lastAnnouncedFrontier = frontier!!.rememberSounded(lastAnnouncedFrontier)
                 lastAnnouncedRow = announcedRow(state)
                 lastLoggedRawFrontier = raw
-            } else if (raw != null && raw != lastLoggedRawFrontier) {
+            } else if (raw != null && raw.token != lastLoggedRawFrontier?.token) {
                 // Raw official alert outside the notif scope (city-scope on, raion not covering
                 // the focus city, or a muted/sleep window): record it silently so the Logs tab
-                // still carries EVERY official alert, even when no notif was posted. A level
-                // flip here is the same episode, so identity alone decides — hence `raw !=`.
+                // still carries EVERY official alert, even when no notif was posted. Identity
+                // alone decides — a level flip here is the same episode, hence `token !=`.
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_ON, night = state.nightActive,
                     sirenOverride = state.officialSirenOverride, vibrationLevel = VIBRATION_STRONG,

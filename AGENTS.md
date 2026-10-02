@@ -10,7 +10,7 @@ Only when the user says **"release it"**, perform a full release:
 4. Run the single command (no args — the version auto-bumps its patch, e.g. 0.3.8 → 0.3.9; use `-PnewVersion=<ver>` only for an explicit override):
    - `.\gradlew.bat :app:releaseDirect` — sideload/beta path: builds the APK and uploads it + `version.json` to the FTP server.
    - `.\gradlew.bat :app:releasePlay` — Google Play path: builds the `play` App Bundle only (no self-update, no upload).
-5. Verify the live result at `https://odesaplay.com.ua/other_apps/oko/version.json` (version + both translations).
+5. The upload already re-fetches the live `version.json` and fails if the version/digest don't match what was just built; still eyeball it for version + both translations.
 6. Move the released entries under a new `## [<ver>]` heading in `CHANGELOG.md` and clear `## [Unreleased]` + mm-dd_h:m:s.
 
 ## While working
@@ -19,7 +19,7 @@ Only when the user says **"release it"**, perform a full release:
 - Always find elegant solutions, not the easy code!
 - Append user-visible changes to `CHANGELOG.md` under `## [Unreleased]` as you go, so any session can release them. Be highly brief. Add mm-dd_h:m:s.
 - Changelog entries are short one-liners, EN only: `- EN text mm-dd_h:m:s`. UA/RU release notes fall back to EN at release time. No multi-paragraph essays.
-- The server `version.json` is generated from `app/version.properties` (versionCode/versionName) plus the `## [Unreleased]` entries in `CHANGELOG.md` (auto-derived at release time). FTP creds live in `app/upload.properties` (git-ignored).
+- The server `version.json` is generated from the **built APK** (`output-metadata.json` → versionCode/versionName, plus the APK's `sha256`) and the `## [Unreleased]` entries in `CHANGELOG.md` (auto-derived at release time). `uploadRelease` cross-checks the version against `app/version.properties` and fails on drift, uploads the APK before the manifest, then verifies the live copy. FTP creds live in `app/upload.properties` (git-ignored).
 - Version numbers: `versionCode` is a monotonic integer; `versionName` is human-readable. Keep both bumped together (the `bumpVersion` task does this).
 - **EN-only strings during normal work.** Do NOT translate strings to UA/RU — write only the
   EN text, and put it in the UA and RU slots too as placeholders so `Strings` compiles).
