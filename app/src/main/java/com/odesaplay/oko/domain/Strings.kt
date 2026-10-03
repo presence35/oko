@@ -715,6 +715,15 @@ object Strings {
         val iconsLabel: String,
     )
 
+    /** Beta log-export controls. Own holder rather than more [Misc] fields: `Misc` is already at
+     *  the JVM constructor argument-slot ceiling, so anything added there fails at class-load
+     *  time in unit tests, not at compile time. */
+    data class LogExportStrings(
+        val sendLogs: String,
+        val sendLogsOk: String,
+        val sendLogsFail: String
+    )
+
     data class WordForms(
         val sources: List<String>,
         val resolvedThreats: List<String>,
@@ -736,6 +745,7 @@ object Strings {
         val explainers: ExplainerStrings,
         val subtitles: Subtitles,
         val wordForms: WordForms,
+        val logsExport: LogExportStrings,
         val calmMessages: List<String>,
     ) {
         val appTitle: String get() = onboarding.appTitle
@@ -1187,6 +1197,9 @@ object Strings {
         val logsGroupByLabel: String get() = misc.logsGroupByLabel
         val debugLogEmpty: String get() = misc.debugLogEmpty
         val debugLogClear: String get() = misc.debugLogClear
+        val logsSendLogs: String get() = logsExport.sendLogs
+        val logsSendLogsOk: String get() = logsExport.sendLogsOk
+        val logsSendLogsFail: String get() = logsExport.sendLogsFail
         val debugLogOpen: String get() = misc.debugLogOpen
         val debugLogDay: String get() = misc.debugLogDay
         val debugLogNight: String get() = misc.debugLogNight

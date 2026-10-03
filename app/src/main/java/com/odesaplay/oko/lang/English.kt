@@ -735,6 +735,11 @@ internal val English: Strings.StringSet = Strings.StringSet(
         resolvingThreats = listOf("Resolving %d threat", "Resolving %d threats"),
         preciseGps = listOf("Precise GPS: 1 min ago", "Precise GPS: %d min ago"),
     ),
+    logsExport = Strings.LogExportStrings(
+        sendLogs = "Send logs",
+        sendLogsOk = "Logs sent:",
+        sendLogsFail = "Send failed",
+    ),
     calmMessages = listOf(
         "Quiet — go touch grass",
         "Breathe",

@@ -1,5 +1,17 @@
 package com.odesaplay.oko.service
 
+/** What a dispatched sound is, i.e. what may be allowed to truncate it. */
+enum class SoundKind {
+    /** Danger siren, repeated until stopped. Truncates anything. */
+    LOOP,
+
+    /** One-shot urgency blip (offline critical). Truncates anything. */
+    ALERT,
+
+    /** Pleasant one-shot (all-clear). Truncated by an alert, never by housekeeping. */
+    CHIME
+}
+
 /**
  * Latest-wins holder for a sound requested before its SoundPool sample finished loading.
  *
@@ -10,6 +22,7 @@ package com.odesaplay.oko.service
 class PendingAlarm {
 
     data class Sound(
+        val kind: SoundKind,
         val sampleId: Int,
         val leftVol: Float,
         val rightVol: Float,

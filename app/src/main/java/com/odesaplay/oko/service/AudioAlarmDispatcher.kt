@@ -62,7 +62,13 @@ class AudioAlarmDispatcher(
     private var soundAllClearId: Int = 0
     private var soundCriticalOfflineId: Int = 0
 
-    private var activeLoopStreamId: Int = 0
+    /**
+     * The one stream this dispatcher currently owns, with what it is. A stream id without its
+     * kind is unrepresentable: every stop is scoped to a kind, so a housekeeping stop can never
+     * truncate an unrelated one-shot.
+     */
+    private data class Active(val streamId: Int, val kind: SoundKind)
+    private var active: Active? = null
 
     init {
         initSoundPool()
@@ -102,6 +108,7 @@ class AudioAlarmDispatcher(
         enforceAlarmStreamVolume()
         playSound(
             if (isRed) soundRedAlertId else soundYellowAlertId,
+            kind = if (loop) SoundKind.LOOP else SoundKind.ALERT,
             priority = 10,
             loopCount = if (loop) -1 else 0
         )
@@ -111,7 +118,7 @@ class AudioAlarmDispatcher(
      * Plays the authoritative All-Clear chime.
      */
     fun dispatchAllClearChime() {
-        playSound(soundAllClearId, 0.9f, 0.9f, 5)
+        playSound(soundAllClearId, leftVol = 0.9f, rightVol = 0.9f, kind = SoundKind.CHIME, priority = 5)
         vibrator.cancel()
     }
 
@@ -137,40 +144,55 @@ class AudioAlarmDispatcher(
     fun dispatchCriticalOffline(overrideSilence: Boolean = true) {
         if (!overrideSilence) return
         enforceAlarmStreamVolume()
-        playSound(soundCriticalOfflineId, priority = 8)
+        playSound(soundCriticalOfflineId, kind = SoundKind.ALERT, priority = 8)
     }
 
     private fun playSound(
         sampleId: Int,
+        kind: SoundKind,
         leftVol: Float = 1.0f,
         rightVol: Float = 1.0f,
         priority: Int = 10,
         loopCount: Int = 0,
         rate: Float = 1.0f
     ): Boolean {
-        val sound = PendingAlarm.Sound(sampleId, leftVol, rightVol, priority, loopCount, rate)
+        val sound = PendingAlarm.Sound(kind, sampleId, leftVol, rightVol, priority, loopCount, rate)
         return when (pendingAlarm.onRequest(sound, sampleId != 0 && loadedSampleIds.contains(sampleId))) {
             PendingAlarm.Decision.DROP, PendingAlarm.Decision.QUEUE -> false
             PendingAlarm.Decision.PLAY -> playNow(sound)
         }
     }
 
+    /**
+     * An alert always preempts whatever is playing; a chime only replaces another chime. The
+     * asymmetric rule is the whole point: a housekeeping stop (see [stopLoopingAlert]) must
+     * never be able to clip a one-shot that just started.
+     */
     private fun playNow(sound: PendingAlarm.Sound): Boolean {
-        stopActiveAlert()
+        val current = active
+        if (current != null && (sound.kind != SoundKind.CHIME || current.kind == SoundKind.LOOP)) {
+            stopActiveAlert()
+        }
         requestFocus()
-        activeLoopStreamId = soundPool?.play(
+        val streamId = soundPool?.play(
             sound.sampleId, sound.leftVol, sound.rightVol, sound.priority, sound.loopCount, sound.rate
         ) ?: 0
+        if (streamId == 0) return false
+        active = Active(streamId, sound.kind)
         return true
     }
 
+    /** Stops everything: explicit user mute, service teardown. */
     fun stopActiveAlert() {
-        if (activeLoopStreamId != 0) {
-            soundPool?.stop(activeLoopStreamId)
-            activeLoopStreamId = 0
-        }
+        active?.let { soundPool?.stop(it.streamId) }
+        active = null
         vibrator.cancel()
         abandonFocus()
+    }
+
+    /** Stops only a looping siren, leaving a one-shot chime to finish. */
+    fun stopLoopingAlert() {
+        if (active?.kind == SoundKind.LOOP) stopActiveAlert()
     }
 
     private fun requestFocus() {

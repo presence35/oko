@@ -65,12 +65,14 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.NearMe
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -119,6 +121,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.odesaplay.oko.AppSources
+import com.odesaplay.oko.LogUpload
+import com.odesaplay.oko.UploadState
 import com.odesaplay.oko.source.OperationalMode
 import com.odesaplay.oko.source.SourceState
 import com.odesaplay.oko.source.SourceTestResult
@@ -249,6 +253,7 @@ fun LogsDropDownSheet(
     var newestFirst by rememberSaveable { mutableStateOf(true) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var legendExpanded by rememberSaveable { mutableStateOf(false) }
+    val uploadState by LogUpload.state.collectAsState()
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -320,6 +325,60 @@ fun LogsDropDownSheet(
                 fontWeight = FontWeight.Bold,
                 color = connColor
             )
+            Spacer(Modifier.width(4.dp))
+            val uploading = uploadState is UploadState.Building || uploadState is UploadState.Sending
+            IconButton(
+                onClick = { if (uploading) LogUpload.dismiss() else LogUpload.upload(context) },
+                enabled = !uploading,
+                interactionSource = rememberHapticInteractionSource()
+            ) {
+                if (uploading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = Color(AppPalette.AlertYellow)
+                    )
+                } else {
+                    Icon(
+                        Icons.Outlined.CloudUpload,
+                        contentDescription = s.logsSendLogs,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        // Upload outcome — a tap with no confirmation gets tapped twice, and you get two bundles.
+        when (val st = uploadState) {
+            is UploadState.Done, is UploadState.Failed -> {
+                val ok = st is UploadState.Done
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { LogUpload.dismiss() }
+                        .background(Color(AppPalette.CardAlt))
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        if (ok) Icons.Filled.CheckCircle else Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = if (ok) Color(AppPalette.SafeGreen) else Color(AppPalette.AlertRed),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (ok) "${s.logsSendLogsOk} ${(st as UploadState.Done).fileName}"
+                        else "${s.logsSendLogsFail}: ${(st as UploadState.Failed).reason}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2
+                    )
+                }
+            }
+            else -> Unit
         }
 
         // Tabs — taps drive the pager; swipes flow back via snapshotFlow above.

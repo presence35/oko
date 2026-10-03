@@ -32,6 +32,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -499,12 +500,17 @@ internal fun NotifyPolicyRow(
     selected: ZonePolicy,
     whatIf: Map<ZonePolicy, Int>,
     onChange: (ZonePolicy) -> Unit,
-    s: Strings.StringSet
+    s: Strings.StringSet,
+    detail: @Composable (ColumnScope.() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
+            .padding(top = 12.dp, bottom = 12.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+            .padding(12.dp)
     ) {
         Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(3.dp))
@@ -514,44 +520,66 @@ internal fun NotifyPolicyRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(10.dp))
-        ZonePolicy.values().forEach { policy ->
-            val isSel = policy == selected
-            val sub = whatIf[policy]?.let { String.format(s.policyWhatIfFormat, it) }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(
-                        width = if (isSel) 2.dp else 1.dp,
-                        color = if (isSel) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outlineVariant,
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                    .hapticClickable { onChange(policy) }
-                    .padding(horizontal = 12.dp, vertical = 9.dp)
-            ) {
-                Column {
-                    Text(
-                        text = policyTitle(policy, s),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
-                    )
-                    Text(
-                        text = policyDesc(policy, s),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    sub?.let {
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ZonePolicy.values().forEach { policy ->
+                PolicyTile(policy, policy == selected, Modifier.weight(1f), s) { onChange(policy) }
             }
-            Spacer(Modifier.height(8.dp))
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            policyDesc(selected, s),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        val sub = whatIf[selected]?.let { String.format(s.policyWhatIfFormat, it) }
+        if (sub != null) {
+            Text(
+                sub,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        detail?.invoke(this)
+    }
+}
+
+/** One policy option as a compact square: title only, the description lives under the row
+ *  for the selected tile (there is no room for it at quarter width). */
+@Composable
+private fun PolicyTile(
+    policy: ZonePolicy,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    s: Strings.StringSet,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(
+            if (selected) 2.dp else 1.dp,
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
+        modifier = modifier
+            .heightIn(min = 56.dp)
+            .hapticClickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = policyTitle(policy, s),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -585,7 +613,10 @@ internal fun DigestControlsRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
+            .padding(top = 12.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(

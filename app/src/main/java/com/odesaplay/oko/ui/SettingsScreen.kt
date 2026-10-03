@@ -657,19 +657,15 @@ fun SettingsScreen(
                         iconBadgeSuperscriptSuffix = s.quietBadgeSuper
                     )
                     AnimatedVisibility(visible = notifyPolicyEnabled) {
-                        Column {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-              NotifyPolicyRow(
-                                title = s.notifyPolicyTitle,
-                                description = s.notifyPolicyDesc,
-                                selected = zonePolicy,
-                                whatIf = policyWhatIfFlow.value,
-                                onChange = onZonePolicyChange,
-                                s = s
-                            )
-                            AnimatedVisibility(visible = zonePolicy == ZonePolicy.DIGEST) {
-                                Column {
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        NotifyPolicyRow(
+                            title = s.notifyPolicyTitle,
+                            description = s.notifyPolicyDesc,
+                            selected = zonePolicy,
+                            whatIf = policyWhatIfFlow.value,
+                            onChange = onZonePolicyChange,
+                            s = s,
+                            detail = {
+                                AnimatedVisibility(visible = zonePolicy == ZonePolicy.DIGEST) {
                                     DigestControlsRow(
                                         max = digestMax,
                                         onMaxChange = onDigestMaxChange,
@@ -681,7 +677,7 @@ fun SettingsScreen(
                                     )
                                 }
                             }
-                        }
+                        )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     FallingDebrisDelayRow(

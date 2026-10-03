@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Logs screen: new "Send logs" button uploads a full diagnostics bundle (device, power/battery timeline, memory, CPU, all prefs, every log buffer) on one tap 10-03_21:05:00
+
+- The all-clear chime no longer gets cut off after a fraction of a second: an alert still interrupts it, but routine cleanup no longer can 10-03_12:05:00
+
+- "Limit repeat sounds" is now its own block: four compact policy tiles, with the description and the digest controls unfolding underneath the one you picked 10-03_12:05:00
+
+- NEPTUN's confirmation count is stripped cleanly again — it arrived with its own period and left a ": 2." tail that broke the area-level chip and course text 10-02_18:20:00
+
 - App updates are now verified before installing: the download is checked against the checksum published with the release, and the APK is confirmed to be this app, signed with the same key, and actually newer 10-02_17:27:04
 
 - The release now takes the version from the built APK, publishes its checksum, and re-checks the live copy — a bad upload fails the release instead of shipping an update nobody can install 10-02_17:27:04

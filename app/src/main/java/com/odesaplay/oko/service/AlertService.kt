@@ -349,6 +349,7 @@ class AlertService : Service() {
             ConnectionLog.attach(applicationContext)
             GpsLog.attach(applicationContext)
             DebugLog.attach(applicationContext)
+            BatteryLog.attach(applicationContext)
             ApiMonitor.attach(applicationContext)
             ConnectionLog.awaitAttached()
             GpsLog.awaitAttached()
@@ -1483,7 +1484,7 @@ val mappedThreats = registry.allThreats.map { list ->
     }
 
     private fun cancelAlert() {
-        audioAlarmDispatcher.stopActiveAlert()
+        audioAlarmDispatcher.stopLoopingAlert()
         notificationManager.cancelNotification(NOTIF_ALERT)
     }
 

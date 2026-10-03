@@ -81,6 +81,12 @@ class NeptunDecoder(
         /**
          * NEPTUN sometimes fills `explanationShort` with bare confirmation counts (e.g. "Підтверджень: 3").
          * Strip redundant phrases and drop the field entirely when no course data remains.
+         *
+         * The count arrives *with its own sentence period* ("… точка невідома. Підтверджень: 2."), so
+         * the trailing-count pattern has to swallow that final dot too. Without it the residue
+         * "… точка невідома.   : 2." survived into `explanationShort`, and every consumer that
+         * compares the text against a template — the area-advisory chip, course translation,
+         * destination parsing — saw a sentence that no longer matched its own pattern.
          */
         fun sanitizeCourse(text: String?): String? {
             if (text == null) return null
@@ -88,7 +94,7 @@ class NeptunDecoder(
             var t = text.replace(Regex("(?iu)підтвердж$cyr*"), " ")
             t = t.replace(Regex("^[\\s:.,—-]+"), "").trim()
             t = t.replaceFirst(Regex("(?iu)^\\d+\\s*(?:джерел$cyr*|sources?)?[\\s:.,—-]*"), "").trim()
-            t = t.replace(Regex("(?iu)[\\s:.,—-]+\\d+(?:\\s*(?:джерел$cyr*|sources?|підтвердж$cyr*))?\\s*$"), "")
+            t = t.replace(Regex("(?iu)[\\s:.,—-]+\\d+(?:\\s*(?:джерел$cyr*|sources?|підтвердж$cyr*))?\\s*\\.?\\s*$"), "")
             if (t.isEmpty()) return null
             if (t.matches(Regex("(?iu)^\\d+(?:\\s*(?:джерел$cyr*|sources?))?\\.?$"))) return null
             return t

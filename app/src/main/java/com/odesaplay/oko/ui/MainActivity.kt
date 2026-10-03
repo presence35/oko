@@ -61,6 +61,7 @@ class MainActivity : ComponentActivity() {
         cleanLegacyOsmdroidCache()
         ConnectionLog.attach(applicationContext)
         DebugLog.attach(applicationContext)
+        BatteryLog.attach(applicationContext)
         // Registry first: after an OS force-stop the process is fresh and anything
         // touching AppSources.registry before init throws (immediate crash on launch).
         AppSources.ensureInit(applicationContext)

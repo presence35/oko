@@ -735,6 +735,11 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         resolvingThreats = listOf("Знешкоджуємо %d загрозу", "Знешкоджуємо %d загрози", "Знешкоджуємо %d загроз"),
         preciseGps = listOf("Точний GPS: %d хвилину тому", "Точний GPS: %d хвилини тому", "Точний GPS: %d хвилин тому"),
     ),
+    logsExport = Strings.LogExportStrings(
+        sendLogs = "Надіслати логи",
+        sendLogsOk = "Логи надіслано:",
+        sendLogsFail = "Не вдалося надіслати",
+    ),
     calmMessages = listOf(
         "Тихо — піди погуляй",
         "Подихай",

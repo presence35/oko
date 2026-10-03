@@ -2,6 +2,7 @@ package com.odesaplay.oko.source.neptun
 
 import com.odesaplay.oko.ThreatType
 import com.odesaplay.oko.connection.Monotonic
+import com.odesaplay.oko.isAreaAdvisory
 import com.odesaplay.oko.engine.MonitorCore
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.OblastAlert
@@ -20,6 +21,45 @@ import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 
 class NeptunDecoderTest {
+
+    /**
+     * NEPTUN appends its confirmation count as its own sentence, period included:
+     * "БпЛА — …: попередження по області, точка невідома. Підтверджень: 2." The count word is
+     * removed before the number, so a pattern that stops at `\s*$` leaves the residue "… : 2." —
+     * which then defeats every template comparison downstream.
+     */
+    @Test
+    fun `sanitizeCourse strips a confirmation count with its own sentence period`() {
+        assertEquals(
+            "БпЛА — Чернігівська область: попередження по області, точка невідома",
+            NeptunDecoder.sanitizeCourse(
+                "БпЛА — Чернігівська область: попередження по області, точка невідома. Підтверджень: 2."
+            )
+        )
+    }
+
+    @Test
+    fun `sanitizeCourse leaves no count residue in any form`() {
+        for (raw in listOf(
+            "Підтверджень: 3",
+            "Підтверджень: 3.",
+            "Джерел: 2",
+            "sources: 4.",
+            "Шахеди курсом на Чорноморськ. Підтверджень: 5."
+        )) {
+            val out = NeptunDecoder.sanitizeCourse(raw)
+            assertFalse("residue left in \"$raw\" -> \"$out\"", out?.contains(Regex("\\d")) == true)
+        }
+    }
+
+    @Test
+    fun `sanitized area advisory is recognised as an advisory`() {
+        val clean = NeptunDecoder.sanitizeCourse(
+            "БпЛА — Чернігівська область: попередження по області, точка невідома. Підтверджень: 2."
+        )!!
+        assertTrue(isAreaAdvisory(clean))
+        assertTrue(isAreaAdvisory("БпЛА — Чернігівська область: попередження по області, точка невідома.   : 2."))
+    }
 
     private lateinit var core: FakeMonitorCore
     private lateinit var decoder: NeptunDecoder
