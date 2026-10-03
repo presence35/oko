@@ -34,7 +34,22 @@ Core work: per-region episode latching in `AlertService` (replaces the single
 was worked out 2026-08-26 (see session notes / this entry).
 
 
-### We need to track if neptun.in.ua changes their API hash
+## Rotate the FTP/upload password
+
+`app/upload.properties` holds the server password in plaintext (it is git-ignored, but it has
+sat in chat logs, in build output, and on every machine that has ever run a release). Rotate the
+FTP credential, then update that file. Worth doing whenever credentials appear in a transcript.
+
+## Harden the log drop box (`server/upload.php`)
+
+The beta log endpoint is deliberately unauthenticated — a token baked into the APK is extractable,
+so it guards nothing while adding a setup step to every tester. As shipped it has a per-IP rate
+limit, a body cap, a JSON-shape check, a sanitized `.json` filename in a fixed out-of-docroot
+directory, and a 90-day prune. Still worth revisiting if the tester group grows: per-IP limits
+assume clients can't rotate addresses, and the endpoint is publicly reachable on the same host
+that serves the APK.
+
+## We need to track if neptun.in.ua changes their API hash
 neptun.in.ua/sdk/build-manifest.json
 
 // In UpdateManager's daily check, add:
