@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Logs: decisions are grouped by oblast again. Rows whose place was a village or a raion ("Маякі", "Odeskyi district") lost their oblast and silently dropped out of the OBLAST grouping — about half of all rows 10-03_22:40:00
+
 - Logs screen: new "Send logs" button uploads a full diagnostics bundle (device, power/battery timeline, memory, CPU, all prefs, every log buffer) on one tap 10-03_21:05:00
 
 - The all-clear chime no longer gets cut off after a fraction of a second: an alert still interrupts it, but routine cleanup no longer can 10-03_12:05:00

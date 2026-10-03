@@ -32,15 +32,14 @@ sealed interface UploadState {
  * buffers: nothing here is ever called unless a human taps, so there is no background cost and
  * no way for a bundle to leak without an explicit tap.
  *
- * Ships the JSON body straight to [ENDPOINT]; the server derives the filename and enforces the
- * bearer token, so the client is never trusted with a path. See `server/upload.php`.
+ * Ships the JSON body straight to [ENDPOINT]; the server derives the filename itself, so the
+ * client is never trusted with a path. No shared secret: a token embedded in the APK is
+ * extractable by anyone who unpacks it, so it would guard nothing while adding a setup step.
+ * See `server/upload.php`.
  */
 object LogUpload {
 
     private const val ENDPOINT = "https://odesaplay.com.ua/other_apps/oko/upload.php"
-
-    /** Shared secret matching `LOG_TOKEN` in server/upload.php. Empty = uploads disabled. */
-    private const val UPLOAD_TOKEN = ""
 
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
@@ -58,10 +57,6 @@ object LogUpload {
     /** No-op if a bundle is already in flight, so a double tap can't produce two uploads. */
     fun upload(context: Context) {
         if (_state.value is UploadState.Building || _state.value is UploadState.Sending) return
-        if (UPLOAD_TOKEN.isBlank()) {
-            _state.value = UploadState.Failed("upload not configured")
-            return
-        }
         val app = context.applicationContext
         scope.launch {
             try {
@@ -71,7 +66,6 @@ object LogUpload {
                 _state.value = UploadState.Sending(body.contentLength())
                 val request = Request.Builder()
                     .url(ENDPOINT)
-                    .header("Authorization", "Bearer $UPLOAD_TOKEN")
                     .header("X-Log-Name", LogBundle.fileName(app))
                     .post(body)
                     .build()
@@ -81,9 +75,20 @@ object LogUpload {
                         _state.value = UploadState.Failed("HTTP ${response.code}")
                         return@use
                     }
-                    val name = runCatching { JSONObject(text).optString("name") }.getOrNull()
+                    // A 2xx that isn't our own contract means something answered instead of
+                    // upload.php — an error page, a captive portal, a host that returns 200 for
+                    // everything. Falling back to the locally-computed name there would tell
+                    // the tester their logs arrived when nothing was ever written.
+                    val name = runCatching { JSONObject(text) }.getOrNull()
+                        ?.takeIf { it.optBoolean("ok") }
+                        ?.optString("name")
                         ?.takeIf { it.isNotBlank() }
-                        ?: bundle.optString("fileName")
+                    if (name == null) {
+                        _state.value = UploadState.Failed(
+                            "unexpected reply (HTTP ${response.code} ${response.header("Content-Type") ?: "?"})"
+                        )
+                        return@use
+                    }
                     _state.value = UploadState.Done(name)
                 }
             } catch (e: Exception) {

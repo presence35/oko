@@ -229,7 +229,8 @@ object LogBundle {
                     p("accuracyM", e.accuracyM)
                 }
             }.toJson())
-            p("power", BatteryLog.entries.value.map { e ->
+            val power = BatteryLog.entries.value
+            p("power", power.map { e ->
                 JSONObject().apply {
                     p("atMillis", e.atMillis)
                     p("batteryPct", e.batteryPct)
@@ -241,11 +242,53 @@ object LogBundle {
                     p("thermal", e.thermal)
                     p("gpsEnabled", e.gpsEnabled)
                     p("batteryUnoptimized", e.batteryUnoptimized)
+                    p("feedThreats", e.feedThreats)
+                    p("activeZones", e.activeZones)
+                    p("screenBrightness", e.screenBrightness)
                 }
             }.toJson())
+            p("powerSummary", powerSummary(power))
         })
 
         return root
+    }
+
+    /**
+     * Derived read of the power timeline. Exists so the array never has to be read by hand, and
+     * specifically so the two failure modes that are invisible in raw rows are called out:
+     * `samples: 0` (the sampler was dead) and a large `longestGapSec` (the SERVICE was dead —
+     * the drain symptom, not a bug in the sampler).
+     */
+    private fun powerSummary(power: List<BatterySample>): JSONObject {
+        if (power.isEmpty()) return JSONObject().apply { p("samples", 0) }
+        val first = power.first().atMillis
+        val last = power.last().atMillis
+        var longestGapMs = 0L
+        var zoneActive = 0
+        var screenOn = 0
+        var bright = 0f
+        var brightCount = 0
+        val pcts = power.mapNotNull { it.batteryPct }
+        for (i in power.indices) {
+            val s = power[i]
+            if (i > 0) longestGapMs = maxOf(longestGapMs, s.atMillis - power[i - 1].atMillis)
+            if (s.interactive == true) screenOn++
+            if ((s.activeZones ?: 0) > 0) zoneActive++
+            s.screenBrightness?.let { bright += it; brightCount++ }
+        }
+        return JSONObject().apply {
+            p("samples", power.size)
+            p("firstAtMillis", first)
+            p("lastAtMillis", last)
+            p("spanSec", (last - first) / 1000)
+            p("expectedSamplesAt25s", (last - first) / 25_000)
+            p("longestGapSec", longestGapMs / 1000)
+            p("screenOnPct", screenOn * 100 / power.size)
+            p("zonesActivePct", zoneActive * 100 / power.size)
+            p("meanBrightness", if (brightCount > 0) bright / brightCount else null)
+            p("batteryPctMin", pcts.minOrNull())
+            p("batteryPctMax", pcts.maxOrNull())
+        }
     }
 
     private fun readProcStatus(): Map<String, String> = runCatching {

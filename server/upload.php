@@ -7,17 +7,19 @@
  * reachable at a guessable URL — you read these over the same FTP account `uploadRelease`
  * already uses, and nothing else can.
  *
- * Setup
- *   1. Edit LOG_TOKEN below to a long random string.
- *   2. Paste the same string into UPLOAD_TOKEN in app/src/main/java/com/odesaplay/oko/service/LogUpload.kt
- *   3. Upload this file to other_apps/oko/upload.php
- *   4. mkdir other_apps/oko_logs  (chmod 700 if the host allows)
+ * Setup: upload this file to other_apps/oko/upload.php. Nothing else — the log directory is
+ * created on first upload, and the app ships the filename in an X-Log-Name header that we
+ * sanitize rather than trust.
  *
- * Bundles land at other_apps/oko_logs/<brand>_<model>_<versionCode>.json and are overwritten in
- * place: one slot per device per build, always the freshest state, nothing to clean up.
+ * No shared secret on purpose. A token baked into the APK is extractable by anyone who unpacks
+ * it, so it guards nothing while adding a setup step to every beta tester. What is kept is the
+ * part that does real work without a secret: the write can only ever produce a sanitized .json
+ * filename inside a fixed directory, so this cannot be used for arbitrary file upload or as free
+ * hosting. Bundles land at other_apps/oko_logs/<brand>_<model>_<versionCode>.json and are
+ * overwritten in place: one slot per device per build, always the freshest state, nothing to
+ * clean up.
  */
 
-const LOG_TOKEN = 'change-me';
 const LOG_DIR = __DIR__ . '/../oko_logs';   // outside the web root on purpose
 const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -31,11 +33,6 @@ function fail(string $why, int $code): void {
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     fail('POST only', 405);
-}
-
-$sent = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-if (!hash_equals('Bearer ' . LOG_TOKEN, $sent)) {
-    fail('bad token', 401);
 }
 
 $body = file_get_contents('php://input');

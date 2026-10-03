@@ -24,8 +24,21 @@ fun resolveOblastId(text: String?): String? {
     return CompactOblastBoundaries.canonicalId(t)
 }
 
-fun inOblast(region: String?, district: String?, locality: String?, token: String?): Boolean {
-    if (token == null) return false
+/** Canonical oblast id for a threat's place.
+ *
+ *  Tries each of the threat's place fields in turn rather than the ONE chosen for display
+ *  (`locality ?: district ?: region`). A threat's locality is very often a village ("Маякі") or a
+ *  raion ("Odeskyi district"), and neither can resolve to an oblast — only its region can, and
+ *  the display choice hides that behind the first non-null field. `inOblast` already consults all
+ *  three for the same reason; this is that idiom for the resolve direction.
+ *
+ *  Ordered locality-first and strictly additive: a row that already resolved keeps its exact
+ *  value, so this only fills nulls and never silently re-points a correct row at another oblast.
+ */
+fun threatOblastId(t: NormalizedThreat): String? =
+    resolveOblastId(t.locality) ?: resolveOblastId(t.district) ?: resolveOblastId(t.region)
+
+fun inOblast(region: String?, district: String?, locality: String?, token: String?): Boolean {    if (token == null) return false
     val id = CompactOblastBoundaries.canonicalId(token.trim()) ?: token.trim().lowercase()
     return (region != null && sameAlertRegion(resolveOblastId(region), id)) ||
         (district != null && sameAlertRegion(resolveOblastId(district), id)) ||

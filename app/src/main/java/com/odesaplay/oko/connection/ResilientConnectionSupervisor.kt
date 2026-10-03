@@ -16,7 +16,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import com.odesaplay.oko.BatteryLog
 import com.odesaplay.oko.ConnectionLog
 import com.odesaplay.oko.ConnStatus
 import com.odesaplay.oko.NetTransport
@@ -229,7 +228,6 @@ class ResilientConnectionSupervisor(
                 delay(WATCHDOG_TICK_MS)
                 val nowMono = Monotonic.now()
                 onWatchdogTick?.invoke(nowMono)
-                BatteryLog.sample()
 
                 val cs = _connectionState.value
                 val lastByte = lastIncomingByteMono.get()

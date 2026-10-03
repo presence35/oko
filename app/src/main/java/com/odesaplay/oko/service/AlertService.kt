@@ -39,6 +39,8 @@ import com.odesaplay.oko.engine.isFastType
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.LatLng
 import com.odesaplay.oko.engine.OblastAlert
+import com.odesaplay.oko.engine.canonicalOblastId
+import com.odesaplay.oko.engine.threatOblastId
 import com.odesaplay.oko.engine.OfficialFrontier
 import com.odesaplay.oko.engine.officialAnnouncementIsOnset
 import com.odesaplay.oko.engine.AlertLevel
@@ -294,6 +296,11 @@ class AlertService : Service() {
         val focusPinned: Boolean,
         val officialReason: String?,
         val officialReasonThreatId: String?,
+        /** Canonical oblast id of the active official alert, captured at the same point as
+         *  [officialRegion]. Carried separately because [officialRegion] is a LOCALIZED display
+         *  name — English even rewrites "район" to "district" — so it cannot be resolved back
+         *  into an id for a raion alert. */
+        val officialOblastId: String?,
         val officialRegion: String?,
         val zoneThreats: Map<String, ThreatZone>,
         val params: ZoneParams,
@@ -753,6 +760,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     officialReason = officialReason,
                     officialReasonThreatId = officialReasonThreatId,
                     officialRegion = activeOfficialAlert?.let { alertRegionName(it, p.language) },
+                    officialOblastId = activeOfficialAlert?.canonicalOblastId(),
                     zoneThreats = zoneThreats,
                     params = params,
                     lang = p.language,
@@ -802,6 +810,15 @@ val mappedThreats = registry.allThreats.map { list ->
             now,
             LocationTracker.lastAccuracyM.value?.toInt(),
             state.focusLocation
+        )
+
+        // Power timeline for the beta log export. Sits on this tick rather than the connection
+        // watchdog so samples keep arriving when the socket supervisor is stopped — the drain
+        // report needs the quiet periods most. Self-throttles to 25s.
+        BatteryLog.sample(
+            now,
+            feedThreats = state.rawThreats.size,
+            activeZones = state.zoneThreats.size
         )
 
         if (state.lang != lastChannelLang) {
@@ -1138,6 +1155,7 @@ val mappedThreats = registry.allThreats.map { list ->
                             threatId = if (attachCause) reasonThreat?.id else null,
                             threatType = reasonThreat?.type?.toThreatType(),
                             locality = locality, distanceKm = null,
+                            scopeOblastId = state.officialOblastId ?: state.focusToken,
                             level = state.focusOblastLevel,
                             now = System.currentTimeMillis()
                     )
@@ -1150,6 +1168,7 @@ val mappedThreats = registry.allThreats.map { list ->
                             threatId = if (attachCause) reasonThreat?.id else null,
                             threatType = reasonThreat?.type?.toThreatType(),
                             locality = locality, distanceKm = null,
+                            scopeOblastId = state.officialOblastId ?: state.focusToken,
                             level = state.focusOblastLevel,
                             now = System.currentTimeMillis()
                         )
@@ -1162,6 +1181,7 @@ val mappedThreats = registry.allThreats.map { list ->
                             threatId = if (attachCause) reasonThreat?.id else null,
                             threatType = reasonThreat?.type?.toThreatType(),
                             locality = locality, distanceKm = null,
+                            scopeOblastId = state.officialOblastId ?: state.focusToken,
                             level = state.focusOblastLevel,
                             now = System.currentTimeMillis()
                     )
@@ -1180,7 +1200,9 @@ val mappedThreats = registry.allThreats.map { list ->
                     notified = false, reason = DebugLogReason.TOGGLE_OFF,
                     threatId = null, threatType = null,
                     locality = state.officialRegion ?: state.focusCityUa,
-                    distanceKm = null, level = state.focusOblastRawLevel,
+                    distanceKm = null,
+                    scopeOblastId = raw.token,
+                    level = state.focusOblastRawLevel,
                     now = System.currentTimeMillis()
                 )
                 lastLoggedRawFrontier = raw
@@ -1225,6 +1247,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     notified = true, reason = DebugLogReason.FIRED,
                     threatId = null, threatType = null,
                     locality = effRegion ?: allClearCity, distanceKm = null,
+                    scopeOblastId = latched.token,
                     now = System.currentTimeMillis()
                 )
                 lastAnnouncedFrontier = null
@@ -1242,6 +1265,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     notified = false, reason = DebugLogReason.TOGGLE_OFF,
                     threatId = null, threatType = null,
                     locality = null, distanceKm = null,
+                    scopeOblastId = lastLoggedRawFrontier?.token,
                     now = System.currentTimeMillis()
                 )
                 lastLoggedRawFrontier = null
@@ -1256,6 +1280,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     notified = false, reason = DebugLogReason.TOGGLE_OFF,
                     threatId = null, threatType = null,
                     locality = state.officialRegion ?: state.focusCityUa, distanceKm = null,
+                    scopeOblastId = latched?.token,
                     now = System.currentTimeMillis()
                 )
             }
@@ -1305,6 +1330,7 @@ val mappedThreats = registry.allThreats.map { list ->
                                     vibrationLevel = primary.vibration,
                                     distanceKm = distanceFromFocusKm(t, state),
                                     locality = t.locality ?: t.district ?: t.region,
+                                    scopeOblastId = threatOblastId(t),
                                     now = System.currentTimeMillis()
                                 )
                             }

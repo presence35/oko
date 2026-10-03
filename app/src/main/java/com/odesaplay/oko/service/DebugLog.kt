@@ -18,6 +18,7 @@ import com.odesaplay.oko.engine.ThreatProps
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.LatLng
 import com.odesaplay.oko.engine.toThreatType
+import com.odesaplay.oko.engine.threatOblastId
 import com.odesaplay.oko.engine.inOblast
 import com.odesaplay.oko.engine.isFastType
 import com.odesaplay.oko.engine.resolveOblastId
@@ -163,6 +164,11 @@ object DebugLog {
         threatType: ThreatType?,
         locality: String?,
         distanceKm: Double?,
+        /** Canonical oblast id of the OFFICIAL area. Required rather than derived here: [locality]
+         *  is a LOCALIZED display name, and re-stemming one back into an id is exactly how raion
+         *  alerts ("Dniprovskyi district") silently lost their oblast. The caller holds the
+         *  alert, so the caller states the id. */
+        scopeOblastId: String?,
         level: AlertLevel? = null,
         now: Long
     ) {
@@ -170,7 +176,7 @@ object DebugLog {
             DebugLogEntry(
                 now, kind, night, sirenOverride, vibrationLevel, notified, reason,
                 threatId, threatType, null, distanceKm, locality, level,
-                scopeOblastId = resolveOblastId(locality), aboutMe = true
+                scopeOblastId = scopeOblastId, aboutMe = true
             )
         )
     }
@@ -239,12 +245,13 @@ object DebugLog {
         vibrationLevel: Int?,
         distanceKm: Double?,
         locality: String?,
+        scopeOblastId: String?,
         now: Long
     ) {
         val entry = DebugLogEntry(
             now, DebugLogKind.ZONE_ENTER, night, sirenOverride, vibrationLevel,
             true, DebugLogReason.FIRED, threatId, threatType, tier, distanceKm, locality,
-            scopeOblastId = resolveOblastId(locality), aboutMe = true
+            scopeOblastId = scopeOblastId, aboutMe = true
         )
         synchronized(verdictsLock) { verdicts[threatId] = fingerprintOf(entry) }
         record(entry)
@@ -316,7 +323,7 @@ object DebugLog {
             ctx.now, DebugLogKind.ZONE_ENTER, ctx.night, ctx.sirenOverride,
             if (fast) ctx.fastVibrationLevel else ctx.slowVibrationLevel,
             notified, reason, t.id, t.type.toThreatType(), tier, distKm,
-            place, scopeOblastId = resolveOblastId(place), aboutMe = mine
+            place, scopeOblastId = threatOblastId(t), aboutMe = mine
         )
     }
 
@@ -335,7 +342,7 @@ object DebugLog {
             ctx.now, DebugLogKind.REGION_THREAT, ctx.night, ctx.sirenOverride,
             if (fast) ctx.fastVibrationLevel else ctx.slowVibrationLevel,
             false, reason, t.id, t.type.toThreatType(), null, distKm,
-            place, scopeOblastId = resolveOblastId(place), aboutMe = mine
+            place, scopeOblastId = threatOblastId(t), aboutMe = mine
         )
     }
 

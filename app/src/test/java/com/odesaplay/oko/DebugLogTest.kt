@@ -4,7 +4,9 @@ import com.odesaplay.oko.engine.LatLng
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.ThreatZone
 import com.odesaplay.oko.engine.AlertLevel
+import com.odesaplay.oko.engine.threatOblastId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -166,6 +168,21 @@ class DebugLogTest {
         now = now
     )
 
+    /**
+     * The bug this guards: rows were only ever resolved from the ONE place field chosen for
+     * display, so a threat whose locality is a village (or a raion) lost its oblast entirely and
+     * silently fell out of the Logs screen's OBLAST grouping.
+     */
+    @Test
+    fun `threatOblastId falls through to the region when the locality cannot resolve`() {
+        assertEquals("odeska", threatOblastId(threat(region = "Одеська", locality = "Маякі")))
+        assertEquals("odeska", threatOblastId(threat(region = "Одеська", district = "Odeskyi district")))
+        // A resolvable locality still wins outright, so no existing row changes oblast.
+        assertEquals("odeska", threatOblastId(threat(region = "Одеська", locality = "Одеса")))
+        // Honestly null when nothing resolves — better a hole than a wrong oblast.
+        assertNull(threatOblastId(threat(region = null, district = null, locality = "Маякі")))
+    }
+
     private fun soundVerdict() = PluginVerdict(VerdictKind.SOUND)
     private fun silentVerdict() = PluginVerdict(VerdictKind.SILENT)
     private fun suppressVerdict(reason: PolicyReason) = PluginVerdict(VerdictKind.SUPPRESS, reason)
@@ -177,10 +194,11 @@ class DebugLogTest {
         DebugLog.recordZoneFired(
             threatId = "t1", threatType = ThreatType.SHAHED, tier = ThreatZone.INNER,
             night = true, sirenOverride = false, vibrationLevel = 3,
-            distanceKm = 12.5, locality = "Одеса", now = now
+            distanceKm = 12.5, locality = "Одеса", scopeOblastId = "odeska", now = now
         )
         val recorded = DebugLog.entries.value.last()
         assertEquals(DebugLogKind.ZONE_ENTER, recorded.kind)
+        assertEquals("odeska", recorded.scopeOblastId)
         assertEquals(ThreatZone.INNER, recorded.tier)
         assertEquals(true, recorded.notified)
         assertEquals(DebugLogReason.FIRED, recorded.reason)
