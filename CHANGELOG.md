@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Logs header gets a back arrow and a roomier NEPTUN mark, status word and send button 10-04_00:55:00
+
+- The battery/power timeline in a sent log now survives app restarts, so a tester who installs a build and taps "Send logs" gets a real timeline instead of a single sample 10-04_00:55:00
+
 - Sending logs: a rate-limited tap now says how long to wait and the button re-enables itself, instead of reporting "HTTP 429" 10-04_00:15:00
 
 - Logs: decisions are grouped by oblast again. Rows whose place was a village or a raion ("Маякі", "Odeskyi district") lost their oblast and silently dropped out of the OBLAST grouping — about half of all rows 10-03_22:40:00

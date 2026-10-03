@@ -12,6 +12,8 @@ import android.provider.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONObject
+import java.io.File
 
 /**
  * One power-state sample. Every field is a cheap system read; null means the OS or device
@@ -44,8 +46,7 @@ data class BatterySample(
 )
 
 /**
- * In-memory ring buffer of power-state samples, consumed by the log export for battery-drain
- * diagnosis.
+ * Power-state timeline for battery-drain diagnosis, consumed by the log export.
  *
  * Fed from [AlertService]'s monitor tick — the same tick that feeds `GpsLog.observe`. That host
  * is deliberate: it runs whenever the alert service is alive, independent of the connection, so
@@ -58,7 +59,13 @@ data class BatterySample(
  * not running, which is itself the battery symptom. `LogBundle.powerSummary` reports the longest
  * gap so that reads as data instead of disappearing into an array nobody scans.
  *
- * [sample] self-throttles so callers can tick at 1s or 30s without caring.
+ * **Persisted, because the usage pattern demands it.** A beta tester installs a build, opens the
+ * app and taps "Send logs" — which restarts the process and hands us a ~1-sample timeline. An
+ * in-memory ring is therefore worthless for exactly the person this exists for. Storage is
+ * newline-delimited JSON appended one line per sample and compacted when it doubles, NOT
+ * DataStore: DataStore rewrites its whole blob per write, which at one write per 25s would cost
+ * more battery than the thing we are measuring. This is the same line-based shape the sibling
+ * logs already use for their own persistence.
  */
 object BatteryLog {
 
@@ -67,15 +74,45 @@ object BatteryLog {
      *  60s cadence under any jitter. 25s guarantees exactly one per idle tick. */
     private const val SAMPLE_INTERVAL_MS = 25_000L
     private const val MAX_ENTRIES = 3_456 // ~24h at SAMPLE_INTERVAL_MS
+    private const val FILE_NAME = "battery_log.jsonl"
 
     private val _entries = MutableStateFlow<List<BatterySample>>(emptyList())
     val entries: StateFlow<List<BatterySample>> = _entries.asStateFlow()
 
     @Volatile private var appContext: Context? = null
+    @Volatile private var store: File? = null
     @Volatile private var lastSampleMono = 0L
+    private var linesOnDisk = 0
 
+    /** Idempotent — both AlertService and MainActivity attach. */
     fun attach(context: Context) {
-        appContext = context.applicationContext
+        val app = context.applicationContext
+        if (store != null) return
+        appContext = app
+        val file = File(app.filesDir, FILE_NAME)
+        store = file
+        synchronized(this) {
+            if (linesOnDisk == 0 && file.exists()) restore(file)
+        }
+    }
+
+    private fun restore(file: File) {
+        val restored = runCatching {
+            file.useLines { lines ->
+                val kept = ArrayDeque<BatterySample>(MAX_ENTRIES)
+                var count = 0
+                lines.forEach { line ->
+                    count++
+                    if (line.isNotBlank()) parse(line)?.let {
+                        if (kept.size == MAX_ENTRIES) kept.removeFirst()
+                        kept.addLast(it)
+                    }
+                }
+                linesOnDisk = count
+                kept.toList()
+            }
+        }.getOrDefault(emptyList())
+        if (restored.isNotEmpty()) _entries.value = restored
     }
 
     /** Records a sample unless one was already taken inside the interval. Cheap enough to
@@ -89,10 +126,12 @@ object BatteryLog {
         feedThreats: Int? = null,
         activeZones: Int? = null
     ) {
+        val ctx = appContext ?: return
+        // Throttle AFTER the context check: updating the clock before it means one early call
+        // with no context would silently swallow the next 25s of samples.
         val mono = SystemClock.elapsedRealtime()
         if (mono - lastSampleMono < SAMPLE_INTERVAL_MS) return
         lastSampleMono = mono
-        val ctx = appContext ?: return
         val pm = ctx.getSystemService(PowerManager::class.java)
         val sticky = ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val entry = BatterySample(
@@ -122,7 +161,68 @@ object BatteryLog {
             }.getOrNull()
         )
         val current = _entries.value
-        _entries.value =
+        val next =
             if (current.size >= MAX_ENTRIES) current.takeLast(MAX_ENTRIES - 1) + entry else current + entry
+        _entries.value = next
+        persist(entry, next)
     }
+
+    private fun persist(entry: BatterySample, ring: List<BatterySample>) {
+        val file = store ?: return
+        runCatching {
+            synchronized(this) {
+                if (linesOnDisk > MAX_ENTRIES * 2) {
+                    // Compact: the ring already holds exactly the window we keep, so rewrite it
+                    // wholesale through a temp file. Truncate-and-rename, so a crash mid-write
+                    // leaves the previous timeline intact rather than a half-written one.
+                    val tmp = File(file.parentFile, "$FILE_NAME.tmp")
+                    tmp.bufferedWriter().use { w -> ring.forEach { w.appendLine(encode(it)) } }
+                    if (!tmp.renameTo(file)) tmp.delete()
+                    linesOnDisk = ring.size
+                } else {
+                    file.appendText(encode(entry) + "\n")
+                    linesOnDisk++
+                }
+            }
+        }
+    }
+
+    private fun encode(s: BatterySample): String = JSONObject().apply {
+        put("t", s.atMillis)
+        s.batteryPct?.let { put("pct", it) }
+        s.charging?.let { put("chg", it) }
+        s.temperatureTenthsC?.let { put("tmp", it) }
+        s.powerSave?.let { put("ps", it) }
+        s.deviceIdle?.let { put("idl", it) }
+        s.interactive?.let { put("scr", it) }
+        s.thermal?.let { put("thm", it) }
+        s.gpsEnabled?.let { put("gps", it) }
+        s.batteryUnoptimized?.let { put("opt", it) }
+        s.feedThreats?.let { put("feed", it) }
+        s.activeZones?.let { put("zn", it) }
+        s.screenBrightness?.let { put("bri", it.toDouble()) }
+    }.toString()
+
+    private fun parse(line: String): BatterySample? = runCatching {
+        val o = JSONObject(line)
+        BatterySample(
+            atMillis = o.optLong("t"),
+            batteryPct = o.optIntOrNull("pct"),
+            charging = o.optBooleanOrNull("chg"),
+            temperatureTenthsC = o.optIntOrNull("tmp"),
+            powerSave = o.optBooleanOrNull("ps"),
+            deviceIdle = o.optBooleanOrNull("idl"),
+            interactive = o.optBooleanOrNull("scr"),
+            thermal = o.optIntOrNull("thm"),
+            gpsEnabled = o.optBooleanOrNull("gps"),
+            batteryUnoptimized = o.optBooleanOrNull("opt"),
+            feedThreats = o.optIntOrNull("feed"),
+            activeZones = o.optIntOrNull("zn"),
+            screenBrightness = o.optDoubleOrNull("bri")?.toFloat()
+        )
+    }.getOrNull()
+
+    private fun JSONObject.optIntOrNull(key: String): Int? = if (has(key)) optInt(key) else null
+    private fun JSONObject.optBooleanOrNull(key: String): Boolean? = if (has(key)) optBoolean(key) else null
+    private fun JSONObject.optDoubleOrNull(key: String): Double? = if (has(key)) optDouble(key) else null
 }

@@ -1,7 +1,6 @@
 package com.odesaplay.oko
 
 import com.odesaplay.oko.engine.AlertLevel
-import com.odesaplay.oko.engine.resolveOblastId
 
 /**
  * A raid — one continuous span of activity, told as a story rather than a row dump.
@@ -111,9 +110,15 @@ private fun officialFromKind(group: List<DebugLogEntry>): AlertLevel? = when {
 
 /**
  * Session-level place id: the oblast the session is about, from its most populated entry place.
+ *
+ * Reads [DebugLogEntry.scopeOblastId] and nothing else. It used to fall back to
+ * `resolveOblastId(it.locality)`, which re-stemmed the row's LOCALIZED display name — the exact
+ * write-time bug that made raion and village rows ungroupable, reintroduced one layer up. The id
+ * is written by the service, which is the only place that holds it; a second guess from a label
+ * can only ever be worse. A session with no resolvable place has no oblast, which is honest.
  */
 fun LogSession.oblastId(): String? =
-    entries.mapNotNull { it.scopeOblastId ?: resolveOblastId(it.locality) }
+    entries.mapNotNull { it.scopeOblastId }
         .groupingBy { it }.eachCount()
         .maxByOrNull { it.value }?.key
 

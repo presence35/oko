@@ -126,9 +126,16 @@ object LogBundle {
         })
 
         root.p("cpu", JSONObject().apply {
-            p("processCpuMs", Process.getElapsedCpuTime())
-            p("uptimeMs", uptime)
-            p("appCpuPercent", if (uptime > 0) Process.getElapsedCpuTime() * 100 / uptime else 0)
+            val processCpuMs = Process.getElapsedCpuTime()
+            // `uptimeMs` is DEVICE uptime (since boot), so dividing process CPU by it reports
+            // ~0% no matter how hard the app worked. Age the denominator off the process start
+            // instead, or the number is decoration.
+            val deviceUptimeMs = uptime
+            val processAgeMs = (deviceUptimeMs - Process.getStartElapsedRealtime()).coerceAtLeast(0)
+            p("processCpuMs", processCpuMs)
+            p("processAgeMs", processAgeMs)
+            p("deviceUptimeMs", deviceUptimeMs)
+            p("appCpuPercent", if (processAgeMs > 0) processCpuMs * 100 / processAgeMs else null)
             p("debuggerAttached", Debug.isDebuggerConnected())
         })
 

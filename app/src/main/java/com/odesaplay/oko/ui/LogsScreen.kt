@@ -114,6 +114,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import androidx.compose.runtime.snapshotFlow
@@ -289,21 +290,34 @@ fun LogsDropDownSheet(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            IconButton(
+                onClick = onClose,
+                interactionSource = rememberHapticInteractionSource()
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = s.backButton,
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
             Text(
                 s.logsTitle,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 4.dp)
             )
             Image(
                 painter = painterResource(R.drawable.neptun),
                 contentDescription = s.attributionText,
                 colorFilter = ColorFilter.tint(connColor),
-                modifier = Modifier.height(16.dp)
+                modifier = Modifier.height(22.dp)
             )
             Spacer(Modifier.width(6.dp))
             val siteUrl = registry.siteUrl
@@ -311,6 +325,8 @@ fun LogsDropDownSheet(
                 siteUrl?.removePrefix("https://")?.removeSuffix("/") ?: "",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.clickable {
                     siteUrl?.let { url ->
                         context.startActivity(
@@ -322,10 +338,10 @@ fun LogsDropDownSheet(
                     }
                 }
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(10.dp))
             Text(
                 healthWord,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = connColor
             )
@@ -338,7 +354,7 @@ fun LogsDropDownSheet(
             ) {
                 if (uploading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp,
                         color = Color(AppPalette.AlertYellow)
                     )
@@ -347,7 +363,7 @@ fun LogsDropDownSheet(
                         Icons.Outlined.CloudUpload,
                         contentDescription = s.logsSendLogs,
                         tint = Color.White,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
