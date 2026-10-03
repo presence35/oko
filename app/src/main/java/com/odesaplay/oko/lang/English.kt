@@ -739,6 +739,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
         sendLogs = "Send logs",
         sendLogsOk = "Logs sent:",
         sendLogsFail = "Send failed",
+        sendLogsBusy = "Too many sends, try again in",
     ),
     calmMessages = listOf(
         "Quiet — go touch grass",

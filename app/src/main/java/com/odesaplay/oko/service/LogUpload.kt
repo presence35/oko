@@ -24,7 +24,12 @@ sealed interface UploadState {
     data object Building : UploadState
     data class Sending(val bytes: Long) : UploadState
     data class Done(val fileName: String) : UploadState
-    data class Failed(val reason: String) : UploadState
+
+    /** [reason] is a diagnostic code, not a sentence — the UI owns the wording and the locale,
+     *  so the engine never needs to know the user's language. [retryAtMillis] is set when the
+     *  server said when to come back (429 + `Retry-After`); until then the control is disabled,
+     *  so a rate-limited tester gets "try again shortly" instead of "HTTP 429". */
+    data class Failed(val reason: String, val retryAtMillis: Long? = null) : UploadState
 }
 
 /**
@@ -72,7 +77,19 @@ object LogUpload {
                 client.newCall(request).execute().use { response ->
                     val text = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
-                        _state.value = UploadState.Failed("HTTP ${response.code}")
+                        _state.value = if (response.code == 429) {
+                            // The endpoint is rate-limited per IP (see server/upload.php). Honour
+                            // its own cooldown instead of surfacing the status code: a tester who
+                            // taps twice cannot act on "HTTP 429", but can act on "try again in a
+                            // moment" — and the button stays disabled until then.
+                            val wait = response.header("Retry-After")?.toIntOrNull()?.coerceIn(5, 300) ?: 30
+                            UploadState.Failed(
+                                "HTTP 429",
+                                retryAtMillis = System.currentTimeMillis() + wait * 1000L
+                            )
+                        } else {
+                            UploadState.Failed("HTTP ${response.code}")
+                        }
                         return@use
                     }
                     // A 2xx that isn't our own contract means something answered instead of

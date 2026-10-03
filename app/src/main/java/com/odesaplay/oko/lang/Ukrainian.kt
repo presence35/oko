@@ -739,6 +739,7 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         sendLogs = "Надіслати логи",
         sendLogsOk = "Логи надіслано:",
         sendLogsFail = "Не вдалося надіслати",
+        sendLogsBusy = "Забагато надіслань, спробуйте ще раз через",
     ),
     calmMessages = listOf(
         "Тихо — піди погуляй",

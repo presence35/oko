@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Sending logs: a rate-limited tap now says how long to wait and the button re-enables itself, instead of reporting "HTTP 429" 10-04_00:15:00
+
 - Logs: decisions are grouped by oblast again. Rows whose place was a village or a raion ("Маякі", "Odeskyi district") lost their oblast and silently dropped out of the OBLAST grouping — about half of all rows 10-03_22:40:00
 
 - Logs screen: new "Send logs" button uploads a full diagnostics bundle (device, power/battery timeline, memory, CPU, all prefs, every log buffer) on one tap 10-03_21:05:00

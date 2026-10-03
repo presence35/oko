@@ -254,6 +254,10 @@ fun LogsDropDownSheet(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var legendExpanded by rememberSaveable { mutableStateOf(false) }
     val uploadState by LogUpload.state.collectAsState()
+    // Reuses the `now` ticker this composable already runs — no second timer just to expire
+    // a rate-limit cooldown.
+    val retryAt = (uploadState as? UploadState.Failed)?.retryAtMillis
+    val coolingDown = retryAt != null && now < retryAt
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -329,7 +333,7 @@ fun LogsDropDownSheet(
             val uploading = uploadState is UploadState.Building || uploadState is UploadState.Sending
             IconButton(
                 onClick = { if (uploading) LogUpload.dismiss() else LogUpload.upload(context) },
-                enabled = !uploading,
+                enabled = !uploading && !coolingDown,
                 interactionSource = rememberHapticInteractionSource()
             ) {
                 if (uploading) {
@@ -368,9 +372,14 @@ fun LogsDropDownSheet(
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(Modifier.width(8.dp))
+                    val waitSec = retryAt?.let { ((it - now) / 1000L).coerceAtLeast(0L) }
                     Text(
-                        if (ok) "${s.logsSendLogsOk} ${(st as UploadState.Done).fileName}"
-                        else "${s.logsSendLogsFail}: ${(st as UploadState.Failed).reason}",
+                        when {
+                            ok -> "${s.logsSendLogsOk} ${(st as UploadState.Done).fileName}"
+                            // Actionable words plus a countdown, never a bare status code.
+                            waitSec != null -> "${s.logsSendLogsBusy} ${waitSec}s"
+                            else -> "${s.logsSendLogsFail}: ${(st as UploadState.Failed).reason}"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White,
                         modifier = Modifier.weight(1f),

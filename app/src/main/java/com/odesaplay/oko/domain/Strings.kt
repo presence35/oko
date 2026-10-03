@@ -721,7 +721,8 @@ object Strings {
     data class LogExportStrings(
         val sendLogs: String,
         val sendLogsOk: String,
-        val sendLogsFail: String
+        val sendLogsFail: String,
+        val sendLogsBusy: String
     )
 
     data class WordForms(
@@ -1200,6 +1201,7 @@ object Strings {
         val logsSendLogs: String get() = logsExport.sendLogs
         val logsSendLogsOk: String get() = logsExport.sendLogsOk
         val logsSendLogsFail: String get() = logsExport.sendLogsFail
+        val logsSendLogsBusy: String get() = logsExport.sendLogsBusy
         val debugLogOpen: String get() = misc.debugLogOpen
         val debugLogDay: String get() = misc.debugLogDay
         val debugLogNight: String get() = misc.debugLogNight

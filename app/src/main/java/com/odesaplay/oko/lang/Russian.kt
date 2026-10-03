@@ -739,6 +739,7 @@ internal val Russian: Strings.StringSet = Strings.StringSet(
         sendLogs = "Отправить логи",
         sendLogsOk = "Логи отправлены:",
         sendLogsFail = "Не удалось отправить",
+        sendLogsBusy = "Слишком много отправок, попробуйте ещё через",
     ),
     calmMessages = listOf(
         "Тишина — сходите подышите свежим воздухом",
