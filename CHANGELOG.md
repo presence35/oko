@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Sent logs now report how many times the app process was killed and restarted overnight, and the longest window alerts were blind, instead of leaving it to be inferred from gaps 10-04_18:30:00
+
+- Oko no longer turns your alarm volume up behind your back: sirens still fire on the alarm stream with "Sirens always sound", but the volume is yours to set 10-04_15:05:00
+
 - Sent logs are no longer overwritten: each upload is timestamped (e.g. `samsung_SM-A505FN_742_20261004-143222.json`), so repeated sends from one phone keep their own file 10-04_17:45:00
 
 - Muting a raid now really mutes it: no sound, no vibration and no notification for anything that starts inside the window (the all-clear releases it, so the next raid rings) 10-04_14:20:00

@@ -286,12 +286,13 @@ object LogBundle {
                     p("thermal", e.thermal)
                     p("gpsEnabled", e.gpsEnabled)
                     p("batteryUnoptimized", e.batteryUnoptimized)
+                    p("processStartMonoMs", e.processStartMonoMs)
                     p("feedThreats", e.feedThreats)
                     p("activeZones", e.activeZones)
                     p("screenBrightness", e.screenBrightness)
                 }
             }.toJson())
-            p("powerSummary", powerSummary(power))
+            p("powerSummary", summarisePower(power))
         })
 
         return root
@@ -299,11 +300,14 @@ object LogBundle {
 
     /**
      * Derived read of the power timeline. Exists so the array never has to be read by hand, and
-     * specifically so the two failure modes that are invisible in raw rows are called out:
-     * `samples: 0` (the sampler was dead) and a large `longestGapSec` (the SERVICE was dead —
-     * the drain symptom, not a bug in the sampler).
+     * specifically so the failure modes that are invisible in raw rows are called out: `samples: 0`
+     * (the sampler was dead), a large `longestGapSec` (the service was dead), and
+     * `restartsObserved` (the PROCESS was killed and came back — the cause of the former).
+     *
+     * Pure so the restart arithmetic is unit-testable; that arithmetic is the whole point of the
+     * function, and it would be untestable inline in `build`.
      */
-    private fun powerSummary(power: List<BatterySample>): JSONObject {
+    internal fun summarisePower(power: List<BatterySample>): JSONObject {
         if (power.isEmpty()) return JSONObject().apply { p("samples", 0) }
         val first = power.first().atMillis
         val last = power.last().atMillis
@@ -312,14 +316,36 @@ object LogBundle {
         var screenOn = 0
         var bright = 0f
         var brightCount = 0
-        val pcts = power.mapNotNull { it.batteryPct }
+        var restarts = 0
+        var maxBlindWindowMs = 0L
+        var previousStart: Long? = null
+        val generations = LinkedHashSet<Long>()
+        val pcts = ArrayList<Int>()
+
         for (i in power.indices) {
             val s = power[i]
-            if (i > 0) longestGapMs = maxOf(longestGapMs, s.atMillis - power[i - 1].atMillis)
+            if (i > 0) {
+                val gapMs = s.atMillis - power[i - 1].atMillis
+                if (gapMs > longestGapMs) longestGapMs = gapMs
+                // A new process generation inside a gap means the process died. The gap is an
+                // UPPER BOUND on blindness: it also covers the wait before the new process's
+                // first sample, so never quote it as the real figure.
+                val prior = previousStart
+                if (prior != null && s.processStartMonoMs != null && s.processStartMonoMs != prior) {
+                    restarts++
+                    if (gapMs > maxBlindWindowMs) maxBlindWindowMs = gapMs
+                }
+            }
+            s.processStartMonoMs?.let { generations.add(it) }
+            // Carry the last known value across a null (a sample predating this field) so the
+            // first post-upgrade sample is not misread as a restart.
+            if (s.processStartMonoMs != null) previousStart = s.processStartMonoMs
             if (s.interactive == true) screenOn++
             if ((s.activeZones ?: 0) > 0) zoneActive++
             s.screenBrightness?.let { bright += it; brightCount++ }
+            s.batteryPct?.let { pcts.add(it) }
         }
+
         return JSONObject().apply {
             p("samples", power.size)
             p("firstAtMillis", first)
@@ -327,6 +353,10 @@ object LogBundle {
             p("spanSec", (last - first) / 1000)
             p("expectedSamplesAt25s", (last - first) / 25_000)
             p("longestGapSec", longestGapMs / 1000)
+            // null, not 0: no samples carrying the field is "cannot tell", not "never restarted".
+            p("processGenerations", generations.size.takeIf { generations.isNotEmpty() })
+            p("restartsObserved", restarts.takeIf { generations.isNotEmpty() })
+            p("maxBlindWindowSec", maxBlindWindowMs / 1000)
             p("screenOnPct", screenOn * 100 / power.size)
             p("zonesActivePct", zoneActive * 100 / power.size)
             p("meanBrightness", if (brightCount > 0) bright / brightCount else null)

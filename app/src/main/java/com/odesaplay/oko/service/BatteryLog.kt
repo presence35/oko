@@ -7,6 +7,7 @@ import android.location.LocationManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
+import android.os.Process
 import android.os.SystemClock
 import android.provider.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +32,16 @@ data class BatterySample(
     val thermal: Int?,
     val gpsEnabled: Boolean?,
     val batteryUnoptimized: Boolean?,
+    /** Monotonic start time of the process that took this sample (`Process.getStartElapsedRealtime`).
+     *
+     *  This is how restarts are detected without a counter: a fresh process has a fresh value,
+     *  and because [sample] is throttled from a process-lifetime `lastSampleMono` that starts at 0,
+     *  the first sample after a restart is always taken immediately. So a restart marks itself.
+     *
+     *  Deliberately MONOTONIC, unlike every other timestamp here: it is compared for equality
+     *  across samples, and wall clock can jump (NTP, DST, a manual change) mid-run. Null on
+     *  samples written before this field existed; the file self-heals as compaction rewrites it. */
+    val processStartMonoMs: Long? = null,
     /** How many threats the feed carried this tick — NEPTUN's throughput, NOT the user's load.
      *  Kept because per-threat parse/decide work is a plausible drain, but never read it as
      *  "work near the user"; [activeZones] is that number. */
@@ -150,6 +161,7 @@ object BatteryLog {
                     ?.isProviderEnabled(LocationManager.GPS_PROVIDER)
             }.getOrNull(),
             batteryUnoptimized = runCatching { pm?.isIgnoringBatteryOptimizations(ctx.packageName) }.getOrNull(),
+            processStartMonoMs = Process.getStartElapsedRealtime(),
             feedThreats = feedThreats,
             activeZones = activeZones,
             // Auto-brightness is the common case and this reports the user's slider, so it is
@@ -198,6 +210,7 @@ object BatteryLog {
         s.thermal?.let { put("thm", it) }
         s.gpsEnabled?.let { put("gps", it) }
         s.batteryUnoptimized?.let { put("opt", it) }
+        s.processStartMonoMs?.let { put("proc", it) }
         s.feedThreats?.let { put("feed", it) }
         s.activeZones?.let { put("zn", it) }
         s.screenBrightness?.let { put("bri", it.toDouble()) }
@@ -216,6 +229,7 @@ object BatteryLog {
             thermal = o.optIntOrNull("thm"),
             gpsEnabled = o.optBooleanOrNull("gps"),
             batteryUnoptimized = o.optBooleanOrNull("opt"),
+            processStartMonoMs = o.optLongOrNull("proc"),
             feedThreats = o.optIntOrNull("feed"),
             activeZones = o.optIntOrNull("zn"),
             screenBrightness = o.optDoubleOrNull("bri")?.toFloat()
@@ -223,6 +237,7 @@ object BatteryLog {
     }.getOrNull()
 
     private fun JSONObject.optIntOrNull(key: String): Int? = if (has(key)) optInt(key) else null
+    private fun JSONObject.optLongOrNull(key: String): Long? = if (has(key)) optLong(key) else null
     private fun JSONObject.optBooleanOrNull(key: String): Boolean? = if (has(key)) optBoolean(key) else null
     private fun JSONObject.optDoubleOrNull(key: String): Double? = if (has(key)) optDouble(key) else null
 }
