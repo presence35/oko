@@ -49,6 +49,7 @@ import com.odesaplay.oko.engine.EpisodeTransition
 import com.odesaplay.oko.engine.RestoredResolution
 import com.odesaplay.oko.engine.officialStateFor
 import com.odesaplay.oko.Transliteration
+import com.odesaplay.oko.isOfficialLevelEnabled
 import com.odesaplay.oko.ThreatType
 import com.odesaplay.oko.engine.ThreatZone
 import com.odesaplay.oko.engine.toThreatType
@@ -117,6 +118,12 @@ class AlertService : Service() {
         const val NOTIF_UPDATE = AlertNotificationManager.NOTIF_UPDATE
         const val NOTIF_MONITORING_PAUSED = AlertNotificationManager.NOTIF_MONITORING_PAUSED
 
+        /** Official notification ids are level-tagged so the posted id names the level it was
+         *  posted at — [officialLevelOf] reads these back, and they are the only place either
+         *  side of that pair is written. */
+        private const val OFFICIAL_ID_RED = "red|"
+        private const val OFFICIAL_ID_YELLOW = "yellow|"
+
         /** "Ignore 30 min": how long offline milestone/critical notifications stay muted. */
         private const val IGNORE_RETRY_MUTE_MS = 30 * 60_000L
 
@@ -132,6 +139,11 @@ class AlertService : Service() {
         private const val MONITOR_TICK_MS = 1_000L
         private const val MONITOR_TICK_IDLE_MS = 30_000L
         private const val SWEEP_THROTTLE_MS = 10_000L
+        /** A tick later than this did not run — the loop slept (doze, freeze, or a stalled
+         *  process) while the wall clock ran on. Anything larger is not a tick, it is a hole, and
+         *  the tick that closes it must re-baseline instead of deciding with a stale clock.
+         *  Comfortably above the 30s idle tick so ordinary jitter never trips it. */
+        private const val SLEEP_GAP_REBASE_MS = 3L * 60_000
         private const val VIBRATION_STRONG = 4
         private const val VIBRATION_ZONE = 3
 
@@ -192,6 +204,10 @@ class AlertService : Service() {
      *  notif scope and toggles, so EVERY official alert is logged even when its notifs are
      *  off, muted or sleeping. Live truth, never a restored row. */
     private var lastLoggedRawFrontier: OfficialFrontier? = null
+    /** Level the audit trail was last told about, for the episode it names. Purely a
+     *  de-duplication stamp for [DebugLogKind.OFFICIAL_LEVEL]: a downgrade must be logged once,
+     *  not on every tick of the hour it applies to. */
+    private var lastLoggedLevelFrontier: OfficialFrontier? = null
     /** Focus oblast token of the previous tick; a change drops a now-stale latched episode. */
     private var lastFocusTokenSeen: String? = null
     /** True once the latched episode was observed raw-active on a ready feed in this
@@ -223,12 +239,14 @@ class AlertService : Service() {
      *  superseded by a new episode, or retired by the TTL. */
     @Volatile private var allClearClosed = false
     /**
-     * TTL timer for the all-clear notification. Non-null ONLY while a live post's timer is
-     * pending: both [clearAllClearNotification] and the timer itself retire it, and
-     * [scheduleAllClearExpiry] retires it before arming a new one. That single-owner rule is
-     * what stops a stale timer from firing during a later episode and cancelling its all-clear.
+     * Wall-clock instant the all-clear notification retires itself, or null when none is armed.
+     *
+     * A deadline, not a coroutine `delay`, on purpose: the old one-shot timer lived on
+     * `uptimeMillis`, which does not advance while the CPU sleeps, so after doze the all-clear
+     * could sit in the shade for hours with a frozen countdown — and it was armed exactly once,
+     * so a re-post could never bring it back. Re-derived from the clock on every tick instead.
      */
-    @Volatile private var allClearExpiryJob: Job? = null
+    @Volatile private var allClearDeadlineMs: Long? = null
     private val debrisBuffer by lazy {
         FallingDebrisBuffer(
             scope = scope,
@@ -265,16 +283,40 @@ class AlertService : Service() {
      *  notifications are suppressed until this instant; the connection keeps reconnecting. */
     @Volatile private var notifMuteUntilMs = 0L
 
-    /** "Mute raid" bells-off state for the active raid (see [RaidMute]). */
+    /** "Mute raid" state for the active raid (see [RaidMute]). A timed mute is persisted, so a
+     *  recycled process cannot quietly un-mute a raid the user silenced ten minutes ago. */
     @Volatile private var raidMute: RaidMute = RaidMute.None
 
-    /** Bells off (danger siren + all-clear chime). Notifications still post, silently. */
-    private fun bellsMuted(): Boolean = raidMute.silent(System.currentTimeMillis())
+    /**
+     * The raid is muted: no sound, no vibration and — since "mute means mute" — no new alert
+     * notification at all. The alert that was already up keeps updating silently; a raid that
+     * starts (or escalates) inside the window is recorded in the audit trail and shown to
+     * nobody, which is the deal the user accepted when they pressed the button.
+     */
+    private fun bellsMuted(): Boolean = raidMute.lapsed(System.currentTimeMillis()).silent(System.currentTimeMillis())
 
-    /** Single writer: keeps the service field and the UI mirror in lockstep. */
+    /** Single writer: keeps the service field, the UI mirror and the persisted deadline in
+     *  lockstep. Persisting only a *timed* mute is deliberate — see [RaidMute.encode]. */
     private fun setRaidMute(value: RaidMute) {
-        raidMute = value
-        RaidMuteState.set(value)
+        val lapsed = value.lapsed(System.currentTimeMillis())
+        raidMute = lapsed
+        RaidMuteState.set(lapsed)
+        scope.launch {
+            ServiceState(applicationContext).setRaidMuteDeadline(lapsed.encode())
+        }
+    }
+
+    /**
+     * Restore a persisted timed mute at service start. A deadline already in the past is dropped
+     * rather than restored, so an old mute can never silence the next raid for a second.
+     */
+    private suspend fun restoreRaidMute() {
+        val now = System.currentTimeMillis()
+        val restored = RaidMute.decode(ServiceState(applicationContext).raidMuteDeadline().first())
+            .lapsed(now)
+        if (restored is RaidMute.None) return
+        raidMute = restored
+        RaidMuteState.set(restored)
     }
 
     private val tally by lazy { NeutralizedTally(applicationContext, scope) }
@@ -334,12 +376,22 @@ class AlertService : Service() {
         val zonePolicy: ZonePolicy,
         val digestMax: Int,
         val digestWindow: DigestWindow,
-        val digestPerType: Boolean
+        val digestPerType: Boolean,
+        /** The city-level gate actually used to derive [focusOblastLevel] this tick. Carried so
+         *  the episode latch can be ENDED through the same gate it was announced through —
+         *  without it, a city-scoped episode could only end once the whole oblast went quiet. */
+        val cityScopeEffective: Boolean = false
     ) {
-        /** Derived summary of the two sub-channels — the master toggle. Mirrors the UI so the
-         *  all-clear gate and the OFF log key on the same red||yellow fact the row shows. */
+        /** "Are official alerts on at all" — the master toggle behind the UI row, and the morale
+         *  tally's yes/no. Anything acting on ONE level (its announcement, its all-clear, the
+         *  notification it left up) must ask [officialLevelEnabled] instead: keying the all-clear
+         *  on this master cleared — and sounded — for a level the user had switched off. */
         val officialAlertsEnabled: Boolean
             get() = officialRedAlertsEnabled || officialYellowAlertsEnabled
+
+        /** Whether *this* level is one the user wants announced. */
+        fun officialLevelEnabled(level: AlertLevel): Boolean =
+            isOfficialLevelEnabled(level, officialRedAlertsEnabled, officialYellowAlertsEnabled)
 
         /** Follow-me is on and we cannot vouch for the position. Kept as one derived fact so no
          *  consumer can read the issue and re-derive a second, looser boolean. */
@@ -413,6 +465,10 @@ class AlertService : Service() {
             startForegroundCompat()
         }
         startMonitoring()
+        // A timed mute outlives the process that took it: the OS recycles a foreground service
+        // under memory pressure, and a mute that vanished on the way back is exactly the "mute
+        // doesn't work" report. Restored before the first tick can read it.
+        scope.launch { restoreRaidMute() }
 
         // An all-clear that survived a process death has no episode behind it any more, so its
         // TTL timer is gone and nothing would ever retire it. Drop it rather than leave a
@@ -424,6 +480,9 @@ class AlertService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         MonitoringStatus.setRunning(true)
+        // Action-log copy is language-neutral on purpose: an audit row outlives the session and
+        // is re-read after a language change, so a localized label would go stale in place.
+        val s0 = Strings.get(AppLanguage.EN)
         // A background start (package-replaced/boot) may have had to drop the location type;
         // once we're started again in the foreground, re-promote so background fixes resume.
         if (!locationFgsActive) startForegroundCompat()
@@ -432,6 +491,7 @@ class AlertService : Service() {
                 scope.launch {
                     AppSources.registry.retryNow()
                 }
+                logAction(DebugLogReason.USER_RETRY, s0.actionLog.retryConnection)
             }
             ACTION_IGNORE_RETRY -> {
                 notifMuteUntilMs = System.currentTimeMillis() + IGNORE_RETRY_MUTE_MS
@@ -441,23 +501,39 @@ class AlertService : Service() {
                     ConnEventKind.IGNORE_MUTED,
                     detail = "${IGNORE_RETRY_MUTE_MS / 60_000} min"
                 )
+                logAction(
+                    DebugLogReason.MUTED, s0.actionLog.ignoreOffline,
+                    "${IGNORE_RETRY_MUTE_MS / 60_000} min"
+                )
             }
-            ACTION_ALERT_OK -> notificationManager.cancelNotification(NOTIF_ALERT)
+            ACTION_ALERT_OK -> {
+                notificationManager.cancelNotification(NOTIF_ALERT)
+                logAction(DebugLogReason.SETTING_CHANGED, s0.actionLog.alertDismissed)
+            }
             ACTION_MUTE_RAID -> {
                 setRaidMute(raidMute.untilClear())
                 audioAlarmDispatcher.stopActiveAlert()
                 notificationManager.cancelNotification(NOTIF_ALERT)
+                logAction(DebugLogReason.MUTED, s0.actionLog.muteRaid, s0.actionLog.untilClear)
             }
             ACTION_MUTE_10 -> {
                 setRaidMute(raidMute.forDuration(System.currentTimeMillis(), MUTE_10_MS))
                 audioAlarmDispatcher.stopActiveAlert()
                 notificationManager.cancelNotification(NOTIF_ALERT)
+                logAction(
+                    DebugLogReason.MUTED, s0.actionLog.muteRaid,
+                    "${MUTE_10_MS / 60_000} min"
+                )
             }
-            ACTION_CLEAR_MUTE -> setRaidMute(RaidMute.None)
+            ACTION_CLEAR_MUTE -> {
+                setRaidMute(RaidMute.None)
+                logAction(DebugLogReason.UNMUTED, s0.actionLog.unmuteRaid)
+            }
             NeutralizedTally.ACTION_NEUTRALIZED_DISMISS -> tally.reset()
             AlarmEpisodeTally.ACTION_ALARM_EPISODE_DISMISS -> episodeTally.reset()
             AlertNotificationManager.ACTION_ALLCLEAR_DISMISSED -> {
                 allClearClosed = true
+                allClearDeadlineMs = null
                 debrisBuffer.abort()
             }
         }
@@ -576,7 +652,12 @@ class AlertService : Service() {
             val _annCity = svcState.officialAnnouncedCity().first().ifBlank { null }
             if (_annToken != null && _annCity != null) {
                 lastAnnouncedFrontier = OfficialFrontier(_annToken, AlertLevel.RED, soundedRed = true)
-                lastAnnouncedRow = "$_annToken|$_annCity"
+                // Prefer the full persisted row: it carries the level and the gate the episode was
+                // announced through. The legacy `token|city` pair is only the fallback for a row
+                // written before that key existed, and it parses as unscoped — which is exactly
+                // how such a row was gated.
+                lastAnnouncedRow = svcState.officialAnnouncedRow().first()
+                    .ifBlank { "$_annToken|$_annCity" }
             }
             // Restore open plugin episodes across restarts: ongoing threats stay
             // handled (no re-siren) and the cold-start repost makes them visible.
@@ -603,10 +684,23 @@ class AlertService : Service() {
 
             val nowFlow = MutableStateFlow(System.currentTimeMillis())
             launch {
+                var previous = System.currentTimeMillis()
                 while (true) {
                     val fast = screenOnFlow.value
                     delay(if (fast) MONITOR_TICK_MS else MONITOR_TICK_IDLE_MS)
-                    nowFlow.value = System.currentTimeMillis()
+                    val tick = System.currentTimeMillis()
+                    val gap = tick - previous
+                    previous = tick
+                    // The loop slept through a doze (or the process was frozen) and the wall clock
+                    // ran on without us. Everything downstream — zones, staleness, episodes — is
+                    // evaluated against `now`, so a tick that wakes up hours later would decide
+                    // with a clock that is already ancient: stale threats revived, episodes
+                    // synthesized and all-clears fired for alerts nobody was ever told about.
+                    // Skip that tick's decisions, log the gap, and re-baseline instead.
+                    if (gap > SLEEP_GAP_REBASE_MS) {
+                        resumeAfterSleep(tick, gap)
+                    }
+                    nowFlow.value = tick
                 }
             }
 
@@ -793,7 +887,8 @@ val mappedThreats = registry.allThreats.map { list ->
                     zonePolicy = p.zonePolicy,
                     digestMax = p.digestMax,
                     digestWindow = p.digestWindow,
-                    digestPerType = p.digestPerType
+                    digestPerType = p.digestPerType,
+                    cityScopeEffective = effectiveCityScope
                 ) to now
             }.collect { (state, now) ->
                 handleState(state, now, engine)
@@ -826,6 +921,13 @@ val mappedThreats = registry.allThreats.map { list ->
             notificationManager.updateChannels(s)
         }
 
+        // Time-derived lifecycles, re-derived from the wall clock on every tick instead of from
+        // an in-process timer that a sleeping CPU would freeze: the all-clear TTL and the debris
+        // countdown. Both used to be one-shot `delay` jobs, so after doze the all-clear sat in
+        // the shade for hours and the countdown froze at whatever number it had reached.
+        retireAllClearIfExpired()
+        if (debrisBuffer.isRunning) debrisBuffer.shrinkTo(state.fallingDebrisDelaySec.coerceIn(0, 600))
+
         // Focus moved (pinned <-> GPS, or a new pinned city): the latched official episode
         // belongs to the old region, so it must not keep announcing/clearing for it. Drop it
         // silently; the new focus can start a fresh episode on the next tick.
@@ -839,6 +941,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 latchedConfirmedLive = false
             }
             lastLoggedRawFrontier = null
+            lastLoggedLevelFrontier = null
             allClearClosed = false
         }
 
@@ -846,7 +949,7 @@ val mappedThreats = registry.allThreats.map { list ->
         // Unknown feed holds the episode: until the first real snapshot arrives the
         // latch counts as alive, so no all-clear, no notif teardown, no tally close.
         val latchedAliveEarly = latchedEarly?.resolve(state.alertsReady, state.alerts) == EpisodeTransition.STAY
-        if (latchedEarly != null && state.alertsReady && latchedEarly.isRawActive(state.alerts)) {
+        if (latchedEarly != null && state.alertsReady && latchedEarly.isStillAlerting(state.alerts)) {
             latchedConfirmedLive = true
         }
         // Both frontiers are live facts about the SAME episode: identity is the canonical
@@ -946,7 +1049,13 @@ val mappedThreats = registry.allThreats.map { list ->
         val effToken = if (latchedAlive) latched!!.token else state.focusToken
         val effCity = if (latchedAlive) latched!!.city else state.focusBannerCity
         val effSince = if (latchedAlive) latched!!.since else state.focusOblastAlertSince
-        val effAlert = if (latchedAlive) state.alerts.officialStateFor(latched!!.token, null, false).alert else null
+        // The latched episode's own alert, read through ITS gate — never oblast-wide — so a sibling
+        // raion that no longer covers the city can neither name the banner nor keep it alive.
+        val effAlert = if (latchedAlive) {
+            val l = latched!!
+            val scoped = l.cityScoped && !l.cityUa.isNullOrBlank()
+            state.alerts.officialStateFor(l.token, l.cityUa.takeIf { scoped }, scoped).alert
+        } else null
         val (effReason, effReasonId) = if (latchedAlive && effAlert != null) {
             engine.deriveOfficialAlertReason(
                 effAlert, state.rawThreats.values.toList(), state.focusLocation,
@@ -1002,7 +1111,14 @@ val mappedThreats = registry.allThreats.map { list ->
                 PluginInput(id, null, null, ThreatType.UNKNOWN, alive = true, shotGrace = true)
             } else null
         }
-        val verdicts = notifyPlugin.tick(pluginInputs, notifyPrefs, now)
+        // Frequency policy runs only when something can actually be delivered. While a raid is muted
+        // there is no verdict to give, and ticking the plugin anyway would spend the episode's
+        // "already sounded" memory on a sound nobody heard — leaving the user unmuted, mid-attack,
+        // in silence. Skipping the TICK (never the zone maps) keeps that memory intact and the
+        // first tick after the mute announces the attack; the audit rows still describe what
+        // happened, as BELL_MUTED rather than FIRED.
+        val raidMutedNow = bellsMuted()
+        val verdicts = if (raidMutedNow) emptyMap() else notifyPlugin.tick(pluginInputs, notifyPrefs, now)
         val presence = JSONObject().apply {
             for ((k, v) in notifyPlugin.snapshot()) put(k, v.name)
         }.toString()
@@ -1033,12 +1149,6 @@ val mappedThreats = registry.allThreats.map { list ->
             val token = state.focusToken ?: return null
             return "$token|${state.focusBannerCity}"
         }
-
-        /** The persisted announcement row for an episode: the legacy `LEVEL|token|since|city`
-         *  shape, so [LatchedEpisode.parse] and older versions keep reading it. */
-        fun announcedRow(state: MonitorState): String =
-            "${state.focusOblastLevel}|${state.focusToken}|" +
-                "${state.focusOblastAlertSince}|${state.focusBannerCity}"
 
         /** Scoped frontier (identity + live level) — the episode being announced. */
         fun announcedFrontier(state: MonitorState): OfficialFrontier? =
@@ -1090,7 +1200,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     if (effLevel == AlertLevel.RED) {
                         val reasonThreat = effReasonId?.let { all[it] }
                         return Primary(
-                            identity = "red|${announcedFrontier!!.token}|$effCity|$effReasonId",
+                            identity = "$OFFICIAL_ID_RED${announcedFrontier!!.token}|$effCity|$effReasonId",
                             title = String.format(s.alertBannerFormat, effCity),
                             body = (effReason ?: effRegion ?: state.focusRegion) + etaSuffix(reasonThreat, state),
                             revealThreat = reasonThreat,
@@ -1101,7 +1211,7 @@ val mappedThreats = registry.allThreats.map { list ->
                         )
                     }
                     return Primary(
-                        identity = "yellow|${announcedFrontier!!.token}|$effCity",
+                        identity = "$OFFICIAL_ID_YELLOW${announcedFrontier!!.token}|$effCity",
                         title = String.format(s.alertYellowBannerFormat, effCity),
                         body = effReason ?: effRegion ?: state.focusRegion,
                         revealThreat = null, silent = !onset, vibration = VIBRATION_STRONG,
@@ -1119,6 +1229,7 @@ val mappedThreats = registry.allThreats.map { list ->
         fun reconcileEpisode(primary: Primary?, state: MonitorState, all: Map<String, NormalizedThreat>) {
             val frontier = announcedFrontier(state)
             val raw = rawFrontier(state)
+            val mutedNow = bellsMuted()
             var scopedOffLogged = false
             // A new region, or the first red of a live one. A downgrade (red → yellow) and a
             // repeat red (a level that flaps) are neither — they only rewrite the announcement.
@@ -1160,11 +1271,14 @@ val mappedThreats = registry.allThreats.map { list ->
                             now = System.currentTimeMillis()
                     )
                     audible -> {
-                        wakeLockManager.acquireForAlert()
+                        if (!mutedNow) wakeLockManager.acquireForAlert()
+                        // A muted raid is recorded, not delivered: the row says BELL_MUTED so
+                        // the Logs tab cannot claim a siren that was deliberately suppressed.
                         DebugLog.recordOfficial(
                             DebugLogKind.OFFICIAL_ON, night = state.nightActive,
                             sirenOverride = state.officialSirenOverride, vibrationLevel = vibration,
-                            notified = true, reason = DebugLogReason.FIRED,
+                            notified = !mutedNow,
+                            reason = if (mutedNow) DebugLogReason.BELL_MUTED else DebugLogReason.FIRED,
                             threatId = if (attachCause) reasonThreat?.id else null,
                             threatType = reasonThreat?.type?.toThreatType(),
                             locality = locality, distanceKm = null,
@@ -1189,6 +1303,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 lastAnnouncedFrontier = frontier!!.rememberSounded(lastAnnouncedFrontier)
                 lastAnnouncedRow = announcedRow(state)
                 lastLoggedRawFrontier = raw
+                lastLoggedLevelFrontier = frontier
             } else if (raw != null && raw.token != lastLoggedRawFrontier?.token) {
                 // Raw official alert outside the notif scope (city-scope on, raion not covering
                 // the focus city, or a muted/sleep window): record it silently so the Logs tab
@@ -1206,9 +1321,29 @@ val mappedThreats = registry.allThreats.map { list ->
                     now = System.currentTimeMillis()
                 )
                 lastLoggedRawFrontier = raw
+                lastLoggedLevelFrontier = raw
+            }
+            // A downgrade (red → yellow) is neither an onset nor an end: the notification is
+            // silently rewritten and nothing at all used to reach the audit trail, so an hour of
+            // yellow read as an unbroken hour of red in the story. The level change is now its
+            // own row — INFO, so it never sounds and never moves the tallies.
+            val loggedLevel = lastLoggedLevelFrontier
+            val flippedLevel = (frontier ?: raw)?.takeIf { f ->
+                loggedLevel != null && loggedLevel.token == f.token && loggedLevel.level != f.level
+            }
+            if (!sounding && flippedLevel != null) {
+                DebugLog.recordOfficialLevel(
+                    flippedLevel.level,
+                    state.officialRegion ?: state.focusCityUa,
+                    flippedLevel.token,
+                    System.currentTimeMillis()
+                )
+                lastLoggedLevelFrontier = flippedLevel
             }
             val suppressAllClear = sounding && allClearSameArea(state)
-            if (!suppressAllClear && latched != null && !latchedAlive && state.officialAlertsEnabled) {
+            // The level's own toggle, never the red||yellow master: an episode whose level is
+            // switched off was never announced, so it must not be "cleared" either.
+            if (!suppressAllClear && latched != null && !latchedAlive && state.officialLevelEnabled(latched.level)) {
                 if (latched.resolveRestored(latchedConfirmedLive, EpisodeTransition.ENDED) == RestoredResolution.EXPIRE_SILENTLY) {
                     // Resurrected latch never observed live in this lifetime: the episode
                     // ended while we were dead. Drop it without notification, chime or log.
@@ -1219,12 +1354,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     return@reconcileEpisode
                 }
                 if (alertable.isEmpty()) cancelAlert()
-                // A second post for an all-clear that is already in the shade is a contract
-                // violation ("one clear per episode") and the reason a TTL used to look broken.
-                // Leave a lifecycle row for it — an INFO row, so the episode's single
-                // OFFICIAL_OFF record is untouched.
                 val reposted = notificationManager.isAllClearNotificationActive()
-                scheduleAllClearExpiry(state.autoDismissAllClear)
                 val allClearCity = latched.city
                 lastCleanAllClearCity = allClearCity
                 if (reposted) DebugLog.recordAllClearReposted(allClearCity, System.currentTimeMillis())
@@ -1232,19 +1362,29 @@ val mappedThreats = registry.allThreats.map { list ->
                 val s = Strings.get(state.lang)
                 val delay = state.fallingDebrisDelaySec.coerceIn(0, 600)
                 lastEpisodeReplay = episodeTally.snapshot()
-                val muted = bellsMuted()
-                if (delay > 0) {
-                    postAllClear(s, state.focusBannerCity, debrisSeconds = delay, silent = true, muted = muted, replay = lastEpisodeReplay)
-                    debrisBuffer.start(durationSeconds = delay)
-                } else {
-                    postAllClear(s, state.focusBannerCity, debrisSeconds = 0, silent = true, muted = muted, replay = lastEpisodeReplay)
-                    if (!muted) audioAlarmDispatcher.dispatchAllClearChime()
+                // A second post for an all-clear that is already in the shade is a contract
+                // violation ("one clear per episode") and the reason a TTL used to look broken.
+                // Leave a lifecycle row for it — an INFO row, so the episode's single
+                // OFFICIAL_OFF record is untouched.
+                // A muted raid is not told anything, all-clear included: the mute belongs to the
+                // whole raid, and an all-clear arriving in the shade is still a notification the
+                // user asked not to get. The mute itself is released by the clear, so the NEXT
+                // raid rings normally. The debris countdown still runs (it is a safety timer),
+                // it just has nothing to update.
+                if (!mutedNow) {
+                    if (delay > 0) {
+                        postAllClear(s, state.focusBannerCity, debrisSeconds = delay, silent = false, replay = lastEpisodeReplay)
+                        debrisBuffer.start(durationSeconds = delay)
+                    } else {
+                        postAllClear(s, state.focusBannerCity, debrisSeconds = 0, silent = false, replay = lastEpisodeReplay)
+                    }
                 }
                 setRaidMute(raidMute.cleared())
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
                     sirenOverride = state.officialSirenOverride, vibrationLevel = null,
-                    notified = true, reason = DebugLogReason.FIRED,
+                    notified = !mutedNow,
+                    reason = if (mutedNow) DebugLogReason.BELL_MUTED else DebugLogReason.FIRED,
                     threatId = null, threatType = null,
                     locality = effRegion ?: allClearCity, distanceKm = null,
                     scopeOblastId = latched.token,
@@ -1270,9 +1410,9 @@ val mappedThreats = registry.allThreats.map { list ->
                 )
                 lastLoggedRawFrontier = null
             }
-            val shownOfficial = lastShownId?.startsWith("red|") == true || lastShownId?.startsWith("yellow|") == true
-            if (shownOfficial && primary == null &&
-                latchedAlive && state.officialAlertsEnabled
+            val shownLevel = officialLevelOf(lastShownId)
+            if (shownLevel != null && primary == null &&
+                latchedAlive && state.officialLevelEnabled(shownLevel)
             ) {
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
@@ -1295,13 +1435,24 @@ val mappedThreats = registry.allThreats.map { list ->
                 mute10 = s.alertActionMute10
             )
             if (primary?.identity != lastShownId) {
+                // Mute means mute: while it is on, a new alert is NOT posted at all — no sound,
+                // no vibration, no notification. `lastShownId` still advances so the state stays
+                // convergent (a suppressed post is not a post the user dismissed, and the tick
+                // cannot be left trying to raise it forever). The attack itself is still recorded
+                // by the sweep and by reconcileEpisode, so the Logs tab can prove it happened.
+                val muted = bellsMuted()
+                if (primary != null && muted) {
+                    lastShownId = primary.identity
+                    return
+                }
                 when {
                     primary == null -> {
                         // Don't tear down a live official notification on a flicker tick:
-                        // any official id stays up while the latched oblast is still raw-active.
+                        // any official id stays up while the latched oblast is still raw-active —
+                        // and only while the level we posted it at is still switched on.
+                        val shownLevel = officialLevelOf(lastShownId)
                         val shownOfficialStillLive =
-                            (lastShownId?.startsWith("red|") == true || lastShownId?.startsWith("yellow|") == true) &&
-                                latchedAlive && state.officialAlertsEnabled
+                            shownLevel != null && latchedAlive && state.officialLevelEnabled(shownLevel)
                         if (!shownOfficialStillLive) {
                             cancelAlert()
                         }
@@ -1383,6 +1534,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     enabledTypes = state.enabled,                    zoneThreats = state.zoneThreats,
                     alertable = alertable,                    verdicts = verdicts,
                     winnerId = primary?.zone?.let { primary.revealThreat?.id },
+                    muted = bellsMuted(),
                     night = state.nightActive,
                     sirenOverride = state.zoneSirenOverride,
                     fastVibrationLevel = state.fastVibrationLevel,
@@ -1520,18 +1672,43 @@ val mappedThreats = registry.allThreats.map { list ->
             nm.activeNotifications.any { it.id == NOTIF_ALERT }
         }.getOrDefault(false)
 
+    /** The level an official notification id was posted at; null when [id] isn't one (a zone id,
+     *  or nothing posted yet). Reads the same consts [buildPrimary] writes the ids with. */
+    private fun officialLevelOf(id: String?): AlertLevel? = when {
+        id == null -> null
+        id.startsWith(OFFICIAL_ID_RED) -> AlertLevel.RED
+        id.startsWith(OFFICIAL_ID_YELLOW) -> AlertLevel.YELLOW
+        else -> null
+    }
+
+    /** The persisted announcement row for an episode: `LEVEL|token|since|city[|cityUa|scoped]`.
+     *  The two trailing fields remember WHICH gate announced this episode, because that is the
+     *  only gate allowed to end it — a city-scoped episode must not need the whole oblast to fall
+     *  quiet. [LatchedEpisode.parse] reads both the new and the old shape. */
+    private fun announcedRow(state: MonitorState): String =
+        "${state.focusOblastLevel}|${state.focusToken}|" +
+            "${state.focusOblastAlertSince}|${state.focusBannerCity}|" +
+            "${state.focusCityUa.orEmpty()}|${if (state.cityScopeEffective) 1 else 0}"
+
     private fun persistOfficialAnnounced(state: MonitorState) {
         scope.launch {
-            ServiceState(applicationContext).setOfficialAnnounced(
+            val svc = ServiceState(applicationContext)
+            svc.setOfficialAnnounced(
                 state.focusToken, state.focusOblastAlertSince, state.officialReasonThreatId,
                 state.focusBannerCity
             )
+            // The whole row, so the gate this episode was announced through (city scope, city)
+            // outlives the process — a restart used to silently downgrade a city-level episode to
+            // oblast-wide, which is how the missing all-clear came back.
+            svc.setOfficialAnnouncedRow(announcedRow(state))
         }
     }
 
     private fun clearOfficialAnnounced() {
         scope.launch {
-            ServiceState(applicationContext).setOfficialAnnounced(null, null, null)
+            val svc = ServiceState(applicationContext)
+            svc.setOfficialAnnounced(null, null, null)
+            svc.setOfficialAnnouncedRow(null)
         }
     }
 
@@ -1559,8 +1736,7 @@ val mappedThreats = registry.allThreats.map { list ->
      * into the next episode.
      */
     private fun clearAllClearNotification() {
-        allClearExpiryJob?.cancel()
-        allClearExpiryJob = null
+        allClearDeadlineMs = null
         debrisBuffer.abort()
         allClearClosed = true
         notificationManager.cancelNotification(NOTIF_ALLCLEAR)
@@ -1575,19 +1751,53 @@ val mappedThreats = registry.allThreats.map { list ->
      */
     private fun scheduleAllClearExpiry(autoDismiss: Boolean): Boolean {
         allClearClosed = false
-        if (allClearExpiryJob != null) return false
+        if (allClearDeadlineMs != null) return false
         if (!autoDismiss) return false
-        allClearExpiryJob = scope.launch {
-            delay(ALL_CLEAR_TTL_MS)
-            allClearExpiryJob = null
-            if (allClearClosed) return@launch
-            clearAllClearNotification()
-            DebugLog.recordAllClearExpired(lastCleanAllClearCity, System.currentTimeMillis())
-        }
+        allClearDeadlineMs = System.currentTimeMillis() + ALL_CLEAR_TTL_MS
         return true
     }
 
-    private fun nextUpdateCheckMillis(from: Long): Long {
+    /**
+     * Retire the all-clear once its TTL has passed. Driven from the monitor tick against the wall
+     * clock instead of a coroutine timer: `delay` is uptime-based, so after the CPU sleeps the
+     * timer has not moved while hours have — the all-clear then sat in the shade with a frozen
+     * countdown, which is the "it never auto-cleared" report.
+     */
+    private fun retireAllClearIfExpired() {
+        val deadline = allClearDeadlineMs ?: return
+        if (System.currentTimeMillis() < deadline) return
+        allClearDeadlineMs = null
+        if (allClearClosed) return
+        clearAllClearNotification()
+        DebugLog.recordAllClearExpired(lastCleanAllClearCity, System.currentTimeMillis())
+    }
+
+    /** One user action, recorded in the audit trail's own Actions filter. High-signal only —
+     *  this ring is the alert audit trail and a per-tap stream would evict it. */
+/**
+     * Re-baseline after the tick loop slept through a doze. Everything the reconcile does is a
+     * function of `now`, and the feed it would reason about is minutes-to-hours old the moment we
+     * come back, so the tick that wakes us must decide nothing. Dropped are the deltas that would
+     * otherwise be measured across a gap nobody observed:
+     *  - [lastZoneTiers] — the spatial hysteresis band would compare against a world that no
+     *    longer exists, so the first threat after a sleep could be denied its escalation.
+     *  - [lastSweepAtMs] — forced to sweep immediately, so the audit trail shows fresh facts
+     *    instead of staying silent for another throttle window.
+     *  - [emptySince] — a single post-gap tick must not age a zone episode straight into an
+     *    all-clear nobody was ever warned about.
+     */
+    private fun resumeAfterSleep(now: Long, gapMs: Long) {
+    lastZoneTiers = emptyMap()
+    lastSweepAtMs = 0L
+    emptySince = null
+    DebugLog.recordPaused(gapMs, now)
+}
+
+private fun logAction(reason: DebugLogReason, label: String, detail: String? = null) {
+    DebugLog.recordAction(reason, label, detail, System.currentTimeMillis())
+}
+
+private fun nextUpdateCheckMillis(from: Long): Long {
         val cal = Calendar.getInstance().apply {
             timeInMillis = from
             set(Calendar.HOUR_OF_DAY, 16)
@@ -1647,7 +1857,11 @@ val mappedThreats = registry.allThreats.map { list ->
 
     override fun onDestroy() {
         MonitoringStatus.setRunning(false)
-        setRaidMute(RaidMute.None)
+        // The mute is deliberately NOT reset here: a destroy is not a mute clear, and the OS
+        // recycles a foreground service freely. A timed mute lives in ServiceState (see
+        // [restoreRaidMute]) precisely so the next instance keeps honouring it. The UI mirror is
+        // reset because it is process-scoped and the process is going away.
+        RaidMuteState.reset()
         audioAlarmDispatcher.release()
         debrisBuffer.abort()
         screenReceiver?.let { unregisterReceiver(it) }

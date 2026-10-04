@@ -24,7 +24,6 @@ object Strings {
         val onboardingTipSiren: String,
         val onboardingTipGradual: String,
         val onboardingFeaturesTitle: String,
-        val onboardingIntro: String,
         val wizardIsTitle: String,
         val wizardIs1: String,
         val wizardIs2: String,
@@ -725,6 +724,40 @@ object Strings {
         val sendLogsBusy: String
     )
 
+    /**
+     * Copy for the audit trail's Actions filter and the alert-silence notice. Its own holder for
+     * the same reason as [LogExportStrings] — `Misc` has no room left — and because these strings
+     * are read out of context (a logged row, a one-line notice), not out of a settings screen.
+     */
+    data class ActionLog(
+        val retryConnection: String,
+        val ignoreOffline: String,
+        val alertDismissed: String,
+        val muteRaid: String,
+        val unmuteRaid: String,
+        val untilClear: String,
+        val mutedFor: String,
+        val mutedRaidBanner: String,
+        val sleepWell: String,
+        val zonesOffNight: String,
+        val zonesOffManual: String,
+        val levelDowngraded: String,
+        val levelUpgraded: String,
+        val actionLabel: String,
+        val reasonLevelChanged: String,
+        val reasonMuted: String,
+        val reasonUnmuted: String,
+        val reasonSettingChanged: String,
+        val reasonUserRetry: String,
+        val reasonTallyPosted: String,
+        val reasonPaused: String,
+        val sessionOngoing: String,
+        val modeActions: String,
+        /** Labels for [LoggedSetting], in ordinal order. A list rather than 14 fields so the
+         *  vocabulary in the log cannot drift away from its copy. */
+        val settingLabels: List<String>
+    )
+
     data class WordForms(
         val sources: List<String>,
         val resolvedThreats: List<String>,
@@ -747,6 +780,7 @@ object Strings {
         val subtitles: Subtitles,
         val wordForms: WordForms,
         val logsExport: LogExportStrings,
+        val actionLog: ActionLog,
         val calmMessages: List<String>,
     ) {
         val appTitle: String get() = onboarding.appTitle
@@ -770,7 +804,6 @@ object Strings {
         val onboardingTipSiren: String get() = onboarding.onboardingTipSiren
         val onboardingTipGradual: String get() = onboarding.onboardingTipGradual
         val onboardingFeaturesTitle: String get() = onboarding.onboardingFeaturesTitle
-        val onboardingIntro: String get() = onboarding.onboardingIntro
         val wizardIsTitle: String get() = onboarding.wizardIsTitle
         val wizardIs1: String get() = onboarding.wizardIs1
         val wizardIs2: String get() = onboarding.wizardIs2

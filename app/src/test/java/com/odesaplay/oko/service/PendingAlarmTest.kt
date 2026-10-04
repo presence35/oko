@@ -7,7 +7,7 @@ import org.junit.Test
 
 class PendingAlarmTest {
 
-    private fun snd(id: Int) = PendingAlarm.Sound(SoundKind.CHIME, id, leftVol = 1f, rightVol = 1f, priority = 10, loopCount = 0, rate = 1f)
+    private fun snd(id: Int) = PendingAlarm.Sound(SoundKind.ALERT, id, leftVol = 1f, rightVol = 1f, priority = 10, loopCount = 0, rate = 1f)
 
     @Test
     fun `loaded sample plays immediately`() {
@@ -50,7 +50,7 @@ class PendingAlarmTest {
     @Test
     fun `queued sound keeps its kind`() {
         val p = PendingAlarm()
-        p.onRequest(PendingAlarm.Sound(SoundKind.CHIME, 5, 1f, 1f, 10, 0, 1f), loaded = false)
-        assertEquals(SoundKind.CHIME, p.onLoaded(5, ok = true)!!.kind)
+        p.onRequest(PendingAlarm.Sound(SoundKind.ALERT, 5, 1f, 1f, 10, 0, 1f), loaded = false)
+        assertEquals(SoundKind.ALERT, p.onLoaded(5, ok = true)!!.kind)
     }
 }

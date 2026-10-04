@@ -87,6 +87,18 @@ class ResilientConnectionSupervisor(
      *  may schedule a reconnect. */
     private val disconnectHandledGen = AtomicInteger(-1)
     private val lastIncomingByteMono = AtomicLong(0L)
+    /**
+     * The same "last byte" stamp, but on the watchdog's OWN accumulated awake time instead of
+     * `elapsedRealtime`.
+     *
+     * `elapsedRealtime` advances through deep sleep while our coroutine does not run, so the
+     * first tick after a doze saw hours of "silence" and force-restarted a healthy socket — the
+     * overnight flapping on devices without a battery exemption. Silence must be measured in
+     * time the watchdog was actually awake to observe it.
+     */
+    private val lastIncomingByteAwake = AtomicLong(0L)
+    /** Awake milliseconds accumulated by the watchdog loop; see [lastIncomingByteAwake]. */
+    private val watchdogAwakeMs = AtomicLong(0L)
     private val reconnectAttempts = AtomicInteger(0)
     /** Last monotonic stamp of reconnect progress (schedule/connect/trigger); drives the
      *  stuck-offline watchdog. */
@@ -224,17 +236,24 @@ class ResilientConnectionSupervisor(
     private fun startWatchdogLoop() {
         watchdogJob?.cancel()
         watchdogJob = scope.launch(Dispatchers.Default) {
+            var previousTickMono = Monotonic.now()
             while (isActive && isRunning.get()) {
                 delay(WATCHDOG_TICK_MS)
                 val nowMono = Monotonic.now()
+                // Awake time only: the gap between two ticks is the only stretch we were actually
+                // running to hear a frame. Capped at one period so a stall cannot bank credit.
+                val awake = watchdogAwakeMs.addAndGet(
+                    (nowMono - previousTickMono).coerceIn(0L, WATCHDOG_TICK_MS * 2)
+                )
+                previousTickMono = nowMono
                 onWatchdogTick?.invoke(nowMono)
 
                 val cs = _connectionState.value
                 val lastByte = lastIncomingByteMono.get()
 
                 if (cs.isConnected && lastByte > 0L) {
-                    val silenceDuration = nowMono - lastByte
-                    // Silence watchdog: 168s without a single byte -> force tear-down
+                    val silenceDuration = awake - lastIncomingByteAwake.get()
+                    // Silence watchdog: 168s of OBSERVED silence without a byte -> force tear-down
                     if (silenceDuration >= SILENCE_TIMEOUT_MS) {
                         Log.w(TAG, "Byte Silence Watchdog expired ($silenceDuration ms) - forcing socket restart")
                         recordEvent(ConnEventKind.CONNECTION_LOST, detail = "168s silence timeout")
@@ -372,6 +391,7 @@ class ResilientConnectionSupervisor(
                     return
                 }
                 lastIncomingByteMono.set(Monotonic.now())
+                lastIncomingByteAwake.set(watchdogAwakeMs.get())
                 reconnectAttempts.set(0)
                 _retryState.value = null
                 val nowWall = System.currentTimeMillis()
@@ -383,6 +403,7 @@ class ResilientConnectionSupervisor(
                 if (connectionGeneration.get() != gen) return
                 val nowMono = Monotonic.now()
                 lastIncomingByteMono.set(nowMono)
+                lastIncomingByteAwake.set(watchdogAwakeMs.get())
                 lastSocketFrame.value = System.currentTimeMillis()
 
                 val currentCs = _connectionState.value

@@ -6,10 +6,7 @@ enum class SoundKind {
     LOOP,
 
     /** One-shot urgency blip (offline critical). Truncates anything. */
-    ALERT,
-
-    /** Pleasant one-shot (all-clear). Truncated by an alert, never by housekeeping. */
-    CHIME
+    ALERT
 }
 
 /**

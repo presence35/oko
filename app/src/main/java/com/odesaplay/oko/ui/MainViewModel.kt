@@ -126,6 +126,21 @@ data class UiState(
     val hiddenTypes: Set<ThreatType> = emptySet(),      // hidden from the map
     val silencedTypes: Set<ThreatType> = emptySet(),    // alerts off (still on the map, dimmed)
     val activeZone: ThreatZone? = null,           // most specific zone with a threat
+    /** Threats the inbound staging re-tiered in this pass — the ONE isInbound verdict, published
+     *  so the popup card reads it instead of re-deriving its own (mirror rule). */
+    val inboundIds: Set<String> = emptySet(),
+    /** The four bells of the CURRENT window (night-aware) as one value, so the map's zone
+     *  buttons can say "lit / partly lit / off" without re-pairing them into two booleans. */
+    val activeArmed: ZoneArmed = ZoneArmed(
+        UserPreferences.DEFAULT.slowRedArmed, UserPreferences.DEFAULT.slowYellowArmed,
+        UserPreferences.DEFAULT.fastRedArmed, UserPreferences.DEFAULT.fastYellowArmed
+    ),
+    /** Why the zone bells read off: the sleep preset, the night window, or a hand-set switch. */
+    val zonesOffCause: ZonesOffCause = ZonesOffCause.Manual,
+    /** "Just let me sleep!" is in effect (the night settings ARE the muted preset). */
+    val nightSleepActive: Boolean = false,
+    /** A raid mute is live — the zone buttons show it even though every bell is still armed. */
+    val raidMuted: Boolean = false,
     val focusOblastAlertActive: Boolean = false,  // official alert on the focus point's oblast
     val focusOblastYellowAlertActive: Boolean = false, // yellow-level official alert on the focus point's oblast
     val focusBannerCity: String = "",             // localized city name for the alert banner
@@ -567,6 +582,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val officialYellowAlertsEnabled: Boolean,
         val officialAlertCityScope: Boolean,
         val nightOfficialAlertCityScope: Boolean,
+        val nightSleepActive: Boolean,
         val sirenOverride: Boolean,
         val followMe: Boolean,
         val criticalOfflineOverride: Boolean,
@@ -671,6 +687,7 @@ val fastGroupCollapsed: Boolean,
             officialYellowAlertsEnabled = officialYellowAlertsEnabled,
             officialAlertCityScope = officialAlertCityScope,
             nightOfficialAlertCityScope = nightOfficialAlertCityScope,
+            nightSleepActive = nightSleepActive,
             sirenOverride = sirenOverride,
             followMe = followMe,
             criticalOfflineOverride = criticalOfflineOverride,
@@ -867,6 +884,16 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             activeSlowYellowArmed = activeArmed.slowYellow,
             activeFastRedArmed = activeArmed.fastRed,
             activeFastYellowArmed = activeArmed.fastYellow,
+            activeArmed = activeArmed,
+            nightSleepActive = prefs.nightSleepActive,
+            zonesOffCause = when {
+                prefs.nightSleepActive -> ZonesOffCause.SleepPreset
+                nightActive -> ZonesOffCause.Night
+                else -> ZonesOffCause.Manual
+            },
+            raidMuted = raidMute.let {
+                it.lapsed(System.currentTimeMillis()).silent(System.currentTimeMillis())
+            },
             nightActive = nightActive,
             nightWindowText = if (prefs.night.window.enabled) {
                 nightWindowText(prefs.night.window.startMin, prefs.night.window.endMin)
@@ -1035,26 +1062,28 @@ showBorders = prefs.showBorders,
                     if (FlourishPolicy.showNeutralizedCard(selectedGone, animOn, sel.mapVisible)) sel.selected else null
                 val focusLatLng = ui.focusLocation
                 val props = refreshed?.let { engine.propsFor(it.type) }
-                val inbound = refreshed != null && props != null &&
-                    isInbound(refreshed, focusLatLng, ui.activeZoneParams, props, nowMs)
+                // One verdict, from the engine pass: the same staging the map and the service
+                // used. The card never re-runs isInbound, which used to be a second, ungated
+                // evaluation of the same question.
+                val inbound = refreshed != null && refreshed.id in ui.inboundIds
+                // The card shows where the track ACTUALLY is. It used to substitute the zone
+                // radius here ("22 km" was literally the yellow ring), so a zone threshold could
+                // pose as a measurement — the mirror-rule break. computeProximity already works
+                // from the predicted position, which is also what the marker is drawn from.
                 val proximity = refreshed?.let { t ->
                     engine.computeProximity(t, focusLatLng, nowMs)
                 }?.let { ep ->
-                    // A staged inbound track is drawn on its ring, so the card must show the ring
-                    // distance, not the raw fix — otherwise it reads "0 km" next to "Approaching".
-                    val ringKm = props?.takeIf { inbound }
-                        ?.let { approachRingKm(ui.activeZoneParams).toDouble() }
                     ThreatProximity(
                         predicted = ep.predicted,
-                        distToUserKm = ringKm ?: ep.distToUserKm,
-                        etaToUserMin = if (ringKm != null && ep.speedKmh != null && ep.speedKmh > 0.0) {
-                            ringKm / ep.speedKmh * 60.0
-                        } else ep.etaToUserMin,
+                        distToUserKm = ep.distToUserKm,
+                        etaToUserMin = ep.etaToUserMin,
                         params = ui.activeZoneParams,
                         speedSource = ep.speedSource,
                         speedKmh = ep.speedKmh
                     )
                 }
+                // The staged tier is the ALARM tier (what would ring), not the position: an
+                // inbound fast track still reads red even while its marker sits far outside.
                 val zoneTier = when {
                     refreshed == null || props == null -> null
                     inbound -> stagedTier(props.isFast)
@@ -1145,7 +1174,7 @@ showBorders = prefs.showBorders,
         val silencedTypeStrings = (ThreatType.values().toSet() - alertedTypes).map { it.toEngineString() }.toSet()
         val engineFocus = focusLocation?.let { LatLng(it.lat, it.lon) }
         val engineParams = ZoneParams(params.slowRedKm, params.slowYellowKm, params.fastRedMin, params.fastYellowMin)
-        val evaluation = stageInbound(
+        val staged = stageInbound(
             engine.evaluate(
                 threats = threatList,
                 focus = engineFocus,
@@ -1167,6 +1196,10 @@ showBorders = prefs.showBorders,
             now,
             silencedTypeStrings
         )
+        val evaluation = staged.eval
+        // The staged (inbound) ids ride the UiState so the popup card reads THIS verdict instead
+        // of running its own isInbound over the selected track.
+        val inboundIds = staged.inboundIds
         lastZoneTiers = evaluation.zoneThreats
         val inInner = evaluation.threatsInner
         val inOuter = evaluation.threatsOuter
@@ -1201,6 +1234,7 @@ showBorders = prefs.showBorders,
             hiddenTypes = ThreatType.values().toSet() - mapEnabledTypes,
             silencedTypes = ThreatType.values().toSet() - alertedTypes,
             activeZone = activeZone,
+            inboundIds = inboundIds,
             focusOblastAlertActive = focusOblastAlertActive,
             focusOblastYellowAlertActive = focusOblastYellowAlertActive,
             focusBannerCity = focusBannerCity,
@@ -1233,6 +1267,34 @@ showBorders = prefs.showBorders,
     private fun timeText(min: Int): String =
         String.format(java.util.Locale.US, "%02d:%02d", min / 60, min % 60)
 
+    /**
+     * One audit row for a high-signal setting change, in the Actions lens of the Logs screen.
+     *
+     * High-signal only — the bells, the official channels, the night preset and the notification
+     * policy. [DebugLog] is the alert audit trail; logging all ~74 preferences would fill the ring
+     * with cosmetic taps and push the decisions that explain a raid out of it. Language-neutral on
+     * purpose: a logged row outlives the session and is re-read after a language change.
+     */
+    private fun logSetting(label: String, detail: String? = null) {
+        DebugLog.recordAction(
+            DebugLogReason.SETTING_CHANGED, label, detail, System.currentTimeMillis()
+        )
+    }
+
+    /** Labels are read from the EN table on purpose — a logged row outlives the session. */
+    private fun logSetting(
+        setting: LoggedSetting,
+        value: Any,
+        unit: String? = null
+    ) {
+        val labels = Strings.get(AppLanguage.EN).actionLog.settingLabels
+        val label = labels.getOrElse(setting.ordinal) { setting.name }
+        logSetting(label, buildString {
+            append(value)
+            unit?.let { append(' ').append(it) }
+        })
+    }
+
     fun setSlowRedKm(km: Int) {
         viewModelScope.launch { prefs.setSlowRedKm(km) }
     }
@@ -1253,6 +1315,7 @@ showBorders = prefs.showBorders,
         viewModelScope.launch {
             if (armed) { AlertService.start(app) }
             prefs.setSlowRedZoneArmed(armed)
+            logSetting(LoggedSetting.SlowRedBell, if (armed) "on" else "off")
         }
     }
 
@@ -1260,6 +1323,7 @@ showBorders = prefs.showBorders,
         viewModelScope.launch {
             if (armed) { AlertService.start(app) }
             prefs.setSlowYellowZoneArmed(armed)
+            logSetting(LoggedSetting.SlowYellowBell, if (armed) "on" else "off")
         }
     }
 
@@ -1267,6 +1331,7 @@ showBorders = prefs.showBorders,
         viewModelScope.launch {
             if (armed) { AlertService.start(app) }
             prefs.setFastRedZoneArmed(armed)
+            logSetting(LoggedSetting.FastRedBell, if (armed) "on" else "off")
         }
     }
 
@@ -1274,6 +1339,7 @@ showBorders = prefs.showBorders,
         viewModelScope.launch {
             if (armed) { AlertService.start(app) }
             prefs.setFastYellowZoneArmed(armed)
+            logSetting(LoggedSetting.FastYellowBell, if (armed) "on" else "off")
         }
     }
 
@@ -1281,6 +1347,7 @@ showBorders = prefs.showBorders,
 fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch {
             prefs.setAlertsArmed(armed)
+            logSetting(LoggedSetting.ZoneBells, if (armed) "on" else "off")
             if (armed) AlertService.start(app)
         }
     }
@@ -1291,35 +1358,58 @@ fun setAlertsArmed(armed: Boolean) {
         // while red and yellow are both OFF.
         viewModelScope.launch {
             prefs.setOfficialAlertsEnabled(enabled)
+            logSetting(LoggedSetting.OfficialRed, if (enabled) "on" else "off")
+            logSetting(LoggedSetting.OfficialYellow, if (enabled) "on" else "off")
         }
     }
 
     fun setOfficialRedAlertsEnabled(enabled: Boolean) {
-        viewModelScope.launch { prefs.setOfficialRedAlertsEnabled(enabled) }
+        viewModelScope.launch {
+            prefs.setOfficialRedAlertsEnabled(enabled)
+            logSetting(LoggedSetting.OfficialRed, if (enabled) "on" else "off")
+        }
     }
 
     fun setOfficialYellowAlertsEnabled(enabled: Boolean) {
-        viewModelScope.launch { prefs.setOfficialYellowAlertsEnabled(enabled) }
+        viewModelScope.launch {
+            prefs.setOfficialYellowAlertsEnabled(enabled)
+            logSetting(LoggedSetting.OfficialYellow, if (enabled) "on" else "off")
+        }
     }
 
     fun setOfficialAlertCityScope(enabled: Boolean) {
-        viewModelScope.launch { prefs.setOfficialAlertCityScope(enabled) }
+        viewModelScope.launch {
+            prefs.setOfficialAlertCityScope(enabled)
+            logSetting(LoggedSetting.CityScope, if (enabled) "on" else "off")
+        }
     }
 
     fun setSirenOverride(override: Boolean) {
-        viewModelScope.launch { prefs.setSirenOverride(override) }
+        viewModelScope.launch {
+            prefs.setSirenOverride(override)
+            logSetting(LoggedSetting.SirenOverride, if (override) "on" else "off")
+        }
     }
 
     fun setFallingDebrisDelaySec(sec: Int) {
-        viewModelScope.launch { prefs.setFallingDebrisDelaySec(sec) }
+        viewModelScope.launch {
+            prefs.setFallingDebrisDelaySec(sec)
+            logSetting(LoggedSetting.DebrisDelay, sec, "s")
+        }
     }
 
     fun setAutoDismissAllClear(enabled: Boolean) {
-        viewModelScope.launch { prefs.setAutoDismissAllClear(enabled) }
+        viewModelScope.launch {
+            prefs.setAutoDismissAllClear(enabled)
+            logSetting(LoggedSetting.AutoDismissAllClear, if (enabled) "on" else "off")
+        }
     }
 
     fun setCriticalOfflineOverride(enabled: Boolean) {
-        viewModelScope.launch { prefs.setCriticalOfflineOverride(enabled) }
+        viewModelScope.launch {
+            prefs.setCriticalOfflineOverride(enabled)
+            logSetting(LoggedSetting.CriticalOffline, if (enabled) "on" else "off")
+        }
     }
 
     fun setCriticalOfflineBypassSilent(enabled: Boolean) {
@@ -1443,7 +1533,10 @@ fun setAlertsArmed(armed: Boolean) {
     }
 
     fun setNightSleep(enabled: Boolean) {
-        viewModelScope.launch { prefs.setNightSleep(enabled) }
+        viewModelScope.launch {
+            prefs.setNightSleep(enabled)
+            logSetting(LoggedSetting.NightSleep, if (enabled) "on" else "off")
+        }
     }
 
     fun setSheltersEnabled(enabled: Boolean) {
@@ -1594,7 +1687,10 @@ fun setAlertsArmed(armed: Boolean) {
     }
 
     fun setNotifyPolicyEnabled(enabled: Boolean) {
-        viewModelScope.launch { prefs.setNotifyPolicyEnabled(enabled) }
+        viewModelScope.launch {
+            prefs.setNotifyPolicyEnabled(enabled)
+            logSetting(LoggedSetting.NotifyPolicy, if (enabled) "on" else "off")
+        }
     }
 
     fun setZonePolicy(policy: ZonePolicy) {

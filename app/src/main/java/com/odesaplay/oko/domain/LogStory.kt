@@ -17,7 +17,14 @@ data class LogSession(
     val startMs: Long,
     val endMs: Long,
     val official: AlertLevel?,
-    val entries: List<DebugLogEntry>
+    val entries: List<DebugLogEntry>,
+    /** True when this session has not been closed by an all-clear and is still recent: the
+     *  raid is ONGOING and [endMs] is "now", not the last row. The old build sealed a live
+     *  raid at its last logged row, so a raid with a quiet stretch showed a finished span. */
+    val ongoing: Boolean = false,
+    /** Every level this episode held, oldest first (a downgrade is a real event — see
+     *  [DebugLogKind.OFFICIAL_LEVEL]) so the card can show "red → yellow" instead of one dot. */
+    val levelChanges: List<Pair<Long, AlertLevel>> = emptyList()
 ) {
     val durationMs: Long get() = (endMs - startMs).coerceAtLeast(0L)
     val size: Int get() = entries.size
@@ -52,24 +59,44 @@ const val SESSION_GAP_MS = 20L * 60 * 1000
 const val SESSION_ADOPT_LEAD_MS = 2L * 60 * 1000
 
 /**
+ * How long a session may stay open on the strength of an un-cleared official alert alone. The
+ * gap window is about "is this the same raid?" — but a raid that has not been cleared yet is
+ * still the same raid however quiet it gets, so an open episode absorbs its own quiet stretches
+ * up to this cap. Without it, a two-hour silence with no new decisions split a live raid into
+ * two cards, the second one with no level to show.
+ */
+const val SESSION_OPEN_EPISODE_MS = 6L * 60 * 60 * 1000
+
+/**
  * Cluster decision rows into raid sessions, newest first.
  *
  * The official alert is the spine: a session runs ON → OFF. Events before the ON within
  * [SESSION_ADOPT_LEAD_MS] are adopted into it (the siren-catching-up case); everything else
  * groups by a [SESSION_GAP_MS] gap. Nothing is ever dropped.
+ *
+ * [now] is explicit so the newest session can be told apart from a finished one: a raid that
+ * has not ended and has not gone quiet for [SESSION_GAP_MS] is [LogSession.ongoing].
  */
-fun buildSessions(entries: List<DebugLogEntry>): List<LogSession> {
-    if (entries.isEmpty()) return emptyList()
-    val sorted = entries.sortedBy { it.atMillis }
+fun buildSessions(entries: List<DebugLogEntry>, now: Long): List<LogSession> {
+    // A tap is not an event: user actions are shown in their own Actions filter and must never
+    // extend, split or head-line a raid story.
+    val sorted = entries.filterNot { it.kind == DebugLogKind.ACTION }.sortedBy { it.atMillis }
+    if (sorted.isEmpty()) return emptyList()
 
     // Walk once, cutting a new session at every ON and after every OFF.
     val groups = mutableListOf<MutableList<DebugLogEntry>>()
     for (e in sorted) {
         val current = groups.lastOrNull()
         val previousClosed = current?.lastOrNull()?.kind == DebugLogKind.OFFICIAL_OFF
+        // An alert that has never been cleared keeps its session open across a quiet stretch —
+        // the same raid, just silent for a while.
+        val openEpisode = current != null &&
+            current.any { it.kind == DebugLogKind.OFFICIAL_ON } &&
+            current.none { it.kind == DebugLogKind.OFFICIAL_OFF } &&
+            e.atMillis - current.first().atMillis <= SESSION_OPEN_EPISODE_MS
         val continues = current != null && !previousClosed &&
             e.kind != DebugLogKind.OFFICIAL_ON &&
-            e.atMillis - current.last().atMillis <= SESSION_GAP_MS
+            (e.atMillis - current.last().atMillis <= SESSION_GAP_MS || openEpisode)
         if (continues) current!!.add(e) else groups.add(mutableListOf(e))
     }
 
@@ -91,14 +118,21 @@ fun buildSessions(entries: List<DebugLogEntry>): List<LogSession> {
         }
     }
 
+    val newest = merged.maxByOrNull { it.last().atMillis }
     return merged.map { group ->
-        val official = group.firstNotNullOfOrNull { it.level } ?: officialFromKind(group)
+        val levels = group.mapNotNull { e -> e.level?.let { e.atMillis to it } }
+        val lastRowMs = group.last().atMillis
+        val ongoing = group === newest &&
+            group.none { it.kind == DebugLogKind.OFFICIAL_OFF } &&
+            now - lastRowMs in 0..SESSION_GAP_MS
         LogSession(
-            id = "s-${group.first().atMillis}-${group.last().atMillis}",
+            id = "s-${group.first().atMillis}-$lastRowMs",
             startMs = group.first().atMillis,
-            endMs = group.last().atMillis,
-            official = official,
-            entries = group.sortedByDescending { it.atMillis }
+            endMs = if (ongoing) maxOf(now, lastRowMs) else lastRowMs,
+            official = levels.maxByOrNull { it.second.ordinal }?.second ?: officialFromKind(group),
+            entries = group.sortedByDescending { it.atMillis },
+            ongoing = ongoing,
+            levelChanges = levels.sortedBy { it.first }
         )
     }.sortedByDescending { it.startMs }
 }

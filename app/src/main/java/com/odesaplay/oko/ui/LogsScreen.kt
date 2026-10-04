@@ -51,6 +51,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DarkMode
@@ -144,8 +146,10 @@ private const val VISIBLE_STEP = 50
 /** Which data source to show. */
 private enum class LogsFilter { DECISIONS, CONNECTIONS, SOURCES }
 
-/** Decisions read as a raid story (default) or the raw event list. */
-private enum class LogsMode { STORY, LIST }
+/** Decisions read as a raid story (default), the raw event list, or the user-action trail.
+ *  A tap is not an event about a threat, so it gets its own lens instead of being mixed into
+ *  the story — the audit trail stays the alert decisions, and the Actions view is one tap away. */
+private enum class LogsMode { STORY, LIST, ACTIONS }
 
 /** Scope of the Decisions feed: only the current focus oblast, or the whole feed. */
 private enum class LogScope { MINE, ALL }
@@ -539,20 +543,22 @@ private fun LogsTabPage(
 ) {
     val scope = rememberCoroutineScope()
     val isDecisions = pageFilter == LogsFilter.DECISIONS
+    val isActions = isDecisions && mode == LogsMode.ACTIONS
     val rows: List<LogRow> = if (pageFilter == LogsFilter.SOURCES) emptyList() else
         buildRows(window, connEntries, gpsEntries, now, isDecisions, newestFirst, scopeMode, focusToken, outcomeFilter, searchQuery, lang)
     // Story mode is the default read: cluster the same filtered events into raids. "My oblast"
     // is the write-time aboutMe flag — in my oblast, or something I would have heard — never a
     // guess from the threat's own place.
     val storySessions = if (isDecisions && mode == LogsMode.STORY) {
-        buildSessions(rows.filterIsInstance<DecisionRow>().map { it.entry })
+        buildSessions(rows.filterIsInstance<DecisionRow>().map { it.entry }, now)
             .filter { outcomeFilter == null || it.entries.any { e -> notifyOutcome(e) == outcomeFilter } }
             .filter { scopeMode == LogScope.ALL || it.aboutMe() }
     } else emptyList()
     // Paginate decisions in GROUP order (not a raw row slice) so a newly-arrived decision
     // can't shift the boundary and inject a fresh trailing row on every "Show more".
     val decisionEntries = rows.filterIsInstance<DecisionRow>().map { it.entry }
-    val allGroups = if (isDecisions) buildGroups(decisionEntries, groupMode, lang, s, newestFirst, now) else emptyList()
+        .let { all -> if (isActions) all.filter { it.kind == DebugLogKind.ACTION } else all }
+    val allGroups = if (isDecisions && !isActions) buildGroups(decisionEntries, groupMode, lang, s, newestFirst, now) else emptyList()
     val shownEntries = allGroups.asSequence().flatMap { it.entries.asSequence() }.take(visibleCount).toList()
     val shownKeys = shownEntries.map { entryKey(it) }.toSet()
     val groups = allGroups.mapNotNull { g ->
@@ -560,8 +566,9 @@ private fun LogsTabPage(
         if (kept.isEmpty()) null else g.copy(entries = kept)
     }
     val visible = if (isDecisions) rows else rows.take(visibleCount)
-    val hasMore = if (isDecisions) shownEntries.size < decisionEntries.size else visible.size < rows.size
-    val subtitle = if (isDecisions) {
+    val hasMore = if (isDecisions && !isActions) shownEntries.size < decisionEntries.size
+    else visible.size < rows.size
+    val subtitle = if (isDecisions && !isActions) {
         // Lifecycle rows aren't events, so they can't inflate the count the segments add up to.
         String.format(s.logsSubtitleFormat, decisionEntries.count { notifyOutcome(it) != NotifyOutcome.INFO })
     } else null
@@ -571,7 +578,7 @@ private fun LogsTabPage(
     val rang = decisionEntries.count { notifyOutcome(it) == NotifyOutcome.RANG }
     val covered = decisionEntries.count { notifyOutcome(it) == NotifyOutcome.COVERED }
     val notNotified = decisionEntries.count { notifyOutcome(it) == NotifyOutcome.NOT_NOTIFIED }
-    val diagnosis = diagnosisOf(decisionEntries, s)
+    val diagnosis = if (isActions) null else diagnosisOf(decisionEntries, s)
     // Collapsed section ids are keyed by group id so a section survives data churn; emptied
     // automatically when its rows scroll out, so a stale id can never linger.
     val collapsed = remember { mutableStateMapOf<String, Boolean>() }
@@ -604,16 +611,18 @@ private fun LogsTabPage(
                 )
             }
             item(key = "summary") {
-                SummaryBar(
-                    total = decisionEntries.size,
-                    rang = rang,
-                    covered = covered,
-                    notNotified = notNotified,
-                    selected = outcomeFilter,
-                    diagnosis = diagnosis,
-                    s = s,
-                    onSelect = onOutcomeFilterChange
-                )
+                if (!isActions) {
+                    SummaryBar(
+                        total = decisionEntries.size,
+                        rang = rang,
+                        covered = covered,
+                        notNotified = notNotified,
+                        selected = outcomeFilter,
+                        diagnosis = diagnosis,
+                        s = s,
+                        onSelect = onOutcomeFilterChange
+                    )
+                }
             }
             if (subtitle != null) {
                 item(key = "subtitle") {
@@ -655,6 +664,15 @@ modifier = Modifier
         } else if (isDecisions && mode == LogsMode.STORY) {
             itemsIndexed(storySessions, key = { _, session -> session.id }) { _, session ->
                 SessionCard(session, s, lang, iconSet, now)
+            }
+        } else if (isDecisions && mode == LogsMode.ACTIONS) {
+            // The action trail is its own lens: no story (a tap is not a raid event), no groups,
+            // no outcome filter — just what the user did, newest first, one row per action.
+            itemsIndexed(
+                decisionEntries.take(visibleCount).sortedByDescending { it.atMillis },
+                key = { _, e -> "act-${e.atMillis}-${e.reason.name}-${e.locality}" }
+            ) { _, entry ->
+                DecisionCard(entry, s, lang, now, iconSet)
             }
         } else if (groups.isNotEmpty()) {
             groups.forEach { group ->
@@ -793,8 +811,11 @@ private fun buildRows(
  * is the non-alert bucket: a notification-lifecycle row reports a fact, not an outcome.
  */
 fun notifyOutcome(e: DebugLogEntry): NotifyOutcome = when {
-    // Lifecycle rows report no alert outcome, so they must never enter the three tallies.
-    e.kind == DebugLogKind.NOTIF -> NotifyOutcome.INFO
+    // Lifecycle rows report no alert outcome, so they must never enter the three tallies. Same
+    // for a level change (the episode's onset and end are already logged) and for the Actions
+    // filter (a tap is not an event about a threat at all).
+    e.kind == DebugLogKind.NOTIF || e.kind == DebugLogKind.OFFICIAL_LEVEL ||
+        e.kind == DebugLogKind.ACTION -> NotifyOutcome.INFO
     e.notified -> NotifyOutcome.RANG
     e.reason == DebugLogReason.COALESCED || e.reason == DebugLogReason.ALREADY_NOTIFIED ||
         e.reason == DebugLogReason.RATE_LIMITED || e.reason == DebugLogReason.ONCE_PER_THREAT ||
@@ -917,7 +938,11 @@ private fun LogControlsRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         SegmentToggle(
-            options = listOf(LogsMode.STORY to s.logsModeStory, LogsMode.LIST to s.logsModeList),
+            options = listOf(
+                LogsMode.STORY to s.logsModeStory,
+                LogsMode.LIST to s.logsModeList,
+                LogsMode.ACTIONS to s.actionLog.modeActions
+            ),
             selected = mode,
             onSelect = onModeChange
         )
@@ -1097,6 +1122,18 @@ private fun SessionCard(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                // A live raid is not a finished span. It used to be sealed at its last logged row,
+                // so a raid that went quiet for 20 minutes showed "09:21 – 10:20 · 58min" while it
+                // was still going on.
+                if (session.ongoing) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "· ${s.actionLog.sessionOngoing}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = DebugRed
+                    )
+                }
                 Spacer(Modifier.weight(1f))
                 Text(
                     verdict,
@@ -1115,13 +1152,27 @@ private fun SessionCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 session.official?.let { level ->
                     if (level != AlertLevel.NONE) {
-                        // No "red"/"yellow" word — the card's colour already says it.
+                        // No "red"/"yellow" word — the card's colour already says it. A second,
+                        // dimmer dot appears when the episode also spent time at another level
+                        // (red → yellow), which used to be an hour of unbroken red in the story.
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
                                 .background(if (level == AlertLevel.RED) DebugRed else DebugAmber)
                         )
+                        val downgraded = session.levelChanges.any {
+                            it.second != level && it.second != AlertLevel.NONE
+                        }
+                        if (downgraded) {
+                            Spacer(Modifier.width(3.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(DebugAmber.copy(alpha = 0.45f))
+                            )
+                        }
                         Spacer(Modifier.width(6.dp))
                     }
                 }
@@ -1500,15 +1551,18 @@ private fun LogRowCard(
 private fun DebugLogKind.icon(): ImageVector = when (this) {
     DebugLogKind.OFFICIAL_ON -> Icons.Filled.Warning
     DebugLogKind.OFFICIAL_OFF -> Icons.Filled.CheckCircle
+    DebugLogKind.OFFICIAL_LEVEL -> Icons.Filled.SwapVert
     DebugLogKind.ZONE_ENTER -> Icons.Filled.Warning
     DebugLogKind.REGION_THREAT -> Icons.Filled.Place
     DebugLogKind.FLOURISH -> Icons.Filled.Star
+    DebugLogKind.ACTION -> Icons.Filled.TouchApp
     DebugLogKind.NOTIF -> Icons.Filled.HourglassBottom
 }
 
 private fun DebugLogKind.label(
     threatType: ThreatType?,
     locality: String?,
+    level: AlertLevel?,
     lang: AppLanguage,
     s: Strings.StringSet
 ): String = when (this) {
@@ -1546,6 +1600,14 @@ private fun DebugLogKind.label(
         }
     }
     DebugLogKind.FLOURISH -> s.debugKindFlourish
+    DebugLogKind.OFFICIAL_LEVEL -> {
+        // A level change IS the story of this row: "Downgraded to yellow" is the fact a reader
+        // wants, and the place it happened is secondary.
+        val loc = localityText(locality, lang)
+        val head = if (level == AlertLevel.YELLOW) s.actionLog.levelDowngraded else s.actionLog.levelUpgraded
+        if (loc != null) "$head · $loc" else head
+    }
+    DebugLogKind.ACTION -> locality ?: s.actionLog.actionLabel
     DebugLogKind.NOTIF -> {
         val loc = localityText(locality, lang)
         if (loc != null) "${s.debugKindNotifExpired} · $loc" else s.debugKindNotifExpired
@@ -1571,6 +1633,13 @@ internal fun DebugLogReason.label(s: Strings.StringSet): String = when (this) {
     DebugLogReason.RATE_LIMITED -> s.debugReasonRateLimited
     DebugLogReason.ONCE_PER_THREAT -> s.debugReasonOncePerThreat
     DebugLogReason.ONCE_PER_TYPE -> s.debugReasonOncePerType
+    DebugLogReason.LEVEL_CHANGED -> s.actionLog.reasonLevelChanged
+    DebugLogReason.MUTED -> s.actionLog.reasonMuted
+    DebugLogReason.UNMUTED -> s.actionLog.reasonUnmuted
+    DebugLogReason.SETTING_CHANGED -> s.actionLog.reasonSettingChanged
+    DebugLogReason.USER_RETRY -> s.actionLog.reasonUserRetry
+    DebugLogReason.TALLY_POSTED -> s.actionLog.reasonTallyPosted
+    DebugLogReason.PAUSED -> s.actionLog.reasonPaused
     DebugLogReason.FIRED -> ""
 }
 
@@ -1606,7 +1675,7 @@ private fun DecisionCard(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    entry.kind.label(entry.threatType, entry.locality, lang, s) +
+                    entry.kind.label(entry.threatType, entry.locality, entry.level, lang, s) +
                         entry.threatId?.let { " · #${it.takeLast(4)}" }.orEmpty(),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,

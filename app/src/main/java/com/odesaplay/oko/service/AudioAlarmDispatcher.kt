@@ -59,7 +59,6 @@ class AudioAlarmDispatcher(
 
     private var soundRedAlertId: Int = 0
     private var soundYellowAlertId: Int = 0
-    private var soundAllClearId: Int = 0
     private var soundCriticalOfflineId: Int = 0
 
     /**
@@ -91,7 +90,6 @@ class AudioAlarmDispatcher(
 
             soundRedAlertId = soundPool?.load(context, R.raw.air_raid_siren, 1) ?: 0
             soundYellowAlertId = soundPool?.load(context, R.raw.zone_outer, 1) ?: 0
-            soundAllClearId = soundPool?.load(context, R.raw.all_clear, 1) ?: 0
             soundCriticalOfflineId = soundPool?.load(context, R.raw.critical_offline, 1) ?: 0
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize SoundPool", e)
@@ -112,14 +110,6 @@ class AudioAlarmDispatcher(
             priority = 10,
             loopCount = if (loop) -1 else 0
         )
-    }
-
-    /**
-     * Plays the authoritative All-Clear chime.
-     */
-    fun dispatchAllClearChime() {
-        playSound(soundAllClearId, leftVol = 0.9f, rightVol = 0.9f, kind = SoundKind.CHIME, priority = 5)
-        vibrator.cancel()
     }
 
     /**
@@ -164,13 +154,11 @@ class AudioAlarmDispatcher(
     }
 
     /**
-     * An alert always preempts whatever is playing; a chime only replaces another chime. The
-     * asymmetric rule is the whole point: a housekeeping stop (see [stopLoopingAlert]) must
-     * never be able to clip a one-shot that just started.
+     * An alert always preempts whatever is playing — including a housekeeping stop target, so a
+     * one-shot that just started is never clipped by [stopLoopingAlert]'s bookkeeping.
      */
     private fun playNow(sound: PendingAlarm.Sound): Boolean {
-        val current = active
-        if (current != null && (sound.kind != SoundKind.CHIME || current.kind == SoundKind.LOOP)) {
+        if (active != null) {
             stopActiveAlert()
         }
         requestFocus()
@@ -190,7 +178,7 @@ class AudioAlarmDispatcher(
         abandonFocus()
     }
 
-    /** Stops only a looping siren, leaving a one-shot chime to finish. */
+    /** Stops only a looping siren, leaving a one-shot (offline critical) to finish. */
     fun stopLoopingAlert() {
         if (active?.kind == SoundKind.LOOP) stopActiveAlert()
     }

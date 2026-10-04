@@ -57,6 +57,67 @@ class OblastAlertEpisodeTest {
         assertEquals(RestoredResolution.HOLD, latched.resolveRestored(true, EpisodeTransition.STAY))
     }
 
+    // --- The gate that ended an episode is the gate that announced it -----------------------
+
+    private val myRaion = listOf(
+        OblastAlert("бердянський", "Бердянський район", "Запорізька область", null)
+    )
+    private val siblingRaion = listOf(
+        OblastAlert("якимівський", "Якимівський район", "Запорізька область", null)
+    )
+    private val cityScoped = LatchedEpisode(
+        AlertLevel.RED, "zaporizka", "s", "Бердянськ",
+        cityUa = "Бердянськ", cityScoped = true
+    )
+
+    @Test
+    fun `a city-scoped episode ends when a sibling raion is the only thing still alerting`() {
+        // The report: no all-clear, and a red banner that could not go away. The episode was
+        // announced city-scoped but ended oblast-wide, so any sibling raion held it open.
+        assertEquals(EpisodeTransition.ENDED, cityScoped.resolve(true, siblingRaion))
+    }
+
+    @Test
+    fun `a city-scoped episode holds while its own raion still alerts`() {
+        assertEquals(EpisodeTransition.STAY, cityScoped.resolve(true, myRaion))
+    }
+
+    @Test
+    fun `the same sibling raion keeps an unscoped episode alive`() {
+        // Scope only narrows when the user asked for city-level: the oblast-wide contract is
+        // unchanged, or a district alert would silence a whole oblast.
+        val oblastWide = LatchedEpisode(AlertLevel.RED, "zaporizka", "s", "Zaporizhzhia")
+        assertEquals(EpisodeTransition.STAY, oblastWide.resolve(true, siblingRaion))
+        assertEquals(EpisodeTransition.ENDED, oblastWide.resolve(true, emptyList()))
+    }
+
+    @Test
+    fun `an old row without the scope fields keeps its original oblast-wide gate`() {
+        val parsed = LatchedEpisode.parse("RED|odeska|s|Odesa")
+        assertEquals(latched, parsed)
+        assertEquals(EpisodeTransition.STAY, parsed!!.resolve(true, active))
+    }
+
+    @Test
+    fun `a persisted scoped row round-trips its own gate`() {
+        val row = "RED|zaporizka|s|Бердянськ|Бердянськ|1"
+        val parsed = LatchedEpisode.parse(row)!!
+        assertEquals(true, parsed.cityScoped)
+        assertEquals("Бердянськ", parsed.cityUa)
+        assertEquals(EpisodeTransition.ENDED, parsed.resolve(true, siblingRaion))
+        assertEquals(EpisodeTransition.STAY, parsed.resolve(true, myRaion))
+    }
+
+    @Test
+    fun `a scoped latch with an unknown city falls back to oblast-wide, never ending early`() {
+        // An unknown city must not be read as "no longer covered" — that would synthesize an
+        // all-clear for an alert still in force.
+        val unknownCity = LatchedEpisode(
+            AlertLevel.RED, "zaporizka", "s", "Zaporizhzhia", cityUa = "", cityScoped = true
+        )
+        assertEquals(EpisodeTransition.STAY, unknownCity.resolve(true, siblingRaion))
+    }
+
     // --- OfficialFrontier: one episode per region, red-then-yellow included ------------------
 
     private fun frontier(level: AlertLevel, token: String = "odeska", soundedRed: Boolean = false) =

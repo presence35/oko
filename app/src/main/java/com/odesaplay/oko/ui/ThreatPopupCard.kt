@@ -459,11 +459,12 @@ fun ThreatPopupCard(
                         }
                         approachingCity?.let { city ->
                             Spacer(Modifier.height(2.dp))
+                            // Small-card variant: a caption too, for the same reason as the large
+                            // card — the pills are the measurement.
                             Text(
                                 String.format(s.approachingFormat, city),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = AdvisoryAmber,
-                                fontWeight = FontWeight.Medium
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AdvisoryAmber.copy(alpha = 0.85f)
                             )
                         }
                         Spacer(Modifier.height(4.dp))
@@ -542,13 +543,14 @@ fun ThreatPopupCard(
                             Spacer(Modifier.height(4.dp))
                         }
 
-                        // Inbound track staged onto its ring: say so, instead of only implying it.
+                        // Inbound track: the source names the destination. It is a caption, not a headline — the
+                        // numbers below it are the real position, and the previous bodyLarge amber
+                        // line out-shouted the distance it sat next to.
                         approachingCity?.let { city ->
                             Text(
                                 String.format(s.approachingFormat, city),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = AdvisoryAmber,
-                                fontWeight = FontWeight.Medium
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AdvisoryAmber.copy(alpha = 0.85f)
                             )
                             Spacer(Modifier.height(4.dp))
                         }

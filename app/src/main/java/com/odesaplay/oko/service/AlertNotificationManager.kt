@@ -74,7 +74,7 @@ const val NOTIF_MONITORING_PAUSED = 9
 
         /** Bump to delete + recreate all managed channels (sound/importance/attrs are
          *  frozen by Android at creation — this is the only way a change takes effect). */
-        const val CHANNEL_SCHEMA_VERSION = 3
+        const val CHANNEL_SCHEMA_VERSION = 4
 
         /**
          * Every Oko notification carries an explicit group key, so the platform never folds
@@ -206,7 +206,10 @@ const val NOTIF_MONITORING_PAUSED = 9
             }
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ALL_CLEAR, s.allClearChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
+            // DEFAULT, not HIGH: the all-clear sounds (as CHANNEL_ALARM_EPISODE already does with
+            // the same sample) but must never pop over the screen — a heads-up "all clear" is an
+            // interruption, not information.
+            NotificationChannel(CHANNEL_ALL_CLEAR, s.allClearChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = s.allClearChannelDesc
                 enableVibration(true)
                 setSound(sirenUri("all_clear"), notificationAttributes())

@@ -81,6 +81,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -1149,8 +1151,8 @@ private fun MapScreen(
                                 }
                             }
                             ZoneButtons(
-                                redArmed = uiState.activeSlowRedArmed || uiState.activeFastRedArmed,
-                                yellowArmed = uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
+                                armed = uiState.activeArmed,
+                                muted = uiState.raidMuted,
                                 lang = uiState.language,
                                 vertical = true,
                                 onZoneTap = zoneOnTap,
@@ -1173,6 +1175,7 @@ private fun MapScreen(
                                         uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
                                     notificationsDisabled = uiState.notificationsDisabledBySystem,
                                     mute = uiState.raidMute,
+                                    zonesOffCause = uiState.zonesOffCause,
                                     s = s,
                                     onFix = onProblemFix,
                                     onUnmute = unmuteRaid,
@@ -1200,8 +1203,8 @@ private fun MapScreen(
                                         }
                                     }
                                     ZoneButtons(
-                                        redArmed = uiState.activeSlowRedArmed || uiState.activeFastRedArmed,
-                                        yellowArmed = uiState.activeSlowYellowArmed || uiState.activeFastYellowArmed,
+                                        armed = uiState.activeArmed,
+                                        muted = uiState.raidMuted,
                                         lang = uiState.language,
                                         onZoneTap = zoneOnTap,
                                         onEditZones = openZonesPanel
@@ -1253,6 +1256,7 @@ private fun MapScreen(
                         zonesArmed = !alertsOff,
                         notificationsDisabled = uiState.notificationsDisabledBySystem,
                         mute = uiState.raidMute,
+                        zonesOffCause = uiState.zonesOffCause,
                         s = s,
                         onFix = onProblemFix,
                         onUnmute = unmuteRaid,
@@ -1861,8 +1865,8 @@ private val FLOATING_ICON_ROW_GAP = 12.dp
 
 @Composable
 internal fun ZoneButtons(
-    redArmed: Boolean,
-    yellowArmed: Boolean,
+    armed: ZoneArmed,
+    muted: Boolean,
     lang: AppLanguage,
     vertical: Boolean = false,
     onZoneTap: (ThreatZone) -> Unit,
@@ -1876,8 +1880,8 @@ internal fun ZoneButtons(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            ZoneButton(ThreatZone.INNER, redArmed, s.zoneButtonRed, onZoneTap)
-            ZoneButton(ThreatZone.OUTER, yellowArmed, s.zoneButtonYellow, onZoneTap)
+            ZoneButton(ThreatZone.INNER, zoneBellState(armed, ThreatZone.INNER, muted), s.zoneButtonRed, onZoneTap)
+            ZoneButton(ThreatZone.OUTER, zoneBellState(armed, ThreatZone.OUTER, muted), s.zoneButtonYellow, onZoneTap)
             ZoneGearButton(onClick = onEditZones, label = s.editZonesLabel)
         }
     } else {
@@ -1886,10 +1890,36 @@ internal fun ZoneButtons(
             horizontalArrangement = Arrangement.spacedBy(FLOATING_ICON_ROW_GAP),
             verticalAlignment = Alignment.Bottom
         ) {
-            ZoneButton(ThreatZone.INNER, redArmed, s.zoneButtonRed, onZoneTap)
-            ZoneButton(ThreatZone.OUTER, yellowArmed, s.zoneButtonYellow, onZoneTap)
+            ZoneButton(ThreatZone.INNER, zoneBellState(armed, ThreatZone.INNER, muted), s.zoneButtonRed, onZoneTap)
+            ZoneButton(ThreatZone.OUTER, zoneBellState(armed, ThreatZone.OUTER, muted), s.zoneButtonYellow, onZoneTap)
             ZoneGearButton(onClick = onEditZones, label = s.editZonesLabel)
         }
+    }
+}
+
+/**
+ * What a zone button can honestly say about that colour's two bells.
+ *
+ * The buttons used to collapse the four armed flags into two booleans with an OR, so "slow armed,
+ * fast off" rendered exactly like "both armed" — and `fastYellowArmed` ships OFF by default, so
+ * the yellow button was permanently ambiguous. Dimming it unless everything is armed is no
+ * better: the default install would then show a crossed bell for a bell the user never touched.
+ * Three states, so "partial" is visible instead of guessed.
+ */
+enum class ZoneBellState { AllArmed, PartArmed, NoneArmed }
+
+/** One derivation for both buttons and the notice pill. [muted] silences everything regardless
+ *  of the switches — a live raid mute is the same fact as "no bell". */
+internal fun zoneBellState(armed: ZoneArmed, zone: ThreatZone, muted: Boolean): ZoneBellState {
+    val flags = when (zone) {
+        ThreatZone.INNER -> listOf(armed.slowRed, armed.fastRed)
+        ThreatZone.OUTER -> listOf(armed.slowYellow, armed.fastYellow)
+    }
+    val on = flags.count { it }
+    return when {
+        muted || on == 0 -> ZoneBellState.NoneArmed
+        on == flags.size -> ZoneBellState.AllArmed
+        else -> ZoneBellState.PartArmed
     }
 }
 
@@ -1969,6 +1999,7 @@ private fun rememberMapNotice(
     zonesArmed: Boolean,
     notificationsDisabled: Boolean,
     mute: RaidMute,
+    zonesOffCause: ZonesOffCause,
     s: Strings.StringSet,
     onFix: (ProblemFix) -> Unit,
     onUnmute: () -> Unit,
@@ -1979,7 +2010,8 @@ private fun rememberMapNotice(
     if (problem != null) {
         return MapNotice(problemLabel(problem.id, s)) { onFix(problem.fix) }
     }
-    val silent = rememberSilentNotice(zonesArmed, notificationsDisabled, mute, s) ?: return null
+    val silent = rememberSilentNotice(zonesArmed, notificationsDisabled, mute, zonesOffCause, s)
+        ?: return null
     return MapNotice(
         label = silent.label,
         onClick = silentNoticeOnClick(silent.action, onUnmute, onOpenZones, onOpenNotificationSettings)
@@ -1995,6 +2027,7 @@ private fun rememberSilentNotice(
     zonesArmed: Boolean,
     notificationsDisabled: Boolean,
     mute: RaidMute,
+    zonesOffCause: ZonesOffCause,
     s: Strings.StringSet
 ): SilentNoticeText? {
     val now by produceState(System.currentTimeMillis(), mute) {
@@ -2005,10 +2038,17 @@ private fun rememberSilentNotice(
             }
         }
     }
-    val reason = SilentReason.resolve(zonesArmed, notificationsDisabled, mute, now) ?: return null
+    val reason = SilentReason.resolve(zonesArmed, notificationsDisabled, mute, now, zonesOffCause)
+        ?: return null
     val label = when (reason) {
         SilentReason.NotificationsDisabled -> s.notificationsDisabledLabel
-        SilentReason.ZonesOff -> s.allAlertsOffLabel
+        // Three causes, three sentences: the old single "Zone alerts are off" was honest about
+        // the state and useless about the cause — and only one of them is fixable by hand.
+        is SilentReason.ZonesOff -> when (reason.cause) {
+            ZonesOffCause.SleepPreset -> s.actionLog.sleepWell
+            ZonesOffCause.Night -> s.actionLog.zonesOffNight
+            ZonesOffCause.Manual -> s.actionLog.zonesOffManual
+        }
         SilentReason.MutedForRaid -> s.silentMutedForRaid
         is SilentReason.MutedFor -> String.format(s.silentMutedTimedFormat, countdownText(reason.deadlineMs - now))
     }
@@ -2058,20 +2098,52 @@ private fun AllAlertsOffWarning(label: String, onClick: () -> Unit) {
 @Composable
 private fun ZoneButton(
     zone: ThreatZone,
-    armed: Boolean,
+    bell: ZoneBellState,
     contentDescription: String,
     onZoneTap: (ThreatZone) -> Unit
 ) {
+    val armed = bell != ZoneBellState.NoneArmed
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier.size(width = 16.dp, height = 18.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (!armed) {
-                AlertsOffBell(size = 16.dp)
+            when (bell) {
+                ZoneBellState.AllArmed -> Unit
+                ZoneBellState.NoneArmed -> AlertsOffBell(size = 16.dp)
+                // Half a bell: this colour still rings for one of its two threat speeds. The
+                // ghost shows the whole glyph, the clipped half shows what is actually armed.
+                ZoneBellState.PartArmed -> PartialBell(size = 16.dp)
             }
         }
         ZonePill(zone, armed, contentDescription, onZoneTap)
+    }
+}
+
+/** Bell with its left half lit — "armed for one of the two speeds". */
+@Composable
+private fun PartialBell(size: Dp, tint: Color = Color(AppPalette.TextSecondary)) {
+    Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_notifications),
+            contentDescription = null,
+            tint = tint.copy(alpha = 0.35f),
+            modifier = Modifier.size(size)
+        )
+        Box(
+            modifier = Modifier
+                .size(width = size / 2, height = size)
+                .align(Alignment.CenterStart)
+                .clipToBounds(),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_notifications),
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(size)
+            )
+        }
     }
 }
 

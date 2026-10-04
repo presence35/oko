@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+- Muting a raid now really mutes it: no sound, no vibration and no notification for anything that starts inside the window (the all-clear releases it, so the next raid rings) 10-04_14:20:00
+
+- "Mute 10 min" now survives the app or service being recycled, and stops claiming a mute after its time is up 10-04_14:20:00
+
+- A city-level alert that ends now gives you its all-clear. The episode was announced for your city but ended only when the whole oblast went quiet, so a neighbouring district kept your siren from ever clearing 10-04_14:20:00
+
+- A threat card no longer shows the zone radius as its distance: "22 km" was literally your yellow ring, so a marker outside the ring still read "Approaching". Real position, real distance, real ETA; "Approaching <city>" is now a quiet line under them 10-04_14:20:00
+
+- The map now says "Sleep well" when "Just let me sleep!" is on, instead of a generic "Zone alerts are off" that also covered a night window or a hand-set switch 10-04_14:20:00
+
+- "Just let me sleep!" can no longer hide itself: its row stays visible with the night window switched off, and editing a night bell by hand no longer leaves a broken restore behind 10-04_14:20:00
+
+- The map's zone buttons say what they mean: lit when a bell of that colour is armed, a half bell when only one of the two is (fast-yellow ships off, so yellow always looked ambiguous), and the bell glyph appears while a raid is muted 10-04_14:20:00
+
+- Logs → a live raid is now marked "ongoing" and counts to the present, instead of showing a finished span that ended at the last event 10-04_14:20:00
+
+- Logs → a red alert downgraded to yellow is recorded, so an hour of yellow no longer reads as an hour of red 10-04_14:20:00
+
+- Logs → new Actions view: what you muted, ignored, retried or switched, plus the bell/official/night settings, with the time 10-04_14:20:00
+
+- Logs → the "N threats resolved" notification is finally recorded, so it can no longer sit next to a "0 notified" header 10-04_14:20:00
+
+- Falling-debris countdown follows the clock instead of a timer: it no longer freezes or restarts when the phone sleeps, and lowering the setting shortens the countdown already running 10-04_14:20:00
+
+- The all-clear auto-dismiss now survives the phone sleeping and a re-post, instead of sitting in the shade all night 10-04_14:20:00
+
+- Overnight on a phone without battery optimisation: the monitor re-syncs instead of deciding from a stale clock (no phantom reconnects, no ghost all-clears), and the timeline records the gap 10-04_14:20:00
+
+- Lighter Russian FPV icon, which was nearly invisible on the dark map 10-04_14:20:00
+
+- The all-clear no longer fires for an alert level you had switched off, and switching a level off mid-alert now drops its own notification instead of leaving it in the shade 10-04_02:05:00
+
+- The all-clear no longer pops over the screen as a heads-up banner; it stays a sound plus a shade entry, like the all-clear tone the morale summary already uses 10-04_02:05:00
+
+- The all-clear no longer fires its own alarm-stream chime: it sounds through its notification channel like the alert it closes, so silent mode, Do Not Disturb and a muted channel silence it too — it used to pierce all of them, even for a phone whose alert never sounded 10-04_01:40:00
+
+- An all-clear with a falling-debris countdown now sounds when the alert actually ends; before, the countdown left it completely silent 10-04_01:40:00
+
 - Logs header gets a back arrow and a roomier NEPTUN mark, status word and send button 10-04_00:55:00
 
 - The battery/power timeline in a sent log now survives app restarts, so a tester who installs a build and taps "Send logs" gets a real timeline instead of a single sample 10-04_00:55:00

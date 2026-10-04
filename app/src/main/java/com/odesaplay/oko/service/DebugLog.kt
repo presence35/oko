@@ -24,8 +24,25 @@ import com.odesaplay.oko.engine.isFastType
 import com.odesaplay.oko.engine.resolveOblastId
 import com.odesaplay.oko.engine.AlertLevel
 
+/**
+ * The settings worth remembering in the audit trail: the ones that decide WHAT you are told
+ * (bells, official channels, city scope, the night preset, the debris delay, the notification
+ * policy). Presentation preferences (map style, card size, icon set, follow-me, tally scope) are
+ * deliberately absent — they never change whether a raid reaches you, and [DebugLog] is the
+ * ring that explains raids.
+ *
+ * Ordinal-indexed into `ActionLog.settingLabels`, so the vocabulary and its copy cannot drift.
+ */
+enum class LoggedSetting {
+    ZoneBells, SlowRedBell, SlowYellowBell, FastRedBell, FastYellowBell,
+    OfficialRed, OfficialYellow, CityScope, SirenOverride, NightSleep,
+    DebrisDelay, AutoDismissAllClear, NotifyPolicy, CriticalOffline
+}
+
 /** Event kinds shown in the Debug log screen. */
-enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, REGION_THREAT, FLOURISH, NOTIF }
+enum class DebugLogKind {
+    OFFICIAL_ON, OFFICIAL_OFF, OFFICIAL_LEVEL, ZONE_ENTER, REGION_THREAT, FLOURISH, NOTIF, ACTION
+}
 
 /**
  * Why a decision landed the way it did. [FIRED] = a notification was actually posted
@@ -35,7 +52,8 @@ enum class DebugLogKind { OFFICIAL_ON, OFFICIAL_OFF, ZONE_ENTER, REGION_THREAT, 
  */
 enum class DebugLogReason {
     FIRED, BELL_MUTED, ALREADY_NOTIFIED, COALESCED, TYPE_OFF, ADVISORY, STALE,
-    OUTSIDE_ZONES, TOGGLE_OFF, RATE_LIMITED, ONCE_PER_THREAT, ONCE_PER_TYPE, NOTIF_EXPIRED
+    OUTSIDE_ZONES, TOGGLE_OFF, RATE_LIMITED, ONCE_PER_THREAT, ONCE_PER_TYPE, NOTIF_EXPIRED,
+    LEVEL_CHANGED, MUTED, UNMUTED, SETTING_CHANGED, USER_RETRY, TALLY_POSTED, PAUSED
 }
 
 /**
@@ -85,6 +103,9 @@ data class DebugLogContext(
     val verdicts: Map<String, PluginVerdict>,
     /** Threat id driving the shown notification (the post winner), if any. */
     val winnerId: String?,
+    /** A raid mute is live, so the winner was deliberately NOT delivered. The sweep must not
+     *  report a FIRED row for a notification that was intentionally suppressed. */
+    val muted: Boolean = false,
     val night: Boolean,
     val sirenOverride: Boolean,
     val fastVibrationLevel: Int,
@@ -215,6 +236,87 @@ object DebugLog {
     }
 
     /**
+     * The severity of a live official episode changed (red → yellow or back) with no new
+     * episode and no second siren. Logged because the notification is silently rewritten and
+     * the story card otherwise shows an unbroken RED for an hour that was half yellow. INFO,
+     * not a decision: the episode's own onset and end are already recorded.
+     */
+    fun recordOfficialLevel(
+        level: AlertLevel,
+        locality: String?,
+        scopeOblastId: String?,
+        now: Long
+    ) {
+        record(
+            DebugLogEntry(
+                now, DebugLogKind.OFFICIAL_LEVEL, night = false, sirenOverride = false,
+                vibrationLevel = null, notified = false, reason = DebugLogReason.LEVEL_CHANGED,
+                threatId = null, threatType = null, tier = null, distanceKm = null,
+                locality = locality, level = level, scopeOblastId = scopeOblastId, aboutMe = true
+            )
+        )
+    }
+
+    /**
+     * A user action worth remembering: the bells were muted, a setting was switched, a retry
+     * was tapped. High-signal only — never a per-tap firehose, because this ring is the alert
+     * audit trail and a tap stream would evict the decisions it exists to explain. [label] is
+     * the localized sentence shown as the row (the [recordFlourish] convention for a row with
+     * no place), [detail] an optional value suffix.
+     */
+    fun recordAction(
+        reason: DebugLogReason,
+        label: String,
+        detail: String? = null,
+        now: Long
+    ) {
+        record(
+            DebugLogEntry(
+                now, DebugLogKind.ACTION, night = false, sirenOverride = false,
+                vibrationLevel = null, notified = false, reason = reason,
+                threatId = null, threatType = null, tier = null, distanceKm = null,
+                locality = if (detail.isNullOrBlank()) label else "$label · $detail",
+                aboutMe = true
+            )
+        )
+    }
+
+    /**
+     * The monitor loop slept through a doze (or the process was frozen) and woke up [gapMs]
+     * later, so that tick's decisions were skipped and every state re-baselined instead. INFO:
+     * it is the honest marker for a hole in the timeline — the gap a beta tester is looking for
+     * when an overnight run "updated wrong".
+     */
+    fun recordPaused(gapMs: Long, now: Long) {
+        val minutes = (gapMs / 60_000L).coerceAtLeast(1L)
+        record(
+            DebugLogEntry(
+                now, DebugLogKind.NOTIF, night = false, sirenOverride = false,
+                vibrationLevel = null, notified = false, reason = DebugLogReason.PAUSED,
+                threatId = null, threatType = null, tier = null, distanceKm = null,
+                locality = "paused ${minutes}m", aboutMe = false
+            )
+        )
+    }
+
+    /**
+     * The neutralized tally posted its own notification. It is a real notification the user
+     * saw, so it belongs in the audit trail, but it is not an alert decision: it stays INFO
+     * and never moves the notified / covered / not-notified tallies.
+     */
+    fun recordTallyPosted(locality: String?, count: Int, now: Long) {
+        record(
+            DebugLogEntry(
+                now, DebugLogKind.NOTIF, night = false, sirenOverride = false,
+                vibrationLevel = null, notified = false, reason = DebugLogReason.TALLY_POSTED,
+                threatId = null, threatType = null, tier = null, distanceKm = null,
+                locality = locality?.let { if (count > 0) "$it · $count" else it },
+                aboutMe = false
+            )
+        )
+    }
+
+    /**
      * Audit trail for the shoot-down flourish replay — tap OUTCOMES only (started /
      * blocked by the animation toggle), never per-bullet spam. [FIRED] = the show actually
      * started; every other reason is a "why not". [detail] is a short locale-neutral
@@ -303,6 +405,13 @@ object DebugLog {
                     PolicyReason.ONCE_PER_TYPE -> DebugLogReason.ONCE_PER_TYPE
                     else -> DebugLogReason.ONCE_PER_THREAT
                 }
+            }
+            ctx.muted -> {
+                // The user muted the raid: the zone was reached and the policy said SOUND, but
+                // nothing was delivered on purpose. BELL_MUTED is exactly that fact, and it is
+                // the only honest row for a winner that was suppressed rather than shown.
+                notified = false
+                reason = DebugLogReason.BELL_MUTED
             }
             ctx.winnerId == t.id -> {
                 notified = false

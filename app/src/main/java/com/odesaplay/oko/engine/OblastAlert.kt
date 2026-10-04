@@ -202,17 +202,31 @@ data class LatchedEpisode(
     val level: AlertLevel,
     val token: String,
     val since: String?,
-    val city: String
+    val city: String,
+    /** Canonical city/raion the episode was announced for, when it was announced city-scoped. */
+    val cityUa: String? = null,
+    /** True when the episode was announced through the city-level gate, so it must be ENDED
+     *  through that same gate. Latching scoped but ending oblast-wide meant an alert narrowed
+     *  away from your city never cleared while any sibling raion still alerted — and the
+     *  latched red banner had no way to go away. Rows written before this existed parse as
+     *  unscoped, which is exactly how they were gated. */
+    val cityScoped: Boolean = false
 ) {
-    fun isRawActive(alerts: List<OblastAlert>): Boolean =
-        alerts.officialStateFor(token, null, false).level != AlertLevel.NONE
+    /** True while this episode is still alerting, measured with the gate it was announced
+     *  through. [cityUa] is only consulted when it is both scoped and known, so an unknown
+     *  city can never end an episode early (it falls back to oblast-wide, as the matcher does). */
+    fun isStillAlerting(alerts: List<OblastAlert>): Boolean {
+        val scoped = cityScoped && !cityUa.isNullOrBlank()
+        return alerts.officialStateFor(token, cityUa.takeIf { scoped }, scoped)
+            .level != AlertLevel.NONE
+    }
 
     /** Pure episode transition: an unready feed (no snapshot heard yet) holds the
      *  episode rather than ending it, so a cold start can never synthesize an
-     *  all-clear out of the initial empty. Only a ready feed showing no raw
-     *  alert ends the episode. */
+     *  all-clear out of the initial empty. Only a ready feed showing no alert for this
+     *  episode's own scope ends it. */
     fun resolve(alertsReady: Boolean, alerts: List<OblastAlert>): EpisodeTransition =
-        if (!alertsReady || isRawActive(alerts)) EpisodeTransition.STAY else EpisodeTransition.ENDED
+        if (!alertsReady || isStillAlerting(alerts)) EpisodeTransition.STAY else EpisodeTransition.ENDED
 
     /** Second gate for restores: only an episode confirmed live in this lifetime may
      *  end loudly. A latch resurrected from persistence that was never observed live
@@ -229,6 +243,18 @@ data class LatchedEpisode(
             if (s.isNullOrBlank()) return null
             val parts = s.split('|')
             return when {
+                // `LEVEL|token|since|city[|cityUa|scoped]` — the two trailing fields are optional,
+                // so a row written by an older build still reads (as unscoped, its old gate).
+                parts.size >= 6 -> {
+                    val lvl = try { AlertLevel.valueOf(parts[0].uppercase()) } catch (_: Exception) { return null }
+                    val token = parts[1].trim()
+                    if (token.isEmpty()) return null
+                    LatchedEpisode(
+                        lvl, token, parts[2].ifBlank { null }, parts[3],
+                        cityUa = parts[4].ifBlank { null },
+                        cityScoped = parts[5].trim() == "1"
+                    )
+                }
                 parts.size >= 4 -> {
                     val lvl = try { AlertLevel.valueOf(parts[0].uppercase()) } catch (_: Exception) { return null }
                     val token = parts[1].trim()

@@ -28,8 +28,10 @@ behavior here, update the implementation in the same change.
 | Threat level | `Double` (0–10) | Aggregate gauge |
 | Proximity | `ThreatProximity?` (per selected threat) | Distance, ETA, speed source |
 
-The service's **raw** (scope=false) gate for the all-clear latch is the same engine function
-`officialAlertActiveFor(alerts, token, null, scope = false)` — consumers never re-implement matching.
+The all-clear latch is re-evaluated through **its own announcing gate** — `LatchedEpisode.isStillAlerting`
+replays the persisted `cityUa`/`scoped` into the same `officialStateFor` matcher, so a city-scoped
+episode ends when nothing covers the city (a sibling raion cannot hold it open) and an oblast-wide
+one still ends oblast-wide. Consumers never re-implement matching.
 
 ## Threat Model
 
@@ -241,13 +243,22 @@ the map, card and siren agree:
   - slow inbound → OUTER (yellow),
   - fast inbound → INNER (still sounds red).
 Both ride the yellow ring; the fast track's alarm stays red while its marker reads "approaching".
-Rewrites zoneThreats, threatsInner/Outer and activeZone; no-op when nothing is inbound. Only
-tracks the engine already placed in a zone are staged, so a far out-of-range track never gets a
-synthetic alarm. The engine itself stays a pure reporter of source data.
+Returns `StagedEvaluation(eval, inboundIds)`: the staged ids are published so the popup card
+reads THIS verdict instead of running its own `isInbound` (a second, ungated evaluation that
+could disagree with the tier the service rang on). Rewrites zoneThreats, threatsInner/Outer and
+activeZone; no-op when nothing is inbound. Only tracks the engine already placed in a zone are
+staged, so a far out-of-range track never gets a synthetic alarm. The engine itself stays a pure
+reporter of source data.
+
+The staged tier is the ALARM tier and nothing else: the card's distance/ETA pills come from
+`computeProximity` (the predicted position, i.e. where the marker is drawn) and a zone radius is
+never substituted for a measurement — that substitution is what made a card read "22 km" when 22
+km was literally the yellow ring. "Approaching <city>" is a caption, not a headline.
 
 `OrbitBehavior` places an inbound track on the yellow ring around its destination instead of
 parking it on the city centre. It only applies when the raw fix is already within `slowRedKm`
-of the destination (the "would land on us" case) — farther tracks keep their normal drift.
+of the destination (the "would land on us" case) — farther tracks keep their normal drift, so a
+marker outside the ring is the truth and not a bug.
 The widget does not stage yet (see ROADMAP.md).
 ```
 
@@ -412,8 +423,8 @@ These are NOT engine concerns but must be preserved in the consumer layer.
 |---|---|---|
 | Zone siren | Plugin verdict SOUND for the winning threat | Frequency preset, floor, digest (below) |
 | Zone silent update | Verdict SILENT (downgrade, steady, winner-switch) | Content refresh, no sound |
-| Official siren | Official onset or the first red of a live episode | Region-latched, persists across restart. One episode per canonical region — identity is the region, never the level or the feed's `since`, so yellow→red is the first red inside the live episode and red→yellow is a silent rewrite. The episode remembers that red has sounded, so a repeat red (a feed flapping yellow↔red) never sirens again: two sounds per alert at the very most. The level is always the live feed's, so a downgrade cannot leave a red announcement standing |
-| All-clear | Raw official episode ends for the latched focus region | One clear per episode: red, yellow, or red-then-yellow; never more than one. Keyed on the raw ending, so a mid-episode scope drop (alert narrowed away from your city) still gets its all-clear. A new official episode supersedes any lingering all-clear (notification removed, debris countdown aborted) even when the new episode's own notification is off; the all-clear also retires itself 20 min after posting (`auto_dismiss_all_clear`), logging a `NOTIF` lifecycle row into the Decisions feed (no alert outcome — the episode's own end is already logged), and a restart drops any all-clear it can no longer attribute to an episode; the just-ended episode's summary stays tappable for its replay until the new episode ends |
+| Official siren | Official onset or the first red of a live episode | Region-latched, persists across restart. One episode per canonical region — identity is the region, never the level or the feed's `since`, so yellow→red is the first red inside the live episode and red→yellow is a silent rewrite **of the notification** (it still writes one `OFFICIAL_LEVEL` audit row, INFO, so an hour of yellow does not read as an hour of red). The episode remembers that red has sounded, so a repeat red (a feed flapping yellow↔red) never sirens again: two sounds per alert at the very most. The level is always the live feed's, so a downgrade cannot leave a red announcement standing |
+| All-clear | Raw official episode ends for the latched focus region | One clear per episode: red, yellow, or red-then-yellow; never more than one. Gated on the **announced level's own toggle** (`officialLevelEnabled`), never the red‖yellow master: a level that is switched off was never announced, so it is never cleared (and never sounds). Sounds through its own notification channel — never the alarm stream — so silent mode, DND and a muted channel silence it exactly as they silenced the alert it closes. Keyed on **the gate that announced it**, persisted with the episode (`LEVEL|token|since|city[|cityUa|scoped]`): a city-level episode ends when nothing covers the city any more, so a mid-episode scope drop (alert narrowed away from your city) still gets its all-clear **and** a sibling raion of the same oblast no longer blocks it. Before this, latching scoped but ending oblast-wide meant a city-scoped episode could not end while any oblast alert existed — no all-clear, and the latched red banner with no way to go away. An old row without the scope fields parses as unscoped, i.e. exactly how it was gated. A new official episode supersedes any lingering all-clear (notification removed, debris countdown aborted) even when the new episode's own notification is off; the all-clear also retires itself 20 min after posting (`auto_dismiss_all_clear`), logging a `NOTIF` lifecycle row into the Decisions feed (no alert outcome — the episode's own end is already logged), and a restart drops any all-clear it can no longer attribute to an episode; the just-ended episode's summary stays tappable for its replay until the new episode ends |
 | Offline critical | Offline 5 min, or 1 min while an official alert (red/yellow) is active on the focus oblast | Once per episode, honors the critical-offline toggle; milestone emission (SourceRegistry `degradedSince` + `connectionMilestones`) vs notification (service). Both offline notifications are dismissed when the episode ends, whatever the toggle state |
 | Offline bypass silent | Sub-toggle of offline critical | Plays sound in silent mode |
 | Night siren overrides | Night window active | Separate zone + official override flags |

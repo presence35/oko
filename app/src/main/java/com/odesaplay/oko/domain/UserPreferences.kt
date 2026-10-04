@@ -145,8 +145,14 @@ data class UserPreferences(
             officialYellow = nightOfficialYellowEnabled
         )
 
-    /** True while the night settings are the fully-muted combination. */
-    val nightSleepActive: Boolean get() = nightEnabled && nightSleepPreset.isMuted
+    /**
+     * True while "Just let me sleep!" is in effect — the night settings ARE the muted preset.
+     *
+     * Deliberately NOT gated on [nightEnabled]: switching the night window off leaves every
+     * night bell switched off, and a hidden fact that all your alerts are off is exactly the
+     * state a user must never have to guess about.
+     */
+    val nightSleepActive: Boolean get() = nightSleepPreset.isMuted
 
     companion object {
         val DEFAULT = UserPreferences()

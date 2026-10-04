@@ -27,6 +27,8 @@ class ServiceState(private val context: Context) {
     private val officialAnnouncedReasonIdKey = stringPreferencesKey("official_announced_reason_id")
     private val officialAnnouncedCityKey = stringPreferencesKey("official_announced_city")
     private val activeZoneAlertsKey = stringPreferencesKey("active_zone_alerts")
+    private val raidMuteDeadlineKey = stringPreferencesKey("raid_mute_deadline")
+    private val officialAnnouncedRowKey = stringPreferencesKey("official_announced_row")
     private val debugLogKey = stringPreferencesKey("debug_log")
     private val lastUpdateCheckKey = longPreferencesKey("last_update_check")
     private val lastNotifiedUpdateCodeKey = longPreferencesKey("last_notified_update_code")
@@ -47,6 +49,29 @@ class ServiceState(private val context: Context) {
 
     suspend fun setGpsLog(serialized: String) {
         context.dataStore.edit { it[gpsLogKey] = serialized }
+    }
+
+    /** The full announcement row (`LEVEL|token|since|city[|cityUa|scoped]`), written as one value so
+     *  the gate an episode was announced through survives a restart. The four separate keys are the
+     *  older shape and are still read when this one is absent. */
+    fun officialAnnouncedRow(): Flow<String> =
+        context.dataStore.data.map { prefs -> prefs[officialAnnouncedRowKey] ?: "" }
+
+    suspend fun setOfficialAnnouncedRow(row: String?) {
+        context.dataStore.edit {
+            if (row.isNullOrBlank()) it.remove(officialAnnouncedRowKey) else it[officialAnnouncedRowKey] = row
+        }
+    }
+
+    /** Wall-clock deadline of the current timed raid mute, or "" when none. Persisted because a
+     *  mute the OS recycles away silently is indistinguishable from a mute that never worked. */
+    fun raidMuteDeadline(): Flow<String> =
+        context.dataStore.data.map { prefs -> prefs[raidMuteDeadlineKey] ?: "" }
+
+    suspend fun setRaidMuteDeadline(row: String?) {
+        context.dataStore.edit {
+            if (row.isNullOrBlank()) it.remove(raidMuteDeadlineKey) else it[raidMuteDeadlineKey] = row
+        }
     }
 
     fun offlinePendingSince(): Flow<Long> =

@@ -788,8 +788,10 @@ fun SettingsScreen(
                     title = s.nightModeLabel,
                     icon = painterResource(R.drawable.ic_moon),
                     expanded = collapse.nightMode,
-                    subtitle = if (nightEnabled && state.nightSleepActive) {
-                        s.allAlertsOffLabel
+                    subtitle = if (state.nightSleepActive) {
+                        // Independent of the night switch: the preset switches every NIGHT alert
+                        // off, and that stays true when the window itself is off.
+                        s.actionLog.sleepWell
                     } else {
                         s.nightSubtitle(
                             nightEnabled,

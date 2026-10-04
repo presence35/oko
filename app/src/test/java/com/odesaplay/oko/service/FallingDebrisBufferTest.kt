@@ -78,4 +78,55 @@ class FallingDebrisBufferTest {
             s.cancel()
         }
     }
+
+    @Test
+    fun `lowering the setting shortens a running countdown`() {
+        // 10-minute countdown, 4 minutes in, slider moved to 4: the report was a countdown that
+        // jumped back to a full 4 minutes instead of continuing from where it was.
+        val s = scope()
+        try {
+            var clock = 0L
+            val buf = FallingDebrisBuffer(s, nowMs = { clock }, onCompleted = {})
+            buf.start(600)
+            clock = 240_000L
+            assertEquals(360, buf.remainingAt(clock))
+            buf.shrinkTo(240)
+            assertEquals(240, buf.remainingAt(clock))
+        } finally {
+            s.cancel()
+        }
+    }
+
+    @Test
+    fun `raising the setting never extends a running countdown`() {
+        val s = scope()
+        try {
+            var clock = 0L
+            val buf = FallingDebrisBuffer(s, nowMs = { clock }, onCompleted = {})
+            buf.start(600)
+            clock = 240_000L
+            buf.shrinkTo(240)
+            clock = 300_000L
+            buf.shrinkTo(600)
+            assertEquals(180, buf.remainingAt(clock))
+        } finally {
+            s.cancel()
+        }
+    }
+
+    @Test
+    fun `the remaining time comes from the clock, so a suspended process resumes truthfully`() {
+        // A `for (n downTo 1) delay(1000)` loop freezes in doze and reports a stale number.
+        val s = scope()
+        try {
+            var clock = 0L
+            val buf = FallingDebrisBuffer(s, nowMs = { clock }, onCompleted = {})
+            buf.start(600)
+            assertEquals(600, buf.remainingAt(clock))
+            clock = 3_600_000L
+            assertEquals(0, buf.remainingAt(clock))
+        } finally {
+            s.cancel()
+        }
+    }
 }

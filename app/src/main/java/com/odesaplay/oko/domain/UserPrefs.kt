@@ -603,7 +603,9 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setNightUseCustomZones(use: Boolean) {
-        context.dataStore.edit { it[nightUseCustomZonesKey] = use }
+        // Part of the preset: switching custom night zones off hands the night bells back to
+        // the day ones, so it ends the sleep snapshot like any other night-alert switch.
+        editNightBell { it[nightUseCustomZonesKey] = use }
     }
 
     suspend fun setNightSlowRedKm(km: Int) {
@@ -639,31 +641,31 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setNightSlowRedArmed(armed: Boolean) {
-        context.dataStore.edit { it[nightSlowRedArmedKey] = armed }
+        editNightBell { it[nightSlowRedArmedKey] = armed }
     }
     suspend fun setNightSlowRedZoneArmed(armed: Boolean) = setNightSlowRedArmed(armed)
 
     suspend fun setNightSlowYellowArmed(armed: Boolean) {
-        context.dataStore.edit { it[nightSlowYellowArmedKey] = armed }
+        editNightBell { it[nightSlowYellowArmedKey] = armed }
     }
     suspend fun setNightSlowYellowZoneArmed(armed: Boolean) = setNightSlowYellowArmed(armed)
 
     suspend fun setNightFastRedArmed(armed: Boolean) {
-        context.dataStore.edit { it[nightFastRedArmedKey] = armed }
+        editNightBell { it[nightFastRedArmedKey] = armed }
     }
     suspend fun setNightFastRedZoneArmed(armed: Boolean) = setNightFastRedArmed(armed)
 
     suspend fun setNightFastYellowArmed(armed: Boolean) {
-        context.dataStore.edit { it[nightFastYellowArmedKey] = armed }
+        editNightBell { it[nightFastYellowArmedKey] = armed }
     }
     suspend fun setNightFastYellowZoneArmed(armed: Boolean) = setNightFastYellowArmed(armed)
 
     suspend fun setNightZoneSirenOverride(override: Boolean) {
-        context.dataStore.edit { it[nightZoneSirenOverrideKey] = override }
+        editNightBell { it[nightZoneSirenOverrideKey] = override }
     }
 
     suspend fun setNightOfficialSirenOverride(override: Boolean) {
-        context.dataStore.edit { it[nightOfficialSirenOverrideKey] = override }
+        editNightBell { it[nightOfficialSirenOverrideKey] = override }
     }
 
     suspend fun setNightOfficialAlertCityScope(enabled: Boolean) {
@@ -671,11 +673,25 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setNightOfficialRedEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[nightOfficialRedEnabledKey] = enabled }
+        editNightBell { it[nightOfficialRedEnabledKey] = enabled }
     }
 
     suspend fun setNightOfficialYellowEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[nightOfficialYellowEnabledKey] = enabled }
+        editNightBell { it[nightOfficialYellowEnabledKey] = enabled }
+    }
+
+    /**
+     * Any direct edit of a night alert switch ends the "Just let me sleep!" preset by
+     * dropping its snapshot. The user is managing these bells themselves now, so the restore
+     * they no longer want must not survive to be re-applied by the next tap — the old
+     * behaviour overwrote the snapshot with the already-edited values and then "restored"
+     * them, which silently lost the night settings the preset had captured.
+     */
+    private suspend fun editNightBell(edit: (MutablePreferences) -> Unit) {
+        context.dataStore.edit { p ->
+            p.remove(nightSleepRestoreKey)
+            edit(p)
+        }
     }
 
     /**

@@ -58,10 +58,28 @@ fun stagedTier(isFast: Boolean): ThreatZone =
     if (isFast) ThreatZone.INNER else ThreatZone.OUTER
 
 /**
+ * The engine result plus WHICH tracks the inbound staging actually touched.
+ *
+ * [inboundIds] exists so the popup card never re-derives the staging decision: the card used to
+ * run its own [isInbound] over the selected track, which is a second, ungated evaluation of the
+ * same question (no reach limit, no silenced-type check) and could disagree with the tier the
+ * service rang on. One verdict, published once.
+ */
+data class StagedEvaluation(
+    val eval: ThreatEvaluationResult,
+    val inboundIds: Set<String>
+) {
+    val zoneThreats: Map<String, ThreatZone> get() = eval.zoneThreats
+}
+
+/**
  * Re-tier the engine result for inbound tracks: every inbound track the engine already placed in
  * a zone moves to its ring tier (slow → OUTER, fast → INNER) while the map orbits it on the
  * yellow ring. Both consumers apply this to the same engine output (mirror rule); the engine
  * stays a pure reporter of source data.
+ *
+ * The staged tier is the ALARM tier and nothing more: the card keeps showing the track's real
+ * predicted distance, because a zone radius is a threshold and must never become a measurement.
  */
 fun stageInbound(
     eval: ThreatEvaluationResult,
@@ -71,28 +89,31 @@ fun stageInbound(
     propsFor: (String) -> ThreatProps,
     now: Long,
     silencedTypes: Set<String> = emptySet()
-): ThreatEvaluationResult {
-    if (focus == null) return eval
+): StagedEvaluation {
+    if (focus == null) return StagedEvaluation(eval, emptySet())
     val inbound = threats.filter {
         it.id in eval.zoneThreats &&
             it.type !in silencedTypes &&
             isInbound(it, focus, params, propsFor(it.type), now)
     }
-    if (inbound.isEmpty()) return eval
+    if (inbound.isEmpty()) return StagedEvaluation(eval, emptySet())
 
     val tiers = LinkedHashMap(eval.zoneThreats)
     inbound.forEach { tiers[it.id] = stagedTier(propsFor(it.type).isFast) }
     val inner = threats.filter { tiers[it.id] == ThreatZone.INNER }
     val outer = threats.filter { tiers[it.id] == ThreatZone.OUTER }
-    return eval.copy(
-        zoneThreats = tiers,
-        threatsInner = inner,
-        threatsOuter = outer,
-        activeZone = when {
-            inner.isNotEmpty() -> ThreatZone.INNER
-            outer.isNotEmpty() -> ThreatZone.OUTER
-            else -> null
-        }
+    return StagedEvaluation(
+        eval = eval.copy(
+            zoneThreats = tiers,
+            threatsInner = inner,
+            threatsOuter = outer,
+            activeZone = when {
+                inner.isNotEmpty() -> ThreatZone.INNER
+                outer.isNotEmpty() -> ThreatZone.OUTER
+                else -> null
+            }
+        ),
+        inboundIds = inbound.mapTo(HashSet()) { it.id }
     )
 }
 

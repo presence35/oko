@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import com.odesaplay.oko.source.ThreatRemoved
+import com.odesaplay.oko.DebugLog
 
 /**
  * Service-side flourish facade: owns the shoot-down tally (count + running memory of resolved
@@ -174,6 +175,11 @@ class NeutralizedTally(
                 .setContentIntent(neutralizedTapPendingIntent(snapshot.memory))
                 .setDeleteIntent(neutralizedDismissPendingIntent())
             safeNotify(NOTIF_NEUTRALIZED, builder.build())
+            // A real notification the user saw, so it belongs in the audit trail — as INFO, never
+            // as an alert: the Logs header counts what was TOLD about a threat, and "41 threats
+            // resolved" is a flourish, not a warning. Without this row the story could show
+            // "0 notified" next to a shade full of tally notifications.
+            DebugLog.recordTallyPosted(null, snapshot.count, System.currentTimeMillis())
         }
     }
 

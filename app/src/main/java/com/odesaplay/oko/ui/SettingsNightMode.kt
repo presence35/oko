@@ -108,37 +108,42 @@ internal fun NightModeCard(
     var editing by remember { mutableStateOf<String?>(null) }  // "start" | "end" | null
 
     Column {
+        // Outside the `enabled` guard on purpose. The preset switches every NIGHT alert off;
+        // hiding its own row when the night window is off left the user with every night bell
+        // disabled and no way to see — or undo — it from anywhere in the app.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 14.dp, end = 14.dp, top = 12.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(if (sleepActive) Color(AppPalette.Primary).copy(alpha = 0.16f) else Color.Transparent)
+                .border(
+                    1.dp,
+                    if (sleepActive) Color(AppPalette.Primary) else Color(AppPalette.Border),
+                    RoundedCornerShape(14.dp)
+                )
+                .hapticClickable { onSleepToggle(!sleepActive) }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(if (sleepActive) R.drawable.ic_notifications_off else R.drawable.ic_moon),
+                contentDescription = null,
+                tint = if (sleepActive) Color(AppPalette.Primary) else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                // "Sleep well" instead of the old "Zone alerts are off": the row mutes NIGHT
+                // alerts specifically, and the old wording read as a claim about the day ones.
+                if (sleepActive) s.actionLog.sleepWell else s.nightSleepButton,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = if (sleepActive) Color(AppPalette.Primary) else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            Switch(checked = sleepActive, onCheckedChange = null)
+        }
         if (enabled) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 14.dp, end = 14.dp, top = 12.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (sleepActive) Color(AppPalette.Primary).copy(alpha = 0.16f) else Color.Transparent)
-                    .border(
-                        1.dp,
-                        if (sleepActive) Color(AppPalette.Primary) else Color(AppPalette.Border),
-                        RoundedCornerShape(14.dp)
-                    )
-                    .hapticClickable { onSleepToggle(!sleepActive) }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    painter = painterResource(if (sleepActive) R.drawable.ic_notifications_off else R.drawable.ic_moon),
-                    contentDescription = null,
-                    tint = if (sleepActive) Color(AppPalette.Primary) else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    if (sleepActive) s.allAlertsOffLabel else s.nightSleepButton,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (sleepActive) Color(AppPalette.Primary) else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-                Switch(checked = sleepActive, onCheckedChange = null)
-            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
