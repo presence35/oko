@@ -62,12 +62,10 @@ class AudioAlarmDispatcher(
     private var soundCriticalOfflineId: Int = 0
 
     /**
-     * The one stream this dispatcher currently owns, with what it is. A stream id without its
-     * kind is unrepresentable: every stop is scoped to a kind, so a housekeeping stop can never
-     * truncate an unrelated one-shot.
+     * The one stream this dispatcher owns, if any. Every dispatched sound is a one-shot that
+     * runs to its end: nothing about the alert's own lifecycle may truncate it.
      */
-    private data class Active(val streamId: Int, val kind: SoundKind)
-    private var active: Active? = null
+    private var activeStreamId: Int? = null
 
     init {
         initSoundPool()
@@ -101,15 +99,9 @@ class AudioAlarmDispatcher(
      * When overrideSilence is false, SoundPool audio is completely suppressed,
      * delegating notification sounds/vibration to standard Android notification channels.
      */
-    fun dispatchDangerAlarm(isRed: Boolean, overrideSilence: Boolean = true, loop: Boolean = false) {
+    fun dispatchDangerAlarm(isRed: Boolean, overrideSilence: Boolean = true) {
         if (!overrideSilence) return
-        enforceAlarmStreamVolume()
-        playSound(
-            if (isRed) soundRedAlertId else soundYellowAlertId,
-            kind = if (loop) SoundKind.LOOP else SoundKind.ALERT,
-            priority = 10,
-            loopCount = if (loop) -1 else 0
-        )
+        playSound(if (isRed) soundRedAlertId else soundYellowAlertId, priority = 10)
     }
 
     /**
@@ -133,20 +125,17 @@ class AudioAlarmDispatcher(
      */
     fun dispatchCriticalOffline(overrideSilence: Boolean = true) {
         if (!overrideSilence) return
-        enforceAlarmStreamVolume()
-        playSound(soundCriticalOfflineId, kind = SoundKind.ALERT, priority = 8)
+        playSound(soundCriticalOfflineId, priority = 8)
     }
 
     private fun playSound(
         sampleId: Int,
-        kind: SoundKind,
         leftVol: Float = 1.0f,
         rightVol: Float = 1.0f,
         priority: Int = 10,
-        loopCount: Int = 0,
         rate: Float = 1.0f
     ): Boolean {
-        val sound = PendingAlarm.Sound(kind, sampleId, leftVol, rightVol, priority, loopCount, rate)
+        val sound = PendingAlarm.Sound(sampleId, leftVol, rightVol, priority, 0, rate)
         return when (pendingAlarm.onRequest(sound, sampleId != 0 && loadedSampleIds.contains(sampleId))) {
             PendingAlarm.Decision.DROP, PendingAlarm.Decision.QUEUE -> false
             PendingAlarm.Decision.PLAY -> playNow(sound)
@@ -154,11 +143,10 @@ class AudioAlarmDispatcher(
     }
 
     /**
-     * An alert always preempts whatever is playing — including a housekeeping stop target, so a
-     * one-shot that just started is never clipped by [stopLoopingAlert]'s bookkeeping.
+     * An alert preempts whatever is already playing — the only stop a play ever performs.
      */
     private fun playNow(sound: PendingAlarm.Sound): Boolean {
-        if (active != null) {
+        if (activeStreamId != null) {
             stopActiveAlert()
         }
         requestFocus()
@@ -166,21 +154,20 @@ class AudioAlarmDispatcher(
             sound.sampleId, sound.leftVol, sound.rightVol, sound.priority, sound.loopCount, sound.rate
         ) ?: 0
         if (streamId == 0) return false
-        active = Active(streamId, sound.kind)
+        activeStreamId = streamId
         return true
     }
 
-    /** Stops everything: explicit user mute, service teardown. */
+    /**
+     * Stops everything: explicit user mute, service teardown — and nothing else. Lifecycle
+     * housekeeping (the alert notification being torn down, the all-clear arriving) never clips
+     * a dispatched one-shot; only a new alert preempts it, or the user.
+     */
     fun stopActiveAlert() {
-        active?.let { soundPool?.stop(it.streamId) }
-        active = null
+        activeStreamId?.let { soundPool?.stop(it) }
+        activeStreamId = null
         vibrator.cancel()
         abandonFocus()
-    }
-
-    /** Stops only a looping siren, leaving a one-shot (offline critical) to finish. */
-    fun stopLoopingAlert() {
-        if (active?.kind == SoundKind.LOOP) stopActiveAlert()
     }
 
     private fun requestFocus() {
@@ -199,20 +186,6 @@ class AudioAlarmDispatcher(
                 audioManager.abandonAudioFocusRequest(audioFocusRequest)
             } catch (_: Exception) {}
         }
-    }
-
-    private fun enforceAlarmStreamVolume() {
-        try {
-            val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
-            val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
-            if (currentVol < (maxVol * 0.70).toInt()) {
-                audioManager.setStreamVolume(
-                    AudioManager.STREAM_ALARM,
-                    (maxVol * 0.85).toInt(),
-                    AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE
-                )
-            }
-        } catch (_: Exception) {}
     }
 
     fun release() {

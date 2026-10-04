@@ -1662,7 +1662,6 @@ val mappedThreats = registry.allThreats.map { list ->
     }
 
     private fun cancelAlert() {
-        audioAlarmDispatcher.stopLoopingAlert()
         notificationManager.cancelNotification(NOTIF_ALERT)
     }
 
