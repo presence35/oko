@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Sent logs are no longer overwritten: each upload is timestamped (e.g. `samsung_SM-A505FN_742_20261004-143222.json`), so repeated sends from one phone keep their own file 10-04_17:45:00
+
 - Muting a raid now really mutes it: no sound, no vibration and no notification for anything that starts inside the window (the all-clear releases it, so the next raid rings) 10-04_14:20:00
 
 - "Mute 10 min" now survives the app or service being recycled, and stops claiming a mute after its time is up 10-04_14:20:00

@@ -13,6 +13,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.TimeZone
 
 /**
@@ -53,11 +55,46 @@ object LogBundle {
         return arr
     }
 
-    /** Server-side filename: one slot per device per build, overwritten in place. */
-    fun fileName(context: Context): String {
-        val brand = (Build.BRAND ?: "unknown").replace(Regex("[^A-Za-z0-9]"), "")
-        val model = (Build.MODEL ?: "unknown").replace(Regex("[^A-Za-z0-9]"), "")
-        return "${brand}_${model}_${BuildConfig.VERSION_CODE}.json"
+    /** Server-side filename. */
+    fun fileName(context: Context): String = bundleFileName(
+        brand = Build.BRAND,
+        model = Build.MODEL,
+        versionCode = BuildConfig.VERSION_CODE,
+        atMillis = System.currentTimeMillis(),
+        zone = ZoneId.systemDefault()
+    )
+
+    /** Hyphens are kept because real model names carry them ("SM-A505FN") and the endpoint's own
+     *  sanitiser allows them too. Dots are deliberately NOT allowed in the brand/model part: a
+     *  dot is the only way a name could contain a path segment, and the model name never needs
+     *  one. Only the fixed `.json` suffix we append may contain a dot. */
+    private val NON_FILE_SAFE = Regex("[^A-Za-z0-9-]")
+
+    /** `<brand>_<model>_<versionCode>_<yyyyMMdd-HHmmss>.json`.
+     *
+     *  The timestamp exists because the endpoint used to overwrite one slot per device per build,
+     *  which quietly destroyed the previous snapshot the moment a tester tapped twice — and a
+     *  staged run (reboot, wait, open, send) is exactly when you tap more than once. The stamp is
+     *  LOCAL time on purpose: the person reading the directory is asking "when did they send
+     *  this", not "what was UTC". Seconds resolution is enough because the endpoint rate-limits
+     *  to one write per 30s per IP, so two bundles in the same second cannot collide.
+     *
+     *  Kept pure and free of `Build`/`Context` so the sanitising is unit-testable: a brand or
+     *  model that reduces to nothing must still produce a usable, filesystem-safe name. */
+    internal fun bundleFileName(
+        brand: String?,
+        model: String?,
+        versionCode: Int,
+        atMillis: Long,
+        zone: ZoneId
+    ): String {
+        fun part(raw: String?, fallback: String): String {
+            val clean = NON_FILE_SAFE.replace(raw.orEmpty(), "")
+            return clean.ifBlank { fallback }
+        }
+        val stamp = Instant.ofEpochMilli(atMillis).atZone(zone)
+            .format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
+        return "${part(brand, "unknown")}_${part(model, "model")}_${versionCode}_$stamp.json"
     }
 
     suspend fun build(context: Context, prefs: UserPrefs): JSONObject {
