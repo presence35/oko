@@ -4,6 +4,8 @@
 - Real UA/RU translations for every remaining English placeholder string 10-05_17:00:15
 - Connection-degraded copy rewritten to plain status wording in all three languages 10-05_17:00:15
 - Threat types and the Fast/Slow groups in Settings are now always expanded instead of collapsible; night-mode and morale master switches moved to the main settings list; the repeat-sound policy picker is indented under its toggle 10-05_17:05:40
+- First-run wizard split into 7 shorter pages, closing on a beta note: use it daily, report bugs via logs, AI translations 10-05_17:29:00
+- Language picker back in Settings → Display; the app no longer follows the phone locale once you pick 10-05_17:29:00
 - Settings rebuilt as a master-detail screen: a root list of sections (each with its live state summary) drilling into per-section pages, replacing the long collapsible scroll; back drills out one level; battery/update/guide/relaunch/footer moved to a More page 10-05_14:22:10
 - Added a GPL-3.0-only LICENSE and documented the license + source-build path in the README 10-04_20:14:47
 - A release build without app/keystore.properties now fails by default instead of being the only mode; -PallowUnsignedRelease is the explicit opt-in for a distributor that signs its own source build (F-Droid) 10-04_20:14:47

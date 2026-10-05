@@ -80,6 +80,69 @@ private val PreviewProximity = ThreatProximity(
     speedKmh = 180.0
 )
 
+/** App-language picker. Each option is labelled in its own language, so a user who can't yet
+ *  read the current UI still finds their language. */
+@Composable
+internal fun LanguageSelector(
+    selected: AppLanguage,
+    onChange: (AppLanguage) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        AppLanguage.values().forEach { lang ->
+            LanguageTile(
+                label = Strings.get(lang).selfLanguageName,
+                selected = lang == selected,
+                onClick = { onChange(lang) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun LanguageTile(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(
+            if (selected) 2.dp else 1.dp,
+            if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.outlineVariant
+        ),
+        modifier = Modifier.fillMaxWidth().hapticClickable(onClick = onClick)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_language),
+                contentDescription = null,
+                tint = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (selected) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            if (selected) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_check),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
 /** Two selectable tiles, each a live scaled preview of that card size. */
 @Composable
 internal fun ThreatCardSizeSelector(

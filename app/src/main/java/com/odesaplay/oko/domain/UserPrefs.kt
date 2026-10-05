@@ -111,12 +111,15 @@ class UserPrefs(private val context: Context) {
     private val digestMaxKey = intPreferencesKey("digest_max")
     private val digestWindowKey = stringPreferencesKey("digest_window")
     private val digestPerTypeKey = booleanPreferencesKey("digest_per_type")
+    private val languageKey = stringPreferencesKey("language")
 
     val preferences: Flow<UserPreferences> = context.dataStore.data.map { it.toUserPreferences() }.distinctUntilChanged()
 
     private fun Preferences.toUserPreferences(): UserPreferences {
-        // No stored override: the language is the phone locale, resolved fresh on every startup.
-        val lang = systemLanguage()
+        // No stored override: the language follows the phone locale until the user picks one.
+        val lang = this[languageKey]?.let { stored ->
+            AppLanguage.values().firstOrNull { it.name == stored }
+        } ?: systemLanguage()
         val d = UserPreferences.DEFAULT
         val cardSize = this[threatCardSizeKey]?.let { stored ->
             ThreatCardSize.values().firstOrNull { it.name == stored }
@@ -576,6 +579,10 @@ class UserPrefs(private val context: Context) {
             it[serviceResurrectedKey] = false
             it[permissionPromptDeferredKey] = deferred
         }
+    }
+
+    suspend fun setLanguage(lang: AppLanguage) {
+        context.dataStore.edit { it[languageKey] = lang.name }
     }
 
     suspend fun setNightEnabled(enabled: Boolean) {

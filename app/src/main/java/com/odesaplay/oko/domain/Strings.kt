@@ -54,6 +54,12 @@ object Strings {
         val wizardMoraleDesc: String,
         val wizardNeptunStatus: String,
         val wizardMapAttribution: String,
+        val wizardBetaTitle: String,
+        val wizardBetaThanks: String,
+        val wizardBetaUse: String,
+        val wizardBetaBugs: String,
+        val wizardBetaAi: String,
+        val wizardBetaBattery: String,
         val settingsSearchHint: String,
         val settingsSearchClear: String,
         val settingsNoResults: String,
@@ -836,6 +842,14 @@ object Strings {
         val wizardMoraleDesc: String get() = onboarding.wizardMoraleDesc
         val wizardNeptunStatus: String get() = onboarding.wizardNeptunStatus
         val wizardMapAttribution: String get() = onboarding.wizardMapAttribution
+        val wizardBetaTitle: String get() = onboarding.wizardBetaTitle
+        val wizardBetaThanks: String get() = onboarding.wizardBetaThanks
+        val wizardBetaUse: String get() = onboarding.wizardBetaUse
+        val wizardBetaBugs: String get() = onboarding.wizardBetaBugs
+        val wizardBetaAi: String get() = onboarding.wizardBetaAi
+        val wizardBetaBattery: String get() = onboarding.wizardBetaBattery
+        val selfLanguageName: String get() = subtitles.selfLanguageName
+        val iconsLabel: String get() = subtitles.iconsLabel
         val fitMapLabel: String get() = onboarding.fitMapLabel
         val dayZonesTitle: String get() = settings.dayZonesTitle
         val nightZonesTitle: String get() = settings.nightZonesTitle

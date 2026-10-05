@@ -85,16 +85,15 @@ internal fun FirstLaunchWizard(
     onLater: () -> Unit
 ) {
     val s = Strings.get(current)
-    val totalSteps = 5
+    val totalSteps = 7
     var step by remember { mutableStateOf(0) }
-    var tipsRevealed by remember { mutableStateOf(false) }
     var locationMode by remember { mutableStateOf<String?>(null) }
     val notifPermLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { }
     val wizardContext = LocalContext.current
     LaunchedEffect(step) {
-        if (step == 2) {
+        if (step == 3) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
                 ContextCompat.checkSelfPermission(wizardContext, Manifest.permission.POST_NOTIFICATIONS) !=
                 PackageManager.PERMISSION_GRANTED
@@ -105,11 +104,13 @@ internal fun FirstLaunchWizard(
     }
     BackHandler(enabled = step > 0) { step-- }
     val stepTitle = when (step) {
-        0 -> s.onboardingTipsTitle
-        1 -> s.wizardLocationTitle
-        2 -> s.wizardCareTitle
-        3 -> s.wizardZonesTitle
-        else -> s.onboardingFeaturesTitle
+        0 -> s.wizardIsTitle
+        1 -> s.onboardingTipsTitle
+        2 -> s.wizardLocationTitle
+        3 -> s.wizardCareTitle
+        4 -> s.wizardZonesTitle
+        5 -> s.onboardingFeaturesTitle
+        else -> s.wizardBetaTitle
     }
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -139,85 +140,31 @@ internal fun FirstLaunchWizard(
                     .verticalScroll(rememberScrollState())
             ) {
                 when (step) {
-                    0 -> {
-                        WizardIsNotBlock(s)
-                        if (!tipsRevealed) {
-                            Spacer(Modifier.height(24.dp))
-                            Button(
-                                onClick = { tipsRevealed = true },
-                                interactionSource = rememberHapticInteractionSource(),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(s.okButton, fontWeight = FontWeight.SemiBold)
-                            }
-                        } else {
-                            Spacer(Modifier.height(28.dp))
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            Spacer(Modifier.height(16.dp))
-                            OnboardingTipRow(
-                                iconRes = IconCatalog.photoRes(ThreatType.SHAHED) ?: R.drawable.ic_threat_shahed,
-                                iconTint = Color.Unspecified,
-                                text = s.onboardingTipTap
-                            )
-                            OnboardingTipRow(
-                                iconRes = R.drawable.ic_settings_ua,
-                                iconTint = Color.Unspecified,
-                                text = s.onboardingTipSettings
-                            )
-                            OnboardingTipRow(
-                                iconRes = R.drawable.ic_volume_up,
-                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                text = s.onboardingTipSiren
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            OnboardingGradualTip(s.onboardingTipGradual)
-                            Spacer(Modifier.height(20.dp))
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            Spacer(Modifier.height(14.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Image(
-                                    painter = painterResource(R.drawable.neptun),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(width = 14.dp, height = 14.dp),
-                                    colorFilter = ColorFilter.tint(Color(AppPalette.SafeGreen))
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "NEPTUN",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(AppPalette.SafeGreen))
-                                )
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                s.wizardNeptunStatus,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                s.wizardMapAttribution,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
+                    0 -> WizardIsNotBlock(s)
+                    1 -> {
+                        OnboardingTipRow(
+                            iconRes = IconCatalog.photoRes(ThreatType.SHAHED) ?: R.drawable.ic_threat_shahed,
+                            iconTint = Color.Unspecified,
+                            text = s.onboardingTipTap
+                        )
+                        OnboardingTipRow(
+                            iconRes = R.drawable.ic_settings_ua,
+                            iconTint = Color.Unspecified,
+                            text = s.onboardingTipSettings
+                        )
+                        OnboardingTipRow(
+                            iconRes = R.drawable.ic_volume_up,
+                            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = s.onboardingTipSiren
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        OnboardingGradualTip(s.onboardingTipGradual)
                     }
-                    1 -> SetupLocationStep(current, mode = locationMode, pinnedCity = pinnedCity, onModeChange = { locationMode = it }, onFollowMeChange = onFollowMeChange, onPinnedCityChange = onPinnedCityChange)
-                    2 -> {
+                    2 -> SetupLocationStep(current, mode = locationMode, pinnedCity = pinnedCity, onModeChange = { locationMode = it }, onFollowMeChange = onFollowMeChange, onPinnedCityChange = onPinnedCityChange)
+                    3 -> {
                         WizardThreatGrid(current, iconSet, silencedTypes, onThreatAlertToggle)
                     }
-                    3 -> SetupZoneControlsStep(
+                    4 -> SetupZoneControlsStep(
                         s = s,
                         lang = current,
                         slowRedKm = slowRedKm,
@@ -232,11 +179,12 @@ internal fun FirstLaunchWizard(
                         onSlowRedArmedChange = onSlowRedArmedChange,
                         onSlowYellowArmedChange = onSlowYellowArmedChange
                     )
-                    else -> SetupFeaturesStep(
+                    5 -> SetupFeaturesStep(
                         s = s,
                         morale = morale,
                         onMoraleChange = onMoraleChange
                     )
+                    else -> WizardBetaBlock(s)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -260,10 +208,9 @@ internal fun FirstLaunchWizard(
                     }
                 }
                 val locationReady = locationMode != null && (locationMode != "pin" || pinnedCity != null)
-                val progressFrac = if (step == 0 && !tipsRevealed) 0f else (step + 1) / totalSteps.toFloat()
+                val progressFrac = (step + 1) / totalSteps.toFloat()
                 val nextEnabled = when (step) {
-                    0 -> tipsRevealed
-                    1 -> locationReady
+                    2 -> locationReady
                     else -> true
                 }
                 val nextInteraction = remember { MutableInteractionSource() }
@@ -458,6 +405,69 @@ private fun WizardIsNotBlock(s: Strings.StringSet) {
             WizardNotBullet(s.wizardNot2)
             WizardNotBullet(s.wizardNot3)
         }
+    }
+}
+
+/** Wizard page: the beta ask — use it, report what breaks, and read this before uninstalling. */
+@Composable
+private fun WizardBetaBlock(s: Strings.StringSet) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        WizardCard(borderColor = _ukraineYellow.copy(alpha = 0.3f)) {
+            WizardBlockHeader(s.wizardBetaTitle, _ukraineYellow)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                s.wizardBetaThanks,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(14.dp))
+            WizardBullet(s.wizardBetaUse, _ukraineYellow)
+            WizardBullet(s.wizardBetaBugs, _ukraineYellow)
+            WizardBullet(s.wizardBetaAi, _ukraineYellow)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                s.wizardBetaBattery,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Spacer(Modifier.height(18.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Spacer(Modifier.height(14.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Image(
+                painter = painterResource(R.drawable.neptun),
+                contentDescription = null,
+                modifier = Modifier.size(width = 14.dp, height = 14.dp),
+                colorFilter = ColorFilter.tint(Color(AppPalette.SafeGreen))
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                "NEPTUN",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color(AppPalette.SafeGreen))
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            s.wizardNeptunStatus,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            s.wizardMapAttribution,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+        )
     }
 }
 

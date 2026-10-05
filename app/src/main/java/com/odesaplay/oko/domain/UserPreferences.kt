@@ -17,8 +17,8 @@ fun <T> AppLanguage.pick(ua: T, en: T, ru: T): T = when (this) {
 }
 
 /**
- * Phone locale → app language, resolved fresh on every startup. No stored override,
- * no in-app switcher. Unknown locales fall back to EN.
+ * Phone locale → app language. The default when no override is stored
+ * (see `UserPrefs.languageKey`); unknown locales fall back to EN.
  */
 fun systemLanguage(): AppLanguage = when (java.util.Locale.getDefault().language) {
     "uk" -> AppLanguage.UA

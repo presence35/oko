@@ -119,6 +119,7 @@ fun SettingsScreen(
     onDisclaimerShown: () -> Unit,
     onThreatCardSizeChange: (ThreatCardSize) -> Unit,
     onIconSetChange: (ThreatIconSet) -> Unit,
+    onLanguageChange: (AppLanguage) -> Unit,
     onOverlapModeChange: (OverlapMode) -> Unit,
     onShowMapScaleChange: (Boolean) -> Unit,
     onShowMediumCitiesChange: (Boolean) -> Unit,
@@ -996,6 +997,13 @@ fun SettingsScreen(
                     }
             }
             SettingsSection.SYSTEM -> SectionDetailBody(stateSummary = sectionSummary(section)) {
+                    // Language first — it relabels every other page, so it reads as a page header.
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(s.languageLabel, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(10.dp))
+                        LanguageSelector(selected = lang, onChange = onLanguageChange)
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Card Size & Detail
                     Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp).explainerFlash(flashId == "cardSize")) {
                         Text(

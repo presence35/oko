@@ -1652,6 +1652,10 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setThreatIconSet(set) }
     }
 
+    fun setLanguage(lang: AppLanguage) {
+        viewModelScope.launch { prefs.setLanguage(lang) }
+    }
+
     fun setOverlapMode(mode: OverlapMode) {
         viewModelScope.launch { prefs.setOverlapMode(mode) }
     }
