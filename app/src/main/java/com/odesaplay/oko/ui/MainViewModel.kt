@@ -189,8 +189,6 @@ data class UiState(
     val neutralizedTallyAllUkraine: Boolean = false,
     val alarmEpisodeTallyEnabled: Boolean = true,
     val threatIconZoom: Boolean = true,
-    val fastGroupCollapsed: Boolean = false,
-    val slowGroupCollapsed: Boolean = false,
     val sheltersEnabled: Boolean = true,
     val sheltersWithKids: Boolean = true,
     val periodicGps: Boolean = false,
@@ -294,8 +292,6 @@ data class SettingsState(
     val alarmEpisodeTallyEnabled: Boolean get() = prefs.alarmEpisodeTallyEnabled
     val threatIconZoom: Boolean get() = prefs.threatIconZoom
     val showThreatIdsOnMap: Boolean get() = prefs.showThreatIdsOnMap
-    val fastGroupCollapsed: Boolean get() = prefs.fastGroupCollapsed
-    val slowGroupCollapsed: Boolean get() = prefs.slowGroupCollapsed
 }
 
 /**
@@ -612,9 +608,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val neutralizedTallyAllUkraine: Boolean,
         val alarmEpisodeTallyEnabled: Boolean,
         val threatIconZoom: Boolean,
-val fastGroupCollapsed: Boolean,
-        val slowGroupCollapsed: Boolean,
-        val sheltersEnabled: Boolean,
+val sheltersEnabled: Boolean,
         val sheltersWithKids: Boolean,
         val periodicGps: Boolean,
         val calmMessagesEnabled: Boolean,
@@ -717,8 +711,6 @@ val fastGroupCollapsed: Boolean,
             neutralizedTallyAllUkraine = neutralizedTallyAllUkraine,
             alarmEpisodeTallyEnabled = alarmEpisodeTallyEnabled,
             threatIconZoom = threatIconZoom,
-            fastGroupCollapsed = fastGroupCollapsed,
-            slowGroupCollapsed = slowGroupCollapsed,
             sheltersEnabled = sheltersEnabled,
             sheltersWithKids = sheltersWithKidsEnabled,
             periodicGps = periodicGps,
@@ -936,8 +928,6 @@ showBorders = prefs.showBorders,
             neutralizedTallyAllUkraine = prefs.neutralizedTallyAllUkraine,
             alarmEpisodeTallyEnabled = prefs.alarmEpisodeTallyEnabled,
             threatIconZoom = prefs.threatIconZoom,
-            fastGroupCollapsed = prefs.fastGroupCollapsed,
-            slowGroupCollapsed = prefs.slowGroupCollapsed,
             sheltersEnabled = prefs.sheltersEnabled,
             sheltersWithKids = prefs.sheltersWithKids,
             periodicGps = prefs.periodicGps,
@@ -1730,15 +1720,7 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setShowRegionBorders(enabled) }
     }
 
-    fun setFastGroupCollapsed(collapsed: Boolean) {
-        viewModelScope.launch { prefs.setFastGroupCollapsed(collapsed) }
-    }
-
-    fun setSlowGroupCollapsed(collapsed: Boolean) {
-        viewModelScope.launch { prefs.setSlowGroupCollapsed(collapsed) }
-    }
-
-    fun setShowMapScale(show: Boolean) {
+        fun setShowMapScale(show: Boolean) {
         viewModelScope.launch { prefs.setShowMapScale(show) }
     }
 

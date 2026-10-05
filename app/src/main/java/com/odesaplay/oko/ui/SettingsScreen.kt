@@ -11,7 +11,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,7 +22,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
@@ -72,11 +72,8 @@ fun SettingsScreen(
     updateFlow: StateFlow<UpdateState>,
     latestVersionFlow: StateFlow<String?>,
     nightActive: Boolean,
-    listState: LazyListState,
-    collapse: SettingsCollapseState,
-    onCollapseChange: (SettingsCollapseState) -> Unit,
-    scrollToThreatsTick: Int,
-    onThreatsScrollHandled: () -> Unit,
+    route: SettingsRoute,
+    onRouteChange: (SettingsRoute) -> Unit,
     activeExplainer: Explainer?,
     onExplainerChange: (Explainer?) -> Unit,
     versionName: String,
@@ -142,9 +139,7 @@ fun SettingsScreen(
     onNeutralizedTallyAllUkraineChange: (Boolean) -> Unit,
     onAlarmEpisodeTallyChange: (Boolean) -> Unit,
     onThreatIconZoomChange: (Boolean) -> Unit,
-    onFastGroupCollapse: (Boolean) -> Unit,
-    onSlowGroupCollapse: (Boolean) -> Unit,
-    showThreatIdsOnMap: Boolean,
+        showThreatIdsOnMap: Boolean,
     onShowThreatIdsOnMapChange: (Boolean) -> Unit,
     zonePolicy: ZonePolicy,
     onZonePolicyChange: (ZonePolicy) -> Unit,
@@ -219,9 +214,7 @@ fun SettingsScreen(
     val neutralizedTallyAllUkraine = state.neutralizedTallyAllUkraine
     val alarmEpisodeTallyEnabled = state.alarmEpisodeTallyEnabled
     val threatIconZoom = state.threatIconZoom
-    val fastGroupCollapsed = state.fastGroupCollapsed
-    val slowGroupCollapsed = state.slowGroupCollapsed
-    val showThreatIdsOnMap = state.showThreatIdsOnMap
+        val showThreatIdsOnMap = state.showThreatIdsOnMap
     val notifyPolicyEnabled = state.notifyPolicyEnabled
     val zonePolicy = state.zonePolicy
     val digestMax = state.digestMax
@@ -231,8 +224,6 @@ fun SettingsScreen(
     val moraleMasterEnabled = state.moraleMasterEnabled
     val moraleVoice = state.moraleVoice
     val bootRestartEnabled = state.bootRestartEnabled
-    val isChecking = updateFlow.value is UpdateState.Checking
-    val scrollToNightMode = nightActive
     val s = Strings.get(lang)
 
     // Search box: filters sections + standalone actions by curated keywords, surfaces suggestion
@@ -248,13 +239,6 @@ fun SettingsScreen(
         if (searching) searchDb.sectionDirect.filterValues { matchesSearch(searchWords, it) }.keys
         else emptySet()
     }
-    val matchedStandalone = remember(searchNormalized, searchDb) {
-        val matched =
-            if (searching) searchDb.standaloneDirect.filterValues { matchesSearch(searchWords, it) }.keys
-            else emptySet()
-        // Play flavor has no self-update button, so drop it from search results too.
-        if (BuildConfig.SELF_UPDATE) matched else matched - StandaloneSetting.UPDATE
-    }
     val relatedChips = remember(searchNormalized, searchDb) {
         if (!searching) emptyList()
         else searchDb.related
@@ -264,12 +248,11 @@ fun SettingsScreen(
             .take(8)
     }
     val allSearchKeywords = remember(searchDb) {
-        searchDb.sectionDirect.values.flatten() + searchDb.standaloneDirect.values.flatten() +
-            searchDb.related.flatMap { it.words }
+        searchDb.sectionDirect.values.flatten() + searchDb.related.flatMap { it.words }
     }
     val didYouMeanChips = remember(searchNormalized, searchDb) {
         if (searching && searchWords.size == 1 && matchedSections.isEmpty() &&
-            matchedStandalone.isEmpty() && relatedChips.isEmpty()
+            relatedChips.isEmpty()
         ) {
             val q = searchWords[0]
             allSearchKeywords.asSequence()
@@ -284,7 +267,7 @@ fun SettingsScreen(
                 .toList()
         } else emptyList()
     }
-    val noSearchResults = searching && matchedSections.isEmpty() && matchedStandalone.isEmpty() &&
+    val noSearchResults = searching && matchedSections.isEmpty() &&
         relatedChips.isEmpty() && didYouMeanChips.isEmpty()
     val keyboard = LocalSoftwareKeyboardController.current
     val appContext = LocalContext.current
@@ -300,8 +283,7 @@ fun SettingsScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    var expandedType by remember { mutableStateOf<ThreatType?>(null) }
-    // One-time explainers: shown when an advanced toggle is flipped for the first time.
+        // One-time explainers: shown when an advanced toggle is flipped for the first time.
     val explainerPrefs = remember { UserPrefs(appContext) }
     val scope = rememberCoroutineScope()
     val explainerList = remember(s) { explainers(s) }
@@ -321,25 +303,25 @@ fun SettingsScreen(
             }
         }
     }
-    // One-time explainer dismissal: the dialog covers the list, so on close the eye is lost.
-    // Snap back to the top of the section the user was tapping and give that row a subtle
-    // border pulse so they re-anchor where they were.
+    // One-time explainer dismissal: the dialog covers the page, so on close the eye is lost.
+    // Return to the section the user was toggling and give that row a subtle border pulse so they
+    // re-anchor where they were.
     var flashId by remember { mutableStateOf<String?>(null) }
-    val sectionOfExplainer: (String) -> Int = { id -> when (id) {
-        "followMe" -> SettingsSection.LOCATION.index
-        "nightMode" -> SettingsSection.NIGHT.index
-        "officialAlerts", "sirenOverride" -> SettingsSection.ALERTS.index
-        "threatToggles" -> SettingsSection.THREATS.index
-        "cardSize" -> SettingsSection.SYSTEM.index
-        else -> SettingsSection.ALERTS.index
+    val sectionOfExplainer: (String) -> SettingsSection = { id -> when (id) {
+        "followMe" -> SettingsSection.LOCATION
+        "nightMode" -> SettingsSection.NIGHT
+        "officialAlerts", "sirenOverride" -> SettingsSection.ALERTS
+        "threatToggles" -> SettingsSection.THREATS
+        "cardSize" -> SettingsSection.SYSTEM
+        else -> SettingsSection.ALERTS
     } }
     val dismissExplainer: () -> Unit = {
         val exp = activeExplainer
         if (exp != null) {
             onExplainerChange(null)
+            onRouteChange(SettingsRoute.Detail(sectionOfExplainer(exp.id)))
             flashId = exp.id
             scope.launch {
-                listState.animateScrollToItem(sectionOfExplainer(exp.id))
                 delay(900)
                 flashId = null
             }
@@ -347,8 +329,7 @@ fun SettingsScreen(
         pendingCardSize?.let { onThreatCardSizeChange(it); pendingCardSize = null }
     }
 
-    // Collapse states are hoisted to MainScreen (rememberSaveable) so they survive screen
-    // switches and process death; only the disclaimer card keeps its own remember logic.
+    // The disclaimer card keeps its own remember logic; the section routes are hoisted to MainScreen.
     var disclaimerExpanded by remember { mutableStateOf(disclaimerReadCount < 3 || !disclaimerCollapsed) }
     LaunchedEffect(Unit) {
         if (disclaimerReadCount < 3) onDisclaimerShown()
@@ -358,59 +339,119 @@ fun SettingsScreen(
         onDisclaimerCollapse(!disclaimerExpanded)
     }
 
-    // Scroll to section when requested by external triggers (e.g. ZonesSheet night mode badge).
-    LaunchedEffect(scrollToThreatsTick) {
-        if (scrollToThreatsTick > 0) {
-            listState.animateScrollToItem(
-                if (scrollToNightMode) SettingsSection.NIGHT.index else SettingsSection.THREATS.index
-            )
-            onThreatsScrollHandled()
+    // Section labels + icons drive both the root list and the detail page's topBar.
+    val sectionTitle: (SettingsSection) -> String = { sec ->
+        when (sec) {
+            SettingsSection.LOCATION -> s.locationSectionTitle
+            SettingsSection.ALERTS -> s.alertsLabel
+            SettingsSection.NIGHT -> s.nightModeLabel
+            SettingsSection.SHELTERS -> s.shelterSectionTitle
+            SettingsSection.THREATS -> s.threatsLabel
+            SettingsSection.SYSTEM -> s.systemSectionTitle
+            SettingsSection.FLOURISH -> s.moraleSectionTitle
+            SettingsSection.MORE -> s.moreSectionTitle
         }
+    }
+    // The same live summary that used to sit under each collapsed card header now lives on its
+    // detail page, so the state is still visible without expanding anything.
+    val sectionSummary: (SettingsSection) -> String = { sec ->
+        when (sec) {
+            SettingsSection.LOCATION -> s.locationSubtitle(followMe, pinnedCity?.name(lang), periodicGps)
+            SettingsSection.ALERTS -> s.alertsSubtitle(
+                officialAlertsEnabled = officialAlertsEnabled,
+                officialRedAlerts = officialRedAlertsEnabled,
+                officialYellowAlerts = officialYellowAlertsEnabled,
+                cityScope = officialAlertCityScope,
+                alwaysSound = sirenOverride
+            )
+            SettingsSection.NIGHT -> if (state.nightSleepActive) s.actionLog.sleepWell else s.nightSubtitle(
+                nightEnabled,
+                nightStartMin,
+                nightEndMin,
+                nightZoneSirenOverride || nightOfficialSirenOverride,
+                nightUseCustomZones
+            )
+            SettingsSection.SHELTERS -> s.sheltersSubtitle(sheltersEnabled)
+            SettingsSection.THREATS -> s.threatsSubtitle(hiddenTypes.size, silencedTypes.size)
+            SettingsSection.SYSTEM -> s.systemSubtitle(threatCardSize, iconSet)
+            SettingsSection.FLOURISH -> s.moraleSubtitle(deathAnimationEnabled, neutralizedTallyEnabled)
+            SettingsSection.MORE -> s.moreSubtitleLabel
+        }
+    }
+    val sectionIcon: @Composable (SettingsSection) -> Painter = { sec ->
+        when (sec) {
+            SettingsSection.LOCATION -> rememberVectorPainter(Icons.Default.LocationOn)
+            SettingsSection.ALERTS -> rememberVectorPainter(Icons.Default.Notifications)
+            SettingsSection.NIGHT -> painterResource(R.drawable.ic_moon)
+            SettingsSection.SHELTERS -> shelterPainter()
+            SettingsSection.THREATS -> rememberVectorPainter(Icons.Default.Warning)
+            SettingsSection.SYSTEM -> painterResource(R.drawable.ic_language)
+            SettingsSection.FLOURISH -> painterResource(R.drawable.ic_morale)
+            SettingsSection.MORE -> rememberVectorPainter(Icons.Default.MoreHoriz)
+        }
+    }
+    val visibleSections = remember(searchNormalized, searchDb) {
+        if (searching) SettingsSection.entries.filter { it in matchedSections }
+        else SettingsSection.entries
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                modifier = Modifier.padding(bottom = 8.dp),
-                title = {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text(s.settingsSearchHint) },
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = null)
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }, interactionSource = rememberHapticInteractionSource()) {
-                                    Icon(Icons.Default.Close, contentDescription = s.settingsSearchClear)
+            when (route) {
+                SettingsRoute.Root -> TopAppBar(
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    title = {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text(s.settingsSearchHint) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Search, contentDescription = null)
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }, interactionSource = rememberHapticInteractionSource()) {
+                                        Icon(Icons.Default.Close, contentDescription = s.settingsSearchClear)
+                                    }
                                 }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(50),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = Color.Transparent,
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                        ),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() })
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack, interactionSource = rememberHapticInteractionSource()) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(50),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                            ),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() })
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack, interactionSource = rememberHapticInteractionSource()) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
+                        }
                     }
-                }
-            )
+                )
+                is SettingsRoute.Detail -> TopAppBar(
+                    navigationIcon = {
+                        IconButton(
+                            onClick = { onRouteChange(SettingsRoute.Root) },
+                            interactionSource = rememberHapticInteractionSource()
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
+                        }
+                    },
+                    title = { Text(sectionTitle(route.section), style = MaterialTheme.typography.titleMedium) }
+                )
+            }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             AnimatedVisibility(
-                visible = relatedChips.isNotEmpty() || didYouMeanChips.isNotEmpty(),
+                visible = route == SettingsRoute.Root &&
+                    (relatedChips.isNotEmpty() || didYouMeanChips.isNotEmpty()),
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut()
             ) {
@@ -433,8 +474,8 @@ fun SettingsScreen(
                     }
                 }
             }
+            if (route == SettingsRoute.Root) {
             LazyColumn(
-                state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -488,15 +529,70 @@ fun SettingsScreen(
                 }
             }
 
-            if (searching.not() || SettingsSection.LOCATION in matchedSections) {
-            item(key = "section_location", contentType = "section") {
-                CollapsibleSectionCard(
-                    title = s.locationSectionTitle,
-                    icon = rememberVectorPainter(Icons.Default.LocationOn),
-                    expanded = collapse.location,
-                    subtitle = s.locationSubtitle(followMe, pinnedCity?.name(lang), periodicGps),
-                    onToggle = { onCollapseChange(collapse.copy(location = !collapse.location)) }
-                ) {
+            items(
+                items = visibleSections,
+                key = { it.ordinal },
+                contentType = { "section" }
+            ) { sec ->
+                // The two master switches that used to hide inside a page header live on the root
+                // list instead: a section whose whole body is gated on its master is a dead end if
+                // the switch is only reachable by drilling in and finding an empty card.
+                when (sec) {
+                    SettingsSection.NIGHT -> SettingsRootRow(
+                        icon = sectionIcon(sec),
+                        title = sectionTitle(sec),
+                        subtitle = sectionSummary(sec),
+                        onClick = { onRouteChange(SettingsRoute.Detail(sec)) },
+                        trailing = {
+                            Switch(
+                                checked = nightEnabled,
+                                onCheckedChange = { v ->
+                                    showExplainer("nightMode"); onNightEnabledChange(v)
+                                },
+                                interactionSource = rememberHapticInteractionSource()
+                            )
+                        }
+                    )
+                    SettingsSection.FLOURISH -> SettingsRootRow(
+                        icon = sectionIcon(sec),
+                        title = sectionTitle(sec),
+                        subtitle = sectionSummary(sec),
+                        onClick = { onRouteChange(SettingsRoute.Detail(sec)) },
+                        trailing = {
+                            Switch(
+                                checked = moraleMasterEnabled,
+                                onCheckedChange = onMoraleMasterChange,
+                                interactionSource = rememberHapticInteractionSource()
+                            )
+                        }
+                    )
+                    else -> SettingsRootRow(
+                        icon = sectionIcon(sec),
+                        title = sectionTitle(sec),
+                        subtitle = sectionSummary(sec),
+                        onClick = { onRouteChange(SettingsRoute.Detail(sec)) }
+                    )
+                }
+            }
+            if (noSearchResults) {
+                item(key = "no_results", contentType = "message") {
+                    Text(
+                        s.settingsNoResults,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            }
+            } else {
+            val section = (route as SettingsRoute.Detail).section
+            Box(modifier = Modifier.weight(1f).padding(16.dp)) {
+            when (section) {
+            SettingsSection.LOCATION -> SectionDetailBody(stateSummary = sectionSummary(section)) {
                     AlertToggleRow(
                         title = s.followMeTitle,
                         description = s.followMeDesc,
@@ -533,25 +629,8 @@ fun SettingsScreen(
                         lang = lang,
                         s = s
                     )
-                }
             }
-
-            }
-            if (searching.not() || SettingsSection.ALERTS in matchedSections) {
-            item(key = "section_alerts", contentType = "section") {
-                CollapsibleSectionCard(
-                    title = s.alertsLabel,
-                    icon = rememberVectorPainter(Icons.Default.Notifications),
-                    expanded = collapse.alerts,
-                    subtitle = s.alertsSubtitle(
-                        officialAlertsEnabled = officialAlertsEnabled,
-                        officialRedAlerts = officialRedAlertsEnabled,
-                        officialYellowAlerts = officialYellowAlertsEnabled,
-                        cityScope = officialAlertCityScope,
-                        alwaysSound = sirenOverride
-                    ),
-                    onToggle = { onCollapseChange(collapse.copy(alerts = !collapse.alerts)) }
-                ) {
+            SettingsSection.ALERTS -> SectionDetailBody(stateSummary = sectionSummary(section)) {
                     if (notificationsDisabled) {
                         Surface(
                             modifier = Modifier
@@ -656,7 +735,10 @@ fun SettingsScreen(
                         iconBadge = s.quietBadgeMain,
                         iconBadgeSuperscriptSuffix = s.quietBadgeSuper
                     )
+                    // Indented under its master toggle so the eye reads "limit repeats" as the parent and the
+// policy picker as the thing it controls, not as a sibling card.
                     AnimatedVisibility(visible = notifyPolicyEnabled) {
+                        Column(modifier = Modifier.padding(start = 24.dp, end = 12.dp)) {
                         NotifyPolicyRow(
                             title = s.notifyPolicyTitle,
                             description = s.notifyPolicyDesc,
@@ -678,6 +760,7 @@ fun SettingsScreen(
                                 }
                             }
                         )
+                        }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     FallingDebrisDelayRow(
@@ -728,90 +811,23 @@ fun SettingsScreen(
                         },
                         emoji = "🛡️"
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    // Battery Optimization
-                    if (batteryOptimized) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_check),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    s.batteryGranted,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                s.batteryBody,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
-                        val title = if (batteryOemInfo.isAggressive) s.batteryOemTitle else s.batteryTitle
-                        val body = if (batteryOemInfo.isAggressive) s.batteryOemBody else s.batteryBody
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                title,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                body,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Button(
-                                onClick = { BatteryOptimization.requestExemption(appContext) },
-                                interactionSource = rememberHapticInteractionSource(),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(s.batteryAllowButton, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
                     }
-                }
-            }
-            }
-
-            if (searching.not() || SettingsSection.NIGHT in matchedSections) {
-            item(key = "section_night", contentType = "section") {
-                CollapsibleSectionCard(
-                    title = s.nightModeLabel,
-                    icon = painterResource(R.drawable.ic_moon),
-                    expanded = collapse.nightMode,
-                    subtitle = if (state.nightSleepActive) {
-                        // Independent of the night switch: the preset switches every NIGHT alert
-                        // off, and that stays true when the window itself is off.
-                        s.actionLog.sleepWell
-                    } else {
-                        s.nightSubtitle(
-                            nightEnabled,
-                            nightStartMin,
-                            nightEndMin,
-                            nightZoneSirenOverride || nightOfficialSirenOverride,
-                            nightUseCustomZones
+            // The master switch now lives on the root row, so the page body carries no copy of it —
+// an off master shows the explanatory line instead of an empty tinted card.
+            SettingsSection.NIGHT -> SectionDetailBody(
+                stateSummary = sectionSummary(section),
+                cardColor = NightSectionBg,
+                cardBorder = NightSectionBorder
+            ) {
+                    if (!nightEnabled && !state.nightSleepActive) {
+                        Text(
+                            s.nightModeDesc,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp)
                         )
-                    },
-                    onToggle = { onCollapseChange(collapse.copy(nightMode = !collapse.nightMode)) },
-                    cardColor = NightSectionBg,
-                    cardBorder = NightSectionBorder,
-                    trailing = {
-                        Switch(
-                            checked = nightEnabled,
-                            onCheckedChange = { v -> showExplainer("nightMode"); onNightEnabledChange(v) },
-                            interactionSource = rememberHapticInteractionSource()
-                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
-                ) {
                     NightModeCard(
                         lang = lang,
                         enabled = nightEnabled,
@@ -856,42 +872,8 @@ fun SettingsScreen(
                         onNightOfficialYellowChange = onNightOfficialYellowChange,
                         onSleepToggle = onNightSleepToggle
                     )
-                }
             }
-
-            }
-            if (searching.not() || SettingsSection.SHELTERS in matchedSections) {
-            item(key = "section_shelters", contentType = "section") {
-                CollapsibleSectionCard(
-                    title = s.shelterSectionTitle,
-                    icon = remember {
-                        object : Painter() {
-                            override val intrinsicSize = Size(24f, 24f)
-                            override fun DrawScope.onDraw() {
-                                val cw = 16f; val ch = 18f
-                                val scale = minOf(size.width / cw, size.height / ch)
-                                val dx = (size.width - cw * scale) / 2f
-                                val dy = (size.height - ch * scale) / 2f
-                                val cx = dx + 8f * scale; val r = 8f * scale
-                                val bottom = dy + 18f * scale; val top = bottom - 18f * scale
-                                val bulbMidY = top + r
-                                drawPath(
-                                    Path().apply {
-                                        moveTo(cx, bottom)
-                                        cubicTo(cx - r * 0.15f, bottom - 2f * scale, dx, bulbMidY + r * 0.5f, dx, bulbMidY)
-                                        cubicTo(dx, top, dx + cw * scale, top, dx + cw * scale, bulbMidY)
-                                        cubicTo(dx + cw * scale, bulbMidY + r * 0.5f, cx + r * 0.15f, bottom - 2f * scale, cx, bottom)
-                                    },
-                                    color = Color.Black,
-                                    style = Stroke(width = 2.6f * scale)
-                                )
-                            }
-                        }
-                    },
-                    expanded = collapse.shelters,
-                    subtitle = s.sheltersSubtitle(sheltersEnabled),
-                    onToggle = { onCollapseChange(collapse.copy(shelters = !collapse.shelters)) }
-                ) {
+            SettingsSection.SHELTERS -> SectionDetailBody(stateSummary = sectionSummary(section)) {
                     AlertToggleRow(
                         title = s.shelterSettingsTitle,
                         description = s.shelterSettingsDesc,
@@ -936,19 +918,8 @@ fun SettingsScreen(
                             modifier = Modifier.size(18.dp)
                         )
                     }
-                }
             }
-
-            }
-            if (searching.not() || SettingsSection.THREATS in matchedSections) {
-            item(key = "section_threats", contentType = "section") {
-                CollapsibleSectionCard(
-                    title = s.threatsLabel,
-                    icon = rememberVectorPainter(Icons.Default.Warning),
-                    expanded = collapse.threats,
-                    subtitle = s.threatsSubtitle(hiddenTypes.size, silencedTypes.size),
-                    onToggle = { onCollapseChange(collapse.copy(threats = !collapse.threats)) }
-                ) {
+            SettingsSection.THREATS -> SectionDetailBody(stateSummary = sectionSummary(section)) {
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text(s.iconSetTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(10.dp))
@@ -965,15 +936,12 @@ fun SettingsScreen(
                         }
                         val groupMapOn = types.none { it in hiddenTypes }
                         val groupAlertsOn = types.none { it in silencedTypes }
-                        val groupCollapsed = if (index == 0) fastGroupCollapsed else slowGroupCollapsed
+                        // A plain header: the group's bulk toggles stay, but the group is no longer
+                        // collapsible — the page already scrolls, so folding it away only hid rows.
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .hapticClickable {
-                                    if (index == 0) onFastGroupCollapse(!fastGroupCollapsed)
-                                    else onSlowGroupCollapse(!slowGroupCollapsed)
-                                }
                                 .padding(horizontal = 16.dp, vertical = 4.dp)
                         ) {
                             Icon(
@@ -1004,53 +972,30 @@ fun SettingsScreen(
                                 enabled = true,
                                 onClick = { onThreatAlertToggleAll(types, !groupAlertsOn) }
                             )
-                            Spacer(Modifier.width(4.dp))
-                            Icon(
-                                imageVector = if (groupCollapsed) Icons.Default.KeyboardArrowDown
-                                else Icons.Default.KeyboardArrowUp,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(24.dp)
-                            )
                         }
-                        if (!groupCollapsed) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
-                                    .padding(bottom = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                types.forEach { type ->
-                                    ThreatSettingsCard(
-                                        type = type,
-                                        lang = lang,
-                                        iconSet = iconSet,
-                                        expanded = expandedType == type,
-                                        onExpandChange = { expandedType = if (expandedType == type) null else type },
-                                        hiddenTypes = hiddenTypes,
-                                        silencedTypes = silencedTypes,
-                                        onThreatMapToggle = { t, v -> showExplainer("threatToggles"); onThreatMapToggle(t, v) },
-                                        onThreatAlertToggle = { t, v -> showExplainer("threatToggles"); onThreatAlertToggle(t, v) },
-                                        flash = flashId == "threatToggles"
-                                    )
-                                }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                .padding(bottom = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            types.forEach { type ->
+                                ThreatSettingsCard(
+                                    type = type,
+                                    lang = lang,
+                                    iconSet = iconSet,
+                                    hiddenTypes = hiddenTypes,
+                                    silencedTypes = silencedTypes,
+                                    onThreatMapToggle = { t, v -> showExplainer("threatToggles"); onThreatMapToggle(t, v) },
+                                    onThreatAlertToggle = { t, v -> showExplainer("threatToggles"); onThreatAlertToggle(t, v) },
+                                    flash = flashId == "threatToggles"
+                                )
                             }
                         }
                     }
-                }
             }
-
-            }
-            if (searching.not() || SettingsSection.SYSTEM in matchedSections) {
-            item(key = "section_system", contentType = "section") {
-                CollapsibleSectionCard(
-                    title = s.systemSectionTitle,
-                    icon = painterResource(id = R.drawable.ic_language),
-                    expanded = collapse.system,
-                    subtitle = s.systemSubtitle(threatCardSize, iconSet),
-                    onToggle = { onCollapseChange(collapse.copy(system = !collapse.system)) }
-                ) {
+            SettingsSection.SYSTEM -> SectionDetailBody(stateSummary = sectionSummary(section)) {
                     // Card Size & Detail
                     Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp).explainerFlash(flashId == "cardSize")) {
                         Text(
@@ -1174,28 +1119,10 @@ fun SettingsScreen(
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertToggleRow(title = s.threatIconZoomTitle, description = s.threatIconZoomDesc, checked = threatIconZoom, onCheckedChange = onThreatIconZoomChange, icon = rememberVectorPainter(Icons.Default.ZoomIn), iconTint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
             }
-
-            }
-
-            if (searching.not() || SettingsSection.FLOURISH in matchedSections) {
-            item(key = "section_flourish", contentType = "section") {
-                CollapsibleSectionCard(
-                    title = s.moraleSectionTitle,
-                    icon = painterResource(R.drawable.ic_morale),
-                    iconTint = Color.Unspecified,
-                    expanded = collapse.flourish,
-                    subtitle = s.moraleSubtitle(deathAnimationEnabled, neutralizedTallyEnabled),
-                    onToggle = { onCollapseChange(collapse.copy(flourish = !collapse.flourish)) },
-                    trailing = {
-                        Switch(
-                            checked = moraleMasterEnabled,
-                            onCheckedChange = onMoraleMasterChange,
-                            interactionSource = rememberHapticInteractionSource()
-                        )
-                    }
-                ) {
+            // Master switch lives on the root row; with it off the page says so instead of showing
+            // nothing but the voice-pack note.
+            SettingsSection.FLOURISH -> SectionDetailBody(stateSummary = sectionSummary(section)) {
                     AnimatedVisibility(visible = moraleMasterEnabled) {
                         MoraleToggles(
                             s = s,
@@ -1228,29 +1155,63 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                     )
+            }
+            SettingsSection.MORE -> SectionDetailBody(stateSummary = sectionSummary(section)) {
+                if (batteryOptimized) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_check),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                s.batteryGranted,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            s.batteryBody,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    val batteryTitle = if (batteryOemInfo.isAggressive) s.batteryOemTitle else s.batteryTitle
+                    val batteryBody = if (batteryOemInfo.isAggressive) s.batteryOemBody else s.batteryBody
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            batteryTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            batteryBody,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = { BatteryOptimization.requestExemption(appContext) },
+                            interactionSource = rememberHapticInteractionSource(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(s.batteryAllowButton, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                 }
-            }
-
-            }
-            if (noSearchResults) {
-                item(key = "no_results", contentType = "message") {
-                    Text(
-                        s.settingsNoResults,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            if (searching.not() || StandaloneSetting.RELAUNCH in matchedStandalone) {
-            item(key = "action_relaunch", contentType = "action") {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 OutlinedButton(
                     onClick = onRelaunchSetup,
                     interactionSource = rememberHapticInteractionSource(),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 16.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
@@ -1260,15 +1221,12 @@ fun SettingsScreen(
                     Spacer(Modifier.width(10.dp))
                     Text(s.relaunchSetupTitle, fontWeight = FontWeight.SemiBold)
                 }
-            }
-
-            }
-            if (searching.not() || StandaloneSetting.RESET_TIPS in matchedStandalone) {
-            item(key = "action_reset_tips", contentType = "action") {
                 OutlinedButton(
                     onClick = onResetTips,
                     interactionSource = rememberHapticInteractionSource(),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
@@ -1278,27 +1236,16 @@ fun SettingsScreen(
                     Spacer(Modifier.width(10.dp))
                     Text(s.resetTipsTitle, fontWeight = FontWeight.SemiBold)
                 }
-            }
-
-            }
-            if (searching.not() || StandaloneSetting.GUIDE in matchedStandalone) {
-            item(key = "action_guide", contentType = "action") {
                 OutlinedButton(
                     onClick = onOpenGuide,
                     interactionSource = rememberHapticInteractionSource(),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text(s.guideSettingsButton, fontWeight = FontWeight.SemiBold)
                 }
-            }
-
-            }
-            item(key = "divider", contentType = "divider") {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            }
-
-            if (BuildConfig.SELF_UPDATE && (searching.not() || StandaloneSetting.UPDATE in matchedStandalone)) {
-            item(key = "action_update", contentType = "action") {
+                if (BuildConfig.SELF_UPDATE) {
                 val updateState by updateFlow.collectAsState()
                 val latestVersion by latestVersionFlow.collectAsState()
                 val isChecking = updateState is UpdateState.Checking
@@ -1348,15 +1295,14 @@ fun SettingsScreen(
                         Text(s.updateButton, fontWeight = FontWeight.SemiBold)
                     }
                 }
-            }
-
-            }
-            if (searching.not() || StandaloneSetting.EXIT in matchedStandalone) {
-            item(key = "action_exit", contentType = "action") {
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Button(
                     onClick = onExit,
                     interactionSource = rememberHapticInteractionSource(),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = Color.White
@@ -1364,10 +1310,6 @@ fun SettingsScreen(
                 ) {
                     Text(s.exitButton, fontWeight = FontWeight.SemiBold)
                 }
-            }
-
-            }
-            item(key = "footer", contentType = "footer") {
                 val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
                 val telegramUrl = "https://t.me/odesaplay_bot"
                 Column(
@@ -1406,6 +1348,8 @@ fun SettingsScreen(
                         }
                     )
                 }
+            }
+            }
             }
         }
     }
@@ -1458,4 +1402,31 @@ fun SettingsScreen(
         )
     }
 
+}
+
+/** The shelter (bulb) glyph, drawn inline: it has no drawable of its own. */
+@Composable
+private fun shelterPainter(): Painter = remember {
+    object : Painter() {
+        override val intrinsicSize = Size(24f, 24f)
+        override fun DrawScope.onDraw() {
+            val cw = 16f; val ch = 18f
+            val scale = minOf(size.width / cw, size.height / ch)
+            val dx = (size.width - cw * scale) / 2f
+            val dy = (size.height - ch * scale) / 2f
+            val cx = dx + 8f * scale; val r = 8f * scale
+            val bottom = dy + 18f * scale; val top = bottom - 18f * scale
+            val bulbMidY = top + r
+            drawPath(
+                Path().apply {
+                    moveTo(cx, bottom)
+                    cubicTo(cx - r * 0.15f, bottom - 2f * scale, dx, bulbMidY + r * 0.5f, dx, bulbMidY)
+                    cubicTo(dx, top, dx + cw * scale, top, dx + cw * scale, bulbMidY)
+                    cubicTo(dx + cw * scale, bulbMidY + r * 0.5f, cx + r * 0.15f, bottom - 2f * scale, cx, bottom)
+                },
+                color = Color.Black,
+                style = Stroke(width = 2.6f * scale)
+            )
+        }
+    }
 }

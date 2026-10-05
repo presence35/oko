@@ -68,9 +68,7 @@ class UserPrefs(private val context: Context) {
     private val neutralizedTallyAllUkraineKey = booleanPreferencesKey("neutralized_tally_all_ukraine")
     private val alarmEpisodeTallyEnabledKey = booleanPreferencesKey("alarm_episode_tally_enabled")
     private val legacyCacheCleanedKey = booleanPreferencesKey("legacy_osmdroid_cleaned")
-    private val fastGroupCollapsedKey = booleanPreferencesKey("fast_group_collapsed")
-    private val slowGroupCollapsedKey = booleanPreferencesKey("slow_group_collapsed")
-    private val batteryOnboardShownKey = booleanPreferencesKey("battery_onboard_shown")
+        private val batteryOnboardShownKey = booleanPreferencesKey("battery_onboard_shown")
     private val serviceResurrectedKey = booleanPreferencesKey("service_resurrected")
     private val permissionPromptDeferredKey = booleanPreferencesKey("permission_prompt_deferred")
     private val nightEnabledKey = booleanPreferencesKey("night_enabled")
@@ -194,9 +192,7 @@ class UserPrefs(private val context: Context) {
             neutralizedTallyAllUkraine = this[neutralizedTallyAllUkraineKey] ?: d.neutralizedTallyAllUkraine,
             alarmEpisodeTallyEnabled = this[alarmEpisodeTallyEnabledKey] ?: d.alarmEpisodeTallyEnabled,
             legacyCacheCleaned = this[legacyCacheCleanedKey] ?: d.legacyCacheCleaned,
-            fastGroupCollapsed = this[fastGroupCollapsedKey] ?: d.fastGroupCollapsed,
-            slowGroupCollapsed = this[slowGroupCollapsedKey] ?: d.slowGroupCollapsed,
-            batteryOnboardShown = this[batteryOnboardShownKey] ?: d.batteryOnboardShown,
+                        batteryOnboardShown = this[batteryOnboardShownKey] ?: d.batteryOnboardShown,
             serviceResurrected = this[serviceResurrectedKey] ?: d.serviceResurrected,
             permissionPromptDeferred = this[permissionPromptDeferredKey] ?: d.permissionPromptDeferred,
             nightEnabled = this[nightEnabledKey] ?: d.nightEnabled,
@@ -561,15 +557,7 @@ class UserPrefs(private val context: Context) {
         context.dataStore.edit { it[legacyCacheCleanedKey] = cleaned }
     }
 
-    suspend fun setFastGroupCollapsed(collapsed: Boolean) {
-        context.dataStore.edit { it[fastGroupCollapsedKey] = collapsed }
-    }
-
-    suspend fun setSlowGroupCollapsed(collapsed: Boolean) {
-        context.dataStore.edit { it[slowGroupCollapsedKey] = collapsed }
-    }
-
-    suspend fun setBatteryOnboardShown(shown: Boolean) {
+        suspend fun setBatteryOnboardShown(shown: Boolean) {
         context.dataStore.edit { it[batteryOnboardShownKey] = shown }
     }
 

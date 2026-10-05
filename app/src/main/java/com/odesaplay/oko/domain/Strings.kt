@@ -149,6 +149,8 @@ object Strings {
         val systemSectionTitle: String,
         val locationSectionTitle: String,
         val moraleSectionTitle: String,
+        val moreSectionTitle: String,
+        val moreSubtitleLabel: String,
         val flybyAnimationLabel: String,
         val flybyAnimationDesc: String,
         val cardSizeSmallLabel: String,
@@ -926,6 +928,10 @@ object Strings {
         val systemSectionTitle: String get() = settings.systemSectionTitle
         val locationSectionTitle: String get() = settings.locationSectionTitle
         val moraleSectionTitle: String get() = settings.moraleSectionTitle
+
+        val moreSectionTitle: String get() = settings.moreSectionTitle
+
+        val moreSubtitleLabel: String get() = settings.moreSubtitleLabel
         val flybyAnimationLabel: String get() = settings.flybyAnimationLabel
         val flybyAnimationDesc: String get() = settings.flybyAnimationDesc
         val cardSizeSmallLabel: String get() = settings.cardSizeSmallLabel

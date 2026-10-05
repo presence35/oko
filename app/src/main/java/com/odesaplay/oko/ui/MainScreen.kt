@@ -61,8 +61,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -208,7 +206,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     var guideFeatureId by remember { mutableStateOf<String?>(null) }
     var guideFromSettings by remember { mutableStateOf(false) }
     var sheltersFromSettings by remember { mutableStateOf(false) }
-    var scrollToThreatsTick by remember { mutableStateOf(0) }
     var wizardFromSettings by remember { mutableStateOf(false) }
     var headerHeightPx by remember { mutableStateOf(0) }
     // The wizard owns the screen while it's up — the map is not even composed then (no tile
@@ -217,8 +214,9 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val prefsLoaded = uiState.wizardCompleted != null
     val wizardShown = uiState.wizardCompleted == false
     val wizardOwnsScreen = wizardShown && !wizardFromSettings
-    val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    var settingsCollapse by rememberSaveable(stateSaver = SettingsCollapseState.Saver) { mutableStateOf(SettingsCollapseState()) }
+    // -1 = root list, else a SettingsSection ordinal for the open detail page. An int survives
+    // process death on its own, so no extra Saver is needed for the sealed route.
+    var settingsDetailIndex by rememberSaveable { mutableIntStateOf(-1) }
     // The zones sheet edits whatever the map is currently showing: night settings while the
     // night window is active and separate night zones are enabled, day settings otherwise.
     val editingNight = uiState.nightActive && uiState.nightUseCustomZones
@@ -262,8 +260,8 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             scope.launch { prefs.setSettingsHintRemaining(settingsHintRemaining) }
         }
         screen = Screen.SETTINGS
-        // Settings always opens fully collapsed — no saved open/closed state across visits.
-        settingsCollapse = SettingsCollapseState()
+        // Settings always opens on the root list — never a saved drill-down state.
+        settingsDetailIndex = -1
         viewModel.checkForUpdatesOnSettingsOpen()
     }
 
@@ -303,11 +301,9 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onOpenSettings = openSettings,
             onOpenThreatSettings = {
                 openSettings()
-                // The shortcut scrolls to the night/threats card: expand it so the landing
-                // isn't an empty collapsed header.
-                settingsCollapse = if (uiState.nightActive) settingsCollapse.copy(nightMode = true)
-                else settingsCollapse.copy(threats = true)
-                scrollToThreatsTick++
+                // The shortcut drills straight into the night/threats page.
+                settingsDetailIndex = (if (uiState.nightActive) SettingsSection.NIGHT
+                    else SettingsSection.THREATS).ordinal
             },
                         onThreatTapped = {
                             showZonesSheet = false
@@ -360,7 +356,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         }
         if (screen == Screen.SETTINGS) {
             // Composed after MapScreen, so its handler is checked first on Back.
-            BackHandler { screen = Screen.MAP }
+            // Drilling out of a detail page goes back to the root list; from the root it leaves.
+            BackHandler {
+                if (settingsDetailIndex >= 0) settingsDetailIndex = -1 else screen = Screen.MAP
+            }
             SettingsScreen(
                 state = settingsState,
                 hapticsEnabled = uiState.hapticsEnabled,
@@ -368,11 +367,14 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 updateFlow = viewModel.updateFlow,
                 latestVersionFlow = viewModel.latestVersionState,
                 nightActive = uiState.nightActive,
-                listState = settingsListState,
-                collapse = settingsCollapse,
-                onCollapseChange = { settingsCollapse = it },
-                scrollToThreatsTick = scrollToThreatsTick,
-                onThreatsScrollHandled = remember { { scrollToThreatsTick = 0 } },
+                route = if (settingsDetailIndex < 0) SettingsRoute.Root
+                    else SettingsRoute.Detail(SettingsSection.entries[settingsDetailIndex]),
+                onRouteChange = { r ->
+                    settingsDetailIndex = when (r) {
+                        SettingsRoute.Root -> -1
+                        is SettingsRoute.Detail -> r.section.ordinal
+                    }
+                },
                 activeExplainer = activeExplainer,
                 onExplainerChange = remember { { activeExplainer = it } },
                 versionName = BuildConfig.VERSION_NAME,
@@ -443,9 +445,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onNeutralizedTallyAllUkraineChange = remember { { viewModel.setNeutralizedTallyAllUkraine(it) } },
                 onAlarmEpisodeTallyChange = remember { { viewModel.setAlarmEpisodeTallyEnabled(it) } },
                 onThreatIconZoomChange = remember { { viewModel.setThreatIconZoom(it) } },
-                onFastGroupCollapse = remember { { viewModel.setFastGroupCollapsed(it) } },
-                onSlowGroupCollapse = remember { { viewModel.setSlowGroupCollapsed(it) } },
-                onExit = onExit,
+                                onExit = onExit,
                 onCheckUpdate = remember { { viewModel.checkForUpdates() } },
                 onRelaunchSetup = remember {
                     {

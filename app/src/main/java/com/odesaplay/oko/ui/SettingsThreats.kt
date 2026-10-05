@@ -1,12 +1,9 @@
 package com.odesaplay.oko
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
@@ -30,8 +27,6 @@ internal fun ThreatSettingsCard(
     type: ThreatType,
     lang: AppLanguage,
     iconSet: ThreatIconSet,
-    expanded: Boolean,
-    onExpandChange: () -> Unit,
     hiddenTypes: Set<ThreatType>,
     silencedTypes: Set<ThreatType>,
     onThreatMapToggle: (ThreatType, Boolean) -> Unit,
@@ -64,25 +59,14 @@ internal fun ThreatSettingsCard(
                     contentDescription = label
                 )
                 Spacer(Modifier.width(12.dp))
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .hapticClickable(onClick = onExpandChange)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            label,
-                            fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Icon(
-                            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                            contentDescription = s.moreInfoLabel,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                Column(modifier = Modifier.weight(1f)) {
+                    // Not collapsible: the details sit under every row, so the page reads as one
+                    // flat list and nothing needs a tap to reveal.
+                    Text(
+                        label,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
                     Spacer(Modifier.height(2.dp))
                     Text(
                         description,
@@ -108,12 +92,11 @@ internal fun ThreatSettingsCard(
                     )
                 }
             }
-            AnimatedVisibility(visible = expanded) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 14.dp, end = 14.dp, bottom = 16.dp)
-                ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, end = 14.dp, bottom = 16.dp)
+            ) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -166,7 +149,6 @@ internal fun ThreatSettingsCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
             }
         }
     }

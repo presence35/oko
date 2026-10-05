@@ -3,44 +3,16 @@ package com.odesaplay.oko
 import com.odesaplay.oko.ThreatTypeCatalog
 import com.odesaplay.oko.City
 
-/** Collapse state of the Settings sections, hoisted to MainScreen. Reset to all-collapsed on
- *  every Settings open (see `openSettings`), so the user always lands on a clean list. */
-data class SettingsCollapseState(
-    val location: Boolean = false,
-    val nightMode: Boolean = false,
-    val alerts: Boolean = false,
-    val flourish: Boolean = false,
-    val shelters: Boolean = false,
-    val threats: Boolean = false,
-    val system: Boolean = false
-) {
-    companion object {
-        val Saver = androidx.compose.runtime.saveable.Saver<SettingsCollapseState, BooleanArray>(
-            save = { it.let { s -> BooleanArray(7).apply {
-                this[0] = s.location; this[1] = s.nightMode; this[2] = s.alerts
-                this[3] = s.flourish; this[4] = s.shelters; this[5] = s.threats; this[6] = s.system
-            } } },
-            restore = { b -> SettingsCollapseState(
-                location = b.getOrElse(0) { false },
-                nightMode = b.getOrElse(1) { false },
-                alerts = b.getOrElse(2) { false },
-                flourish = b.getOrElse(3) { false },
-                shelters = b.getOrElse(4) { false },
-                threats = b.getOrElse(5) { false },
-                system = b.getOrElse(6) { false }
-            ) }
-        )
-    }
+/** The Settings screens: a root list of sections, and a full detail page per section. */
+sealed interface SettingsRoute {
+    object Root : SettingsRoute
+    data class Detail(val section: SettingsSection) : SettingsRoute
 }
 
-/** The collapsible section cards, in LazyColumn order (item 0 is the disclaimer card).
- *  `index` is the section's LazyColumn position with the full list shown. */
-internal enum class SettingsSection(val index: Int) {
-    LOCATION(1), ALERTS(2), NIGHT(3), SHELTERS(4), THREATS(5), SYSTEM(6), FLOURISH(7)
-}
-
-/** Standalone action buttons below the section cards, also matched by the search box. */
-internal enum class StandaloneSetting { RELAUNCH, RESET_TIPS, GUIDE, UPDATE, EXIT }
+/** The Settings sections, in root-list order. Each one is its own detail page; MORE holds the
+ *  standalone actions (relaunch, reset tips, guide, update, exit), the battery exemption and the
+ *  footer. The disclaimer is not a section — it stays pinned on the root list. */
+enum class SettingsSection { LOCATION, ALERTS, NIGHT, SHELTERS, THREATS, SYSTEM, FLOURISH, MORE }
 
 /** A suggestion chip shown by the search box: a tappable hint that fills the query with a
  *  keyword that resolves to its setting. */
@@ -97,10 +69,9 @@ internal fun searchChip(labelUa: String, labelEn: String, queryUa: String, query
 
 internal fun chipList(vararg c: SearchChip) = c.toList()
 
-/** The search database: curated direct keywords per target + pooled related concepts. */
+/** The search database: curated direct keywords per section + pooled related concepts. */
 internal data class SettingsSearchDb(
     val sectionDirect: Map<SettingsSection, List<String>>,
-    val standaloneDirect: Map<StandaloneSetting, List<String>>,
     val related: List<RelatedConcept>
 )
 
@@ -167,23 +138,19 @@ internal fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
             "заливка", "область", "області", "заливка областей", "заливка регіонів",
             "кордон", "кордони", "межа", "межі", "контури",
             "енерг", "звільнення"
-        )
-    )
-    val standaloneDirect = mapOf(
-        StandaloneSetting.RELAUNCH to kw(
-            "relaunch", "replay", "wizard", "setup", "перезапуск", "повторити", "початкове"
         ),
-        StandaloneSetting.RESET_TIPS to kw(
-            "tips", "hints", "reset", "onboarding", "підказки", "скинути", "підказка"
-        ),
-        StandaloneSetting.GUIDE to kw(
-            "guide", "help", "features", "путівник", "допомога", "функції"
-        ),
-        StandaloneSetting.UPDATE to kw(
-            "update", "check", "download", "version", "new", "оновлення", "перевір", "завантаж", "версія"
-        ),
-        StandaloneSetting.EXIT to kw(
-            "exit", "stop", "monitoring", "quit", "вийти", "зупинити", "моніторинг", "вихід"
+        // The standalone actions and the battery exemption all live on the MORE page, so their
+        // keywords resolve to that one row.
+        SettingsSection.MORE to kw(
+            "more", "about", "other", "actions", "relaunch", "replay", "wizard", "setup",
+            "tips", "hints", "reset", "onboarding", "guide", "help", "features",
+            "update", "check", "download", "version", "new", "exit", "stop", "monitoring", "quit",
+            "disclaimer", "warning", "battery", "power", "заряд",
+            "більше", "інше", "про", "перезапуск", "повторити", "початкове",
+            "підказки", "скинути", "підказка", "путівник", "допомога", "функції",
+            "оновлення", "перевір", "завантаж", "версія",
+            "вийти", "зупинити", "моніторинг", "вихід",
+            "застереження", "батарея", "автономність"
         )
     )
     val related = listOf(
@@ -236,5 +203,5 @@ internal fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
             searchChip("Нічний режим", "Night mode", "ніч", "night")
         ))
     )
-    return SettingsSearchDb(sectionDirect, standaloneDirect, related)
+    return SettingsSearchDb(sectionDirect, related)
 }

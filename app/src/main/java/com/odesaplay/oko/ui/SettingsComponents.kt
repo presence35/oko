@@ -1,15 +1,8 @@
 package com.odesaplay.oko
 import com.odesaplay.oko.theme.AppPalette
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -20,12 +13,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.*
@@ -44,7 +38,6 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -348,102 +341,99 @@ internal fun SearchChipsRow(
     }
 }
 
+/** One section on the Settings root list: icon + title + a live one-line state summary. Tapping
+ *  drills into that section's detail page. */
 @Composable
-internal fun CollapsibleSectionCard(
-    title: String,
+internal fun SettingsRootRow(
     icon: Painter,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    subtitle: String? = null,
-    emoji: String? = null,
-    iconTint: Color = MaterialTheme.colorScheme.primary,
-    cardColor: Color? = null,
-    cardBorder: Color? = null,
-    trailing: @Composable (() -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+    trailing: @Composable (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val chevronAngle = animateFloatAsState(
-        targetValue = if (expanded) 0f else 180f,
-        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
-        label = "chevronAngle"
-    )
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .pressTick(interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true),
+                onClick = onClick
+            )
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (isPressed) 0.06f else 0f))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Icon(
+                painter = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2
+                    )
+                }
+            }
+            // The switch owns its own tap handling, so it replaces the drill-in chevron: a master
+            // toggle here is a direct control, not a way into the section.
+            if (trailing != null) {
+                trailing()
+            } else {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+/** The body of one section's detail page: a card holding its rows, with the section's live state
+ *  summary pinned at the top. The page's own TopAppBar is the screen's topBar, so this shell has
+ *  no header and no chevron — drilling in and out is the navigation. */
+@Composable
+internal fun SectionDetailBody(
+    stateSummary: String?,
+    cardColor: Color? = null,
+    cardBorder: Color? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxSize(),
         colors = if (cardColor != null) CardDefaults.cardColors(containerColor = cardColor) else CardDefaults.cardColors(),
         border = if (cardBorder != null) BorderStroke(1.dp, cardBorder) else null
     ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pressTick(interactionSource)
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = ripple(bounded = true),
-                        onClick = onToggle
-                    )
-                    .background(
-                        MaterialTheme.colorScheme.onSurface.copy(
-                            alpha = if (isPressed) 0.06f else 0f
-                        )
-                    )
-                    .padding(horizontal = 16.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                if (emoji != null) {
-                    Text(
-                        text = emoji,
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.size(24.dp)
-                    )
-                } else {
-                    Icon(
-                        painter = icon,
-                        contentDescription = null,
-                        tint = iconTint,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    if (!expanded && !subtitle.isNullOrBlank()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2
-                        )
-                    }
-                }
-                trailing?.invoke()
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(24.dp)
-                        .graphicsLayer { rotationZ = chevronAngle.value }
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            if (!stateSummary.isNullOrBlank()) {
+                Text(
+                    stateSummary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
-            AnimatedVisibility(
-                visible = expanded,
-                enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
-                exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()
-            ) {
-                Column {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    content()
-                }
-            }
+            content()
         }
     }
 }
