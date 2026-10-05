@@ -1,8 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- Sent logs now say who killed the app: the phone's own exit history (crash, low memory, swiped away, update) plus when the build was installed, so an unexplained restart is no longer a mystery 10-05_21:40:00
 - Real UA/RU translations for every remaining English placeholder string 10-05_17:00:15
 - Connection-degraded copy rewritten to plain status wording in all three languages 10-05_17:00:15
+- Header connection indicator is now a plain colored dot (no word); beta page points at the real path to Logs instead of Settings 10-05_19:05:20
+- Language picker shows flags only (no name under each), and the Canadian flag now uses the official maple leaf and official red 10-05_18:45:30
 - Threat types in Settings are now a flat list with a Fast/Slow legend instead of tall cards; night-mode row is tinted to match its page; morale row dims when its master is off 10-05_18:20:15
 - Threat types and the Fast/Slow groups in Settings are now always expanded instead of collapsible; night-mode and morale master switches moved to the main settings list; the repeat-sound policy picker is indented under its toggle 10-05_17:05:40
 - First-run wizard split into shorter pages, closing on a beta note: use it daily, report bugs via logs, AI translations 10-05_17:29:00
@@ -11,6 +14,10 @@
 - The first wizard page now says "An important distinction" with a drawn (not screenshotted, therefore readable in every language) source post 10-05_18:10:00
 - Settings search flashes the exact block you searched for; the More page actions became explained rows instead of buttons 10-05_18:10:00
 - Fixed the "update available" reminder showing a bare "v" with no version number
+- Fixed the language picker mapping the wrong flag to each language
+- Threat icons in Settings are 2.5x bigger and get their own band above the name
+- Beta note and first wizard page fully translated to Ukrainian and Russian
+- Connection pill in the header shows the state as a word again, not just a coloured dot
 - Settings rebuilt as a master-detail screen: a root list of sections (each with its live state summary) drilling into per-section pages, replacing the long collapsible scroll; back drills out one level; battery/update/guide/relaunch/footer moved to a More page 10-05_14:22:10
 - Added a GPL-3.0-only LICENSE and documented the license + source-build path in the README 10-04_20:14:47
 - A release build without app/keystore.properties now fails by default instead of being the only mode; -PallowUnsignedRelease is the explicit opt-in for a distributor that signs its own source build (F-Droid) 10-04_20:14:47

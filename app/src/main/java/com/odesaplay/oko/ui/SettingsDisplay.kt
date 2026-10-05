@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.Image
@@ -82,9 +84,10 @@ private val PreviewProximity = ThreatProximity(
     speedKmh = 180.0
 )
 
-/** App-language picker: one horizontal row of flags. The flag identifies the language fast, the
- *  autonym under it names it in its own script, and the heading carries the *other* languages'
- *  words for "language" so a user who cannot read the current UI can still find the row. */
+/** App-language picker: one horizontal row of flags, no text under them. The flag alone is the
+ *  label — a name under it restates what the flag already says in the user's own script. The
+ *  heading carries the *other* languages' words for "language" so a user who cannot read the
+ *  current UI can still find the row. */
 @Composable
 internal fun LanguageSelector(
     selected: AppLanguage,
@@ -107,7 +110,7 @@ internal fun LanguageSelector(
             AppLanguage.values().forEach { lang ->
                 FlagTile(
                     flagRes = languageFlagRes(lang),
-                    label = Strings.get(lang).selfLanguageName,
+                    contentDescription = Strings.get(lang).languageLabel,
                     selected = lang == selected,
                     onClick = { onChange(lang) },
                     modifier = Modifier.weight(1f)
@@ -118,15 +121,15 @@ internal fun LanguageSelector(
 }
 
 private fun languageFlagRes(lang: AppLanguage): Int = lang.pick(
-    R.drawable.flag_odesa,
+    R.drawable.flag_ua,
     R.drawable.flag_ca,
-    R.drawable.flag_ua
+    R.drawable.flag_odesa
 )
 
 @Composable
 private fun FlagTile(
     flagRes: Int,
-    label: String,
+    contentDescription: String,
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -140,33 +143,21 @@ private fun FlagTile(
             if (selected) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.outlineVariant
         ),
-        modifier = modifier.hapticClickable(onClick = onClick)
+        modifier = modifier
+            .semantics { this.contentDescription = contentDescription }
+            .hapticClickable(onClick = onClick)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp)
-        ) {
-            Image(
-                painter = painterResource(flagRes),
-                contentDescription = null,
-                contentScale = ContentScale.FillWidth,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(4.dp))
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (selected) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-            )
-        }
+        // Square-ish padding now that the flag is the whole tile: no text row to balance.
+        Image(
+            painter = painterResource(flagRes),
+            contentDescription = null,
+            contentScale = ContentScale.FillWidth,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(6.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
+        )
     }
 }
 

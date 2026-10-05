@@ -22,6 +22,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 
@@ -44,6 +48,9 @@ internal fun ConnectionStatus(
         else -> s.connOnline
     }
     val pillInteraction = remember { MutableInteractionSource() }
+    // The word stays: the three states differ by colour alone, and colour is exactly what a
+    // red-green colourblind reader cannot use. The description adds what the visible row cannot
+    // say — that the pill is a button, and that tapping it opens the Logs screen.
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(50))
@@ -54,7 +61,11 @@ internal fun ConnectionStatus(
                 interactionSource = pillInteraction,
                 indication = ripple(bounded = true),
                 onClick = onOpenLogs
-            ),
+            )
+            .semantics(mergeDescendants = true) {
+                contentDescription = "$label · ${s.logsTitle}"
+                role = Role.Button
+            },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Image(

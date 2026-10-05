@@ -461,7 +461,7 @@ private fun WizardSourcePost(s: Strings.StringSet) {
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Text(
-                "NEPTUN",
+                s.wizardSourceChannel,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -564,7 +564,7 @@ private fun WizardBetaBlock(s: Strings.StringSet) {
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                "NEPTUN",
+                s.wizardSourceChannel,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface

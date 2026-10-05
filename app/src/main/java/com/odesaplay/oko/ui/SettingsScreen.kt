@@ -378,12 +378,13 @@ fun SettingsScreen(
                 cityScope = officialAlertCityScope,
                 alwaysSound = sirenOverride
             )
-            SettingsSection.NIGHT -> if (state.nightSleepActive) s.actionLog.sleepWell else s.nightSubtitle(
+            SettingsSection.NIGHT -> s.nightSubtitle(
                 nightEnabled,
                 nightStartMin,
                 nightEndMin,
                 nightZoneSirenOverride || nightOfficialSirenOverride,
-                nightUseCustomZones
+                nightUseCustomZones,
+                state.nightSleepActive
             )
             SettingsSection.SHELTERS -> s.sheltersSubtitle(sheltersEnabled)
             SettingsSection.THREATS -> s.threatsSubtitle(hiddenTypes.size, silencedTypes.size)
@@ -1038,7 +1039,7 @@ fun SettingsScreen(
                                 // separates the types now that they are no longer cards.
                                 if (i > 0) {
                                     HorizontalDivider(
-                                        modifier = Modifier.padding(start = 82.dp),
+                                        modifier = Modifier.padding(start = 98.dp),
                                         color = MaterialTheme.colorScheme.outlineVariant
                                     )
                                 }

@@ -29,6 +29,7 @@ object Strings {
         val wizardSourcePost: String,
         val wizardSourceLink: String,
         val wizardSourceEdited: String,
+        val wizardSourceChannel: String,
         val wizardIs1: String,
         val wizardIs2: String,
         val wizardIs3: String,
@@ -830,6 +831,7 @@ object Strings {
         val wizardSourcePost: String get() = onboarding.wizardSourcePost
         val wizardSourceLink: String get() = onboarding.wizardSourceLink
         val wizardSourceEdited: String get() = onboarding.wizardSourceEdited
+        val wizardSourceChannel: String get() = onboarding.wizardSourceChannel
         val wizardIs1: String get() = onboarding.wizardIs1
         val wizardIs2: String get() = onboarding.wizardIs2
         val wizardIs3: String get() = onboarding.wizardIs3
@@ -993,15 +995,28 @@ object Strings {
                 subtitles.locationManual
             }
 
-        fun nightSubtitle(enabled: Boolean, startMin: Int, endMin: Int, sirenOverride: Boolean, useCustomZones: Boolean): String =
-            if (!enabled) {
-                subtitles.nightDisabled
+        /** The night row's summary. The sleep preset and the window are independent (the preset
+         *  mutes NIGHT alerts and outlives the window switch), so both are reported when both are
+         *  on — previously an active preset replaced the summary entirely and the window's own
+         *  hours became invisible from the list. */
+        fun nightSubtitle(
+            enabled: Boolean,
+            startMin: Int,
+            endMin: Int,
+            sirenOverride: Boolean,
+            useCustomZones: Boolean,
+            sleepActive: Boolean = false
+        ): String {
+            val prefix = if (sleepActive) actionLog.sleepWell else subtitles.nightEnabledPrefix.trimEnd(' ', '·', ' ')
+            return if (!enabled) {
+                if (sleepActive) "$prefix · ${subtitles.nightDisabled}" else subtitles.nightDisabled
             } else {
                 val timeStr = String.format(java.util.Locale.US, "%02d:%02d–%02d:%02d", startMin / 60, startMin % 60, endMin / 60, endMin % 60)
                 val sirenStr = if (sirenOverride) " · ${subtitles.nightSirenSuffix}" else ""
                 val zonesStr = if (useCustomZones) " · ${subtitles.nightZonesSuffix}" else ""
-                "${subtitles.nightEnabledPrefix} · $timeStr$sirenStr$zonesStr"
+                "$prefix · $timeStr$sirenStr$zonesStr"
             }
+        }
 
         fun alertsSubtitle(
             officialAlertsEnabled: Boolean,

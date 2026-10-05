@@ -1,6 +1,7 @@
 package com.odesaplay.oko
 
 import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -35,7 +36,13 @@ import java.util.TimeZone
  */
 object LogBundle {
 
-    private const val SCHEMA = 1
+    /**
+     * Bumped to 2 when `app.lastUpdateTime` and the `exits`/`exitSummary` blocks were added. The
+     * payload only ever grows, so an old reader still parses a new bundle — the number exists so a
+     * reader can tell "field absent because the build predates it" from "field absent because the
+     * OS would not say".
+     */
+    private const val SCHEMA = 2
 
     private val SECRET = Regex(
         "(?i)bearer\\s+\\S+" +
@@ -107,10 +114,13 @@ object LogBundle {
         val dbg = Debug.MemoryInfo().also { Debug.getMemoryInfo(it) }
         val proc = readProcStatus()
         val uptime = SystemClock.elapsedRealtime()
+        // Sampled once so `exportedAt` and the wall-to-monotonic conversion in [readExits] share
+        // one instant and the arithmetic below is reproducible from the bundle alone.
+        val nowMs = System.currentTimeMillis()
 
         val root = JSONObject()
         root.p("schema", SCHEMA)
-        root.p("exportedAt", Instant.now().toString())
+        root.p("exportedAt", Instant.ofEpochMilli(nowMs).toString())
         root.p("uptimeMs", uptime)
         root.p("fileName", fileName(context))
 
@@ -124,7 +134,12 @@ object LogBundle {
             p("installer", scrub(runCatching {
                 context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
             }.getOrNull()))
-            p("firstInstall", context.packageManager.getPackageInfo(context.packageName, 0).firstInstallTime)
+            val pkg = context.packageManager.getPackageInfo(context.packageName, 0)
+            p("firstInstall", pkg.firstInstallTime)
+            // A self-update kills the process, so `powerSummary.restartsObserved` is unreadable
+            // without knowing when the build landed: the first "restart" after an install is the
+            // installer, not a mystery kill.
+            p("lastUpdate", pkg.lastUpdateTime)
         })
 
         root.p("device", JSONObject().apply {
@@ -191,6 +206,27 @@ object LogBundle {
             p("vmHwmKb", proc["VmHWM"]?.substringBefore(" ")?.toIntOrNull())
             p("threads", proc["Threads"]?.toIntOrNull())
         })
+
+        // The OS's own account of why the process died. `powerSummary.restartsObserved` only says
+        // THAT it died; this says who killed it and why, which is the question a tester cannot
+        // answer from the app's side at all.
+        val exits = readExits(context, am, uptime, nowMs)
+        exits?.let {
+            root.p("exits", it.map { e ->
+                JSONObject().apply {
+                    p("timestampMs", e.timestampMs)
+                    p("elapsedRealtimeMs", e.elapsedRealtimeMs)
+                    p("reason", e.reason)
+                    p("reasonName", e.reasonName)
+                    p("description", scrub(e.description))
+                    p("status", e.status)
+                    p("importance", e.importance)
+                    p("pssKb", e.pssKb)
+                    p("rssKb", e.rssKb)
+                }
+            }.toJson())
+            root.p("exitSummary", summariseExits(it))
+        }
 
         // Language and theme are prefs, not a second source of truth — they ship in the
         // snapshot below rather than being mirrored here.
@@ -299,6 +335,115 @@ object LogBundle {
     }
 
     /**
+     * How many historical exits to keep. The OS caps this anyway; 32 covers the worst night we
+     * have seen (seven kills in four and a half hours) several times over without turning the
+     * bundle into a diary.
+     */
+    private const val EXIT_HISTORY = 32
+
+    /**
+     * [android.app.ApplicationExitInfo.IMPORTANCE_FOREGROUND]. Named locally so the pure
+     * [summariseExits] needs no SDK reference and stays unit-testable on a JVM.
+     */
+    private const val IMPORTANCE_FOREGROUND = 100
+
+    /**
+     * The OS's kill log, oldest-last as the platform returns it. Null on API < 30, which per this
+     * file's convention means "not readable on this device" — an absent key, not a null one.
+     *
+     * Two things only the platform can answer, both asked after a real field report:
+     *  - **who killed the process.** `powerSummary.restartsObserved` detects a death by watching
+     *    the process generation change between samples; it cannot tell a low-memory kill from a
+     *    crash from the user swiping the app away.
+     *  - **how long it lived.** [ApplicationExitInfo] exposes only a wall-clock death time, but
+     *    every power row carries [android.os.Process.getStartElapsedRealtime], which is on the
+     *    monotonic clock — so the death is converted onto that clock here and a lifetime becomes
+     *    `elapsedRealtimeMs - (that generation's processStartMonoMs)`.
+     *
+     * The conversion assumes the wall clock did not move between the death and [nowMs]; the raw
+     * `timestampMs` ships alongside it, and `uptimeMs`/`exportedAt` are at the bundle root, so a
+     * reader who distrusts it can redo the arithmetic. [ApplicationExitInfo] has no monotonic
+     * accessor of its own and no public name for a reason, hence the local table in
+     * [exitReasonName].
+     */
+    private fun readExits(
+        context: Context,
+        am: ActivityManager?,
+        uptimeMs: Long,
+        nowMs: Long
+    ): List<ProcessExit>? {
+        if (Build.VERSION.SDK_INT < 30) return null
+        return runCatching {
+            am?.getHistoricalProcessExitReasons(context.packageName, 0, EXIT_HISTORY)
+                ?.mapNotNull { info ->
+                    // The CALLING process heads the list as a live record: reason OTHER, no memory
+                    // figures. It has not died, so reporting it as a death would invent one on
+                    // every single bundle and drown the real ones.
+                    if (info.reason == ApplicationExitInfo.REASON_OTHER && info.pss == 0L) {
+                        null
+                    } else {
+                        ProcessExit(
+                            timestampMs = info.timestamp,
+                            elapsedRealtimeMs = uptimeMs - (nowMs - info.timestamp),
+                            reason = info.reason,
+                            reasonName = exitReasonName(info.reason),
+                            description = info.description,
+                            status = info.status,
+                            importance = info.importance,
+                            pssKb = info.pss,
+                            rssKb = info.rss
+                        )
+                    }
+                }
+        }.getOrNull()
+    }
+
+    /**
+     * The API-30 reason set, by name. Deliberately a closed list over constants rather than a
+     * hand-typed number table, so a value can never be paired with the wrong label. Anything not
+     * listed lands in the `else` branch and still carries its number — which covers both reasons
+     * added by later API levels (API 34 alone added several) and the two API-30 reasons that are
+     * `@SystemApi` and therefore not nameable from here. The platform's own `reasonToString` is
+     * not public API either, which is why the table exists.
+     */
+    internal fun exitReasonName(reason: Int): String = when (reason) {
+        ApplicationExitInfo.REASON_ANR -> "REASON_ANR"
+        ApplicationExitInfo.REASON_CRASH -> "REASON_CRASH"
+        ApplicationExitInfo.REASON_CRASH_NATIVE -> "REASON_CRASH_NATIVE"
+        ApplicationExitInfo.REASON_EXIT_SELF -> "REASON_EXIT_SELF"
+        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "REASON_EXCESSIVE_RESOURCE_USAGE"
+        ApplicationExitInfo.REASON_FREEZER -> "REASON_FREEZER"
+        ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "REASON_INITIALIZATION_FAILURE"
+        ApplicationExitInfo.REASON_LOW_MEMORY -> "REASON_LOW_MEMORY"
+        ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "REASON_PERMISSION_CHANGE"
+        ApplicationExitInfo.REASON_SIGNALED -> "REASON_SIGNALED"
+        ApplicationExitInfo.REASON_UNKNOWN -> "REASON_UNKNOWN"
+        ApplicationExitInfo.REASON_USER_REQUESTED -> "REASON_USER_REQUESTED"
+        ApplicationExitInfo.REASON_USER_STOPPED -> "REASON_USER_STOPPED"
+        ApplicationExitInfo.REASON_OTHER -> "REASON_OTHER"
+        else -> "REASON_$reason"
+    }
+
+    /**
+     * Derived read of [readExits], same contract as [summarisePower]: the array never has to be
+     * read by hand. `byReason` is the headline (a `REASON_CRASH: 3` is a bug report, a
+     * `REASON_USER_REQUESTED: 12` is a user), and `whileForeground` separates "the system reaped
+     * us while backgrounded" from "we died holding a screen the user was looking at".
+     *
+     * Pure so it is unit-testable; the arithmetic is the whole point.
+     */
+    internal fun summariseExits(exits: List<ProcessExit>): JSONObject {
+        val byReason = exits.groupingBy { it.reasonName }.eachCount()
+        return JSONObject().apply {
+            p("total", exits.size)
+            p("oldestTimestampMs", exits.minOfOrNull { it.timestampMs })
+            p("newestTimestampMs", exits.maxOfOrNull { it.timestampMs })
+            p("byReason", JSONObject().apply { byReason.forEach { (k, v) -> p(k, v) } })
+            p("whileForeground", exits.count { it.importance >= IMPORTANCE_FOREGROUND })
+        }
+    }
+
+    /**
      * Derived read of the power timeline. Exists so the array never has to be read by hand, and
      * specifically so the failure modes that are invisible in raw rows are called out: `samples: 0`
      * (the sampler was dead), a large `longestGapSec` (the service was dead), and
@@ -372,3 +517,20 @@ object LogBundle {
         }.toMap()
     }.getOrDefault(emptyMap())
 }
+
+/**
+ * One historical process death, flattened out of [android.app.ApplicationExitInfo]. A plain data
+ * class rather than the SDK type because the platform class cannot be constructed in a JVM unit
+ * test, and the summarising is exactly the part worth testing.
+ */
+internal data class ProcessExit(
+    val timestampMs: Long,
+    val elapsedRealtimeMs: Long,
+    val reason: Int,
+    val reasonName: String,
+    val description: String?,
+    val status: Int,
+    val importance: Int,
+    val pssKb: Long,
+    val rssKb: Long
+)

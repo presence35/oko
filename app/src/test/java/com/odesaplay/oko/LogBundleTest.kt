@@ -124,6 +124,76 @@ class LogBundleTest {
         assertEquals(80, summary.getInt("batteryPctMax"))
     }
 
+    private fun exit(
+        atMillis: Long,
+        reason: Int = 3,
+        reasonName: String = "REASON_LOW_MEMORY",
+        importance: Int = 125
+    ) = ProcessExit(
+        timestampMs = atMillis,
+        elapsedRealtimeMs = atMillis,
+        reason = reason,
+        reasonName = reasonName,
+        description = null,
+        status = 0,
+        importance = importance,
+        pssKb = 40_000L,
+        rssKb = 90_000L
+    )
+
+    /**
+     * The whole point of the block: a kill log that says only "3 exits" is useless. Reasons must
+     * stay separate — a crash and a low-memory kill are different bugs — and the window bounds
+     * must be real, because "when did this start" is what separates an overnight murder from an
+     * install.
+     */
+    @Test
+    fun `exit summary counts each reason separately and bounds the window`() {
+        val summary = LogBundle.summariseExits(
+            listOf(
+                exit(1_000L, reason = 4, reasonName = "REASON_CRASH"),
+                exit(2_000L),
+                exit(9_000L, reason = 4, reasonName = "REASON_CRASH")
+            )
+        )
+        assertEquals(3, summary.getInt("total"))
+        assertEquals(2, summary.getJSONObject("byReason").getInt("REASON_CRASH"))
+        assertEquals(1, summary.getJSONObject("byReason").getInt("REASON_LOW_MEMORY"))
+        assertEquals(1_000L, summary.getLong("oldestTimestampMs"))
+        assertEquals(9_000L, summary.getLong("newestTimestampMs"))
+    }
+
+    /**
+     * The field report was seven deaths "while the screen was on". Foreground is the app's
+     * importance, not the screen's, so the two are tracked apart on purpose — a summary that
+     * blurred them would hide the one case worth chasing.
+     */
+    @Test
+    fun `exit summary separates deaths while foreground from backgrounded ones`() {
+        val summary = LogBundle.summariseExits(
+            listOf(
+                exit(1_000L, reason = 4, reasonName = "REASON_CRASH", importance = 130),
+                exit(2_000L, importance = 125),
+                exit(3_000L, importance = 40)
+            )
+        )
+        assertEquals(2, summary.getInt("whileForeground"))
+    }
+
+    /**
+     * A phone that never killed the app must not report a bogus death: zero entries, and null
+     * bounds rather than 0 (epoch) or now, which would read as a real event at a real time.
+     */
+    @Test
+    fun `an empty exit history reports zero and null bounds`() {
+        val summary = LogBundle.summariseExits(emptyList())
+        assertEquals(0, summary.getInt("total"))
+        assertEquals(0, summary.getInt("whileForeground"))
+        assertTrue(summary.isNull("oldestTimestampMs"))
+        assertTrue(summary.isNull("newestTimestampMs"))
+        assertEquals(0, summary.getJSONObject("byReason").length())
+    }
+
 
     private val kyiv: ZoneId = ZoneId.of("Europe/Kyiv")
 
