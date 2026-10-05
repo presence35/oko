@@ -25,6 +25,10 @@ object Strings {
         val onboardingTipGradual: String,
         val onboardingFeaturesTitle: String,
         val wizardIsTitle: String,
+        val wizardPageTitle: String,
+        val wizardSourcePost: String,
+        val wizardSourceLink: String,
+        val wizardSourceEdited: String,
         val wizardIs1: String,
         val wizardIs2: String,
         val wizardIs3: String,
@@ -33,6 +37,11 @@ object Strings {
         val wizardNot2: String,
         val wizardNot3: String,
         val relaunchSetupTitle: String,
+        val moreRelaunchDesc: String,
+        val moreResetTipsDesc: String,
+        val moreGuideDesc: String,
+        val moreUpdateDesc: String,
+        val moreExitDesc: String,
         val wizardCareTitle: String,
         val wizardCareSubtitle: String,
         val wizardCareSubtitleGearSuffix: String,
@@ -143,6 +152,11 @@ object Strings {
         val threatAlertLabel: String,
         val fastGroupLabel: String,
         val slowGroupLabel: String,
+        val threatsLegendLabel: String,
+        val threatsLegendMap: String,
+        val threatsLegendAlerts: String,
+        val threatsGroupMapDesc: String,
+        val threatsGroupAlertsDesc: String,
         val fastGroupIconDesc: String,
         val slowGroupIconDesc: String,
         val mapToggleHintPrefix: String,
@@ -270,7 +284,6 @@ object Strings {
         val kmUnit: String,
         val minUnit: String,
         val meterUnit: String,
-        val moreInfoLabel: String,
         val offLabel: String,
         val mapCenterLabel: String,
         val followMeTitle: String,
@@ -813,6 +826,10 @@ object Strings {
         val onboardingTipGradual: String get() = onboarding.onboardingTipGradual
         val onboardingFeaturesTitle: String get() = onboarding.onboardingFeaturesTitle
         val wizardIsTitle: String get() = onboarding.wizardIsTitle
+        val wizardPageTitle: String get() = onboarding.wizardPageTitle
+        val wizardSourcePost: String get() = onboarding.wizardSourcePost
+        val wizardSourceLink: String get() = onboarding.wizardSourceLink
+        val wizardSourceEdited: String get() = onboarding.wizardSourceEdited
         val wizardIs1: String get() = onboarding.wizardIs1
         val wizardIs2: String get() = onboarding.wizardIs2
         val wizardIs3: String get() = onboarding.wizardIs3
@@ -821,6 +838,11 @@ object Strings {
         val wizardNot2: String get() = onboarding.wizardNot2
         val wizardNot3: String get() = onboarding.wizardNot3
         val relaunchSetupTitle: String get() = onboarding.relaunchSetupTitle
+        val moreRelaunchDesc: String get() = onboarding.moreRelaunchDesc
+        val moreResetTipsDesc: String get() = onboarding.moreResetTipsDesc
+        val moreGuideDesc: String get() = onboarding.moreGuideDesc
+        val moreUpdateDesc: String get() = onboarding.moreUpdateDesc
+        val moreExitDesc: String get() = onboarding.moreExitDesc
         val wizardCareTitle: String get() = onboarding.wizardCareTitle
         val wizardCareSubtitle: String get() = onboarding.wizardCareSubtitle
         val wizardCareSubtitleGearSuffix: String get() = onboarding.wizardCareSubtitleGearSuffix
@@ -925,6 +947,16 @@ object Strings {
         val threatAlertLabel: String get() = settings.threatAlertLabel
         val fastGroupLabel: String get() = settings.fastGroupLabel
         val slowGroupLabel: String get() = settings.slowGroupLabel
+        val threatsLegendLabel: String get() = settings.threatsLegendLabel
+
+        val threatsLegendMap: String get() = settings.threatsLegendMap
+
+        val threatsLegendAlerts: String get() = settings.threatsLegendAlerts
+
+        val threatsGroupMapDesc: String get() = settings.threatsGroupMapDesc
+
+        val threatsGroupAlertsDesc: String get() = settings.threatsGroupAlertsDesc
+
         val fastGroupIconDesc: String get() = settings.fastGroupIconDesc
         val slowGroupIconDesc: String get() = settings.slowGroupIconDesc
         val mapToggleHintPrefix: String get() = settings.mapToggleHintPrefix
@@ -1123,7 +1155,6 @@ object Strings {
         val kmUnit: String get() = threat.kmUnit
         val minUnit: String get() = threat.minUnit
         val meterUnit: String get() = threat.meterUnit
-        val moreInfoLabel: String get() = threat.moreInfoLabel
         val offLabel: String get() = threat.offLabel
         val mapCenterLabel: String get() = threat.mapCenterLabel
         val followMeTitle: String get() = threat.followMeTitle

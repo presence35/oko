@@ -24,6 +24,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
@@ -36,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.semantics.contentDescription as semanticsContentDescription
 import androidx.compose.ui.semantics.semantics
@@ -85,7 +88,7 @@ internal fun FirstLaunchWizard(
     onLater: () -> Unit
 ) {
     val s = Strings.get(current)
-    val totalSteps = 7
+    val totalSteps = 6
     var step by remember { mutableStateOf(0) }
     var locationMode by remember { mutableStateOf<String?>(null) }
     val notifPermLauncher = rememberLauncherForActivityResult(
@@ -104,12 +107,11 @@ internal fun FirstLaunchWizard(
     }
     BackHandler(enabled = step > 0) { step-- }
     val stepTitle = when (step) {
-        0 -> s.wizardIsTitle
+        0 -> s.wizardPageTitle
         1 -> s.onboardingTipsTitle
         2 -> s.wizardLocationTitle
         3 -> s.wizardCareTitle
         4 -> s.wizardZonesTitle
-        5 -> s.onboardingFeaturesTitle
         else -> s.wizardBetaTitle
     }
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -141,28 +143,14 @@ internal fun FirstLaunchWizard(
             ) {
                 when (step) {
                     0 -> WizardIsNotBlock(s)
-                    1 -> {
-                        OnboardingTipRow(
-                            iconRes = IconCatalog.photoRes(ThreatType.SHAHED) ?: R.drawable.ic_threat_shahed,
-                            iconTint = Color.Unspecified,
-                            text = s.onboardingTipTap
-                        )
-                        OnboardingTipRow(
-                            iconRes = R.drawable.ic_settings_ua,
-                            iconTint = Color.Unspecified,
-                            text = s.onboardingTipSettings
-                        )
-                        OnboardingTipRow(
-                            iconRes = R.drawable.ic_volume_up,
-                            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            text = s.onboardingTipSiren
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        OnboardingGradualTip(s.onboardingTipGradual)
-                    }
+                    1 -> WizardTipsBlock(s)
                     2 -> SetupLocationStep(current, mode = locationMode, pinnedCity = pinnedCity, onModeChange = { locationMode = it }, onFollowMeChange = onFollowMeChange, onPinnedCityChange = onPinnedCityChange)
                     3 -> {
                         WizardThreatGrid(current, iconSet, silencedTypes, onThreatAlertToggle)
+                        Spacer(Modifier.height(18.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Spacer(Modifier.height(6.dp))
+                        WizardMoraleToggle(s = s, morale = morale, onMoraleChange = onMoraleChange)
                     }
                     4 -> SetupZoneControlsStep(
                         s = s,
@@ -178,11 +166,6 @@ internal fun FirstLaunchWizard(
                         onSlowYellowChange = onSlowYellowChange,
                         onSlowRedArmedChange = onSlowRedArmedChange,
                         onSlowYellowArmedChange = onSlowYellowArmedChange
-                    )
-                    5 -> SetupFeaturesStep(
-                        s = s,
-                        morale = morale,
-                        onMoraleChange = onMoraleChange
                     )
                     else -> WizardBetaBlock(s)
                 }
@@ -376,34 +359,172 @@ private fun WizardThreatGrid(
     }
 }
 
-/** Step 0: what this app is / is not, above a real source-channel screenshot. */
+/** Step 0: what this app is / is not, above a rendering of a real source-channel post. */
 @Composable
 private fun WizardIsNotBlock(s: Strings.StringSet) {
+    val green = Color(AppPalette.SafeGreen)
+    val red = Color(AppPalette.AlertRed)
     Column(modifier = Modifier.fillMaxWidth()) {
-        WizardCard(borderColor = _ukraineYellow.copy(alpha = 0.3f)) {
-            WizardBlockHeader(s.wizardIsTitle, _ukraineYellow)
+        WizardCard(borderColor = green.copy(alpha = 0.3f)) {
+            WizardBlockHeader(s.wizardIsTitle, green)
             Spacer(Modifier.height(14.dp))
-            Image(
-                painter = painterResource(R.drawable.wizard_source),
-                contentDescription = null,
-                contentScale = ContentScale.FillWidth,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
-            )
+            WizardSourcePost(s)
             Spacer(Modifier.height(16.dp))
-            WizardBullet(s.wizardIs1, _ukraineYellow)
-            WizardBullet(s.wizardIs2, _ukraineYellow)
-            WizardBullet(s.wizardIs3, _ukraineYellow)
+            WizardBullet(s.wizardIs1, green)
+            WizardBullet(s.wizardIs2, green)
+            WizardBullet(s.wizardIs3, green)
         }
         Spacer(Modifier.height(12.dp))
-        WizardCard(borderColor = MaterialTheme.colorScheme.outlineVariant) {
-            WizardBlockHeader(s.wizardNotTitle, MaterialTheme.colorScheme.onSurfaceVariant)
+        WizardCard(borderColor = red.copy(alpha = 0.3f)) {
+            WizardBlockHeader(s.wizardNotTitle, red)
             Spacer(Modifier.height(14.dp))
             WizardNotBullet(s.wizardNot1)
             WizardNotBullet(s.wizardNot2)
             WizardNotBullet(s.wizardNot3)
+        }
+    }
+}
+
+/**
+ * Step 1: the usage tips, followed by the feature showcase. The showcase used to be its own
+ * page; it lives here now because the tips row is short and the diagrams are the widest
+ * content in the wizard.
+ */
+@Composable
+private fun WizardTipsBlock(s: Strings.StringSet) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        OnboardingTipRow(
+            iconRes = IconCatalog.photoRes(ThreatType.SHAHED) ?: R.drawable.ic_threat_shahed,
+            iconTint = Color.Unspecified,
+            text = s.onboardingTipTap
+        )
+        OnboardingTipRow(
+            iconRes = R.drawable.ic_settings_ua,
+            iconTint = Color.Unspecified,
+            text = s.onboardingTipSettings
+        )
+        OnboardingTipRow(
+            iconRes = R.drawable.ic_volume_up,
+            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = s.onboardingTipSiren
+        )
+        Spacer(Modifier.height(6.dp))
+        OnboardingGradualTip(s.onboardingTipGradual)
+        Spacer(Modifier.height(20.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Spacer(Modifier.height(16.dp))
+        guideFeatures(s).filter { it.id in setOf("live", "zones", "night", "shelter") }
+            .forEach { f ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    FeatureDiagram(
+                        kind = f.diagram,
+                        modifier = Modifier
+                            .size(width = 92.dp, height = 62.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            f.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            f.summary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+            }
+    }
+}
+
+/**
+ * A real source-channel post, drawn rather than screenshotted. The PNG it replaces was baked
+ * in Ukrainian, which left EN readers with an unreadable card on the very first page.
+ */
+@Composable
+private fun WizardSourcePost(s: Strings.StringSet) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text(
+                "NEPTUN",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                s.wizardSourcePost,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                s.wizardSourceLink,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color(AppPalette.SafeGreen)
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SourceReactionChip("1", Icons.Filled.Star)
+                SourceReactionChip("50", Icons.Filled.Notifications)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "12.3K",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                s.wizardSourceEdited,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SourceReactionChip(count: String, icon: ImageVector) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.hapticClickable {}
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(AppPalette.AlertYellow),
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                count,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -510,12 +631,11 @@ private fun WizardBullet(text: String, accent: Color) {
     val head = text.substringBefore(" — ")
     val tail = text.substringAfter(" — ", "")
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-        Box(
-            modifier = Modifier
-                .padding(top = 7.dp)
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(accent)
+        Icon(
+            imageVector = Icons.Filled.Check,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.padding(top = 1.dp).size(16.dp)
         )
         Spacer(Modifier.width(10.dp))
         Text(
@@ -544,7 +664,7 @@ private fun WizardNotBullet(text: String) {
         Icon(
             Icons.Filled.Close,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = Color(AppPalette.AlertRed),
             modifier = Modifier.padding(top = 2.dp).size(15.dp)
         )
         Spacer(Modifier.width(10.dp))
@@ -935,54 +1055,6 @@ private fun WizardZoneSliderRow(
             color = if (armed) color else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold,
             style = MaterialTheme.typography.labelLarge
-        )
-    }
-}
-
-@Composable
-private fun SetupFeaturesStep(
-    s: Strings.StringSet,
-    morale: Boolean,
-    onMoraleChange: (Boolean) -> Unit
-) {
-    val features = remember(s) {
-        guideFeatures(s).filter { it.id in setOf("live", "zones", "night", "shelter") }
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        features.forEach { f ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                FeatureDiagram(
-                    kind = f.diagram,
-                    modifier = Modifier
-                        .size(width = 92.dp, height = 62.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                )
-                Spacer(Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        f.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        f.summary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        WizardMoraleToggle(
-            s = s,
-            morale = morale,
-            onMoraleChange = onMoraleChange
         )
     }
 }

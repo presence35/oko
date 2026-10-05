@@ -316,18 +316,31 @@ fun SettingsScreen(
         "cardSize" -> SettingsSection.SYSTEM
         else -> SettingsSection.ALERTS
     } }
+    val flashBlock: (String) -> Unit = { id ->
+        flashId = id
+        scope.launch {
+            delay(900)
+            flashId = null
+        }
+    }
     val dismissExplainer: () -> Unit = {
         val exp = activeExplainer
         if (exp != null) {
             onExplainerChange(null)
             onRouteChange(SettingsRoute.Detail(sectionOfExplainer(exp.id)))
-            flashId = exp.id
-            scope.launch {
-                delay(900)
-                flashId = null
-            }
+            flashBlock(exp.id)
         }
         pendingCardSize?.let { onThreatCardSizeChange(it); pendingCardSize = null }
+    }
+
+    // Drilling in from a search result also pulses the block the query named: the user asked for
+    // one setting, and landing on a page of twenty rows with nothing highlighted is how they end
+    // up concluding the setting does not exist.
+    val openSection: (SettingsSection) -> Unit = { sec ->
+        onRouteChange(SettingsRoute.Detail(sec))
+        if (searching) {
+            anchorFor(searchWords)?.takeIf { it.section == sec }?.let { flashBlock(it.id) }
+        }
     }
 
     // The disclaimer card keeps its own remember logic; the section routes are hoisted to MainScreen.
@@ -543,7 +556,11 @@ fun SettingsScreen(
                         icon = sectionIcon(sec),
                         title = sectionTitle(sec),
                         subtitle = sectionSummary(sec),
-                        onClick = { onRouteChange(SettingsRoute.Detail(sec)) },
+                        onClick = { openSection(sec) },
+                        // Tinted like its own detail page, so the purple section is legible as one
+                        // thing from the list rather than appearing out of nowhere on drill-in.
+                        cardColor = NightSectionBg,
+                        cardBorder = NightSectionBorder,
                         trailing = {
                             Switch(
                                 checked = nightEnabled,
@@ -558,7 +575,10 @@ fun SettingsScreen(
                         icon = sectionIcon(sec),
                         title = sectionTitle(sec),
                         subtitle = sectionSummary(sec),
-                        onClick = { onRouteChange(SettingsRoute.Detail(sec)) },
+                        onClick = { openSection(sec) },
+                        // The whole body is master-gated, so an off master means the row is
+                        // currently inert — but the switch stays lit and the page stays openable.
+                        dimmed = !moraleMasterEnabled,
                         trailing = {
                             Switch(
                                 checked = moraleMasterEnabled,
@@ -571,7 +591,7 @@ fun SettingsScreen(
                         icon = sectionIcon(sec),
                         title = sectionTitle(sec),
                         subtitle = sectionSummary(sec),
-                        onClick = { onRouteChange(SettingsRoute.Detail(sec)) }
+                        onClick = { openSection(sec) }
                     )
                 }
             }
@@ -879,6 +899,7 @@ fun SettingsScreen(
                         title = s.shelterSettingsTitle,
                         description = s.shelterSettingsDesc,
                         checked = sheltersEnabled,
+                        flash = flashId == "shelters",
                         onCheckedChange = onSheltersEnabledChange
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -921,29 +942,64 @@ fun SettingsScreen(
                     }
             }
             SettingsSection.THREATS -> SectionDetailBody(stateSummary = sectionSummary(section)) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).explainerFlash(flashId == "iconSet")) {
                         Text(s.iconSetTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(10.dp))
                         IconSetSelector(lang = lang, selected = iconSet, onChange = onIconSetChange)
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // Legend for the two icon-only toggles that appear on every row below — without
+                    // it a place pin and a bell mean nothing on first read.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, top = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            s.threatsLegendLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            Icons.Filled.Place,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            s.threatsLegendMap,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Icon(
+                            Icons.Filled.Notifications,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            s.threatsLegendAlerts,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
                     val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
                     fastAndSlowGroups(lang, typeCatalog).forEachIndexed { index, (groupIcon, groupTitle, types) ->
-                        if (index == 1) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant
-                            )
-                        }
+                        if (index > 0) Spacer(Modifier.height(12.dp))
                         val groupMapOn = types.none { it in hiddenTypes }
                         val groupAlertsOn = types.none { it in silencedTypes }
-                        // A plain header: the group's bulk toggles stay, but the group is no longer
-                        // collapsible — the page already scrolls, so folding it away only hid rows.
+                        // A caption plus the group's bulk toggles — not a collapsible header. The
+                        // page scrolls, so folding a group away only hid rows.
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .padding(start = 16.dp, end = 16.dp, bottom = 2.dp)
                         ) {
                             Icon(
                                 painter = painterResource(id = groupIcon),
@@ -954,35 +1010,39 @@ fun SettingsScreen(
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 groupTitle,
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.weight(1f)
                             )
                             IconToggle(
                                 icon = Icons.Filled.Place,
-                                contentDescription = s.threatMapLabel,
+                                contentDescription = s.threatsGroupMapDesc,
                                 on = groupMapOn,
                                 enabled = true,
                                 onClick = { onThreatMapToggleAll(types, !groupMapOn) }
                             )
                             IconToggle(
                                 icon = Icons.Filled.Notifications,
-                                contentDescription = s.threatAlertLabel,
+                                contentDescription = s.threatsGroupAlertsDesc,
                                 on = groupAlertsOn,
                                 enabled = true,
                                 onClick = { onThreatAlertToggleAll(types, !groupAlertsOn) }
                             )
                         }
                         Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .padding(bottom = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            types.forEach { type ->
-                                ThreatSettingsCard(
+                            types.forEachIndexed { i, type ->
+                                // Divider between rows (not before the first) — this is what
+                                // separates the types now that they are no longer cards.
+                                if (i > 0) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(start = 82.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant
+                                    )
+                                }
+                                ThreatTypeRow(
                                     type = type,
                                     lang = lang,
                                     iconSet = iconSet,
@@ -998,9 +1058,10 @@ fun SettingsScreen(
             }
             SettingsSection.SYSTEM -> SectionDetailBody(stateSummary = sectionSummary(section)) {
                     // Language first — it relabels every other page, so it reads as a page header.
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        Text(s.languageLabel, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(10.dp))
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                            .explainerFlash(flashId == "language")
+                    ) {
                         LanguageSelector(selected = lang, onChange = onLanguageChange)
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1056,7 +1117,8 @@ fun SettingsScreen(
                         checked = showMapScale,
                         onCheckedChange = onShowMapScaleChange,
                         icon = painterResource(R.drawable.ic_scale),
-                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        flash = flashId == "mapScale"
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     CityLabelTogglesRow(
@@ -1070,7 +1132,8 @@ fun SettingsScreen(
                         smallLabel = s.smallCitiesChip,
                         onLargeChange = onShowLargeCitiesChange,
                         onMediumChange = onShowMediumCitiesChange,
-                        onSmallChange = onShowSmallCitiesChange
+                        onSmallChange = onShowSmallCitiesChange,
+                        flash = flashId == "cityLabels"
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertRegionModeRow(
@@ -1080,12 +1143,14 @@ fun SettingsScreen(
                         cityLabelsLabel = s.alertRegionModeCityLabelsChip,
                         fillLabel = s.alertRegionModeFillChip,
                         borderLabel = s.alertRegionModeBorderChip,
-                        onModeChange = onAlertRegionModeChange
+                        onModeChange = onAlertRegionModeChange,
+                        flash = flashId == "regionFill"
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertToggleRow(
                         title = s.showBordersTitle,
                         description = s.showBordersDesc,
+                        flash = flashId == "borders",
                         checked = showBorders,
                         onCheckedChange = onShowBordersChange,
                         icon = rememberVectorPainter(Icons.Outlined.CropFree),
@@ -1105,6 +1170,7 @@ fun SettingsScreen(
                         title = s.hapticsTitle,
                         description = s.hapticsDesc,
                         checked = hapticsEnabled,
+                        flash = flashId == "haptics",
                         onCheckedChange = onHapticsEnabledChange
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1113,10 +1179,11 @@ fun SettingsScreen(
                         title = s.showThreatIdsOnMapTitle,
                         description = s.showThreatIdsOnMapDesc,
                         checked = showThreatIdsOnMap,
+                        flash = flashId == "threatIds",
                         onCheckedChange = onShowThreatIdsOnMapChange
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).explainerFlash(flashId == "overlap")) {
                         Text(s.overlapModeTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(s.overlapModeDesc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(10.dp))
@@ -1126,7 +1193,7 @@ fun SettingsScreen(
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    AlertToggleRow(title = s.threatIconZoomTitle, description = s.threatIconZoomDesc, checked = threatIconZoom, onCheckedChange = onThreatIconZoomChange, icon = rememberVectorPainter(Icons.Default.ZoomIn), iconTint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    AlertToggleRow(title = s.threatIconZoomTitle, description = s.threatIconZoomDesc, checked = threatIconZoom, onCheckedChange = onThreatIconZoomChange, icon = rememberVectorPainter(Icons.Default.ZoomIn), iconTint = MaterialTheme.colorScheme.onSurfaceVariant, flash = flashId == "iconZoom")
             }
             // Master switch lives on the root row; with it off the page says so instead of showing
             // nothing but the voice-pack note.
@@ -1213,111 +1280,57 @@ fun SettingsScreen(
                         }
                     }
                 }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                OutlinedButton(
+                // The actions read as one list, not five competing buttons: same row shape as every
+                // other settings row, each with a line saying what it actually does. The duplicate
+                // Refresh icon that made "replay" and "reset tips" indistinguishable is gone.
+                SettingsActionRow(
+                    icon = rememberVectorPainter(Icons.Filled.Refresh),
+                    title = s.relaunchSetupTitle,
+                    subtitle = s.moreRelaunchDesc,
                     onClick = onRelaunchSetup,
-                    interactionSource = rememberHapticInteractionSource(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, top = 16.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(s.relaunchSetupTitle, fontWeight = FontWeight.SemiBold)
-                }
-                OutlinedButton(
-                    onClick = onResetTips,
-                    interactionSource = rememberHapticInteractionSource(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(s.resetTipsTitle, fontWeight = FontWeight.SemiBold)
-                }
-                OutlinedButton(
+                    flash = flashId == "relaunch"
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsActionRow(
+                    icon = painterResource(R.drawable.ic_check),
+                    title = s.resetTipsTitle,
+                    subtitle = s.moreResetTipsDesc,
+                    onClick = onResetTips
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsActionRow(
+                    icon = painterResource(R.drawable.ic_map_ua),
+                    title = s.guideSettingsButton,
+                    subtitle = s.moreGuideDesc,
                     onClick = onOpenGuide,
-                    interactionSource = rememberHapticInteractionSource(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text(s.guideSettingsButton, fontWeight = FontWeight.SemiBold)
-                }
+                    flash = flashId == "guide"
+                )
                 if (BuildConfig.SELF_UPDATE) {
-                val updateState by updateFlow.collectAsState()
-                val latestVersion by latestVersionFlow.collectAsState()
-                val isChecking = updateState is UpdateState.Checking
-                if (isChecking) {
-                    Button(
+                    val updateState by updateFlow.collectAsState()
+                    val latestVersion by latestVersionFlow.collectAsState()
+                    val isChecking = updateState is UpdateState.Checking
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsActionRow(
+                        icon = if (latestVersion != null) painterResource(R.drawable.ic_download)
+                        else rememberVectorPainter(Icons.Filled.Refresh),
+                        title = if (latestVersion != null) "${s.updateAvailableButton} · v$latestVersion"
+                        else s.updateButton,
+                        subtitle = s.moreUpdateDesc,
                         onClick = onCheckUpdate,
-                        interactionSource = rememberHapticInteractionSource(),
-                        enabled = false,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(s.updateButton, fontWeight = FontWeight.SemiBold)
-                    }
-                } else if (latestVersion != null) {
-                    Button(
-                        onClick = onCheckUpdate,
-                        interactionSource = rememberHapticInteractionSource(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.ic_download),
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            "${s.updateAvailableButton} · v$latestVersion",
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                } else {
-                    OutlinedButton(
-                        onClick = onCheckUpdate,
-                        interactionSource = rememberHapticInteractionSource(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = s.checkForUpdates,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(s.updateButton, fontWeight = FontWeight.SemiBold)
-                    }
-                }
+                        enabled = !isChecking,
+                        trailingProgress = isChecking,
+                        flash = flashId == "update"
+                    )
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Button(
+                SettingsActionRow(
+                    icon = rememberVectorPainter(Icons.Filled.Close),
+                    title = s.exitButton,
+                    subtitle = s.moreExitDesc,
                     onClick = onExit,
-                    interactionSource = rememberHapticInteractionSource(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text(s.exitButton, fontWeight = FontWeight.SemiBold)
-                }
+                    iconTint = MaterialTheme.colorScheme.error,
+                    titleTint = MaterialTheme.colorScheme.error
+                )
                 val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
                 val telegramUrl = "https://t.me/odesaplay_bot"
                 Column(

@@ -341,6 +341,83 @@ internal fun SearchChipsRow(
     }
 }
 
+/** One standalone action on a settings page (replay, reset tips, guide, update, exit). Shaped
+ *  like a root row so a page of actions reads as the same kind of list as the root list — the
+ *  alternative, a stack of full-width buttons, gave no room for a line of explanation and made
+ *  two same-icon buttons indistinguishable. */
+@Composable
+internal fun SettingsActionRow(
+    icon: Painter,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    titleTint: Color = MaterialTheme.colorScheme.onSurface,
+    enabled: Boolean = true,
+    trailingProgress: Boolean = false,
+    flash: Boolean = false
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .explainerFlash(flash)
+            .background(
+                MaterialTheme.colorScheme.onSurface.copy(
+                    alpha = if (isPressed && enabled) 0.06f else 0f
+                )
+            )
+            .pressTick(interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true),
+                enabled = enabled,
+                onClick = onClick
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            painter = icon,
+            contentDescription = null,
+            tint = if (enabled) iconTint else iconTint.copy(alpha = 0.4f),
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = if (enabled) titleTint else titleTint.copy(alpha = 0.4f)
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (trailingProgress) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp
+            )
+        } else {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
 /** One section on the Settings root list: icon + title + a live one-line state summary. Tapping
  *  drills into that section's detail page. */
 @Composable
@@ -349,6 +426,9 @@ internal fun SettingsRootRow(
     title: String,
     subtitle: String?,
     onClick: () -> Unit,
+    cardColor: Color? = null,
+    cardBorder: Color? = null,
+    dimmed: Boolean = false,
     trailing: @Composable (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -362,7 +442,9 @@ internal fun SettingsRootRow(
                 indication = ripple(bounded = true),
                 onClick = onClick
             )
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (isPressed) 0.06f else 0f))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (isPressed) 0.06f else 0f)),
+        colors = if (cardColor != null) CardDefaults.cardColors(containerColor = cardColor) else CardDefaults.cardColors(),
+        border = if (cardBorder != null) BorderStroke(1.dp, cardBorder) else null
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
@@ -373,9 +455,17 @@ internal fun SettingsRootRow(
                 painter = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
+                // dimmed fades only the label block, never the trailing control or the row's
+                // own tap area: a section whose master is off still needs its switch reachable.
+                modifier = Modifier
+                    .size(24.dp)
+                    .then(if (dimmed) Modifier.alpha(0.45f) else Modifier)
             )
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .then(if (dimmed) Modifier.alpha(0.45f) else Modifier)
+            ) {
                 Text(
                     title,
                     style = MaterialTheme.typography.titleMedium,

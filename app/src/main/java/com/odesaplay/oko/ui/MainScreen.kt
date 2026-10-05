@@ -171,7 +171,13 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         if (updateReminderTick > 0) {
     val s = Strings.get(uiState.language)
             val result = snackbarHostState.showSnackbar(
-                message = String.format(s.updateAvailableOnOpen, uiState.latestVersion.orEmpty()),
+                // Read the version from the flow that raised the tick, not from uiState: uiState is
+                // one large combine that has not recomposed yet when the tick lands, so it still
+                // holds the previous (null) version and the message rendered as a bare "v".
+                message = String.format(
+                    s.updateAvailableOnOpen,
+                    viewModel.latestVersionState.value.orEmpty()
+                ),
                 actionLabel = s.updateDownload,
                 duration = SnackbarDuration.Long
             )

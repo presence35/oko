@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -80,28 +82,57 @@ private val PreviewProximity = ThreatProximity(
     speedKmh = 180.0
 )
 
-/** App-language picker. Each option is labelled in its own language, so a user who can't yet
- *  read the current UI still finds their language. */
+/** App-language picker: one horizontal row of flags. The flag identifies the language fast, the
+ *  autonym under it names it in its own script, and the heading carries the *other* languages'
+ *  words for "language" so a user who cannot read the current UI can still find the row. */
 @Composable
 internal fun LanguageSelector(
     selected: AppLanguage,
     onChange: (AppLanguage) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        AppLanguage.values().forEach { lang ->
-            LanguageTile(
-                label = Strings.get(lang).selfLanguageName,
-                selected = lang == selected,
-                onClick = { onChange(lang) }
-            )
+    val heading = remember(selected) {
+        AppLanguage.values()
+            .filter { it != selected }
+            .joinToString(" · ") { Strings.get(it).languageLabel }
+    }
+    Column {
+        Text(
+            heading,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            AppLanguage.values().forEach { lang ->
+                FlagTile(
+                    flagRes = languageFlagRes(lang),
+                    label = Strings.get(lang).selfLanguageName,
+                    selected = lang == selected,
+                    onClick = { onChange(lang) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
 
+private fun languageFlagRes(lang: AppLanguage): Int = lang.pick(
+    R.drawable.flag_odesa,
+    R.drawable.flag_ca,
+    R.drawable.flag_ua
+)
+
 @Composable
-private fun LanguageTile(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun FlagTile(
+    flagRes: Int,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer
         else MaterialTheme.colorScheme.surfaceContainerHigh,
         border = BorderStroke(
@@ -109,36 +140,32 @@ private fun LanguageTile(label: String, selected: Boolean, onClick: () -> Unit) 
             if (selected) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.outlineVariant
         ),
-        modifier = Modifier.fillMaxWidth().hapticClickable(onClick = onClick)
+        modifier = modifier.hapticClickable(onClick = onClick)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp)
         ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_language),
+            Image(
+                painter = painterResource(flagRes),
                 contentDescription = null,
-                tint = if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(4.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 label,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 color = if (selected) MaterialTheme.colorScheme.onSurface
                 else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f)
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
             )
-            if (selected) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_check),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
         }
     }
 }
@@ -407,11 +434,13 @@ internal fun CityLabelTogglesRow(
     smallLabel: String,
     onLargeChange: (Boolean) -> Unit,
     onMediumChange: (Boolean) -> Unit,
-    onSmallChange: (Boolean) -> Unit
+    onSmallChange: (Boolean) -> Unit,
+    flash: Boolean = false
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .explainerFlash(flash)
             .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
     ) {
         Column {
@@ -484,11 +513,13 @@ internal fun AlertRegionModeRow(
     cityLabelsLabel: String,
     fillLabel: String,
     borderLabel: String,
-    onModeChange: (AlertRegionMode) -> Unit
+    onModeChange: (AlertRegionMode) -> Unit,
+    flash: Boolean = false
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .explainerFlash(flash)
             .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
     ) {
         Column {

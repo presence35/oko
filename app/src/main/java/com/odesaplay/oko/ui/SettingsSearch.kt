@@ -75,6 +75,53 @@ internal data class SettingsSearchDb(
     val related: List<RelatedConcept>
 )
 
+/**
+ * A single block inside a section. Search resolves to a section, but the thing the user typed
+ * about is almost always one row on that page — so the tap also arms a flash on the block it
+ * names, and the row pulses for a moment instead of leaving them to hunt for it.
+ */
+internal data class SearchAnchor(
+    val id: String,
+    val section: SettingsSection,
+    val words: List<String>
+)
+
+private fun anchor(id: String, section: SettingsSection, vararg words: String) = SearchAnchor(
+    id,
+    section,
+    words.map { it.searchNorm() }.filter { it.isNotBlank() }.distinct()
+)
+
+internal val searchAnchors: List<SearchAnchor> = listOf(
+    anchor("language", SettingsSection.SYSTEM, "language", "мова", "язык", "translation", "переклад",
+        "ukrainian", "english", "russian", "українськ", "англійськ", "русск", "мови"),
+    anchor("cardSize", SettingsSection.SYSTEM, "card size", "card", "size", "scale", "розмір", "картка"),
+    anchor("cityLabels", SettingsSection.SYSTEM, "city labels", "labels", "мітка", "підпис"),
+    anchor("mapScale", SettingsSection.SYSTEM, "map scale", "scale bar", "шкала", "масштаб"),
+    anchor("regionFill", SettingsSection.SYSTEM, "fill", "region", "oblast", "заливка", "область", "регіон"),
+    anchor("borders", SettingsSection.SYSTEM, "border", "borders", "outline", "boundary", "кордон", "межа", "контур"),
+    anchor("haptics", SettingsSection.SYSTEM, "haptic", "vibration when tapping", "вібрація", "тап"),
+    anchor("threatIds", SettingsSection.SYSTEM, "threat id", "ids", "номер", "ід"),
+    anchor("overlap", SettingsSection.SYSTEM, "overlap", "overlapping", "count", "перекриття", "рахунок"),
+    anchor("iconZoom", SettingsSection.SYSTEM, "zoom", "icon zoom", "зум", "наближення"),
+    anchor("iconSet", SettingsSection.THREATS, "icon", "icons", "icon set", "style", "іконка", "іконки", "набір", "стиль"),
+    anchor("threatToggles", SettingsSection.THREATS, "threat", "threats", "type", "types", "group", "загроз", "тип", "група"),
+    anchor("shelters", SettingsSection.SHELTERS, "shelter", "shelters", "directory", "укриття", "сховище", "бомбосховище"),
+    anchor("followMe", SettingsSection.LOCATION, "follow me", "gps", "location", "слід", "за мною", "локація", "місце"),
+    anchor("pinCity", SettingsSection.LOCATION, "pin", "pinned city", "city", "пін", "місто"),
+    anchor("night", SettingsSection.NIGHT, "night", "sleep", "silent", "ніч", "сон", "тиша"),
+    anchor("officialAlerts", SettingsSection.ALERTS, "official", "official alerts", "siren", "оповіщення", "сирена", "офіційн"),
+    anchor("battery", SettingsSection.MORE, "battery", "charge", "power", "energy", "батарея", "заряд", "енерг"),
+    anchor("guide", SettingsSection.MORE, "guide", "tutorial", "how to", "путівник", "інструкція"),
+    anchor("update", SettingsSection.MORE, "update", "version", "download", "оновлення", "версія"),
+    anchor("exit", SettingsSection.MORE, "exit", "quit", "stop", "monitoring", "вихід", "вийти", "зупинити"),
+    anchor("morale", SettingsSection.FLOURISH, "morale", "fun", "animation", "effects", "мораль", "розваг", "анімація")
+)
+
+/** The block a query names, or null when it only resolves to a section. */
+internal fun anchorFor(queryWords: List<String>, anchors: List<SearchAnchor> = searchAnchors): SearchAnchor? =
+    anchors.firstOrNull { matchesSearch(queryWords, it.words) }
+
 /** Builds the settings search database. Direct keywords are curated (both languages), threat-type
  *  terms are auto-derived from the catalog, and related concepts map user intents to chips.
  *  Future languages extend the keyword/concept lists without changing the matching logic. */
@@ -126,7 +173,8 @@ internal fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
             "літак", "recon", "reconnaissance", "розвідка", "розвідувальний", "unknown", "невідомий"
         ) + threatTerms),
         SettingsSection.SYSTEM to kw(
-            "system", "display", "interface", "language", "ukrainian", "english",
+            "system", "display", "interface", "language", "ukrainian", "english", "russian",
+            "мови", "язык", "русск", "переклад", "translation",
             "card", "cards", "size", "scale", "battery", "exempt",
             "overlap", "overlapping", "count", "zoom", "zoom icons",
             "перекриття", "перекриті", "зум", "наближення",
