@@ -20,3 +20,4 @@ local.properties
 /app/telegram.properties
 /app/keystore.properties
 /app/release.keystore
+/app/debug.keystore

@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- Added a GPL-3.0-only LICENSE and documented the license + source-build path in the README 10-04_20:14:47
+- A release build without app/keystore.properties now fails by default instead of being the only mode; -PallowUnsignedRelease is the explicit opt-in for a distributor that signs its own source build (F-Droid) 10-04_20:14:47
+- Pinned the Gradle wrapper with distributionSha256Sum and dropped the committed debug.keystore 10-04_20:14:47
 
 - Sent logs now report how many times the app process was killed and restarted overnight, and the longest window alerts were blind, instead of leaving it to be inferred from gaps 10-04_18:30:00
 

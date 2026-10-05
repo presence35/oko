@@ -10,7 +10,9 @@ change a documented invariant, update the relevant section.
 - Two build flavors from one codebase: **`play`** (Google Play, AAB — no self-update, no
   `REQUEST_INSTALL_PACKAGES`/FileProvider) and **`sideload`** (beta APK feed on
   `odesaplay.com.ua` with in-app self-update). `BuildConfig.SELF_UPDATE` is the compile-time
-  gate; R8 strips the dead branch in `play` release.
+  gate; R8 strips the dead branch in `play` release. `play` is also the source-build target: a
+  distributor compiling and signing the app itself (F-Droid) builds it with no
+  `app/keystore.properties` and `-PallowUnsignedRelease`, which yields an unsigned APK.
 - Jetpack Compose (Material 3, dark-only) + MapLibre Native SDK (OpenGL/Vulkan hardware-accelerated raster & vector tiles). Kotlin 2.2.10 (AGP 9.4 built-in Kotlin), JDK 17, minSdk 26 /
   targetSdk 36, namespace `com.odesaplay.oko`.
 - No runtime backend of ours: data comes straight from the public
@@ -291,7 +293,7 @@ like the rest of the app). |
 
 | File | Responsibility |
 | --- | --- |
-| `app/build.gradle.kts` | Android config + custom tasks: `bumpVersion`, `releaseDirect`, `releasePlay`, `uploadRelease`, `uploadPrivacy`. Declares the `play`/`sideload` flavors (`BuildConfig.SELF_UPDATE`). |
+| `app/build.gradle.kts` | Android config + custom tasks: `bumpVersion`, `requireReleaseKeystore`, `releaseDirect`, `releasePlay`, `uploadRelease`, `uploadPrivacy`. Declares the `play`/`sideload` flavors (`BuildConfig.SELF_UPDATE`). The `release` signing config only exists when `app/keystore.properties` does; without it the build fails unless `-PallowUnsignedRelease` is passed, which emits an unsigned APK for a distributor that signs its own source build (F-Droid). |
 | `app/version.properties` | `versionCode`/`versionName` — bumped by `bumpVersion`; `uploadRelease` cross-checks them against the built APK's `output-metadata.json` and fails on drift. |
 | `app/build/release/version.json` | Generated update feed (build output, uploaded by `releaseDirect`; not committed — the live copy is on the server). |
 
@@ -748,6 +750,8 @@ Run: `.\gradlew.bat :app:testDebugUnitTest`
   `## [Unreleased]` CHANGELOG entries, uploads the APK first and the manifest second, then
   re-fetches the live `version.json` and fails if the server does not serve what was just built.
   Requires git-ignored `app/keystore.properties` (signing) and `app/upload.properties` (FTP creds).
+  Both release paths depend on `:app:requireReleaseKeystore`, which fails if the keystore is
+  missing — the unsigned source-build mode (`-PallowUnsignedRelease`) can never reach publishing.
 - `.\gradlew.bat :app:releasePlay` — bumps the version and builds the `play` App Bundle only.
 - Full release workflow is documented in `AGENTS.md` ("release it").
 

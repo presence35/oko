@@ -64,8 +64,9 @@ evaluation contract. Read `ARCHITECTURE.md` for module map and data-flow context
 Only after a meaningful code change, verify before declaring the task done:
 
 - `.\gradlew.bat :app:assembleDebug`
-- `.\gradlew.bat :app:testDebugUnitTest` — when touching engine logic
-  (`ThreatEngine`/`NormalizedThreat`/`ThreatProps`/`SpeedCache`).
+- `.\gradlew.bat :app:testSideloadDebugUnitTest` — when touching engine logic
+  (`ThreatEngine`/`NormalizedThreat`/`ThreatProps`/`SpeedCache`). The bare task name
+  `testDebugUnitTest` is ambiguous across the `play`/`sideload` flavors and fails.
 
 Fix any failures before finishing.
 

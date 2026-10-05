@@ -18,6 +18,12 @@ fun readKeystoreProps(): Properties = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+/** A build with no app/keystore.properties is only ever correct for a source build that the
+ *  distributor signs itself — F-Droid compiles the store flavor this way. Everywhere else it
+ *  is a mistake, so it must be asked for explicitly rather than happening silently. */
+val hasReleaseKeystore = file("keystore.properties").exists()
+val unsignedReleaseAllowed = project.hasProperty("allowUnsignedRelease")
+
 android {
     namespace = "com.odesaplay.oko"
     compileSdk = 36
@@ -58,16 +64,19 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
-        create("release") {
-            val ksPropsFile = file("keystore.properties")
-            if (!ksPropsFile.exists()) {
-                throw GradleException("Missing $ksPropsFile — create it with storeFile, storePassword, keyAlias, keyPassword (it is git-ignored).")
+        if (hasReleaseKeystore) {
+            create("release") {
+                val ks = readKeystoreProps()
+                storeFile = file(ks.getProperty("storeFile") ?: throw GradleException("keystore.properties: missing 'storeFile'"))
+                storePassword = ks.getProperty("storePassword") ?: throw GradleException("keystore.properties: missing 'storePassword'")
+                keyAlias = ks.getProperty("keyAlias") ?: throw GradleException("keystore.properties: missing 'keyAlias'")
+                keyPassword = ks.getProperty("keyPassword") ?: throw GradleException("keystore.properties: missing 'keyPassword'")
             }
-            val ks = Properties().apply { ksPropsFile.inputStream().use { load(it) } }
-            storeFile = file(ks.getProperty("storeFile") ?: throw GradleException("keystore.properties: missing 'storeFile'"))
-            storePassword = ks.getProperty("storePassword") ?: throw GradleException("keystore.properties: missing 'storePassword'")
-            keyAlias = ks.getProperty("keyAlias") ?: throw GradleException("keystore.properties: missing 'keyAlias'")
-            keyPassword = ks.getProperty("keyPassword") ?: throw GradleException("keystore.properties: missing 'keyPassword'")
+        } else if (!unsignedReleaseAllowed) {
+            throw GradleException(
+                "Missing ${file("keystore.properties")} — create it with storeFile, storePassword, keyAlias, keyPassword (it is git-ignored). " +
+                    "Pass -PallowUnsignedRelease only for a source build that the distributor signs itself (F-Droid)."
+            )
         }
     }
 
@@ -75,11 +84,10 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            // Null on an unsigned source build (see hasReleaseKeystore) — AGP then emits
+            // app-<flavor>-release-unsigned.apk for the distributor to sign.
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            ndk {
-                debugSymbolLevel = "FULL"
-            }
         }
     }
 
@@ -179,6 +187,18 @@ private fun deriveVersionName(current: String, newCode: Int): String {
     return "$major.$minor.$newCode"
 }
 
+/** Publishing is always our own signature. The unsigned path exists only for a distributor
+ *  building from source, so it must never reach the release tasks. */
+tasks.register("requireReleaseKeystore") {
+    group = "versioning"
+    description = "Fails unless app/keystore.properties is present. Guards every publishing path against the unsigned source-build mode."
+    doLast {
+        if (!hasReleaseKeystore) throw GradleException(
+            "app/keystore.properties is required to publish. -PallowUnsignedRelease is only for a distributor building and signing from source."
+        )
+    }
+}
+
 tasks.register<GradleBuild>("releaseDirect") {
     group = "release"
     description = "Bumps the version, then builds the sideload (direct/beta) APK and uploads it + version.json to the FTP server, in a fresh Gradle run so both carry the new version."
@@ -190,7 +210,7 @@ tasks.register<GradleBuild>("releaseDirect") {
 tasks.register<GradleBuild>("releasePlay") {
     group = "release"
     description = "Bumps the version, then builds the Google Play App Bundle (play flavor — no self-update). Does not upload."
-    dependsOn("bumpVersion")
+    dependsOn("bumpVersion", "requireReleaseKeystore")
     dir = rootProject.projectDir
     tasks = listOf(":app:bundlePlayRelease")
 }
@@ -198,7 +218,7 @@ tasks.register<GradleBuild>("releasePlay") {
 tasks.register("uploadRelease") {
     group = "versioning"
     description = "Builds the beta-release APK (sideload flavor), generates version.json (version + sha256 read from the built APK, notes from CHANGELOG.md), uploads both, then verifies the live copy."
-    dependsOn("assembleSideloadRelease")
+    dependsOn("requireReleaseKeystore", "assembleSideloadRelease")
     doLast {
         val uploadPropsFile = file("upload.properties")
         if (!uploadPropsFile.exists()) {
