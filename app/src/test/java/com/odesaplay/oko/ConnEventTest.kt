@@ -25,7 +25,7 @@ class ConnEventTest {
         val retry = ConnEvent(0L, ConnEventKind.RETRY_SCHEDULED, attempt = 2, delayMs = 8_000L)
         assertEquals("Повтор через 8s · спроба 2", retry.label(s))
         assertEquals("З'єднання втрачено", ConnEvent(0L, ConnEventKind.CONNECTION_LOST).label(s))
-        assertEquals("Notifications muted for 30 min", ConnEvent(0L, ConnEventKind.IGNORE_MUTED, detail = "30 min").label(s))
+        assertEquals("Сповіщення заглушено на 30 min", ConnEvent(0L, ConnEventKind.IGNORE_MUTED, detail = "30 min").label(s))
     }
 
     @Test
@@ -33,6 +33,6 @@ class ConnEventTest {
         val en = Strings.get(AppLanguage.EN)
         assertEquals("Offline 4 min", String.format(en.offlineLiveFormat, 4))
         val ua = Strings.get(AppLanguage.UA)
-        assertEquals("Offline 4 min", String.format(ua.offlineLiveFormat, 4))
+        assertEquals("Офлайн 4 хв", String.format(ua.offlineLiveFormat, 4))
     }
 }

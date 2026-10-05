@@ -171,4 +171,9 @@ class ServiceState(private val context: Context) {
     suspend fun setCriticalChannelBypassApplied(applied: Boolean) {
         context.dataStore.edit { it[criticalChannelBypassAppliedKey] = applied }
     }
+
+    /** Wipes every stored key, returning the store to its documented defaults. */
+    suspend fun clearAll() {
+        context.dataStore.edit { it.clear() }
+    }
 }

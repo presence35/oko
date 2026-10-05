@@ -239,7 +239,11 @@ object Strings {
         val noThreatsMessage: String,
         val serviceOfflineBanner: String,
         val sirenOverrideWarning: String,
-        val bootRestartPaused: String
+        val bootRestartPaused: String,
+        val sleepNoticeTitle: String,
+        val sleepNoticeOffFormat: String,
+        val sleepNoticeOfficialClause: String,
+        val sleepNoticeAllowClause: String
     )
 
     data class Updates(
@@ -786,6 +790,8 @@ object Strings {
     val resolvedTypeThreats: List<String>,
         val resolvingThreats: List<String>,
         val preciseGps: List<String>,
+        /** "3 threats confirmed" — the sleep notice's count, plural forms per language. */
+        val confirmedThreats: List<String>,
     )
 
     data class StringSet(
@@ -1229,6 +1235,10 @@ object Strings {
         val batteryGranted: String get() = misc.batteryGranted
         val batteryOemTitle: String get() = misc.batteryOemTitle
         val batteryOemBody: String get() = misc.batteryOemBody
+        val sleepNoticeTitle: String get() = status.sleepNoticeTitle
+        val sleepNoticeOffFormat: String get() = status.sleepNoticeOffFormat
+        val sleepNoticeOfficialClause: String get() = status.sleepNoticeOfficialClause
+        val sleepNoticeAllowClause: String get() = status.sleepNoticeAllowClause
         val showThreatIdsOnMapTitle: String get() = misc.showThreatIdsOnMapTitle
         val showThreatIdsOnMapDesc: String get() = misc.showThreatIdsOnMapDesc
         val batteryGenericBody: String get() = misc.batteryGenericBody
@@ -1600,6 +1610,29 @@ fun resolvedThreatsPhrase(count: Int, lang: AppLanguage): String {
     val form = s.wordForms.resolvedThreats[pluralIndex(count, lang).coerceAtMost(s.wordForms.resolvedThreats.lastIndex)]
     return String.format(form, count)
 }
+
+/** "3 threats confirmed" — the same plural machinery as the tally, for the sleep notice's count. */
+fun confirmedThreatsPhrase(count: Int, lang: AppLanguage): String {
+    val s = Strings.get(lang)
+    val form = s.wordForms.confirmedThreats[pluralIndex(count, lang).coerceAtMost(s.wordForms.confirmedThreats.lastIndex)]
+    return String.format(form, count)
+}
+
+/**
+ * The sleep notice body: a fixed opening, then one clause per fact that actually applies, then the
+ * ask. Composed rather than templated so the combinations do not multiply — "an official alert
+ * started" and "N threats were confirmed" are independent facts that can both be true, and each
+ * clause is its own complete sentence, so nothing needs stitching across languages and a clause
+ * that does not apply is simply absent rather than rendering as a zero.
+ *
+ * Pure, and takes its [StringSet] rather than fetching one, so every combination is testable.
+ */
+fun sleepNoticeBody(s: Strings.StringSet, window: SleepWindow, evidence: SleepEvidence): String = buildList {
+    add(String.format(s.sleepNoticeOffFormat, window.minutes))
+    if (evidence.officialOnsetInWindow) add(s.sleepNoticeOfficialClause)
+    if (evidence.confirmedInWindow > 0) add(confirmedThreatsPhrase(evidence.confirmedInWindow, s.language))
+    add(s.sleepNoticeAllowClause)
+}.joinToString(" ")
 
 /** "15 Drones resolved" — the resolved count carrying the type's own plural label, so a
  *  single-type tally needs no breakdown line under the title. */

@@ -579,6 +579,7 @@ fun SettingsScreen(
                         onClick = { openSection(sec) },
                         // The whole body is master-gated, so an off master means the row is
                         // currently inert — but the switch stays lit and the page stays openable.
+                        iconTint = Color.Unspecified,
                         dimmed = !moraleMasterEnabled,
                         trailing = {
                             Switch(

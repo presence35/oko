@@ -29,8 +29,17 @@ object BatteryOptimization {
 
     /**
      * Detects the device manufacturer and returns battery-restriction info.
-     * On Pixel/Nexus devices this returns `isAggressive = false` because stock Android
-     * does not impose OEM-specific background restrictions beyond Doze.
+     *
+     * A KNOWN aggressive vendor reads as aggressive; every unlisted manufacturer — Google
+     * included — falls through to aggressive on purpose, because that is the direction to be
+     * wrong in: over-warning a stock-Android user costs a scarier heading, while under-warning an
+     * aggressive-OEM user costs an alert that never arrives. (This comment used to claim the
+     * opposite for Pixel/Nexus. The code never implemented it — the two disagreed from the commit
+     * that introduced both, which is why nobody noticed it for so long: nothing depends on it.)
+     *
+     * [OemInfo.isAggressive] currently chooses between two strings whose bodies are identical and
+     * whose click path is identical, so it is a heading, not a behaviour. Driving the report from
+     * measured sleep windows instead of a vendor lookup is tracked in ROADMAP.md.
      *
      * Call [setSimulatedOem] to override for testing on non-OEM devices.
      */

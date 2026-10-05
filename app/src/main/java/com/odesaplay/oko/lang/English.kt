@@ -233,6 +233,10 @@ wizardBetaBattery = "Draining your battery? That's exactly the bug we need. Send
         serviceOfflineBanner = "SERVICE OFFLINE — tap to reactivate",
         sirenOverrideWarning = "Siren follows system volume — enable Sirens always sound for alarm-level volume",
         bootRestartPaused = "Monitoring paused after reboot — tap to start",
+        sleepNoticeTitle = "Oko was asleep",
+        sleepNoticeOffFormat = "Monitoring was off for %1\$d min.",
+        sleepNoticeOfficialClause = "An official alert started in that time.",
+        sleepNoticeAllowClause = "Allow unrestricted background use so alerts keep ringing.",
     ),
     updates = Strings.Updates(
         updateAvailableTitle = "New version available",
@@ -755,6 +759,7 @@ wizardBetaBattery = "Draining your battery? That's exactly the bug we need. Send
         resolvedTypeThreats = listOf("%1\$d %2\$s resolved"),
         resolvingThreats = listOf("Resolving %d threat", "Resolving %d threats"),
         preciseGps = listOf("Precise GPS: 1 min ago", "Precise GPS: %d min ago"),
+        confirmedThreats = listOf("1 threat confirmed", "%d threats confirmed"),
     ),
     logsExport = Strings.LogExportStrings(
         sendLogs = "Send logs",

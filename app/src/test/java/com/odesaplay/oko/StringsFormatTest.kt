@@ -92,9 +92,9 @@ class StringsFormatTest {
         assertEquals("Знешкоджуємо 11 загроз", resolvingThreatsPhrase(11, AppLanguage.UA))
         assertEquals("Знешкоджуємо 21 загрозу", resolvingThreatsPhrase(21, AppLanguage.UA))
         assertEquals("Знешкоджуємо 22 загрози", resolvingThreatsPhrase(22, AppLanguage.UA))
-        // RU tables hold EN copies for now, but the Slavic 3-form index still selects per RU rules.
-        assertEquals("Resolving 1 threat", resolvingThreatsPhrase(1, AppLanguage.RU))
-        assertEquals("Resolving 5 threats", resolvingThreatsPhrase(5, AppLanguage.RU))
-        assertEquals("Precise GPS: 1 min ago", preciseGpsAgePhrase(1, AppLanguage.RU))
+        // RU carries its own translation, and the Slavic 3-form index selects per RU rules.
+        assertEquals("Устранение 1 угрозы", resolvingThreatsPhrase(1, AppLanguage.RU))
+        assertEquals("Устранение 5 угроз", resolvingThreatsPhrase(5, AppLanguage.RU))
+        assertEquals("Точный GPS: 1 мин назад", preciseGpsAgePhrase(1, AppLanguage.RU))
     }
 }

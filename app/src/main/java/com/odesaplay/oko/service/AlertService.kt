@@ -226,10 +226,37 @@ class AlertService : Service() {
     private var lastMonitorAlertLevel: AlertLevel = AlertLevel.NONE
 
     private var hasShownGpsFallbackToast = false
+    /** Last observed battery-exemption state, so the sleep notice is cleared on the TRANSITION.
+     *  Polling-and-cancelling every tick would be a binder call per tick forever, because a granted
+     *  exemption is sticky — and the sleep path cannot do it, since an exempt app stops sleeping
+     *  and therefore stops producing the windows that would trigger the check. */
+    private var lastExemptionGranted: Boolean? = null
     @Volatile private var wasConnected = true
     private var offlineAlertJob: Job? = null
     private var offlineRestorePending = false
     private val screenOnFlow = MutableStateFlow(true)
+    /**
+     * A sleep the loop just came out of, waiting to be reported. Set by the tick coroutine, read and
+     * consumed by the evaluation coroutine — a StateFlow because that is already the hand-off shape
+     * here ([nowFlow], [screenOnFlow]), and because the evaluation needs a re-run when it changes.
+     */
+    private val pendingSleep = MutableStateFlow<PendingSleep?>(null)
+
+    /**
+     * One evaluation's inputs, named at class scope rather than inside the monitoring coroutine
+     * because [applySleepDecision] is a member and needs to receive the same snapshot the
+     * evaluation saw. Source-agnostic by construction: engine currency in, nothing wire-shaped.
+     */
+    private data class LiveInputs(
+        val rawThreats: Map<String, NormalizedThreat>,
+        val alerts: List<OblastAlert>,
+        val gps: LatLng?,
+        val now: Long,
+        val alertsReady: Boolean,
+        /** The sleep this tick closed, if any. Rides the feed so the classification sees the same
+         *  snapshot the evaluation does, and is consumed exactly once. */
+        val sleep: PendingSleep? = null
+    )
     private var screenReceiver: BroadcastReceiver? = null
 
     private val notificationManager by lazy { AlertNotificationManager(applicationContext) }
@@ -704,14 +731,6 @@ class AlertService : Service() {
                 }
             }
 
-            data class LiveInputs(
-                val rawThreats: Map<String, NormalizedThreat>,
-                val alerts: List<OblastAlert>,
-                val gps: LatLng?,
-                val now: Long,
-                val alertsReady: Boolean
-            )
-
             val registry = AppSources.registry
             val engine = ThreatEngine(registry.typeCatalog.value)
 val mappedThreats = registry.allThreats.map { list ->
@@ -724,7 +743,8 @@ val mappedThreats = registry.allThreats.map { list ->
                 nowFlow,
                 registry.connectionState,
                 registry.degradedSince,
-                registry.alertsReady
+                registry.alertsReady,
+                pendingSleep
             ) { values: Array<Any?> ->
                 @Suppress("UNCHECKED_CAST")
                 LiveInputs(
@@ -732,7 +752,8 @@ val mappedThreats = registry.allThreats.map { list ->
                     alerts = values[1] as List<OblastAlert>,
                     gps = values[2] as LatLng?,
                     now = values[3] as Long,
-                    alertsReady = values[6] as Boolean
+                    alertsReady = values[6] as Boolean,
+                    sleep = values[7] as PendingSleep?
                 )
             }
 
@@ -805,6 +826,9 @@ val mappedThreats = registry.allThreats.map { list ->
                 val effectiveCityScope = p.officialAlertCityScope || (nightActive && p.nightOfficialAlertCityScope)
                 val official = alerts.officialStateFor(focusToken, focusCityUa, effectiveCityScope)
                 val officialRaw = alerts.officialStateFor(focusToken, null, false)
+                // Held until here because the report is about the focus oblast's own episode, read
+                // through the shared gate above — the policy never re-implements official matching.
+                applySleepDecision(live, official.alert?.since, p)
                 val focusOblastLevel = official.level
                 val focusOblastRawLevel = officialRaw.level
                 val focusOblastRawSince = officialRaw.alert?.since
@@ -1040,6 +1064,12 @@ val mappedThreats = registry.allThreats.map { list ->
             notificationManager.cancelNotification(NOTIF_MILESTONE)
             notificationManager.cancelNotification(NOTIF_OFFLINE_CRITICAL)
         }
+        // The sleep notice exists to ask for the battery exemption, so it must not outlive the
+        // answer. Checked here rather than in the sleep path because an exempt app stops sleeping:
+        // once the ask is answered there are no more windows to trigger a cleanup.
+        val exemptionGranted = BatteryOptimization.isIgnoringBatteryOptimizations(this)
+        if (lastExemptionGranted == false && exemptionGranted) notificationManager.clearSleepNotice()
+        lastExemptionGranted = exemptionGranted
 
         val all = state.threats
 
@@ -1789,8 +1819,72 @@ val mappedThreats = registry.allThreats.map { list ->
     lastZoneTiers = emptyMap()
     lastSweepAtMs = 0L
     emptySince = null
-    DebugLog.recordPaused(gapMs, now)
+    val window = SleepWindow(startedAtMillis = now - gapMs, wokeAtMillis = now)
+    DebugLog.recordPaused(window, now)
+    pendingSleep.value = PendingSleep(window = window)
 }
+
+    /**
+     * Executes the [SleepPolicy] verdict for a sleep the loop just came out of. Deliberately a
+     * transport: it consumes the pending sleep, calls the policy once, and does what it says. Every
+     * branch that could be mis-ordered (muted, exempt, too short, unreadable feed) lives in the pure
+     * decision, so there is no policy in this function to get wrong.
+     *
+     * The evidence is measured here rather than in the tick because only the evaluation has the
+     * feed, and it is frozen into the pending value because the window is expressed against the
+     * feed's own clock — re-deriving it on a later tick would slide it forward and grow the count.
+     */
+    private fun applySleepDecision(
+        live: LiveInputs,
+        focusAlertSince: String?,
+        prefs: UserPreferences
+    ) {
+        val pending = live.sleep ?: return
+
+        val evidence = pending.evidence
+            ?: SleepPolicy.evidenceFor(
+                pending.window,
+                live.rawThreats.values,
+                live.alerts,
+                focusAlertSince
+            )
+
+        val decision = SleepPolicy.decide(
+            pending.window,
+            evidence,
+            muted = bellsMuted(),
+            exemptionGranted = BatteryOptimization.isIgnoringBatteryOptimizations(this)
+        )
+
+        // Deferral must not touch the flow: `pendingSleep` is also the re-evaluation trigger, so
+        // consuming and restoring it here would oscillate null<->value and re-run the whole
+        // evaluation block in a loop for the length of the mute. The only write on this path is the
+        // one-off evidence freeze, which converges because the next pass finds it already measured.
+        if (decision == SleepDecision.Hold) {
+            if (pending.evidence == null) {
+                pendingSleep.compareAndSet(pending, pending.copy(evidence = evidence))
+            }
+            return
+        }
+
+        // A terminal verdict: consume atomically, so a post can never double-fire and a newer sleep
+        // that landed while we were deciding is not stolen by this pass.
+        if (!pendingSleep.compareAndSet(pending, null)) return
+
+        when (decision) {
+            SleepDecision.Silent -> Unit
+            SleepDecision.Dismiss -> notificationManager.clearSleepNotice()
+            is SleepDecision.Post -> {
+                val s = Strings.get(prefs.language)
+                notificationManager.postSleepNotice(
+                    s.sleepNoticeTitle,
+                    sleepNoticeBody(s, decision.window, decision.evidence),
+                    s.batteryAllowButton
+                )
+            }
+            SleepDecision.Hold -> Unit // handled above
+        }
+    }
 
 private fun logAction(reason: DebugLogReason, label: String, detail: String? = null) {
     DebugLog.recordAction(reason, label, detail, System.currentTimeMillis())

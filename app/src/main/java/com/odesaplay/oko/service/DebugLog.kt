@@ -287,8 +287,8 @@ object DebugLog {
      * it is the honest marker for a hole in the timeline — the gap a beta tester is looking for
      * when an overnight run "updated wrong".
      */
-    fun recordPaused(gapMs: Long, now: Long) {
-        val minutes = (gapMs / 60_000L).coerceAtLeast(1L)
+    fun recordPaused(window: SleepWindow, now: Long) {
+        val minutes = (window.durationMs / 60_000L).coerceAtLeast(1L)
         record(
             DebugLogEntry(
                 now, DebugLogKind.NOTIF, night = false, sirenOverride = false,

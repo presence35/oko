@@ -16,42 +16,55 @@ the process is suspended end to end, not just the decision coroutine. Only the t
 CPU came back on. A threat that entered a zone mid-stall is not seen until the loop wakes: one
 demonstrated miss on the Samsung is a `ZONE_ENTER/FIRED` 7.8 min after a 7.8 min blackout.
 
-**Worse, every wake-up currently decides nothing.** `AlertService.SLEEP_GAP_REBASE_MS` is 3 min
-and the idle tick is 30 s, but a Doze window is 5-6 min — so every post-Doze tick is above the
-threshold and takes `resumeAfterSleep`, which deliberately drops `lastZoneTiers`,
-`lastSweepAtMs` and `emptySince` and evaluates nothing. The rebase is right for an *hours* gap; it
-is the wrong call for a 5-minute one, and on any device that enters Doze it is the only call
-being made. Fixing that interaction is the cheap half (see below).
+**The loop is not the problem.** An earlier read of these logs claimed the wake-up tick "decides
+nothing" because `resumeAfterSleep` fires on every gap. That is wrong and is corrected here:
+`resumeAfterSleep` (`AlertService.kt:1788`) has no skip in it — it drops `lastZoneTiers`, sets
+`lastSweepAtMs = 0L` (which forces the next sweep *sooner*) and nulls `emptySince`, then
+`nowFlow.value = tick` runs unconditionally. The wake tick evaluates; it just does so from a clean
+slate rather than computing deltas across a gap nobody observed, which is correct — the deltas are
+the part that cannot be trusted. The comment above the call site ("Skip that tick's decisions")
+describes intent the code does not implement, and the data agrees: a 466 s stall shows as a gap
+*between* two decisions, not two gaps. Consequence: `SLEEP_GAP_REBASE_MS = 3 min` is a correct
+detector and must NOT be lowered to ~90 s — that would push ordinary hiccups onto the rebase path
+and discard hysteresis for nothing. There is no cheap in-app correctness win here.
 
-The exemption flow **already exists and is already surfaced** — `BatteryOptimization.requestExemption`
-is wired into `MainScreen`, `SettingsScreen` and the first-launch wizard, and the bundle reports
-`batteryUnoptimized`. So this is not "add a button". What is missing:
+So the whole remaining problem is **silence, not wrongness**: the app knows it slept (it logs
+`PAUSED` on every one of those stalls) and never tells the user. The exemption flow **already
+exists and is already surfaced** — `BatteryOptimization.requestExemption` is wired into
+`MainScreen`, `SettingsScreen` (the button renders whenever the app is not exempt) and the
+first-launch wizard, and the bundle reports `batteryUnoptimized`. Both test phones are un-exempt,
+so both are showing the button today. What is missing:
 
-- **A user-visible sleep report.** After a stall over some threshold, say so plainly — "Oko was
-  asleep 22 min; 14 alerts were published while it was off" — counted from what actually arrived.
-  The honest framing matters: the app cannot know what it *missed*, only what was published, so
-  the copy must not claim "you missed 14 alerts". Own copy in EN, then UA/RU.
-- **Make the exemption ask *sticky and consequential*.** It is currently one row in Settings that
-  the user can dismiss forever. Given the exemption is the actual cure (Doze does not apply to an
-  exempt app, so the 30 s tick runs normally and none of the hacks below are needed), the sleep
-  report is the moment to name it: "this is why you were unprotected — tap to fix". Needs
-  `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` in the manifest and a Play-policy review; core
-  functionality is a defensible use case for an air-raid app, but state it in the listing.
-- **Fix the rebase threshold, then measure before anything clever.** `SLEEP_GAP_REBASE_MS` down to
-  ~90 s costs nothing and stops the app throwing away a perfectly good tick after every Doze
-  window. It does **not** shrink the windows themselves. Only after that is worth trying a partial
-  wake lock held across the idle tick, and `setExactAndAllowWhileIdle` on the official-alert path
-  as the fallback for OEM throttling that ignores wake locks — both cost battery, which is the
-  trade this app cannot afford to lose. Measure on the Samsung, which is the worst case by 3x.
-
-Two adjacent bugs found while digging, cheap and independent:
-
-- **`BatteryOptimization.getOemInfo()` returns `isAggressive = true` for every unlisted OEM**,
-  including Google — its own KDoc says a Pixel must return `false`. So the wizard and Settings show
-  the aggressive-OEM copy, and the OEM-aware intent, on the one phone whose Doze behaves best.
-  The `else` branch should be `false`.
-- **`requestExemptionOemAware()` has no caller.** Either wire it into the sticky ask above or
-  delete it; dead code that looks like the fix is worse than no code.
+- **Promote the sleep from a diagnostic to a fact with a consumer.** `resumeAfterSleep` already
+  receives both endpoints of the window; it currently writes a string (`"paused 22m"`) into a
+  diagnostic ring buffer. Make it a typed `SleepWindow` (engine-owned, like `OblastAlert`) and let a
+  **pure** `SleepPolicy` classify it. One producer (the single call site that can know the tick
+  stopped), one fact, consumers orchestrate — the existing no-mirror shape.
+- **Report only what carries a server timestamp.** Two claims are provable from the feed alone:
+  official-episode onsets inside the window, and tracks whose `confirmedAt` falls inside it. Both
+  are compared server-timestamp-to-server-timestamp, anchored on the newest `updatedAt` in the feed
+  as "server now", so no client/server clock skew can fabricate or hide one. This is also why no
+  pre-gap snapshot and no cold-cache flag are needed: a cold cache cannot invent a server-timed
+  event inside the window. Threats that appeared *and resolved* while blind stay uncountable — so
+  the copy says "an official alert started while Oko was asleep", never "you missed 14 alerts".
+- **Throttle by notification identity, not by state.** Reuse one notification id through the
+  existing `safeNotify(id, ...)` so a re-post *replaces* rather than stacks: one updating row per
+  sleep episode ("asleep 6 min" → "asleep 22 min"), coalescing for free with no `lastNagAtMs` and
+  no pref. 165-301 stalls a day makes this the load-bearing detail: a notification that nags is
+  worse than no notification. Clear it when the exemption is granted or the app is opened.
+- **Let the measured sleep history choose the copy instead of the vendor string.**
+  `BatteryOptimization.getOemInfo()`'s manufacturer table exists only to pick which settings screen
+  to open, and its `isAggressive` flag currently changes one *title adjective* — the EN and UA
+  bodies are byte-identical and the click path is identical (`SettingsScreen.kt:1276` calls
+  `requestExemption`, never the OEM-aware variant). `hasAutoStartIntent` is written 7x and read
+  0x. So either give `requestExemptionOemAware()` its one caller (the sleep notice's tap target, so
+  Samsung/Xiaomi land on their OEM screen) or delete it, and delete the write-only field. The plain
+  claim in its KDoc — that a Pixel returns `isAggressive = false` — is false, and the two have
+  disagreed since the same commit (`136af82`). Net line count should go **down**.
+- **Keep the loud path off the battery.** A wake lock held across the idle tick, or
+  `setExactAndAllowWhileIdle` on the official-alert path, are the only things that shrink the
+  windows themselves. They cost battery, which is the trade this app cannot afford to lose — try
+  them only if the exemption ask proves insufficient, and measure on the Samsung (worst by 3x).
 
 Open question for whoever picks this up: is the promise "we will not sleep through an official
 alert" (achievable with an alarm path) or "we will not sleep at all" (not achievable on an

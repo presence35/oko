@@ -71,6 +71,9 @@ class AlertNotificationManager(private val context: Context) {
         const val NOTIF_UPDATE = 7
         const val NOTIF_ALARM_EPISODE = 8
 const val NOTIF_MONITORING_PAUSED = 9
+        /** The "we were asleep" notice. One id on purpose: a re-post REPLACES it, so a night of
+         *  Doze windows updates a single shade row instead of stacking dozens. */
+        const val NOTIF_SLEEP = 10
 
         /** Bump to delete + recreate all managed channels (sound/importance/attrs are
          *  frozen by Android at creation — this is the only way a change takes effect). */
@@ -94,7 +97,7 @@ const val NOTIF_MONITORING_PAUSED = 9
         /** The one place a notification id maps to its group: a producer can never invent a
          *  group, and two ids can never share one by accident. */
         fun groupFor(id: Int): String = when (id) {
-            NOTIF_MONITOR, NOTIF_MONITORING_PAUSED -> GROUP_MONITOR
+            NOTIF_MONITOR, NOTIF_MONITORING_PAUSED, NOTIF_SLEEP -> GROUP_MONITOR
             NOTIF_ALERT, NOTIF_ALLCLEAR -> GROUP_ALERT
             NOTIF_MILESTONE, NOTIF_OFFLINE_CRITICAL -> GROUP_OFFLINE
             NOTIF_UPDATE -> GROUP_UPDATE
@@ -478,6 +481,61 @@ const val NOTIF_MONITORING_PAUSED = 9
             .setAutoCancel(true)
             .build()
         safeNotify(NOTIF_MONITORING_PAUSED, notif)
+    }
+
+    /**
+     * Announces a sleep that was worth reporting, and carries the one action that can reduce the
+     * next one. Reuses [NOTIF_SLEEP] deliberately: a later sleep replaces this row instead of adding
+     * another, so a night of Doze windows is one updating line rather than thirty. That is the whole
+     * throttle — no timestamp pref, no boolean, no rate-limit code.
+     *
+     * Rides [CHANNEL_OFFLINE_CRITICAL] because it is the same message to the user — "Oko could not
+     * warn you" — and that channel is already `IMPORTANCE_HIGH`, so the notice is actually seen
+     * instead of sitting mute in the shade. It does NOT reuse the notification id: critical-offline
+     * is a state that ends when the network returns and is cancelled on recovery, so sharing an id
+     * would let a reconnect wipe this row, and an offline alert would overwrite it.
+     *
+     * Retires itself by [SleepPolicy.NOTICE_TTL_MS] via `setTimeoutAfter`, so nothing has to
+     * remember a deadline, tick a timer, or hook the Activity lifecycle. `setAutoCancel` also lets
+     * the user swipe it. [allowLabel] is the exemption button.
+     */
+    fun postSleepNotice(title: String, text: String, allowLabel: String) {
+        val notif = buildNotification(NOTIF_SLEEP, CHANNEL_OFFLINE_CRITICAL)
+            .setSmallIcon(R.drawable.ic_trident)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setTimeoutAfter(SleepPolicy.NOTICE_TTL_MS)
+            .addAction(R.drawable.ic_trident, allowLabel, exemptionIntent())
+            .setContentIntent(exemptionIntent())
+            .build()
+        safeNotify(NOTIF_SLEEP, notif)
+    }
+
+    /** Takes the sleep row down early — used when the exemption lands, so the ask outlives its reason. */
+    fun clearSleepNotice() {
+        NotificationManagerCompat.from(context).cancel(NOTIF_SLEEP)
+    }
+
+    /**
+     * The system "allow unrestricted background use?" dialog, as a PendingIntent.
+     *
+     * A `getActivity` intent rather than a service action on purpose: if the service received this
+     * tap and then called `startActivity`, Android 10+ would block the background launch. Handing
+     * the activity to the platform as a PendingIntent keeps the user's tap as the grant.
+     */
+    private fun exemptionIntent(): PendingIntent {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            .setData(Uri.parse("package:${context.packageName}"))
+        return PendingIntent.getActivity(
+            context,
+            13,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 
     private fun sirenUri(resName: String): Uri =

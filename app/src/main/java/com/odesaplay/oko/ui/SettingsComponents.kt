@@ -428,6 +428,7 @@ internal fun SettingsRootRow(
     onClick: () -> Unit,
     cardColor: Color? = null,
     cardBorder: Color? = null,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
     dimmed: Boolean = false,
     trailing: @Composable (() -> Unit)? = null
 ) {
@@ -454,7 +455,9 @@ internal fun SettingsRootRow(
             Icon(
                 painter = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                // Color.Unspecified keeps a painter's own colors (the morale heart is half flag
+                // blue, half flag yellow) instead of flattening it to the theme accent.
+                tint = iconTint,
                 // dimmed fades only the label block, never the trailing control or the row's
                 // own tap area: a section whose master is off still needs its switch reachable.
                 modifier = Modifier

@@ -232,6 +232,10 @@ wizardBetaBattery = "Быстро садится батарея? Это ровн
         serviceOfflineBanner = "СЛУЖБА НЕ В СЕТИ — нажмите для повторного подключения",
         sirenOverrideWarning = "Громкость сирены зависит от системы — включите «Сирена поверх всех режимов» для максимального звука",
         bootRestartPaused = "Мониторинг приостановлен после перезагрузки — нажмите для запуска",
+        sleepNoticeTitle = "Oko was asleep",
+        sleepNoticeOffFormat = "Monitoring was off for %1\$d min.",
+        sleepNoticeOfficialClause = "An official alert started in that time.",
+        sleepNoticeAllowClause = "Allow unrestricted background use so alerts keep ringing.",
     ),
     updates = Strings.Updates(
         updateAvailableTitle = "Доступна новая версия",
@@ -755,6 +759,7 @@ wizardBetaBattery = "Быстро садится батарея? Это ровн
         resolvedTypeThreats = listOf("%1\$d %2\$s нейтрализовано"),
         resolvingThreats = listOf("Устранение %d угрозы", "Устранение %d угроз", "Устранение %d угроз"),
         preciseGps = listOf("Точный GPS: %d мин назад", "Точный GPS: %d мин назад", "Точный GPS: %d мин назад"),
+        confirmedThreats = listOf("Подтверждена %d угроза", "Подтверждено %d угрозы", "Подтверждено %d угроз"),
     ),
     logsExport = Strings.LogExportStrings(
         sendLogs = "Отправить логи",

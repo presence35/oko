@@ -101,6 +101,12 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
     sourceSets {
         getByName("main") {
             res.srcDirs("src/main/res", "src/main/iconpacks/classic", "src/main/iconpacks/photo", "src/main/iconpacks/army", "src/main/iconpacks/comic", "src/main/iconpacks/russian")
@@ -158,8 +164,23 @@ dependencies {
     implementation("androidx.glance:glance-appwidget:1.1.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Robolectric lets Android-bound units (SharedPreferences, Context, system services) run as
+    // plain JVM tests. SDK is pinned in src/test/resources/robolectric.properties.
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("androidx.work:work-testing:2.11.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
+
+// Unit tests gate every build: a change that breaks them fails assembly — and therefore the
+// release tasks — instead of surfacing later. ~20s warm; Robolectric's first run downloads its
+// android-all jars once. Hooked onto assemble* rather than preBuild: preBuild is an ancestor of
+// the compile tasks, so a dependency there would be a cycle.
+tasks.matching { it.name == "assemble" || (it.name.startsWith("assemble") && !it.name.startsWith("assembleAndroidTest")) }
+    .configureEach {
+        dependsOn("testSideloadDebugUnitTest")
+    }
 
 tasks.register("bumpVersion") {
     group = "versioning"
