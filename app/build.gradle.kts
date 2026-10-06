@@ -250,6 +250,8 @@ tasks.register("uploadRelease") {
         val user = up.getProperty("user") ?: throw GradleException("upload.properties: missing 'user'")
         val pass = up.getProperty("password") ?: throw GradleException("upload.properties: missing 'password'")
         val remoteDir = up.getProperty("remoteDir").orEmpty().trim().trim('/')
+        val ftpHost = up.getProperty("ftpHost")?.trim()
+            ?: throw GradleException("upload.properties: missing 'ftpHost' — the FTPS server host whose certificate is valid (e.g. athena.ukrhost.biz).")
 
         // The APK is the source of truth for versionCode/versionName: version.properties is
         // bumped before the build and could describe a different artifact than the one we are
@@ -298,30 +300,12 @@ tasks.register("uploadRelease") {
         jsonFile.parentFile.mkdirs()
         jsonFile.writeText(versionJson, Charsets.UTF_8)
 
-        fun ftpPath(fileName: String): String =
-            if (remoteDir.isEmpty()) "ftp://$host/$fileName" else "ftp://$host/$remoteDir/$fileName"
-
-        fun upload(local: File, remoteName: String) {
-            val cmd = listOf(
-                "curl", "-sS", "--ftp-create-dirs",
-                "-T", local.absolutePath,
-                ftpPath(remoteName),
-                "--user", "$user:$pass"
-            )
-            val result = ProcessBuilder(cmd).redirectErrorStream(true).start()
-            val output = result.inputStream.readBytes().toString(Charsets.UTF_8)
-            val code = result.waitFor()
-            println("upload $remoteName -> exit $code")
-            if (output.isNotBlank()) println(output)
-            if (code != 0) throw GradleException("FTP upload of $remoteName failed (exit $code)")
-        }
-
         // APK first, manifest second: a client must never read a new versionCode while the old
         // file is still what that URL serves. The reverse order is unsafe.
-        upload(builtApk, "app-release.apk")
-        upload(jsonFile, "version.json")
+        ftpUpload(ftpHost, remoteDir, user, pass, builtApk, "app-release.apk")
+        ftpUpload(ftpHost, remoteDir, user, pass, jsonFile, "version.json")
         val privacyFile = rootProject.file("privacy.html")
-        if (privacyFile.exists()) upload(privacyFile, "privacy.html")
+        if (privacyFile.exists()) ftpUpload(ftpHost, remoteDir, user, pass, privacyFile, "privacy.html")
 
         // Prove the server serves what we just built. Without this, a bad upload only shows up
         // as an app that silently refuses to install, forever. FTP→HTTPS propagation can lag,
@@ -366,6 +350,25 @@ private fun sha256Of(file: File): String {
     return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
+// Explicit FTPS (AUTH TLS) against the host whose certificate is valid; implicit FTPS
+// (curl's ftps:// scheme, port 990) is not exposed by the server. Credentials travel
+// through curl's --config on stdin so the password never appears in the process argv.
+private fun ftpUpload(ftpHost: String, remoteDir: String, user: String, pass: String, local: File, remoteName: String) {
+    val path = if (remoteDir.isEmpty()) "ftp://$ftpHost/$remoteName" else "ftp://$ftpHost/$remoteDir/$remoteName"
+    fun esc(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
+    val config = "user = \"${esc(user)}:${esc(pass)}\"\n"
+    val proc = ProcessBuilder(
+        "curl", "-sS", "--ssl-reqd", "--ftp-create-dirs", "--config", "-",
+        "-T", local.absolutePath, path
+    ).redirectErrorStream(true).start()
+    proc.outputStream.use { it.write(config.toByteArray(Charsets.UTF_8)) }
+    val output = proc.inputStream.readBytes().toString(Charsets.UTF_8)
+    val code = proc.waitFor()
+    println("upload $remoteName -> exit $code")
+    if (output.isNotBlank()) println(output)
+    if (code != 0) throw GradleException("FTP upload of $remoteName failed (exit $code)")
+}
+
 tasks.register("uploadPrivacy") {
     group = "versioning"
     description = "Uploads the privacy policy (privacy.html) to the FTP server."
@@ -379,18 +382,13 @@ tasks.register("uploadPrivacy") {
         val user = up.getProperty("user") ?: throw GradleException("upload.properties: missing 'user'")
         val pass = up.getProperty("password") ?: throw GradleException("upload.properties: missing 'password'")
         val remoteDir = up.getProperty("remoteDir").orEmpty().trim().trim('/')
+        val ftpHost = up.getProperty("ftpHost")?.trim()
+            ?: throw GradleException("upload.properties: missing 'ftpHost' — the FTPS server host whose certificate is valid (e.g. athena.ukrhost.biz).")
 
         val local = rootProject.file("privacy.html")
         if (!local.exists()) throw GradleException("privacy.html not found: $local")
-        val path = if (remoteDir.isEmpty()) "ftp://$host/privacy.html" else "ftp://$host/$remoteDir/privacy.html"
 
-        val result = ProcessBuilder(
-            listOf("curl", "-sS", "--ftp-create-dirs", "-T", local.absolutePath, path, "--user", "$user:$pass")
-        ).redirectErrorStream(true).start()
-        val output = result.inputStream.readBytes().toString(Charsets.UTF_8)
-        val code = result.waitFor()
-        if (output.isNotBlank()) println(output)
-        if (code != 0) throw GradleException("FTP upload of privacy.html failed (exit $code)")
+        ftpUpload(ftpHost, remoteDir, user, pass, local, "privacy.html")
         println("Privacy policy: https://$host/other_apps/oko/privacy.html")
     }
 }
