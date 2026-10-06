@@ -1596,6 +1596,11 @@ val mappedThreats = registry.allThreats.map { list ->
             }
         }
 
+        // Sampled BEFORE the reconcile pipeline: an all-clear post tears the episode down
+        // (dropOfficialEpisode), which clears the "observed live" latch fact. The morale window
+        // closes on this same tick and gates on that fact, so reading it after the pipeline would
+        // always be false — which is how the alarm summary silently stopped posting.
+        val episodeWasConfirmedLive = latchedConfirmedLive
         // Invoke the reconcile pipeline. Verdicts (plugin-owned) already decided
         // sound/silent/suppress above; below only executes. Official paths untouched.
         val primary = buildPrimary(state, all)
@@ -1611,7 +1616,7 @@ val mappedThreats = registry.allThreats.map { list ->
             episodeTally.begin(effCity, now)
         } else if (!alarmNowActive && episodeActive) {
             episodeActive = false
-            if (latchedConfirmedLive) {
+            if (episodeWasConfirmedLive) {
                 episodeTally.finish(state.focusBannerCity, state.lang, state.officialAlertsEnabled, now)
                 lastEpisodeReplay = episodeTally.snapshot()
             }

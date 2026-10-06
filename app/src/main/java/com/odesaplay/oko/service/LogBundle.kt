@@ -323,6 +323,7 @@ object LogBundle {
                     p("gpsEnabled", e.gpsEnabled)
                     p("batteryUnoptimized", e.batteryUnoptimized)
                     p("processStartMonoMs", e.processStartMonoMs)
+                    p("processCpuMs", e.processCpuMs)
                     p("feedThreats", e.feedThreats)
                     p("activeZones", e.activeZones)
                     p("screenBrightness", e.screenBrightness)
@@ -467,14 +468,25 @@ object LogBundle {
         var restarts = 0
         var maxBlindWindowMs = 0L
         var previousStart: Long? = null
+        var previousCpu: Long? = null
         val generations = LinkedHashSet<Long>()
         val pcts = ArrayList<Int>()
+        val cpuPct = ArrayList<Double>()
 
         for (i in power.indices) {
             val s = power[i]
             if (i > 0) {
                 val gapMs = s.atMillis - power[i - 1].atMillis
                 if (gapMs > longestGapMs) longestGapMs = gapMs
+                // CPU burnt over this interval as a percentage of ONE core. Null-safe on both
+                // sides: a pair that spans a process restart (cpu resets to ~0) would read as a
+                // huge negative, and a sample predating the field reads as unknown, not as zero.
+                val cpu = s.processCpuMs
+                val priorCpu = previousCpu
+                if (cpu != null && priorCpu != null && gapMs > 0 && cpu >= priorCpu &&
+                    s.processStartMonoMs == power[i - 1].processStartMonoMs) {
+                    cpuPct.add((cpu - priorCpu) * 100.0 / gapMs)
+                }
                 // A new process generation inside a gap means the process died. The gap is an
                 // UPPER BOUND on blindness: it also covers the wait before the new process's
                 // first sample, so never quote it as the real figure.
@@ -488,6 +500,7 @@ object LogBundle {
             // Carry the last known value across a null (a sample predating this field) so the
             // first post-upgrade sample is not misread as a restart.
             if (s.processStartMonoMs != null) previousStart = s.processStartMonoMs
+            s.processCpuMs?.let { previousCpu = it }
             if (s.interactive == true) screenOn++
             if ((s.activeZones ?: 0) > 0) zoneActive++
             s.screenBrightness?.let { bright += it; brightCount++ }
@@ -508,6 +521,13 @@ object LogBundle {
             p("screenOnPct", screenOn * 100 / power.size)
             p("zonesActivePct", zoneActive * 100 / power.size)
             p("meanBrightness", if (brightCount > 0) bright / brightCount else null)
+            // CPU as a share of ONE core, per interval. The mean here is legitimate (unlike
+            // brightness): the distribution is bounded at 100 and one-sided, so there is no
+            // long tail of outliers to skew it — and the max catches a burst that the mean hides.
+            // null, not 0: no sample pair carrying the field is "cannot tell".
+            p("cpuPctMean", cpuPct.takeIf { it.isNotEmpty() }?.average())
+            p("cpuPctMax", cpuPct.maxOrNull())
+            p("cpuIntervals", cpuPct.size.takeIf { cpuPct.isNotEmpty() })
             p("batteryPctMin", pcts.minOrNull())
             p("batteryPctMax", pcts.maxOrNull())
         }

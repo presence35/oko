@@ -87,10 +87,7 @@ object BatteryOptimization {
     /** Shows the system "allow background run?" dialog for this app. */
     fun requestExemption(context: Context) {
         try {
-            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                .setData(Uri.parse("package:${context.packageName}"))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
+            context.startActivity(genericExemptionIntent(context))
         } catch (_: Exception) {
             // Some devices don't offer the dialog — fall back to the general settings list.
             try {
@@ -106,10 +103,53 @@ object BatteryOptimization {
     /**
      * Attempt to open the manufacturer-specific auto-start / battery settings page.
      * Returns `true` if an intent was launched, `false` if none available for this OEM.
+     *
+     * The boolean means "did the OEM path launch", not "did anything launch" — `false` still
+     * opens the standard dialog. `BatteryOptimizationTest` pins both halves of that.
      */
     fun requestExemptionOemAware(context: Context): Boolean {
+        val intent = oemSettingsIntent(context)
+
+        return if (intent != null) {
+            try {
+                context.startActivity(intent)
+                true
+            } catch (_: Exception) {
+                // OEM intent not available on this ROM version — fall back to standard
+                requestExemption(context)
+                false
+            }
+        } else {
+            // No OEM-specific intent — use standard Android dialog
+            requestExemption(context)
+            false
+        }
+    }
+
+    /**
+     * The OEM settings screen when one exists, otherwise the standard exemption dialog intent.
+     *
+     * Deliberately not the same fallback as [requestExemptionOemAware]: a `PendingIntent` resolves
+     * at tap time and cannot catch a dead OEM component, so it must decide now, by resolving the
+     * component. On a ROM where the vendor screen is missing, that yields the generic dialog rather
+     * than a tap that does nothing. See `AlertNotificationManager.exemptionIntent`.
+     */
+    fun exemptionIntent(context: Context): Intent {
+        val oem = oemSettingsIntent(context)
+        val installed = oem?.component?.packageName?.let { pkg ->
+            runCatching { context.packageManager.getPackageInfo(pkg, 0) }.isSuccess
+        } == true
+        return if (installed) oem!! else genericExemptionIntent(context)
+    }
+
+    private fun genericExemptionIntent(context: Context): Intent =
+        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            .setData(Uri.parse("package:${context.packageName}"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    private fun oemSettingsIntent(context: Context): Intent? {
         val oem = getOemInfo(context)
-        val intent = when {
+        return when {
             // Xiaomi / Redmi / POCO — MIUI auto-start manager
             oem.manufacturer.lowercase().let { it.contains("xiaomi") || it.contains("redmi") || it.contains("poco") } ->
                 Intent().apply {
@@ -147,21 +187,6 @@ object BatteryOptimization {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
             else -> null
-        }
-
-        return if (intent != null) {
-            try {
-                context.startActivity(intent)
-                true
-            } catch (_: Exception) {
-                // OEM intent not available on this ROM version — fall back to standard
-                requestExemption(context)
-                false
-            }
-        } else {
-            // No OEM-specific intent — use standard Android dialog
-            requestExemption(context)
-            false
         }
     }
 }

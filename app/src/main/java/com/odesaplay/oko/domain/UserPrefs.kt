@@ -269,8 +269,6 @@ class UserPrefs(private val context: Context) {
             p[digestWindowKey] = patch.digestWindow.name
             p[digestPerTypeKey] = patch.digestPerType
             p[digestMaxKey] = patch.digestMax.coerceIn(1, 10)
-            p[slowRedKmKey] = patch.slowRedKm
-            p[slowYellowKmKey] = patch.slowYellowKm
             p[fastRedMinKey] = patch.fastRedMin
             p[fastYellowMinKey] = patch.fastYellowMin
             p[slowRedArmedKey] = patch.slowRedArmed

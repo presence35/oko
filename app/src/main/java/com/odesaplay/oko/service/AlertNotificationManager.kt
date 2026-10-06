@@ -537,15 +537,17 @@ const val NOTIF_MONITORING_PAUSED = 9
     }
 
     /**
-     * The system "allow unrestricted background use?" dialog, as a PendingIntent.
+     * The battery-exemption screen as a PendingIntent — the OEM-specific one when the device
+     * resolves it, the system "allow unrestricted background use?" dialog otherwise.
      *
      * A `getActivity` intent rather than a service action on purpose: if the service received this
      * tap and then called `startActivity`, Android 10+ would block the background launch. Handing
-     * the activity to the platform as a PendingIntent keeps the user's tap as the grant.
+     * the activity to the platform as a PendingIntent keeps the user's tap as the grant — which is
+     * also why `BatteryOptimization.exemptionIntent` pre-resolves instead of relying on the
+     * try/catch fallback that [BatteryOptimization.requestExemptionOemAware] can afford.
      */
     private fun exemptionIntent(): PendingIntent {
-        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-            .setData(Uri.parse("package:${context.packageName}"))
+        val intent = BatteryOptimization.exemptionIntent(context)
         return PendingIntent.getActivity(
             context,
             13,

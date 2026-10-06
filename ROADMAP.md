@@ -19,14 +19,14 @@ tells people to go turn things down and hunting four pages is not "turning it do
 
 What each owns, and what none of them may touch:
 
-| | Always ready | Normal | Quiet house | Just watching |
+| | Aware | Normal | Quiet | Watching |
 |---|---|---|---|---|
 | always sound / bypass silent | on / on | off / off | off / off | off / off |
 | critical-offline override | on | on | on | **off** |
 | restart after reboot / periodic GPS | on / on | on / off | on / off | **off / off** |
 | battery ask | armed | armed | armed | **silenced** |
 | repeat-sound policy | every change | once per threat | digest 10 min, per type, max 5 | digest 60 min |
-| rings | 20/50 km, all 4 armed | 20/50, fast-yellow off | **15/40 km** | 20/50, **all 4 off** |
+| rings armed | all 4 | fast-yellow off | fast-yellow off | **all 4 off** |
 | night window | **all 8 bells armed, both siren overrides on** | untouched | untouched | untouched |
 | types that ring | all | all | **all but aviation/recon/unknown** | **all but unknown** |
 | follow bullet / HQ blasts | on / on | on / on | **off / off** | **off / off** |
@@ -34,9 +34,11 @@ What each owns, and what none of them may touch:
 | shelters | on | on | on | **off** |
 
 Map visibility is never in the patch — a persona decides what rings, never what is drawn. Neither
-is morale, the tallies, language, the pinned city or map appearance: someone who picks
-"quiet house" still gets the neutralized counter, because that counter is the cheap thirty-second
-payoff and the effects are the expensive noise.
+is morale, the tallies, language, the pinned city, map appearance, or the **zone radii**: the rings
+are the user's own reach, and a preset tap silently resizing them was a change nobody asked for
+(removed after shipping exactly that surprise). Someone who picks "Quiet" still gets the
+neutralized counter, because that counter is the cheap thirty-second payoff and the effects are the
+expensive noise.
 
 **The night window is claimed, not stated** — `IntensityPatch.night` is the one nullable field,
 `IntensityNight`, set only by ALWAYS_READY (all eight bells armed, both siren overrides on). Every
@@ -84,15 +86,14 @@ threats AND alerts, so no clock skew can fabricate or hide a miss; one reused no
 everything coalesces into one updating row; `setTimeoutAfter(12 h)` for retirement; and the opt-in
 switch. The retirement replaced the original "clear it when the app is opened" idea on purpose:
 clearing on `onResume` would destroy the only reminder for an overnight event every time the user
-glanced at their phone.
+glanced at their phone. The notice's button now opens the OEM's own battery/autostart screen when
+the device has one (`BatteryOptimization.exemptionIntent`), so `requestExemptionOemAware` finally
+has a production caller too; the two functions share one table but keep DIFFERENT fallbacks on
+purpose, because a `PendingIntent` cannot catch a missing component at tap time and therefore
+pre-checks the vendor package is installed, while the imperative path tries and catches.
 
 **Remaining:**
 
-- **The exemption ask is still just a Settings row.** The notice's button opens the generic
-  `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` dialog, because the intent is built inline in
-  `AlertNotificationManager`. `BatteryOptimization.requestExemptionOemAware()` already resolves the
-  OEM-specific screen and has NO production caller, only `BatteryOptimizationTest`. Wiring it into
-  that button is what sends a Samsung/Xiaomi user to the screen that actually fixes their device.
 - **Let the measured sleep history choose the copy instead of the vendor string.**
   `getOemInfo()`'s manufacturer table exists only to pick a screen, and `isAggressive` changes one
   *title adjective*: the EN and UA bodies are byte-identical and the click path is identical. The

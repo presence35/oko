@@ -1,9 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+- Logs now carry per-sample process CPU time, so a battery report can be attributed to the app or to the screen without guessing 10-06_19:40:00
+- The asleep notice's "unrestricted background" button opens the manufacturer's own battery/autostart screen when the device has one, instead of always the generic dialog 10-06_19:40:00
 - The alert notification's first button is now "Mute &lt;type&gt;" — silence one threat kind (e.g. drones) for good, undo it in Settings → Threats; region-only red and yellow alerts keep "OK" 10-06_22:20:00
 - The first-run wizard's channel post now shows the Telegram logo and name next to NEPTUN 10-06_22:20:00
 - The five Morale voices now read as real Russian instead of English text under a Russian name 10-06_21:53:12
+- Fixed the "alarm summary" notification never arriving: the summary and the all-clear are decided on the same tick, and the all-clear's teardown cleared the fact the summary gated on — so the show was only reachable by tapping the all-clear 10-06_22:48:03
+- The ready-made setups in Settings → Reliability are now always visible instead of hidden behind a tap 10-06_22:48:03
+- The four setups are one word each — Aware, Normal, Quiet, Watching — and Normal is marked as the one you already have 10-06_22:48:03
+- The ready-made setups no longer resize your zone circles: those are your own reach, not a persona's, and a tap that silently moved them was a change nobody asked for 10-06_22:48:03
+- The asleep-notice and restart-after-reboot rows now use the same icon style as every other settings row, instead of an emoji 10-06_22:48:03
 
 ## [0.6.790]
 

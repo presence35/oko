@@ -86,6 +86,21 @@ class AlertEpisodeClearTest {
     private fun allClearTitle(): String? =
         allClear()?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()
 
+    private fun alarmSummary(): Notification? =
+        notificationManager().getNotification(AlertNotificationManager.NOTIF_ALARM_EPISODE)
+
+    /**
+     * The summary is posted from the service's IO scope, so `handleState` returning is not proof it
+     * landed. Bounded poll, so a regression still fails fast instead of hanging.
+     */
+    private fun awaitAlarmSummary(): Notification? {
+        repeat(300) {
+            alarmSummary()?.let { return it }
+            Thread.sleep(10)
+        }
+        return null
+    }
+
     /** (deadline, closed) — the two facts only the TTL and the debris ticks read. */
     private fun allClearLifecycle() = service().allClearLifecycleForTest()
 
@@ -257,6 +272,25 @@ class AlertEpisodeClearTest {
         assertFalse(
             "the second episode's all-clear must reopen the debris countdown",
             allClearLifecycle().second
+        )
+    }
+
+    /**
+     * The morale window closes on the same tick the all-clear posts, and the all-clear's own
+     * teardown clears the "observed live" fact that window gates on. Reading that fact after the
+     * pipeline ran made the gate permanently false: the summary never posted, while the all-clear
+     * tap kept replaying the very records the summary is built from — which is why the show was
+     * still reachable by hand and looked like "the notification just doesn't arrive".
+     */
+    @Test
+    fun `an ended episode posts its alarm summary`() {
+        announce(1_000)
+        tick(3_000, monitor())
+
+        assertNotNull("the episode ended, so an all-clear must be up", allClear())
+        assertNotNull(
+            "and the morale summary for that same episode must be posted",
+            awaitAlarmSummary()
         )
     }
 }

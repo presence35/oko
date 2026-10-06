@@ -13,7 +13,8 @@ class LogBundleTest {
         start: Long? = 1_000L,
         battery: Int? = 50,
         interactive: Boolean? = false,
-        zones: Int? = 0
+        zones: Int? = 0,
+        cpu: Long? = null
     ) = BatterySample(
         atMillis = atMillis,
         batteryPct = battery,
@@ -26,6 +27,7 @@ class LogBundleTest {
         gpsEnabled = true,
         batteryUnoptimized = false,
         processStartMonoMs = start,
+        processCpuMs = cpu,
         feedThreats = 10,
         activeZones = zones
     )
@@ -122,6 +124,46 @@ class LogBundleTest {
         assertEquals(50, summary.getInt("zonesActivePct"))
         assertEquals(76, summary.getInt("batteryPctMin"))
         assertEquals(80, summary.getInt("batteryPctMax"))
+    }
+
+    /** 250ms of CPU per 25s wall = 1% of one core. */
+    @Test
+    fun `cpu is summarised as a share of one core`() {
+        val summary = LogBundle.summarisePower(
+            listOf(
+                sample(0L, cpu = 1_000L),
+                sample(25_000L, cpu = 1_250L),
+                sample(50_000L, cpu = 1_500L)
+            )
+        )
+        assertEquals(2, summary.getInt("cpuIntervals"))
+        assertEquals(1.0, summary.getDouble("cpuPctMean"), 0.001)
+        assertEquals(1.0, summary.getDouble("cpuPctMax"), 0.001)
+    }
+
+    /** A restart resets the counter; that pair must not read as a huge negative rate. */
+    @Test
+    fun `a cpu pair spanning a restart is skipped`() {
+        val summary = LogBundle.summarisePower(
+            listOf(
+                sample(0L, cpu = 500_000L, start = 1_000L),
+                sample(25_000L, cpu = 10L, start = 2_000L),
+                sample(50_000L, cpu = 260L, start = 2_000L)
+            )
+        )
+        // Only the second pair (250ms / 25s) is counted.
+        assertEquals(1, summary.getInt("cpuIntervals"))
+        assertEquals(1.0, summary.getDouble("cpuPctMean"), 0.001)
+    }
+
+    @Test
+    fun `no cpu field means cannot tell, not zero`() {
+        val summary = LogBundle.summarisePower(
+            listOf(sample(0L, cpu = null), sample(25_000L, cpu = null))
+        )
+        assertTrue(summary.isNull("cpuPctMean"))
+        assertTrue(summary.isNull("cpuPctMax"))
+        assertTrue(summary.isNull("cpuIntervals"))
     }
 
     private fun exit(

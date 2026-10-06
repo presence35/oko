@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -18,7 +19,8 @@ import org.robolectric.RobolectricTestRunner
 /**
  * The presets picker, rendered. [WizardFlowTest] owns the rules; this owns the things a pure
  * function cannot see — that the four names are wired to the four setups, that the subtext follows
- * the selection instead of describing all four at once, and that no language leaves a tile blank.
+ * the selection instead of describing all four at once, that exactly one tile wears the default
+ * mark, and that no language leaves a tile blank.
  */
 @RunWith(RobolectricTestRunner::class)
 class IntensityPickerTest {
@@ -95,6 +97,28 @@ class IntensityPickerTest {
             compose.onNodeWithText(strings.wizardIntensityQuiet).assertIsDisplayed()
             compose.onNodeWithText(strings.wizardIntensityWatching).assertIsDisplayed()
             compose.onNodeWithText(strings.wizardIntensityQuietDesc).assertIsDisplayed()
+        }
+    }
+
+    /**
+     * Exactly one tile wears the "default setup" mark, and the mark does not follow the selection:
+     * a preset is a one-shot writer, so `selected` only ever means "just applied from here", never
+     * "currently active". Which tile *should* wear it is [AppIntensity.DEFAULT], and that it names
+     * the shipped setup is pinned field-for-field by `AppIntensityTest`.
+     */
+    @Test
+    fun `the default mark sits on one tile and ignores the selection`() {
+        var selection by mutableStateOf<AppIntensity?>(null)
+        compose.setContent {
+            IntensityPicker(s = s, selected = selection, onPick = {})
+        }
+
+        for (candidate in AppIntensity.values()) {
+            compose.runOnIdle { selection = candidate }
+            compose.onAllNodesWithContentDescription(
+                s.wizardIntensityDefaultBadge,
+                useUnmergedTree = true
+            ).assertCountEquals(1)
         }
     }
 }

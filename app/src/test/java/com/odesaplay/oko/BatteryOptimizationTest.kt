@@ -2,6 +2,7 @@ package com.odesaplay.oko
 
 import android.app.Application
 import android.content.Context
+import android.content.pm.PackageInfo
 import android.os.PowerManager
 import android.provider.Settings
 import org.junit.Assert.assertEquals
@@ -88,5 +89,40 @@ class BatteryOptimizationTest {
         assertFalse(launched)
         val started = Shadows.shadowOf(context as Application).nextStartedActivity
         assertEquals(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, started?.action)
+    }
+
+    @Test
+    fun `notification intent uses the vendor page when the vendor app is installed`() {
+        BatteryOptimization.setSimulatedOem(context, "Xiaomi")
+        Shadows.shadowOf(context.packageManager).installPackage(
+            PackageInfo().apply { packageName = "com.miui.securitycenter" }
+        )
+
+        val intent = BatteryOptimization.exemptionIntent(context)
+
+        assertEquals("com.miui.securitycenter", intent.component?.packageName)
+    }
+
+    @Test
+    fun `notification intent falls back to the standard dialog when the vendor page is absent`() {
+        // A PendingIntent cannot catch a missing vendor screen at tap time, so an uninstalled one
+        // must yield the generic dialog here — the opposite of requestExemptionOemAware's
+        // optimistic behaviour, which stays as it is for its own test.
+        BatteryOptimization.setSimulatedOem(context, "Huawei")
+
+        val intent = BatteryOptimization.exemptionIntent(context)
+
+        assertNull(intent.component)
+        assertEquals(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, intent.action)
+    }
+
+    @Test
+    fun `notification intent for an unknown vendor is the standard dialog`() {
+        BatteryOptimization.setSimulatedOem(context, "Google")
+
+        val intent = BatteryOptimization.exemptionIntent(context)
+
+        assertNull(intent.component)
+        assertEquals(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, intent.action)
     }
 }

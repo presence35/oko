@@ -13,7 +13,16 @@ package com.odesaplay.oko
  * handling, aggressive sound). That paranoia is correct near the front line and absurd in a
  * living room, and the knobs that control it are scattered across four settings pages.
  */
-enum class AppIntensity { ALWAYS_READY, BALANCED, QUIET, WATCHING }
+enum class AppIntensity {
+    ALWAYS_READY, BALANCED, QUIET, WATCHING;
+
+    companion object {
+        /** The setup the app ships with — the tile the picker marks as "what you already have".
+         *  [AppIntensityTest] holds it to `UserPreferences.DEFAULT` field for field, so the mark
+         *  cannot become a lie. */
+        val DEFAULT = BALANCED
+    }
+}
 
 /**
  * The night window, as a preset sees it. A group rather than eight flat fields because it is the
@@ -39,7 +48,9 @@ data class IntensityNight(
  *
  * Fields deliberately absent, because no preset has an opinion on them: language, map appearance,
  * official-alert levels, the neutralized/alarm tallies, the morale master, GPS follow-me,
- * shelters-for-kids and the pinned city. Those belong to the person, not to a persona.
+ * shelters-for-kids, the pinned city and the zone radii. Those belong to the person, not to a
+ * persona — in particular the rings are the user's own reach, and a preset tap silently resizing
+ * them is a change nobody asked for.
  */
 data class IntensityPatch(
     // Reliability: how much the phone is expected to fight for the alert.
@@ -56,9 +67,7 @@ data class IntensityPatch(
     val digestWindow: DigestWindow,
     val digestPerType: Boolean,
     val digestMax: Int,
-    // Personal rings and how fast they escalate.
-    val slowRedKm: Int,
-    val slowYellowKm: Int,
+    // How fast the personal rings escalate.
     val fastRedMin: Int,
     val fastYellowMin: Int,
     val slowRedArmed: Boolean,
@@ -100,8 +109,6 @@ fun AppIntensity.patch(): IntensityPatch = when (this) {
         digestWindow = DigestWindow.EPISODE,
         digestPerType = false,
         digestMax = 10,
-        slowRedKm = 20,
-        slowYellowKm = 50,
         fastRedMin = 5,
         fastYellowMin = 20,
         slowRedArmed = true,
@@ -113,7 +120,7 @@ fun AppIntensity.patch(): IntensityPatch = when (this) {
         highQualityExplosions = true,
         deathAnimationStyle = DeathAnimationStyle.ADVANCED,
         sheltersEnabled = true,
-        // "Always ready" means 3am too: every night bell armed and both siren overrides on, so the
+        // "Aware" means 3am too: every night bell armed and both siren overrides on, so the
         // night window stops being the one place the app goes quiet.
         night = IntensityNight(
             zoneSirenOverride = true,
@@ -142,8 +149,6 @@ fun AppIntensity.patch(): IntensityPatch = when (this) {
         digestWindow = DigestWindow.EPISODE,
         digestPerType = false,
         digestMax = 10,
-        slowRedKm = 20,
-        slowYellowKm = 50,
         fastRedMin = 5,
         fastYellowMin = 20,
         slowRedArmed = true,
@@ -169,8 +174,6 @@ fun AppIntensity.patch(): IntensityPatch = when (this) {
         digestWindow = DigestWindow.MIN_10,
         digestPerType = true,
         digestMax = 5,
-        slowRedKm = 15,
-        slowYellowKm = 40,
         fastRedMin = 5,
         fastYellowMin = 20,
         slowRedArmed = true,
@@ -200,8 +203,6 @@ fun AppIntensity.patch(): IntensityPatch = when (this) {
         digestWindow = DigestWindow.MIN_60,
         digestPerType = false,
         digestMax = 10,
-        slowRedKm = 20,
-        slowYellowKm = 50,
         // Slow escalation, and not armed at all: no in-zone bells for someone who lives far away.
         fastRedMin = 10,
         fastYellowMin = 45,

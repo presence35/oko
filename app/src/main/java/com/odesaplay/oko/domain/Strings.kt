@@ -82,6 +82,7 @@ object Strings {
         val wizardIntensityQuietDesc: String,
         val wizardIntensityWatching: String,
         val wizardIntensityWatchingDesc: String,
+        val wizardIntensityDefaultBadge: String,
         val settingsSearchHint: String,
         val settingsSearchClear: String,
         val settingsNoResults: String,
@@ -950,6 +951,7 @@ object Strings {
         val wizardIntensityQuietDesc: String get() = onboarding.wizardIntensityQuietDesc
         val wizardIntensityWatching: String get() = onboarding.wizardIntensityWatching
         val wizardIntensityWatchingDesc: String get() = onboarding.wizardIntensityWatchingDesc
+        val wizardIntensityDefaultBadge: String get() = onboarding.wizardIntensityDefaultBadge
         val selfLanguageName: String get() = subtitles.selfLanguageName
         val iconsLabel: String get() = subtitles.iconsLabel
         val fitMapLabel: String get() = onboarding.fitMapLabel

@@ -27,7 +27,8 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.outlined.CropFree
@@ -237,8 +238,6 @@ fun SettingsScreen(
     val searchNormalized = searchQuery.searchNorm()
     val searchWords = searchNormalized.split(" ").filter { it.isNotBlank() }
     var showBootRestartOffConfirm by remember { mutableStateOf(false) }
-    // The presets panel is pure view state: nothing about a preset is remembered once applied.
-    var presetsOpen by remember { mutableStateOf(false) }
     // Which quadrant the subtext is describing. Starts null — nothing has been applied from here.
     var presetShown by remember { mutableStateOf<AppIntensity?>(null) }
     val searching = searchNormalized.isNotEmpty()
@@ -654,32 +653,38 @@ fun SettingsScreen(
             when (section) {
                 SettingsSection.RELIABILITY -> SectionDetailBody(stateSummary = sectionSummary(section)) {
                     // The escape hatch for the alpha note's advice: one tap instead of hunting the
-                    // four pages these switches live on.
-                    SettingsActionRow(
-                        icon = rememberVectorPainter(Icons.Filled.Tune),
-                        title = s.setupPresetTitle,
-                        subtitle = s.setupPresetDesc,
-                        onClick = { presetsOpen = !presetsOpen }
-                    )
-                    AnimatedVisibility(visible = presetsOpen) {
-                        Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
-                            IntensityPicker(
-                                s = s,
-                                selected = presetShown,
-                                onPick = { intensity ->
-                                    // Applied on tap, panel left open: the subtext then explains
-                                    // what was just written, and another tap tries something else.
-                                    onApplyIntensity(intensity)
-                                    presetShown = intensity
-                                }
-                            )
-                            Spacer(Modifier.height(10.dp))
-                            Text(
-                                s.setupPresetHint,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    // four pages these switches live on. Always expanded — a collapsed row hid the
+                    // very choice it existed to offer.
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(
+                            s.setupPresetTitle,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            s.setupPresetDesc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        IntensityPicker(
+                            s = s,
+                            selected = presetShown,
+                            onPick = { intensity ->
+                                // Applied on tap, the picker left as it is: the subtext then explains
+                                // what was just written, and another tap tries something else.
+                                onApplyIntensity(intensity)
+                                presetShown = intensity
+                            }
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            s.setupPresetHint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlwaysSoundRow(
@@ -1479,7 +1484,8 @@ private fun BootRestartRow(
         description = s.bootRestartDesc,
         checked = checked,
         onCheckedChange = { v -> if (!v) onRequestDisable() else onChange(true) },
-        emoji = "🛡️"
+        icon = rememberVectorPainter(Icons.Filled.PowerSettingsNew),
+        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }
 
@@ -1498,7 +1504,8 @@ private fun SleepNoticeRow(
         description = s.sleepNoticeSettingDesc,
         checked = checked,
         onCheckedChange = onChange,
-        emoji = "😴"
+        icon = rememberVectorPainter(Icons.Filled.Bedtime),
+        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }
 

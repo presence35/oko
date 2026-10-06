@@ -42,6 +42,13 @@ data class BatterySample(
      *  across samples, and wall clock can jump (NTP, DST, a manual change) mid-run. Null on
      *  samples written before this field existed; the file self-heals as compaction rewrites it. */
     val processStartMonoMs: Long? = null,
+    /** Cumulative CPU milliseconds burnt by THIS process since it started
+     *  (`Process.getElapsedCpuTime()`, user+system). Monotonic like [processStartMonoMs], so
+     *  consecutive samples give a rate; 100% of one core means the delta equals the wall delta.
+     *
+     *  The one figure in the bundle that measures what the app COSTS rather than what the device
+     *  reports about the battery. Null on samples predating the field. */
+    val processCpuMs: Long? = null,
     /** How many threats the feed carried this tick — NEPTUN's throughput, NOT the user's load.
      *  Kept because per-threat parse/decide work is a plausible drain, but never read it as
      *  "work near the user"; [activeZones] is that number. */
@@ -162,6 +169,7 @@ object BatteryLog {
             }.getOrNull(),
             batteryUnoptimized = runCatching { pm?.isIgnoringBatteryOptimizations(ctx.packageName) }.getOrNull(),
             processStartMonoMs = Process.getStartElapsedRealtime(),
+            processCpuMs = runCatching { Process.getElapsedCpuTime() }.getOrNull(),
             feedThreats = feedThreats,
             activeZones = activeZones,
             // Auto-brightness is the common case and this reports the user's slider, so it is
@@ -211,6 +219,7 @@ object BatteryLog {
         s.gpsEnabled?.let { put("gps", it) }
         s.batteryUnoptimized?.let { put("opt", it) }
         s.processStartMonoMs?.let { put("proc", it) }
+        s.processCpuMs?.let { put("cpu", it) }
         s.feedThreats?.let { put("feed", it) }
         s.activeZones?.let { put("zn", it) }
         s.screenBrightness?.let { put("bri", it.toDouble()) }
@@ -230,6 +239,7 @@ object BatteryLog {
             gpsEnabled = o.optBooleanOrNull("gps"),
             batteryUnoptimized = o.optBooleanOrNull("opt"),
             processStartMonoMs = o.optLongOrNull("proc"),
+            processCpuMs = o.optLongOrNull("cpu"),
             feedThreats = o.optIntOrNull("feed"),
             activeZones = o.optIntOrNull("zn"),
             screenBrightness = o.optDoubleOrNull("bri")?.toFloat()

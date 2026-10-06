@@ -141,8 +141,6 @@ class UserPrefsTest {
         assertEquals(patch.digestWindow, p.digestWindow)
         assertEquals(patch.digestPerType, p.digestPerType)
         assertEquals(patch.digestMax, p.digestMax)
-        assertEquals(patch.slowRedKm, p.slowRedKm)
-        assertEquals(patch.slowYellowKm, p.slowYellowKm)
         assertEquals(patch.fastRedMin, p.fastRedMin)
         assertEquals(patch.fastYellowMin, p.fastYellowMin)
         assertEquals(patch.slowRedArmed, p.slowRedArmed)
@@ -172,6 +170,25 @@ class UserPrefsTest {
         assertFalse(p.alertEnabledTypes.contains(ThreatType.RECON))
     }
 
+    /**
+     * The rings are the user's own reach, not a persona's. A preset sets what rings and how fast it
+     * escalates — never how far the circles reach. A tap that silently resized them was a change
+     * nobody asked for, and one the user could only discover by noticing the map.
+     */
+    @Test
+    fun `an intensity patch leaves the zone radii alone`() = runTest {
+        prefs.clearAll()
+        prefs.setSlowRedKm(7)
+        prefs.setSlowYellowKm(30)
+
+        for (intensity in AppIntensity.values()) {
+            prefs.applyIntensity(intensity.patch())
+            val p = prefs.preferences.first()
+            assertEquals(intensity.name, 7, p.slowRedKm)
+            assertEquals(intensity.name, 30, p.slowYellowKm)
+        }
+    }
+
     @Test
     fun `re-applying an intensity restores it exactly`() = runTest {
         prefs.clearAll()
@@ -183,8 +200,9 @@ class UserPrefsTest {
         prefs.applyIntensity(quiet)
 
         val p = prefs.preferences.first()
-        assertEquals(quiet.slowRedKm, p.slowRedKm)
         assertEquals(quiet.followBullet, p.followBullet)
+        // …and the hand-set ring is not the preset's to reset.
+        assertEquals(3, p.slowRedKm)
     }
 
     /**

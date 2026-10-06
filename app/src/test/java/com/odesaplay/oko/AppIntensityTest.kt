@@ -19,8 +19,6 @@ class AppIntensityTest {
             assertTrue(intensity.name, patch.alertTypes.isNotEmpty())
             assertTrue(intensity.name, patch.alertTypes.all { it in ThreatType.values() })
             assertTrue(intensity.name, patch.digestMax in 1..10)
-            assertTrue(intensity.name, patch.slowRedKm > 0)
-            assertTrue(intensity.name, patch.slowYellowKm >= patch.slowRedKm)
             assertTrue(intensity.name, patch.fastYellowMin >= patch.fastRedMin)
         }
     }
@@ -35,8 +33,6 @@ class AppIntensityTest {
         assertNull("Normal must not touch the night window", AppIntensity.BALANCED.patch().night)
         val d = UserPreferences.DEFAULT
         val patch = AppIntensity.BALANCED.patch()
-        assertEquals(d.slowRedKm, patch.slowRedKm)
-        assertEquals(d.slowYellowKm, patch.slowYellowKm)
         assertEquals(d.fastRedMin, patch.fastRedMin)
         assertEquals(d.fastYellowMin, patch.fastYellowMin)
         assertEquals(d.slowRedArmed, patch.slowRedArmed)
