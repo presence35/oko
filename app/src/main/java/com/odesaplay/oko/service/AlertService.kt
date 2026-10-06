@@ -1753,8 +1753,8 @@ val mappedThreats = registry.allThreats.map { list ->
      *  only gate allowed to end it — a city-scoped episode must not need the whole oblast to fall
      *  quiet. [LatchedEpisode.parse] reads both the new and the old shape. */
     private fun announcedRow(state: MonitorState): String =
-        "${state.focusOblastLevel}|${state.focusToken}|" +
-            "${state.focusOblastAlertSince}|${state.focusBannerCity}|" +
+        "${state.focusOblastLevel}|${state.focusToken.orEmpty()}|" +
+            "${state.focusOblastAlertSince.orEmpty()}|${state.focusBannerCity}|" +
             "${state.focusCityUa.orEmpty()}|${if (state.cityScopeEffective) 1 else 0}"
 
     private fun persistOfficialAnnounced(state: MonitorState) {
@@ -2047,6 +2047,9 @@ private fun nextUpdateCheckMillis(from: Long): Long {
         RaidMuteState.reset()
         audioAlarmDispatcher.release()
         debrisBuffer.abort()
+        // Detach the GNSS/network listeners so the radio can sleep. The next service instance
+        // re-subscribes from startMonitoring; start() is idempotent.
+        LocationTracker.stop()
         screenReceiver?.let { unregisterReceiver(it) }
         screenReceiver = null
         monitoringJob?.cancel()

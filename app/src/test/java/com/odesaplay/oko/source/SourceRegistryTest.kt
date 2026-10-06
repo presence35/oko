@@ -54,15 +54,19 @@ private class FakeSource(
 
 class SourceRegistryTest {
 
+    private lateinit var realNowProvider: () -> Long
+
     @Before
     fun setUp() {
         // JVM has no SystemClock.elapsedRealtime; give the registry a JVM-safe monotonic source.
+        // The real provider is restored in tearDown so no later suite inherits this clock.
+        realNowProvider = Monotonic.nowProvider
         Monotonic.nowProvider = { System.nanoTime() }
     }
 
     @After
     fun tearDown() {
-        Monotonic.nowProvider = { 0L }
+        Monotonic.nowProvider = realNowProvider
     }
 
     private fun testScope() = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
@@ -499,6 +503,20 @@ class SourceRegistryTest {
         tick += 1_000L
         ws.emitConnection(SourceState.OFFLINE)
         assertEquals(episodeStart, registry.degradedSince.value)
+    }
+
+    @Test
+    fun `unregister cancels the collectors so a removed source can no longer poke readiness`() {
+        val registry = SourceRegistry()
+        val scope = testScope()
+        val a = FakeSource("a")
+        registry.register(a, scope)
+        // The cold start's initial empty is the readiness baseline; nothing has proved liveness yet.
+        assertFalse(registry.alertsReady.value)
+        registry.unregister(a)
+        // A leaked collector would treat this as the second delivery and flip readiness.
+        a.emitAlerts(listOf(OblastAlert("k1", "n1", "Odesa", null)))
+        assertFalse(registry.alertsReady.value)
     }
 
     @Test

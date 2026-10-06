@@ -1,6 +1,7 @@
 package com.odesaplay.oko.source
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -141,6 +142,9 @@ class SourceRegistry {
     private var milestoneEpisodeStart = 0L
     private var milestoneLoopStarted = false
 
+    /** Per-source flow collectors, cancelled on [unregister] so no orphaned collection survives. */
+    private val sourceJobs = mutableMapOf<Source, List<Job>>()
+
     /** Branding link shown in the Logs header (domain of the primary source). */
     val siteUrl: String? get() = _sources.value.firstOrNull()?.siteUrl
 
@@ -149,10 +153,13 @@ class SourceRegistry {
         if (logSource == null && source is ConnectionLogSource) logSource = source
         rebuildTypeCatalog()
         source.start(scope)
-        scope.launch {
+        // One collector per flow, owned by the source so unregister can cancel them. Without
+        // this, unregister left five live collectors in the scope, and a re-register doubled them.
+        val jobs = mutableListOf<Job>()
+        jobs += scope.launch {
             source.threats.collect { remergeThreats() }
         }
-        scope.launch {
+        jobs += scope.launch {
             // Every emission merges (even the first — a late subscriber must never drop
             // a real snapshot). Readiness is separate: the first observed value is the
             // baseline, only the second+ proves a live snapshot delivery, so a cold
@@ -164,15 +171,17 @@ class SourceRegistry {
                 snapshotSeen = true
             }
         }
-        scope.launch {
+        jobs += scope.launch {
             source.connectionState.collect { recheckConnection() }
         }
-        scope.launch {
+        jobs += scope.launch {
             source.operationalMode.collect { remergeAlerts(); recheckConnection() }
         }
-        scope.launch {
+        jobs += scope.launch {
             source.removedThreats.collect { _removedThreats.tryEmit(it) }
         }
+        sourceJobs.remove(source)?.forEach { it.cancel() }
+        sourceJobs[source] = jobs
         if (!milestoneLoopStarted) {
             milestoneLoopStarted = true
             scope.launch {
@@ -188,6 +197,7 @@ class SourceRegistry {
     }
 
     fun unregister(source: Source) {
+        sourceJobs.remove(source)?.forEach { it.cancel() }
         source.stop()
         _sources.update { it - source }
         if (logSource === source) logSource = null

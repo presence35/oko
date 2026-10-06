@@ -142,7 +142,9 @@ class NeptunDecoder(
                 locality = optNullable("locality"),
                 lat = lat,
                 lon = lon,
-                heading = if (o.has("heading") && !o.isNull("heading")) o.optDouble("heading") else null,
+                heading = if (o.has("heading") && !o.isNull("heading")) {
+                    o.optDouble("heading", Double.NaN).takeIf { it.isFinite() }
+                } else null,
                 bearingDeg = bearingDeg,
                 status = o.optString("status", "active"),
                 advisory = o.optBoolean("advisory", false),

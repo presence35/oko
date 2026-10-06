@@ -39,6 +39,14 @@ class RaidMuteTest {
     }
 
     @Test
+    fun `a short timed mute never weakens a longer one already in force`() {
+        val active = RaidMute.Until(deadlineMs = 100_000L)
+        val tapped = active.forDuration(now = 1_000L, durationMs = 10_000L)
+        assertEquals(RaidMute.Until(100_000L), tapped)
+        assertTrue(tapped.silent(99_999L))
+    }
+
+    @Test
     fun `a spent deadline lapses to none instead of lingering as a dead mute`() {
         // The pill used to keep counting down to a deadline that had passed, and claim a mute
         // that no longer muted anything.

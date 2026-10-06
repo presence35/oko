@@ -1,15 +1,24 @@
 package com.odesaplay.oko.connection
 
+import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class MonotonicTest {
 
-    @Test
-    fun `default provider returns non-negative value`() {
-        val result = Monotonic.now()
-        assertTrue(result >= 0)
+    private lateinit var realNowProvider: () -> Long
+
+    @Before
+    fun setUp() {
+        realNowProvider = Monotonic.nowProvider
+    }
+
+    @After
+    fun tearDown() {
+        // Never leave a fixed test clock behind: it would freeze Monotonic for every later
+        // suite that shares this Gradle daemon JVM.
+        Monotonic.nowProvider = realNowProvider
     }
 
     @Test

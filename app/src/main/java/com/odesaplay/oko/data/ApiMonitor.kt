@@ -148,7 +148,12 @@ object ApiMonitor {
 }
 
 internal fun serializeSystemLog(entries: List<SystemEntry>): String =
-    entries.joinToString("\n") { "${it.atMillis}|${it.kind.name}|${it.detail}" }
+    // Newlines are the record separator, so a multiline detail (an exception message, a raw
+    // network error) would split one entry into several unparseable fragments. Flatten at the
+    // encoding boundary.
+    entries.joinToString("\n") {
+        "${it.atMillis}|${it.kind.name}|${it.detail.replace('\n', ' ').replace('\r', ' ')}"
+    }
 
 internal fun parseSystemLog(raw: String): List<SystemEntry> =
     raw.split('\n').mapNotNull { line ->

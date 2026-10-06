@@ -150,6 +150,19 @@ class ThreatEngineTest {
     }
 
     @Test
+    fun `predictPosition - non-finite course or speed returns null, never NaN coordinates`() {
+        val now = System.currentTimeMillis()
+        val props = NEPTUN_TYPES["shahed"]!!
+        val nanHeading = makeThreat(
+            bearingDeg = null, heading = Double.NaN,
+            updatedAtMillis = now - 60_000, confirmedAtMillis = now - 60_000
+        )
+        assertNull(engine.predictPosition(nanHeading, 50.0, props, now))
+        val nanSpeed = makeThreat(bearingDeg = 0.0, updatedAtMillis = now - 60_000)
+        assertNull(engine.predictPosition(nanSpeed, Double.NaN, props, now))
+    }
+
+    @Test
     fun `predictPosition - resolved status returns null`() {
         val threat = makeThreat(status = "resolved", confirmedAtMillis = System.currentTimeMillis() - 60_000)
         val props = NEPTUN_TYPES["shahed"]!!

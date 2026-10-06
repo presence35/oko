@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- Monitoring now releases the location listeners when the service stops, so the GPS radio can sleep instead of draining battery in the background 10-06_16:15:29
+- Tapping a short "Mute N min" no longer shortens a longer mute already in force 10-06_16:15:29
+- Long error messages in Logs no longer split into garbled rows 10-06_16:15:29
 - Night-mode settings: dropped the "Sound at night" heading above the alert toggles, which wrongly implied they only affect sound 10-06_15:58:49
 - Fixed a crash on launch: the app could die on the first tick after a restart while an official alert episode was still active, taking monitoring down with it 10-06_15:41:12
 - Beta page headline now reads "Beta test group" and the card no longer repeats it, and the bug-report note draws the actual NEPTUN mark with the live state word in the sentence instead of naming it 10-06_15:48:23

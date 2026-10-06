@@ -19,10 +19,11 @@ class ValidatedNetworkTracker<K : Any> {
         return wasEmpty && keys.isNotEmpty()
     }
 
-    /** @return true when this removal drained the set (was non-empty, now empty). */
+    /** @return true when this removal drained the set (the key was held and the set is now empty).
+     *  Removing an untracked key is an idempotent no-op and never reports a drain. */
     fun remove(key: K): Boolean {
-        keys.remove(key)
-        return keys.isEmpty()
+        val existed = keys.remove(key)
+        return existed && keys.isEmpty()
     }
 
     fun clear() = keys.clear()

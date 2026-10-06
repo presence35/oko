@@ -99,6 +99,16 @@ class OblastAlertEpisodeTest {
     }
 
     @Test
+    fun `a persisted null placeholder reads as an absent field, never the literal`() {
+        // The writer used to stringify a null `since`/`cityUa` as the text "null", which then
+        // parsed back as a non-null value.
+        val parsed = LatchedEpisode.parse("RED|odeska|null|Odesa|null|0")!!
+        assertEquals(null, parsed.since)
+        assertEquals(null, parsed.cityUa)
+        assertEquals(false, parsed.cityScoped)
+    }
+
+    @Test
     fun `a persisted scoped row round-trips its own gate`() {
         val row = "RED|zaporizka|s|Бердянськ|Бердянськ|1"
         val parsed = LatchedEpisode.parse(row)!!

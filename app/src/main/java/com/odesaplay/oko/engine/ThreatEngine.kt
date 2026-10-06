@@ -392,6 +392,10 @@ class ThreatEngine(
         // fix-track fallback (motionHeading) is intentionally NOT used here — a source that
         // reports no course is never made to move (plugin model is respected).
         val heading = t.bearingDeg ?: t.heading ?: return null
+        // A non-finite course (a source reporting "N/A" that slipped past the parser) must never
+        // be extrapolated: Math.toRadians(NaN) yields NaN coordinates, and NaN serialized into
+        // MapLibre GeoJSON crashes the native renderer.
+        if (!heading.isFinite() || !speedMps.isFinite() || speedMps <= 0.0) return null
         // Anchor on the LATEST fix: the raw lat/lon is valid as-of updatedAt (or confirmedAt if
         // updatedAt is missing). Gliding from an old confirmedAt would over-extrapolate a track
         // whose position has been refreshed since.

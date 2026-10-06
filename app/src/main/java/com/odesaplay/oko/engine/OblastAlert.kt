@@ -239,6 +239,10 @@ data class LatchedEpisode(
         }
 
     companion object {
+        /** A persisted field that is absent reads as null — including the literal "null" a
+         *  nullable field stringifies to when the row was written. */
+        private fun String?.orNullToken(): String? = this?.takeIf { it.isNotBlank() && it != "null" }
+
         fun parse(s: String?): LatchedEpisode? {
             if (s.isNullOrBlank()) return null
             val parts = s.split('|')
@@ -250,8 +254,8 @@ data class LatchedEpisode(
                     val token = parts[1].trim()
                     if (token.isEmpty()) return null
                     LatchedEpisode(
-                        lvl, token, parts[2].ifBlank { null }, parts[3],
-                        cityUa = parts[4].ifBlank { null },
+                        lvl, token, parts[2].orNullToken(), parts[3],
+                        cityUa = parts[4].orNullToken(),
                         cityScoped = parts[5].trim() == "1"
                     )
                 }
@@ -259,12 +263,12 @@ data class LatchedEpisode(
                     val lvl = try { AlertLevel.valueOf(parts[0].uppercase()) } catch (_: Exception) { return null }
                     val token = parts[1].trim()
                     if (token.isEmpty()) return null
-                    LatchedEpisode(lvl, token, parts[2].ifBlank { null }, parts[3])
+                    LatchedEpisode(lvl, token, parts[2].orNullToken(), parts[3])
                 }
                 parts.size == 3 -> {
                     val token = parts[0].trim()
                     if (token.isEmpty()) return null
-                    LatchedEpisode(AlertLevel.RED, token, parts[1].ifBlank { null }, parts[2])
+                    LatchedEpisode(AlertLevel.RED, token, parts[1].orNullToken(), parts[2])
                 }
                 else -> null
             }

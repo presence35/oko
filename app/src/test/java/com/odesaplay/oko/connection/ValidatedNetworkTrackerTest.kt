@@ -34,6 +34,15 @@ class ValidatedNetworkTrackerTest {
     }
 
     @Test
+    fun `removing an untracked network never reports a drain`() {
+        val t = ValidatedNetworkTracker<String>()
+        assertFalse(t.remove("ghost")) // empty set: not a drain
+        assertTrue(t.add("wifi"))
+        assertFalse(t.remove("ghost")) // still held: not a drain
+        assertFalse(t.isEmpty())
+    }
+
+    @Test
     fun `clear drains the set`() {
         val t = ValidatedNetworkTracker<String>()
         t.add("a")

@@ -27,7 +27,7 @@ class UserPrefs(private val context: Context) {
         .map { (key, value) -> key.name to value.toString() }
         .toMap()
 
-    private val keyCache = mutableMapOf<String, Preferences.Key<Boolean>>()
+    private val keyCache = java.util.concurrent.ConcurrentHashMap<String, Preferences.Key<Boolean>>()
     private fun cachedBooleanKey(name: String): Preferences.Key<Boolean> =
         keyCache.getOrPut(name) { booleanPreferencesKey(name) }
 

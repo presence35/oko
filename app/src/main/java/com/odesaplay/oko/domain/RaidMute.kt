@@ -32,9 +32,13 @@ sealed interface RaidMute {
     /** "Mute raid" — the strongest mute. */
     fun untilClear(): RaidMute = UntilClear
 
-    /** "Mute N min" — a no-op while [UntilClear] already dominates. */
-    fun forDuration(now: Long, durationMs: Long): RaidMute =
-        if (this is UntilClear) this else Until(now + durationMs)
+    /** "Mute N min" — a no-op while [UntilClear] already dominates, and never weakens a longer
+     *  timed mute already in force. */
+    fun forDuration(now: Long, durationMs: Long): RaidMute = when (this) {
+        is UntilClear -> this
+        is Until -> Until(maxOf(deadlineMs, now + durationMs))
+        None -> Until(now + durationMs)
+    }
 
     fun cleared(): RaidMute = None
 

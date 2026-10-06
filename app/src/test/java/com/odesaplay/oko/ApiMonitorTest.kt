@@ -58,4 +58,12 @@ class ApiMonitorTest {
         assertEquals(1, parsed.size)
         assertEquals("SHA256: aa:bb -> cc:dd (new)", parsed[0].detail)
     }
+
+    @Test
+    fun `serialize flattens a multiline detail so every record round-trips`() {
+        val entry = SystemEntry(100L, SystemEntryKind.SDK_CHECK_FAILED, "boom\ncaused by:\n  io")
+        val parsed = parseSystemLog(serializeSystemLog(listOf(entry)))
+        assertEquals(1, parsed.size)
+        assertEquals("boom caused by:   io", parsed[0].detail)
+    }
 }

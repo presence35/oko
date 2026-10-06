@@ -246,6 +246,19 @@ class NeptunDecoderTest {
     }
 
     @Test
+    fun `parseNormalizedThreat - non-numeric heading normalizes to null`() {
+        val json = JSONObject().apply {
+            put("id", "test-heading")
+            put("lat", 50.0)
+            put("lon", 30.0)
+            put("status", "active")
+            put("heading", "N/A")
+        }
+        val threat = NeptunDecoder.parseNormalizedThreat(json)!!
+        assertNull(threat.heading)
+    }
+
+    @Test
     fun `parseNormalizedThreat - future timestamps are clamped to now`() {
         val future = "2099-01-01T00:00:00Z"
         val json = JSONObject().apply {
