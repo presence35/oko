@@ -544,7 +544,7 @@ private fun WizardBetaBlock(s: Strings.StringSet, neptunDown: Boolean, degraded:
             )
             Spacer(Modifier.height(14.dp))
             WizardBullet(s.wizardBetaUse, _ukraineYellow)
-            WizardBugBullet(s, pillColor(neptunDown, degraded))
+            WizardBugBullet(s, pillColor(neptunDown, degraded), pillLabel(s, neptunDown, degraded))
             WizardBullet(s.wizardBetaAi, _ukraineYellow)
             Spacer(Modifier.height(12.dp))
             Text(
@@ -556,29 +556,6 @@ private fun WizardBetaBlock(s: Strings.StringSet, neptunDown: Boolean, degraded:
         Spacer(Modifier.height(18.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Spacer(Modifier.height(14.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Image(
-                painter = painterResource(R.drawable.neptun),
-                contentDescription = null,
-                modifier = Modifier.size(width = 14.dp, height = 14.dp),
-                colorFilter = ColorFilter.tint(Color(AppPalette.SafeGreen))
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                s.wizardSourceChannel,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.width(6.dp))
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(Color(AppPalette.SafeGreen))
-            )
-        }
-        Spacer(Modifier.height(6.dp))
         Text(
             s.wizardNeptunStatus,
             style = MaterialTheme.typography.bodySmall,
@@ -632,11 +609,11 @@ private fun WizardBullet(text: String, accent: Color) {
     WizardBulletRow(claimThenDetail(text), accent)
 }
 
-/** The bug-report bullet. Its instruction ends with the REAL NEPTUN mark drawn inside the
- *  sentence — the reader is told to tap a picture of the thing, not a description of it. The
- *  mark is tinted with the source's own tier, so it is the same mark the header shows. */
+/** The bug-report bullet. Its instruction ends with the REAL NEPTUN mark and the source's own
+ *  state word drawn inside the sentence — the reader is told to tap a picture of the header pill,
+ *  not a description of it, so they recognise it the moment they see the header. */
 @Composable
-private fun WizardBugBullet(s: Strings.StringSet, markColor: Color) {
+private fun WizardBugBullet(s: Strings.StringSet, markColor: Color, markLabel: String) {
     val glyphId = "neptun"
     val head = s.wizardBetaBugs.substringBefore(" — ")
     val lead = s.wizardBetaBugs.substringAfter(" — ", "")
@@ -650,6 +627,8 @@ private fun WizardBugBullet(s: Strings.StringSet, markColor: Color) {
                 append(lead)
                 append(' ')
                 appendInlineContent(glyphId, "[neptun]")
+                append(' ')
+                withStyle(SpanStyle(color = markColor)) { append(markLabel) }
                 append(' ')
                 append(s.wizardBetaBugsTail)
             }

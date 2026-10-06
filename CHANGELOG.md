@@ -1,8 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- Night-mode settings: dropped the "Sound at night" heading above the alert toggles, which wrongly implied they only affect sound 10-06_15:58:49
 - Fixed a crash on launch: the app could die on the first tick after a restart while an official alert episode was still active, taking monitoring down with it 10-06_15:41:12
-- Beta page headline now reads "Beta test group" and the card no longer repeats it, and the bug-report note draws the actual NEPTUN mark in the sentence instead of naming it 10-06_15:48:23
+- Beta page headline now reads "Beta test group" and the card no longer repeats it, and the bug-report note draws the actual NEPTUN mark with the live state word in the sentence instead of naming it 10-06_15:48:23
+- Beta page attribution line removed (mark + wordmark + dot); the credit paragraph below already names Neptun 10-06_15:56:30
 - Beta card trimmed: one log instruction and the battery line as a single closing sentence 10-06_15:48:23
 - Orange connection pill, its notification and its log row now say what the state means — no updates from the feed — instead of claiming the link failed, in all three languages 10-06_14:47:37
 - Quiet feed no longer reads as a degraded connection: the orange edge moved from 42s to 4m20s, while OkHttp's ping and the silence backstop still reap a dead socket 10-06_14:37:17

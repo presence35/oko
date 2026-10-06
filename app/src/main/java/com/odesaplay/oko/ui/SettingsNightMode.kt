@@ -165,9 +165,6 @@ internal fun NightModeCard(
             }
             if (!sleepActive) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Box(modifier = Modifier.padding(horizontal = 14.dp)) {
-                    SectionCaption(s.nightSoundLabel)
-                }
                 Column(modifier = Modifier.padding(horizontal = 14.dp)) {
                     SectionCaption(s.officialAlertsTitle)
                     OfficialPairToggleRow(

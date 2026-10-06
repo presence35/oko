@@ -127,7 +127,6 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         nightModeDesc = "Окреме налаштування звуку, вібрації та зон для нічного вікна.",
         nightStartTimeLabel = "Початок",
         nightEndTimeLabel = "Кінець",
-        nightSoundLabel = "Звук уночі",
         nightZoneSirenOverrideTitle = "Сирени зон завжди звучать",
         nightOfficialSirenOverrideTitle = "Офіційні сирени завжди звучать",
         nightCustomZonesTitle = "Окремі нічні зони",

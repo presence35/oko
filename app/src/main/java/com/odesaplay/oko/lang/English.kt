@@ -128,7 +128,6 @@ internal val English: Strings.StringSet = Strings.StringSet(
         nightModeDesc = "Separate sound, vibration and zone settings for the night window.",
         nightStartTimeLabel = "Start",
         nightEndTimeLabel = "End",
-        nightSoundLabel = "Sound at night",
         nightZoneSirenOverrideTitle = "Zone alerts always sound",
         nightOfficialSirenOverrideTitle = "Official alerts always sound",
         nightCustomZonesTitle = "Separate night zones",

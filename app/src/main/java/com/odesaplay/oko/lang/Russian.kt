@@ -127,7 +127,6 @@ internal val Russian: Strings.StringSet = Strings.StringSet(
         nightModeDesc = "Отдельные настройки звука, вибрации и зон для ночного времени.",
         nightStartTimeLabel = "Начало",
         nightEndTimeLabel = "Конец",
-        nightSoundLabel = "Звук ночью",
         nightZoneSirenOverrideTitle = "Сирена зон поверх всех режимов",
         nightOfficialSirenOverrideTitle = "Официальная сирена поверх всех режимов",
         nightCustomZonesTitle = "Отдельные ночные зоны",
