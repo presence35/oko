@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- The five Morale voices now read as real Russian instead of English text under a Russian name 10-06_21:53:12
 
 ## [0.6.790]
 
