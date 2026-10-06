@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.outlined.CropFree
@@ -368,6 +369,7 @@ fun SettingsScreen(
             SettingsSection.SYSTEM -> s.systemSectionTitle
             SettingsSection.FLOURISH -> s.moraleSectionTitle
             SettingsSection.MORE -> s.moreSectionTitle
+            SettingsSection.RELIABILITY -> s.reliabilitySectionTitle
         }
     }
     // The same live summary that used to sit under each collapsed card header now lives on its
@@ -395,6 +397,12 @@ fun SettingsScreen(
             SettingsSection.SYSTEM -> s.systemSubtitle(threatCardSize, iconSet)
             SettingsSection.FLOURISH -> s.moraleSubtitle(deathAnimationEnabled, neutralizedTallyEnabled)
             SettingsSection.MORE -> s.moreSubtitleLabel
+            SettingsSection.RELIABILITY -> s.reliabilitySubtitle(
+                alwaysSound = sirenOverride,
+                criticalOffline = criticalOfflineOverride,
+                bootRestart = bootRestartEnabled,
+                batteryExempt = batteryOptimized
+            )
         }
     }
     val sectionIcon: @Composable (SettingsSection) -> Painter = { sec ->
@@ -407,11 +415,12 @@ fun SettingsScreen(
             SettingsSection.SYSTEM -> painterResource(R.drawable.ic_language)
             SettingsSection.FLOURISH -> painterResource(R.drawable.ic_morale)
             SettingsSection.MORE -> rememberVectorPainter(Icons.Default.MoreHoriz)
+            SettingsSection.RELIABILITY -> rememberVectorPainter(Icons.Filled.Security)
         }
     }
     val visibleSections = remember(searchNormalized, searchDb) {
-        if (searching) SettingsSection.entries.filter { it in matchedSections }
-        else SettingsSection.entries
+        if (searching) rootSectionOrder.filter { it in matchedSections }
+        else rootSectionOrder
     }
 
     Scaffold(
@@ -635,6 +644,38 @@ fun SettingsScreen(
             val section = (route as SettingsRoute.Detail).section
             Box(modifier = Modifier.weight(1f).padding(16.dp)) {
             when (section) {
+                SettingsSection.RELIABILITY -> SectionDetailBody(stateSummary = sectionSummary(section)) {
+                    AlwaysSoundRow(
+                        s = s,
+                        checked = sirenOverride,
+                        flash = flashId == "sirenOverride",
+                        onShowExplainer = { showExplainer("sirenOverride") },
+                        onChange = onSirenOverrideChange
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    CriticalOfflineRows(
+                        s = s,
+                        override = criticalOfflineOverride,
+                        bypassSilent = criticalOfflineBypassSilent,
+                        onOverride = onCriticalOfflineOverrideChange,
+                        onBypass = onCriticalOfflineBypassSilentChange
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    BootRestartRow(
+                        s = s,
+                        checked = bootRestartEnabled,
+                        onChange = onBootRestartChange,
+                        onRequestDisable = { showBootRestartOffConfirm = true }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    BatteryExemptionBlock(
+                        s = s,
+                        granted = batteryOptimized,
+                        oemInfo = batteryOemInfo,
+                        flash = flashId == "battery",
+                        onAllow = { BatteryOptimization.requestExemption(appContext) }
+                    )
+                }
                 // Unreachable by construction (`openSection` redirects shelters to the shelter
                 // screen); a restored legacy route must bounce there too rather than render an
                 // empty settings page.
@@ -762,14 +803,12 @@ fun SettingsScreen(
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    AlertToggleRow(
-                        title = s.sirenOverrideTitle,
-                        description = s.sirenOverrideDesc,
+                    AlwaysSoundRow(
+                        s = s,
                         checked = sirenOverride,
-                        onCheckedChange = { v -> showExplainer("sirenOverride"); onSirenOverrideChange(v) },
-                        icon = painterResource(R.drawable.ic_volume_up),
-                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        flash = flashId == "sirenOverride"
+                        flash = flashId == "sirenOverride",
+                        onShowExplainer = { showExplainer("sirenOverride") },
+                        onChange = onSirenOverrideChange
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertToggleRow(
@@ -827,36 +866,19 @@ fun SettingsScreen(
                         iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    AlertToggleRow(
-                        title = s.offlineCriticalOverrideTitle,
-                        description = s.offlineCriticalOverrideDesc,
-                                checked = criticalOfflineOverride,
-                                onCheckedChange = onCriticalOfflineOverrideChange,
-                                icon = painterResource(R.drawable.ic_wifi_off),
-                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                    CriticalOfflineRows(
+                        s = s,
+                        override = criticalOfflineOverride,
+                        bypassSilent = criticalOfflineBypassSilent,
+                        onOverride = onCriticalOfflineOverrideChange,
+                        onBypass = onCriticalOfflineBypassSilentChange
                     )
-                    AnimatedVisibility(visible = criticalOfflineOverride) {
-                        Column(modifier = Modifier.padding(start = 40.dp)) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            AlertToggleRow(
-                                title = s.offlineCriticalBypassSilentTitle,
-                                description = s.offlineCriticalBypassSilentDesc,
-                                checked = criticalOfflineBypassSilent,
-                                onCheckedChange = onCriticalOfflineBypassSilentChange,
-                                icon = painterResource(R.drawable.ic_volume_up),
-                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    AlertToggleRow(
-                        title = s.bootRestartTitle,
-                        description = s.bootRestartDesc,
+                    BootRestartRow(
+                        s = s,
                         checked = bootRestartEnabled,
-                        onCheckedChange = { v ->
-                            if (!v) showBootRestartOffConfirm = true else onBootRestartChange(true)
-                        },
-                        emoji = "🛡️"
+                        onChange = onBootRestartChange,
+                        onRequestDisable = { showBootRestartOffConfirm = true }
                     )
                     }
             // The master switch now lives on the root row, so the page body carries no copy of it —
@@ -1170,54 +1192,13 @@ fun SettingsScreen(
                     )
             }
             SettingsSection.MORE -> SectionDetailBody(stateSummary = sectionSummary(section)) {
-                if (batteryOptimized) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_check),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                s.batteryGranted,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            s.batteryBody,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    val batteryTitle = if (batteryOemInfo.isAggressive) s.batteryOemTitle else s.batteryTitle
-                    val batteryBody = if (batteryOemInfo.isAggressive) s.batteryOemBody else s.batteryBody
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            batteryTitle,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            batteryBody,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Button(
-                            onClick = { BatteryOptimization.requestExemption(appContext) },
-                            interactionSource = rememberHapticInteractionSource(),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(s.batteryAllowButton, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
+                BatteryExemptionBlock(
+                    s = s,
+                    granted = batteryOptimized,
+                    oemInfo = batteryOemInfo,
+                    flash = flashId == "battery",
+                    onAllow = { BatteryOptimization.requestExemption(appContext) }
+                )
                 // The actions read as one list, not five competing buttons: same row shape as every
                 // other settings row, each with a line saying what it actually does. The duplicate
                 // Refresh icon that made "replay" and "reset tips" indistinguishable is gone.
@@ -1386,6 +1367,124 @@ private fun shelterPainter(): Painter = remember {
                 color = Color.Black,
                 style = Stroke(width = 2.6f * scale)
             )
+        }
+    }
+}
+
+/** "Always sound" — shared by the Alerts page and the Reliability page, so the same row has one
+ *  definition rather than two that can drift. */
+@Composable
+private fun AlwaysSoundRow(
+    s: Strings.StringSet,
+    checked: Boolean,
+    flash: Boolean,
+    onShowExplainer: () -> Unit,
+    onChange: (Boolean) -> Unit
+) {
+    AlertToggleRow(
+        title = s.sirenOverrideTitle,
+        description = s.sirenOverrideDesc,
+        checked = checked,
+        onCheckedChange = { v -> onShowExplainer(); onChange(v) },
+        icon = painterResource(R.drawable.ic_volume_up),
+        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+        flash = flash
+    )
+}
+
+/** The critical-offline master and its silent-mode bypass, shared by Alerts and Reliability. */
+@Composable
+private fun CriticalOfflineRows(
+    s: Strings.StringSet,
+    override: Boolean,
+    bypassSilent: Boolean,
+    onOverride: (Boolean) -> Unit,
+    onBypass: (Boolean) -> Unit
+) {
+    AlertToggleRow(
+        title = s.offlineCriticalOverrideTitle,
+        description = s.offlineCriticalOverrideDesc,
+        checked = override,
+        onCheckedChange = onOverride,
+        icon = painterResource(R.drawable.ic_wifi_off),
+        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    AnimatedVisibility(visible = override) {
+        Column(modifier = Modifier.padding(start = 40.dp)) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            AlertToggleRow(
+                title = s.offlineCriticalBypassSilentTitle,
+                description = s.offlineCriticalBypassSilentDesc,
+                checked = bypassSilent,
+                onCheckedChange = onBypass,
+                icon = painterResource(R.drawable.ic_volume_up),
+                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/** Restart-after-reboot, shared by Alerts and Reliability; turning it off asks for confirmation. */
+@Composable
+private fun BootRestartRow(
+    s: Strings.StringSet,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    onRequestDisable: () -> Unit
+) {
+    AlertToggleRow(
+        title = s.bootRestartTitle,
+        description = s.bootRestartDesc,
+        checked = checked,
+        onCheckedChange = { v -> if (!v) onRequestDisable() else onChange(true) },
+        emoji = "🛡️"
+    )
+}
+
+/** The battery-exemption row. Not a toggle but a live OS check with a fix action, shared by the
+ *  More page and the Reliability page. */
+@Composable
+private fun BatteryExemptionBlock(
+    s: Strings.StringSet,
+    granted: Boolean,
+    oemInfo: OemInfo,
+    flash: Boolean,
+    onAllow: () -> Unit
+) {
+    Column(modifier = Modifier.padding(16.dp).explainerFlash(flash)) {
+        if (granted) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_check),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(s.batteryGranted, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(s.batteryBody, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            Text(
+                if (oemInfo.isAggressive) s.batteryOemTitle else s.batteryTitle,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (oemInfo.isAggressive) s.batteryOemBody else s.batteryBody,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = onAllow,
+                interactionSource = rememberHapticInteractionSource(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(s.batteryAllowButton, fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }

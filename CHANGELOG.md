@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- New Reliability settings page gathering the guarantees that alerts still reach you — battery exemption, always-sound, critical-offline and restart-after-reboot — alongside their existing pages 10-06_17:10:00
 - The "Oko was asleep" notice now only appears when a sleep actually cost something — a threat confirmed or an official alert that started while the loop was off — instead of for every harmless Doze gap that missed nothing 10-06_16:38:00
 - Monitoring now releases the location listeners when the service stops, so the GPS radio can sleep instead of draining battery in the background 10-06_16:15:29
 - Tapping a short "Mute N min" no longer shortens a longer mute already in force 10-06_16:15:29

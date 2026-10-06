@@ -167,6 +167,7 @@ object Strings {
         val moraleSectionTitle: String,
         val moreSectionTitle: String,
         val moreSubtitleLabel: String,
+        val reliabilitySectionTitle: String,
         val flybyAnimationLabel: String,
         val flybyAnimationDesc: String,
         val cardSizeSmallLabel: String,
@@ -718,6 +719,9 @@ object Strings {
         val alertsCityScopePrefix: String,
         val alertsAlwaysSoundPrefix: String,
         val alertsMasterPrefix: String,
+        val reliabilityCriticalOfflinePrefix: String,
+        val reliabilityRestartPrefix: String,
+        val reliabilityBatteryPrefix: String,
         val onWord: String,
         val offWord: String,
         val moraleAnimationPrefix: String,
@@ -1014,6 +1018,7 @@ object Strings {
         val moreSectionTitle: String get() = settings.moreSectionTitle
 
         val moreSubtitleLabel: String get() = settings.moreSubtitleLabel
+        val reliabilitySectionTitle: String get() = settings.reliabilitySectionTitle
         val flybyAnimationLabel: String get() = settings.flybyAnimationLabel
         val flybyAnimationDesc: String get() = settings.flybyAnimationDesc
         val cardSizeSmallLabel: String get() = settings.cardSizeSmallLabel
@@ -1071,6 +1076,23 @@ object Strings {
             }
             parts.add(String.format(subtitles.alertsAlwaysSoundPrefix, if (alwaysSound) subtitles.onWord else subtitles.offWord))
             return parts.joinToString(" · ")
+        }
+
+        /** The Reliability row's summary: the four guarantees that an alert still reaches the user,
+         *  each as its own on/off clause, so the list shows at a glance which are currently off. */
+        fun reliabilitySubtitle(
+            alwaysSound: Boolean,
+            criticalOffline: Boolean,
+            bootRestart: Boolean,
+            batteryExempt: Boolean
+        ): String {
+            fun on(b: Boolean) = if (b) subtitles.onWord else subtitles.offWord
+            return listOf(
+                String.format(subtitles.alertsAlwaysSoundPrefix, on(alwaysSound)),
+                String.format(subtitles.reliabilityCriticalOfflinePrefix, on(criticalOffline)),
+                String.format(subtitles.reliabilityRestartPrefix, on(bootRestart)),
+                String.format(subtitles.reliabilityBatteryPrefix, on(batteryExempt))
+            ).joinToString(" · ")
         }
 
         fun moraleSubtitle(animation: Boolean, tally: Boolean): String {

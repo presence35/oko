@@ -9,10 +9,19 @@ sealed interface SettingsRoute {
     data class Detail(val section: SettingsSection) : SettingsRoute
 }
 
-/** The Settings sections, in root-list order. Each one is its own detail page; MORE holds the
- *  standalone actions (relaunch, reset tips, guide, update, exit), the battery exemption and the
- *  footer. The disclaimer is not a section — it stays pinned on the root list. */
-enum class SettingsSection { LOCATION, ALERTS, NIGHT, SHELTERS, THREATS, SYSTEM, FLOURISH, MORE }
+/** The Settings sections. Each one is its own detail page; MORE holds the standalone actions
+ *  (relaunch, reset tips, guide, update, exit) and the footer, RELIABILITY gathers the guarantees
+ *  that an alert still reaches the user. The disclaimer is not a section — it stays pinned on the
+ *  root list. */
+enum class SettingsSection { LOCATION, ALERTS, NIGHT, SHELTERS, THREATS, SYSTEM, FLOURISH, MORE, RELIABILITY }
+
+/** Root-list display order. Kept apart from the enum so RELIABILITY can be appended (stable
+ *  [SettingsSection.ordinal]s, which `MainScreen` saves) yet still be listed before MORE. */
+internal val rootSectionOrder = listOf(
+    SettingsSection.LOCATION, SettingsSection.ALERTS, SettingsSection.NIGHT,
+    SettingsSection.SHELTERS, SettingsSection.THREATS, SettingsSection.SYSTEM,
+    SettingsSection.FLOURISH, SettingsSection.RELIABILITY, SettingsSection.MORE
+)
 
 /** A suggestion chip shown by the search box: a tappable hint that fills the query with a
  *  keyword that resolves to its setting. */
@@ -112,7 +121,11 @@ internal val searchAnchors: List<SearchAnchor> = listOf(
     anchor("pinCity", SettingsSection.LOCATION, "pin", "pinned city", "city", "пін", "місто"),
     anchor("night", SettingsSection.NIGHT, "night", "sleep", "silent", "ніч", "сон", "тиша"),
     anchor("officialAlerts", SettingsSection.ALERTS, "official", "official alerts", "siren", "оповіщення", "сирена", "офіційн"),
-    anchor("battery", SettingsSection.MORE, "battery", "charge", "power", "energy", "батарея", "заряд", "енерг"),
+    anchor("battery", SettingsSection.RELIABILITY, "battery", "charge", "power", "energy", "батарея", "заряд", "енерг"),
+    anchor("reliability", SettingsSection.RELIABILITY, "reliability", "always on", "keep running",
+        "background", "exempt", "critical offline", "offline", "reboot", "restart", "boot",
+        "надійн", "фон", "критичн", "офлайн", "перезавантаж", "перезапуск",
+        "надёжн", "фоне", "критич", "оффлайн", "перезагрузк", "перезапуск"),
     anchor("guide", SettingsSection.MORE, "guide", "tutorial", "how to", "путівник", "інструкція"),
     anchor("update", SettingsSection.MORE, "update", "version", "download", "оновлення", "версія"),
     anchor("exit", SettingsSection.MORE, "exit", "quit", "stop", "monitoring", "вихід", "вийти", "зупинити"),
@@ -200,6 +213,12 @@ internal fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
             "оновлення", "перевір", "завантаж", "версія",
             "вийти", "зупинити", "моніторинг", "вихід",
             "застереження", "батарея", "автономність"
+        ),
+        SettingsSection.RELIABILITY to kw(
+            "reliability", "always on", "keep running", "background", "exempt",
+            "battery", "critical", "offline", "outage", "reboot", "restart", "boot",
+            "надійн", "фон", "батарея", "критичн", "офлайн", "перезавантаж", "перезапуск",
+            "надёжн", "фоне", "критич", "оффлайн", "перезагрузк"
         )
     )
     val related = listOf(
