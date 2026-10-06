@@ -57,7 +57,7 @@ evaluation contract. Read `ARCHITECTURE.md` for module map and data-flow context
   `$u = New-Object System.Text.UTF8Encoding($false)`; `[System.IO.File]::ReadAllText($f, $u)` /
   `[System.IO.File]::WriteAllText($f, $text, $u)`.
 - User settings/prefs go through `UserPrefs` (`domain/UserPrefs.kt`, DataStore-backed); don't add a second prefs store.
-- Backwards compatible code, or migrating old users is not a concern -- we're in beta mode still.
+- Backwards compatible code, or migrating old users is not a concern -- we're in alpha mode still.
 
 ### Always build/verify before finishing
 

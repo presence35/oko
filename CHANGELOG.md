@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+- The alpha note now tells you which battery use is normal: a bright screen costs battery either way, but a fast drop while the phone sits idle is the bug worth reporting 10-06_18:05:00
+- Settings → Reliability has an opt-in "Asleep notice": Oko tells you when monitoring stopped for a while and something was missed, with a button to allow unrestricted background use. Off by default 10-06_17:20:00
+- "Always ready" now covers the night hours too: every night bell armed and both siren overrides on, and it cancels an in-flight "Just let me sleep!" instead of letting it come back and undo the choice 10-06_20:41:12
+- The setup picker is now four equal tiles in one row, with a single explanation under them that changes as you pick — the four descriptions no longer compete for space on one screen 10-06_20:41:12
+- First-run wizard asks "how hard should it work?" — four ready-made setups (Always ready, Normal, Quiet house, Just watching) set reliability, alert frequency, rings and effects in one tap, and every switch stays yours to change afterwards 10-06_20:07:38
+- The same four setups now live in Settings → Reliability under "Ready-made setups", so changing your mind later is one tap instead of four pages 10-06_20:07:38
+- The closing page is honest about the build: "Alpha build", not beta — and it says the app was designed for bad conditions and where to turn it down when it persists harder than your own life needs 10-06_20:07:38
+- Fixed a promise the app never kept: with "limit repeat sounds" off, the stored "once per threat" policy was ignored and every single update rang; the limit is now on by default, so one bell per threat, a re-bell when it reaches the red ring, and every escalation 10-06_20:07:38
+- Morale voice names are now real Russian instead of English 10-06_20:07:38
 - New Reliability settings page gathering the guarantees that alerts still reach you — battery exemption, always-sound, critical-offline and restart-after-reboot — alongside their existing pages 10-06_17:10:00
 - The "Oko was asleep" notice now only appears when a sleep actually cost something — a threat confirmed or an official alert that started while the loop was off — instead of for every harmless Doze gap that missed nothing 10-06_16:38:00
 - Monitoring now releases the location listeners when the service stops, so the GPS radio can sleep instead of draining battery in the background 10-06_16:15:29

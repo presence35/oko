@@ -43,20 +43,20 @@ fun moraleVoicePack(lang: AppLanguage, voice: MoraleVoice): MoraleVoicePack {
 }
 
 fun MoraleVoice.label(lang: AppLanguage): String = when (this) {
-    MoraleVoice.RANDOM -> lang.pick("Випадково", "Random", "Random")
-    MoraleVoice.PLAIN -> lang.pick("Просто", "Plain", "Plain")
-    MoraleVoice.WARM -> lang.pick("Тепло", "Warm", "Warm")
-    MoraleVoice.SPICY -> lang.pick("З перцем", "Spicy", "Spicy")
-    MoraleVoice.SLANG -> lang.pick("Сленг", "Slang", "Slang")
-    MoraleVoice.VIYSKO -> lang.pick("Військо", "Viysko", "Viysko")
-    MoraleVoice.BABUSIA -> lang.pick("Бабуся", "Babusia", "Babusia")
+    MoraleVoice.RANDOM -> lang.pick("Випадково", "Random", "Случайно")
+    MoraleVoice.PLAIN -> lang.pick("Просто", "Plain", "Просто")
+    MoraleVoice.WARM -> lang.pick("Тепло", "Warm", "Тепло")
+    MoraleVoice.SPICY -> lang.pick("З перцем", "Spicy", "С перцем")
+    MoraleVoice.SLANG -> lang.pick("Сленг", "Slang", "Сленг")
+    MoraleVoice.VIYSKO -> lang.pick("Військо", "Viysko", "Военное")
+    MoraleVoice.BABUSIA -> lang.pick("Бабуся", "Babusia", "Бабуля")
 }
 
 fun moraleVoiceSectionTitle(lang: AppLanguage): String =
-    lang.pick("Голос", "Voice", "Voice")
+    lang.pick("Голос", "Voice", "Голос")
 
 fun randomTodayLabel(lang: AppLanguage, voiceLabel: String): String =
-    lang.pick("Випадково · сьогодні: $voiceLabel", "Random · today: $voiceLabel", "Random · today: $voiceLabel")
+    lang.pick("Випадково · сьогодні: $voiceLabel", "Random · today: $voiceLabel", "Случайно · сегодня: $voiceLabel")
 
 private fun englishPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
     MoraleVoice.WARM -> MoraleVoicePack(

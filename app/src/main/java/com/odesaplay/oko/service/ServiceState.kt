@@ -1,5 +1,6 @@
 package com.odesaplay.oko.service
 
+import com.odesaplay.oko.PreferenceStores
 import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -7,13 +8,15 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore by preferencesDataStore(name = "service_state")
+private const val STORE_NAME = "service_state"
 
 class ServiceState(private val context: Context) {
+
+    /** Resolved through [PreferenceStores] so a test can sandbox it. See that file for why. */
+    private val store by lazy { PreferenceStores.of(context, STORE_NAME) }
 
     private val keyCache = mutableMapOf<String, Preferences.Key<*>>()
 
@@ -38,27 +41,27 @@ class ServiceState(private val context: Context) {
     private val criticalChannelBypassAppliedKey = booleanPreferencesKey("critical_channel_bypass_applied")
 
     fun connLog(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[connLogKey] ?: "" }
+        store.data.map { prefs -> prefs[connLogKey] ?: "" }
 
     suspend fun setConnLog(serialized: String) {
-        context.dataStore.edit { it[connLogKey] = serialized }
+        store.edit { it[connLogKey] = serialized }
     }
 
     fun gpsLog(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[gpsLogKey] ?: "" }
+        store.data.map { prefs -> prefs[gpsLogKey] ?: "" }
 
     suspend fun setGpsLog(serialized: String) {
-        context.dataStore.edit { it[gpsLogKey] = serialized }
+        store.edit { it[gpsLogKey] = serialized }
     }
 
     /** The full announcement row (`LEVEL|token|since|city[|cityUa|scoped]`), written as one value so
      *  the gate an episode was announced through survives a restart. The four separate keys are the
      *  older shape and are still read when this one is absent. */
     fun officialAnnouncedRow(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[officialAnnouncedRowKey] ?: "" }
+        store.data.map { prefs -> prefs[officialAnnouncedRowKey] ?: "" }
 
     suspend fun setOfficialAnnouncedRow(row: String?) {
-        context.dataStore.edit {
+        store.edit {
             if (row.isNullOrBlank()) it.remove(officialAnnouncedRowKey) else it[officialAnnouncedRowKey] = row
         }
     }
@@ -66,49 +69,49 @@ class ServiceState(private val context: Context) {
     /** Wall-clock deadline of the current timed raid mute, or "" when none. Persisted because a
      *  mute the OS recycles away silently is indistinguishable from a mute that never worked. */
     fun raidMuteDeadline(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[raidMuteDeadlineKey] ?: "" }
+        store.data.map { prefs -> prefs[raidMuteDeadlineKey] ?: "" }
 
     suspend fun setRaidMuteDeadline(row: String?) {
-        context.dataStore.edit {
+        store.edit {
             if (row.isNullOrBlank()) it.remove(raidMuteDeadlineKey) else it[raidMuteDeadlineKey] = row
         }
     }
 
     fun offlinePendingSince(): Flow<Long> =
-        context.dataStore.data.map { prefs -> prefs[offlinePendingSinceKey] ?: 0L }
+        store.data.map { prefs -> prefs[offlinePendingSinceKey] ?: 0L }
 
     suspend fun setOfflinePendingSince(ts: Long) {
-        context.dataStore.edit { it[offlinePendingSinceKey] = ts }
+        store.edit { it[offlinePendingSinceKey] = ts }
     }
 
     fun ignoreRetryUntil(): Flow<Long> =
-        context.dataStore.data.map { prefs -> prefs[ignoreRetryUntilKey] ?: 0L }
+        store.data.map { prefs -> prefs[ignoreRetryUntilKey] ?: 0L }
 
     suspend fun setIgnoreRetryUntil(ts: Long) {
-        context.dataStore.edit { it[ignoreRetryUntilKey] = ts }
+        store.edit { it[ignoreRetryUntilKey] = ts }
     }
 
     fun reconnectStartMillis(): Flow<Long> =
-        context.dataStore.data.map { prefs -> prefs[reconnectStartMillisKey] ?: 0L }
+        store.data.map { prefs -> prefs[reconnectStartMillisKey] ?: 0L }
 
     suspend fun setReconnectStartMillis(ms: Long) {
-        context.dataStore.edit { it[reconnectStartMillisKey] = ms }
+        store.edit { it[reconnectStartMillisKey] = ms }
     }
 
     fun officialAnnouncedToken(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[officialAnnouncedTokenKey] ?: "" }
+        store.data.map { prefs -> prefs[officialAnnouncedTokenKey] ?: "" }
 
     fun officialAnnouncedSince(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[officialAnnouncedSinceKey] ?: "" }
+        store.data.map { prefs -> prefs[officialAnnouncedSinceKey] ?: "" }
 
     fun officialAnnouncedReasonId(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[officialAnnouncedReasonIdKey] ?: "" }
+        store.data.map { prefs -> prefs[officialAnnouncedReasonIdKey] ?: "" }
 
     fun officialAnnouncedCity(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[officialAnnouncedCityKey] ?: "" }
+        store.data.map { prefs -> prefs[officialAnnouncedCityKey] ?: "" }
 
     suspend fun setOfficialAnnounced(token: String?, since: String?, reasonId: String?, city: String? = null) {
-        context.dataStore.edit {
+        store.edit {
             it[officialAnnouncedTokenKey] = token ?: ""
             it[officialAnnouncedSinceKey] = since ?: ""
             it[officialAnnouncedReasonIdKey] = reasonId ?: ""
@@ -117,63 +120,63 @@ class ServiceState(private val context: Context) {
     }
 
     fun activeZoneAlerts(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[activeZoneAlertsKey] ?: "" }
+        store.data.map { prefs -> prefs[activeZoneAlertsKey] ?: "" }
 
     suspend fun setActiveZoneAlerts(serialized: String) {
-        context.dataStore.edit { it[activeZoneAlertsKey] = serialized }
+        store.edit { it[activeZoneAlertsKey] = serialized }
     }
 
     fun debugLog(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[debugLogKey] ?: "" }
+        store.data.map { prefs -> prefs[debugLogKey] ?: "" }
 
     suspend fun setDebugLog(serialized: String) {
-        context.dataStore.edit { it[debugLogKey] = serialized }
+        store.edit { it[debugLogKey] = serialized }
     }
 
     fun lastUpdateCheck(): Flow<Long> =
-        context.dataStore.data.map { prefs -> prefs[lastUpdateCheckKey] ?: 0L }
+        store.data.map { prefs -> prefs[lastUpdateCheckKey] ?: 0L }
 
     suspend fun setLastUpdateCheck(ts: Long) {
-        context.dataStore.edit { it[lastUpdateCheckKey] = ts }
+        store.edit { it[lastUpdateCheckKey] = ts }
     }
 
     fun lastNotifiedUpdateCode(): Flow<Long> =
-        context.dataStore.data.map { prefs -> prefs[lastNotifiedUpdateCodeKey] ?: 0L }
+        store.data.map { prefs -> prefs[lastNotifiedUpdateCodeKey] ?: 0L }
 
     suspend fun setLastNotifiedUpdateCode(code: Long) {
-        context.dataStore.edit { it[lastNotifiedUpdateCodeKey] = code }
+        store.edit { it[lastNotifiedUpdateCodeKey] = code }
     }
 
     fun lastSdkManifestHash(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[lastSdkManifestHashKey] ?: "" }
+        store.data.map { prefs -> prefs[lastSdkManifestHashKey] ?: "" }
 
     suspend fun setLastSdkManifestHash(hash: String) {
-        context.dataStore.edit { it[lastSdkManifestHashKey] = hash }
+        store.edit { it[lastSdkManifestHashKey] = hash }
     }
 
     fun systemLog(): Flow<String> =
-        context.dataStore.data.map { prefs -> prefs[systemLogKey] ?: "" }
+        store.data.map { prefs -> prefs[systemLogKey] ?: "" }
 
     suspend fun setSystemLog(serialized: String) {
-        context.dataStore.edit { it[systemLogKey] = serialized }
+        store.edit { it[systemLogKey] = serialized }
     }
 
     fun channelSchemaVersion(): Flow<Int> =
-        context.dataStore.data.map { prefs -> prefs[channelSchemaVersionKey] ?: 0 }
+        store.data.map { prefs -> prefs[channelSchemaVersionKey] ?: 0 }
 
     suspend fun setChannelSchemaVersion(version: Int) {
-        context.dataStore.edit { it[channelSchemaVersionKey] = version }
+        store.edit { it[channelSchemaVersionKey] = version }
     }
 
     fun criticalChannelBypassApplied(): Flow<Boolean?> =
-        context.dataStore.data.map { prefs -> prefs[criticalChannelBypassAppliedKey] }
+        store.data.map { prefs -> prefs[criticalChannelBypassAppliedKey] }
 
     suspend fun setCriticalChannelBypassApplied(applied: Boolean) {
-        context.dataStore.edit { it[criticalChannelBypassAppliedKey] = applied }
+        store.edit { it[criticalChannelBypassAppliedKey] = applied }
     }
 
     /** Wipes every stored key, returning the store to its documented defaults. */
     suspend fun clearAll() {
-        context.dataStore.edit { it.clear() }
+        store.edit { it.clear() }
     }
 }

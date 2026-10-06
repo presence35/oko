@@ -64,13 +64,24 @@ object Strings {
         val wizardMoraleDesc: String,
         val wizardNeptunStatus: String,
         val wizardMapAttribution: String,
-        val wizardBetaTitle: String,
-        val wizardBetaThanks: String,
-        val wizardBetaUse: String,
-        val wizardBetaBugs: String,
-        val wizardBetaBugsTail: String,
-        val wizardBetaAi: String,
-        val wizardBetaBattery: String,
+        val wizardAlphaTitle: String,
+        val wizardAlphaThanks: String,
+        val wizardAlphaUse: String,
+        val wizardAlphaReliability: String,
+        val wizardAlphaBugs: String,
+        val wizardAlphaBugsTail: String,
+        val wizardAlphaAi: String,
+        val wizardAlphaBattery: String,
+        val wizardIntensityTitle: String,
+        val wizardIntensitySubtitle: String,
+        val wizardIntensityReady: String,
+        val wizardIntensityReadyDesc: String,
+        val wizardIntensityBalanced: String,
+        val wizardIntensityBalancedDesc: String,
+        val wizardIntensityQuiet: String,
+        val wizardIntensityQuietDesc: String,
+        val wizardIntensityWatching: String,
+        val wizardIntensityWatchingDesc: String,
         val settingsSearchHint: String,
         val settingsSearchClear: String,
         val settingsNoResults: String,
@@ -168,12 +179,17 @@ object Strings {
         val moreSectionTitle: String,
         val moreSubtitleLabel: String,
         val reliabilitySectionTitle: String,
+        val setupPresetTitle: String,
+        val setupPresetDesc: String,
+        val setupPresetHint: String,
         val flybyAnimationLabel: String,
         val flybyAnimationDesc: String,
         val cardSizeSmallLabel: String,
         val cardSizeLargeLabel: String,
         val bootRestartTitle: String,
         val bootRestartDesc: String,
+        val sleepNoticeSettingTitle: String,
+        val sleepNoticeSettingDesc: String,
         val bootRestartWarningTitle: String,
         val bootRestartWarningBody: String,
         val bootRestartDisableButton: String
@@ -914,13 +930,24 @@ object Strings {
         val wizardMoraleDesc: String get() = onboarding.wizardMoraleDesc
         val wizardNeptunStatus: String get() = onboarding.wizardNeptunStatus
         val wizardMapAttribution: String get() = onboarding.wizardMapAttribution
-        val wizardBetaTitle: String get() = onboarding.wizardBetaTitle
-        val wizardBetaBugsTail: String get() = onboarding.wizardBetaBugsTail
-        val wizardBetaThanks: String get() = onboarding.wizardBetaThanks
-        val wizardBetaUse: String get() = onboarding.wizardBetaUse
-        val wizardBetaBugs: String get() = onboarding.wizardBetaBugs
-        val wizardBetaAi: String get() = onboarding.wizardBetaAi
-        val wizardBetaBattery: String get() = onboarding.wizardBetaBattery
+        val wizardAlphaTitle: String get() = onboarding.wizardAlphaTitle
+        val wizardAlphaBugsTail: String get() = onboarding.wizardAlphaBugsTail
+        val wizardAlphaThanks: String get() = onboarding.wizardAlphaThanks
+        val wizardAlphaUse: String get() = onboarding.wizardAlphaUse
+        val wizardAlphaReliability: String get() = onboarding.wizardAlphaReliability
+        val wizardAlphaBugs: String get() = onboarding.wizardAlphaBugs
+        val wizardAlphaAi: String get() = onboarding.wizardAlphaAi
+        val wizardAlphaBattery: String get() = onboarding.wizardAlphaBattery
+        val wizardIntensityTitle: String get() = onboarding.wizardIntensityTitle
+        val wizardIntensitySubtitle: String get() = onboarding.wizardIntensitySubtitle
+        val wizardIntensityReady: String get() = onboarding.wizardIntensityReady
+        val wizardIntensityReadyDesc: String get() = onboarding.wizardIntensityReadyDesc
+        val wizardIntensityBalanced: String get() = onboarding.wizardIntensityBalanced
+        val wizardIntensityBalancedDesc: String get() = onboarding.wizardIntensityBalancedDesc
+        val wizardIntensityQuiet: String get() = onboarding.wizardIntensityQuiet
+        val wizardIntensityQuietDesc: String get() = onboarding.wizardIntensityQuietDesc
+        val wizardIntensityWatching: String get() = onboarding.wizardIntensityWatching
+        val wizardIntensityWatchingDesc: String get() = onboarding.wizardIntensityWatchingDesc
         val selfLanguageName: String get() = subtitles.selfLanguageName
         val iconsLabel: String get() = subtitles.iconsLabel
         val fitMapLabel: String get() = onboarding.fitMapLabel
@@ -1008,6 +1035,8 @@ object Strings {
         val exitButton: String get() = settings.exitButton
         val bootRestartTitle: String get() = settings.bootRestartTitle
         val bootRestartDesc: String get() = settings.bootRestartDesc
+        val sleepNoticeSettingTitle: String get() = settings.sleepNoticeSettingTitle
+        val sleepNoticeSettingDesc: String get() = settings.sleepNoticeSettingDesc
         val bootRestartWarningTitle: String get() = settings.bootRestartWarningTitle
         val bootRestartWarningBody: String get() = settings.bootRestartWarningBody
         val bootRestartDisableButton: String get() = settings.bootRestartDisableButton
@@ -1019,6 +1048,9 @@ object Strings {
 
         val moreSubtitleLabel: String get() = settings.moreSubtitleLabel
         val reliabilitySectionTitle: String get() = settings.reliabilitySectionTitle
+        val setupPresetTitle: String get() = settings.setupPresetTitle
+        val setupPresetDesc: String get() = settings.setupPresetDesc
+        val setupPresetHint: String get() = settings.setupPresetHint
         val flybyAnimationLabel: String get() = settings.flybyAnimationLabel
         val flybyAnimationDesc: String get() = settings.flybyAnimationDesc
         val cardSizeSmallLabel: String get() = settings.cardSizeSmallLabel

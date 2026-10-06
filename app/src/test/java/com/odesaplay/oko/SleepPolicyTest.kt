@@ -21,6 +21,19 @@ class SleepPolicyTest {
     private fun readable(confirmed: Int = 0, official: Boolean = false) =
         SleepEvidence(feedNowMillis = serverNow, confirmedInWindow = confirmed, officialOnsetInWindow = official)
 
+    /**
+     * `decide` requires `enabled` so no caller can post notices at a user who switched them off.
+     * Every test below is about the ON path, so it declares that once here instead of 12 times —
+     * and the tests that exercise the switch call [SleepPolicy.decide] directly.
+     */
+    private fun decide(
+        window: SleepWindow,
+        evidence: SleepEvidence,
+        enabled: Boolean = true,
+        muted: Boolean = false,
+        exemptionGranted: Boolean = false
+    ) = SleepPolicy.decide(window, evidence, enabled, muted, exemptionGranted)
+
     // ---- decide -------------------------------------------------------------------------------
 
     /** Under the floor a gap is an ordinary hiccup — a slow sweep, a frozen OEM, a long GC. */
@@ -28,7 +41,7 @@ class SleepPolicyTest {
     fun `a short sleep is not worth a word`() {
         assertEquals(
             SleepDecision.Silent,
-            SleepPolicy.decide(window(SleepPolicy.REPORT_AFTER_MS - 1), readable(confirmed = 5))
+            decide(window(SleepPolicy.REPORT_AFTER_MS - 1), readable(confirmed = 5))
         )
     }
 
@@ -37,7 +50,7 @@ class SleepPolicyTest {
     fun `the reporting floor is inclusive and nothing below it is held`() {
         assertEquals(
             SleepDecision.Post::class,
-            SleepPolicy.decide(window(SleepPolicy.REPORT_AFTER_MS), readable(confirmed = 1)).let { it::class }
+            decide(window(SleepPolicy.REPORT_AFTER_MS), readable(confirmed = 1)).let { it::class }
         )
     }
 
@@ -49,7 +62,7 @@ class SleepPolicyTest {
      */
     @Test
     fun `a readable sleep that missed nothing is silent`() {
-        assertEquals(SleepDecision.Silent, SleepPolicy.decide(window(20 * 60_000L), readable()))
+        assertEquals(SleepDecision.Silent, decide(window(20 * 60_000L), readable()))
     }
 
     /** A threat confirmed while the loop was not running is real harm and must be reported. */
@@ -57,7 +70,7 @@ class SleepPolicyTest {
     fun `a confirmed threat in the window is reported`() {
         assertEquals(
             SleepDecision.Post::class,
-            SleepPolicy.decide(window(20 * 60_000L), readable(confirmed = 1))::class
+            decide(window(20 * 60_000L), readable(confirmed = 1))::class
         )
     }
 
@@ -66,7 +79,7 @@ class SleepPolicyTest {
     fun `an official onset alone is reported`() {
         assertEquals(
             SleepDecision.Post::class,
-            SleepPolicy.decide(window(20 * 60_000L), readable(official = true))::class
+            decide(window(20 * 60_000L), readable(official = true))::class
         )
     }
 
@@ -75,7 +88,7 @@ class SleepPolicyTest {
     fun `a mute does not hold a sleep that missed nothing`() {
         assertEquals(
             SleepDecision.Silent,
-            SleepPolicy.decide(window(20 * 60_000L), readable(), muted = true)
+            decide(window(20 * 60_000L), readable(), muted = true)
         )
     }
 
@@ -103,7 +116,7 @@ class SleepPolicyTest {
      */
     @Test
     fun `an unreadable feed is silent, never reported`() {
-        assertEquals(SleepDecision.Silent, SleepPolicy.decide(window(60 * 60_000L), SleepEvidence.UNKNOWN))
+        assertEquals(SleepDecision.Silent, decide(window(60 * 60_000L), SleepEvidence.UNKNOWN))
     }
 
     /** A live raid mute DEFERS: a sleep is an event, so suppressing it would lose it outright. */
@@ -111,16 +124,15 @@ class SleepPolicyTest {
     fun `a mute holds the sleep rather than dropping it`() {
         assertEquals(
             SleepDecision.Hold,
-            SleepPolicy.decide(window(20 * 60_000L), readable(confirmed = 3), muted = true)
+            decide(window(20 * 60_000L), readable(confirmed = 3), muted = true)
         )
     }
 
     /** ...but the mute never holds something we would not have said anyway. */
     @Test
-    fun `a mute does not hold a sleep that is below the floor`() {
-        assertEquals(
+    fun `a mute does not hold a sleep that is below the floor`() {        assertEquals(
             SleepDecision.Silent,
-            SleepPolicy.decide(window(SleepPolicy.REPORT_AFTER_MS - 1), readable(), muted = true)
+            decide(window(SleepPolicy.REPORT_AFTER_MS - 1), readable(), muted = true)
         )
     }
 
@@ -128,7 +140,7 @@ class SleepPolicyTest {
     fun `a mute does not hold an unreadable sleep`() {
         assertEquals(
             SleepDecision.Silent,
-            SleepPolicy.decide(window(60 * 60_000L), SleepEvidence.UNKNOWN, muted = true)
+            decide(window(60 * 60_000L), SleepEvidence.UNKNOWN, muted = true)
         )
     }
 
@@ -140,8 +152,46 @@ class SleepPolicyTest {
     fun `a granted exemption dismisses even while muted`() {
         assertEquals(
             SleepDecision.Dismiss,
-            SleepPolicy.decide(window(20 * 60_000L), readable(confirmed = 3), muted = true, exemptionGranted = true)
+            decide(window(20 * 60_000L), readable(confirmed = 3), muted = true, exemptionGranted = true)
         )
+    }
+
+    // ---- the feature switch --------------------------------------------------------------------
+
+    /**
+     * Off is `Silent`, and it is the FIRST arm, so a switched-off notice cannot be talked into
+     * posting by anything that follows — not by harm, not by a mute, not by the exemption. `Silent`
+     * rather than `Dismiss` on purpose: nothing folds into the ledger, so there is nothing to
+     * publish, and the row that may already be up is taken down by the service's retract check
+     * instead of by every single stall.
+     */
+    @Test
+    fun `a switched-off notice never posts, whatever the evidence says`() {
+        val harmful = readable(confirmed = 5, official = true)
+        assertEquals(
+            SleepDecision.Silent,
+            SleepPolicy.decide(window(30 * 60_000L), harmful, enabled = false)
+        )
+        assertEquals(
+            SleepDecision.Silent,
+            SleepPolicy.decide(window(30 * 60_000L), harmful, enabled = false, muted = true)
+        )
+        assertEquals(
+            SleepDecision.Silent,
+            SleepPolicy.decide(
+                window(30 * 60_000L), harmful,
+                enabled = false, muted = true, exemptionGranted = true
+            )
+        )
+    }
+
+    /** The switch is the one arm that can turn a would-be post into silence. */
+    @Test
+    fun `the same window posts when enabled and is silent when not`() {
+        val w = window(30 * 60_000L)
+        val harmed = readable(confirmed = 2)
+        assertEquals(SleepDecision.Post::class, decide(w, harmed)::class)
+        assertEquals(SleepDecision.Silent, SleepPolicy.decide(w, harmed, enabled = false))
     }
 
     // ---- evidenceFor --------------------------------------------------------------------------
@@ -206,7 +256,7 @@ class SleepPolicyTest {
         )
         assertEquals(serverNow - 2 * 60_000L, evidence.feedNowMillis)
         assertEquals(true, evidence.officialOnsetInWindow)
-        assertEquals(SleepDecision.Post::class, SleepPolicy.decide(window(20 * 60_000L), evidence)::class)
+        assertEquals(SleepDecision.Post::class, decide(window(20 * 60_000L), evidence)::class)
     }
 
     /** An episode already live before the sleep is not claimed: it self-excludes on `since`. */

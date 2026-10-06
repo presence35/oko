@@ -168,6 +168,11 @@ dependencies {
     // plain JVM tests. SDK is pinned in src/test/resources/robolectric.properties.
     testImplementation("org.robolectric:robolectric:4.17")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    // Compose UI tests, run on the JVM through Robolectric: the intensity picker and the wizard
+    // pages are pure UI logic that no amount of domain testing can reach. Versionless — the
+    // compose-bom platform above aligns them.
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("androidx.work:work-testing:2.11.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

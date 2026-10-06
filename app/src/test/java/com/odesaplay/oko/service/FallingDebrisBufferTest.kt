@@ -4,17 +4,30 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class FallingDebrisBufferTest {
 
     private fun scope() = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * A buffer on virtual time: [nowMs] reads the test scheduler's clock, so the deadline expires
+     * when the test says so rather than when a wall clock does. The job goes in [backgroundScope]
+     * because the countdown loop never completes on its own — it is cancelled when the test ends.
+     */
+    private fun TestScope.virtualBuffer(
+        nowMs: () -> Long = { testScheduler.currentTime },
+        onTick: ((Int) -> Unit)? = null,
+        onCompleted: () -> Unit
+    ) = FallingDebrisBuffer(backgroundScope, nowMs = nowMs, onTick = onTick, onCompleted = onCompleted)
 
     @Test
     fun `zero duration completes immediately without running`() {
@@ -32,51 +45,46 @@ class FallingDebrisBufferTest {
     }
 
     @Test
-    fun `abort stops the countdown and skips completion`() {
-        val s = scope()
-        try {
-            var completed = false
-            val buf = FallingDebrisBuffer(s, onCompleted = { completed = true })
-            buf.start(60)
-            assertTrue(buf.isRunning)
-            buf.abort()
-            assertFalse(buf.isRunning)
-            Thread.sleep(1200)
-            assertFalse(completed)
-        } finally {
-            s.cancel()
-        }
+    fun `abort stops the countdown and skips completion`() = runTest {
+        var completed = false
+        val buf = virtualBuffer(onCompleted = { completed = true })
+        buf.start(60)
+        runCurrent()
+        assertTrue(buf.isRunning)
+
+        buf.abort()
+        assertFalse(buf.isRunning)
+        // Two virtual seconds: long enough that a surviving job would have ticked and completed.
+        advanceTimeBy(2_000)
+        runCurrent()
+        assertFalse(completed)
     }
 
     @Test
-    fun `one second countdown ticks once then completes`() {
-        val s = scope()
-        try {
-            val ticks = AtomicInteger(0)
-            val done = CountDownLatch(1)
-            FallingDebrisBuffer(s, onTick = { ticks.incrementAndGet() }, onCompleted = { done.countDown() })
-                .start(1)
-            assertTrue(done.await(5, TimeUnit.SECONDS))
-            assertEquals(1, ticks.get())
-        } finally {
-            s.cancel()
-        }
+    fun `one second countdown ticks once then completes`() = runTest {
+        val ticks = AtomicInteger(0)
+        var completed = false
+        virtualBuffer(onTick = { ticks.incrementAndGet() }, onCompleted = { completed = true })
+            .start(1)
+
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(1, ticks.get())
+        assertTrue(completed)
     }
 
     @Test
-    fun `restart cancels the previous countdown`() {
-        val s = scope()
-        try {
-            val completions = AtomicInteger(0)
-            val buf = FallingDebrisBuffer(s, onCompleted = { completions.incrementAndGet() })
-            buf.start(60)
-            buf.start(0)
-            Thread.sleep(1200)
-            assertEquals(1, completions.get())
-            assertFalse(buf.isRunning)
-        } finally {
-            s.cancel()
-        }
+    fun `restart cancels the previous countdown`() = runTest {
+        val completions = AtomicInteger(0)
+        val buf = virtualBuffer(onCompleted = { completions.incrementAndGet() })
+        buf.start(60)
+        runCurrent()
+        buf.start(0)
+
+        advanceTimeBy(2_000)
+        runCurrent()
+        assertEquals(1, completions.get())
+        assertFalse(buf.isRunning)
     }
 
     @Test

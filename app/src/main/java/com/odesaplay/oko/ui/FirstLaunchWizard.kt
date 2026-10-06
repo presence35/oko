@@ -62,6 +62,10 @@ import kotlin.math.roundToInt
 private val _ukraineBlue = Color(AppPalette.UkraineBlue)
 private val _ukraineYellow = Color(AppPalette.AlertYellow)
 
+/**
+ * The wizard's rules live in [WizardPage] and its neighbours in `WizardFlow.kt`, so they can be
+ * tested without a device and cannot drift apart from the pages.
+ */
 @Composable
 internal fun FirstLaunchWizard(
     current: AppLanguage,
@@ -79,6 +83,7 @@ internal fun FirstLaunchWizard(
     morale: Boolean,
     neptunDown: Boolean,
     degraded: Boolean,
+    onIntensityPick: (AppIntensity) -> Unit,
     onThreatAlertToggle: (ThreatType, Boolean) -> Unit,
     onFollowMeChange: (Boolean) -> Unit,
     onPinnedCityChange: (City?) -> Unit,
@@ -91,32 +96,28 @@ internal fun FirstLaunchWizard(
     onLater: () -> Unit
 ) {
     val s = Strings.get(current)
-    val totalSteps = 6
-    var step by remember { mutableStateOf(0) }
+    var step by remember { mutableStateOf(WizardPage.WHAT) }
     var locationMode by remember { mutableStateOf<String?>(null) }
+    // Chosen before the pages that the presets rewrite, so those pages open showing what was picked.
+    // Presets are a one-shot write: nothing here re-applies on later steps or on later launches.
+    var intensity by remember { mutableStateOf(AppIntensity.BALANCED) }
     val notifPermLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { }
     val wizardContext = LocalContext.current
     LaunchedEffect(step) {
-        if (step == 3) {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-                ContextCompat.checkSelfPermission(wizardContext, Manifest.permission.POST_NOTIFICATIONS) !=
-                PackageManager.PERMISSION_GRANTED
-            ) {
-                notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
+        // The care page: ask for notifications only once there is something to notify about.
+        if (step == WizardPage.CARE &&
+            shouldAskForNotifications(
+                android.os.Build.VERSION.SDK_INT,
+                notificationsPermissionGranted(wizardContext)
+            )
+        ) {
+            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
-    BackHandler(enabled = step > 0) { step-- }
-    val stepTitle = when (step) {
-        0 -> s.wizardPageTitle
-        1 -> s.onboardingTipsTitle
-        2 -> s.wizardLocationTitle
-        3 -> s.wizardCareTitle
-        4 -> s.wizardZonesTitle
-        else -> s.wizardBetaTitle
-    }
+    BackHandler(enabled = !step.isFirst) { step = step.previous() }
+    val stepTitle = step.title(s)
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -145,17 +146,33 @@ internal fun FirstLaunchWizard(
                     .verticalScroll(rememberScrollState())
             ) {
                 when (step) {
-                    0 -> WizardIsNotBlock(s)
-                    1 -> WizardTipsBlock(s)
-                    2 -> SetupLocationStep(current, mode = locationMode, pinnedCity = pinnedCity, onModeChange = { locationMode = it }, onFollowMeChange = onFollowMeChange, onPinnedCityChange = onPinnedCityChange)
-                    3 -> {
+                    WizardPage.WHAT -> WizardIsNotBlock(s)
+                    WizardPage.TIPS -> WizardTipsBlock(s)
+                    WizardPage.INTENSITY -> Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            s.wizardIntensitySubtitle,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        IntensityPicker(
+                            s = s,
+                            selected = intensity,
+                            onPick = { picked ->
+                                intensity = picked
+                                onIntensityPick(picked)
+                            }
+                        )
+                    }
+                    WizardPage.LOCATION -> SetupLocationStep(current, mode = locationMode, pinnedCity = pinnedCity, onModeChange = { locationMode = it }, onFollowMeChange = onFollowMeChange, onPinnedCityChange = onPinnedCityChange)
+                    WizardPage.CARE -> {
                         WizardThreatGrid(current, iconSet, silencedTypes, onThreatAlertToggle)
                         Spacer(Modifier.height(18.dp))
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         Spacer(Modifier.height(6.dp))
                         WizardMoraleToggle(s = s, morale = morale, onMoraleChange = onMoraleChange)
                     }
-                    4 -> SetupZoneControlsStep(
+                    WizardPage.ZONES -> SetupZoneControlsStep(
                         s = s,
                         lang = current,
                         slowRedKm = slowRedKm,
@@ -170,7 +187,7 @@ internal fun FirstLaunchWizard(
                         onSlowRedArmedChange = onSlowRedArmedChange,
                         onSlowYellowArmedChange = onSlowYellowArmedChange
                     )
-                    else -> WizardBetaBlock(s, neptunDown, degraded)
+                    WizardPage.ALPHA -> WizardAlphaBlock(s, neptunDown, degraded)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -180,9 +197,9 @@ internal fun FirstLaunchWizard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 val backInteraction = remember { MutableInteractionSource() }
-                if (step > 0) {
+                if (!step.isFirst) {
                     IconButton(
-                        onClick = { step-- },
+                        onClick = { step = step.previous() },
                         interactionSource = backInteraction,
                         modifier = Modifier.pressTick(backInteraction)
                     ) {
@@ -193,12 +210,8 @@ internal fun FirstLaunchWizard(
                         )
                     }
                 }
-                val locationReady = locationMode != null && (locationMode != "pin" || pinnedCity != null)
-                val progressFrac = (step + 1) / totalSteps.toFloat()
-                val nextEnabled = when (step) {
-                    2 -> locationReady
-                    else -> true
-                }
+                val progressFrac = (step.ordinal + 1) / WizardPage.COUNT.toFloat()
+                val nextEnabled = step.isNextEnabled(locationMode, pinnedCity != null)
                 val nextInteraction = remember { MutableInteractionSource() }
                 Box(
                     modifier = Modifier
@@ -212,7 +225,13 @@ internal fun FirstLaunchWizard(
                     contentAlignment = Alignment.Center
                 ) {
                     Button(
-                        onClick = { if (step < totalSteps - 1) step++ else onComplete() },
+                        // Leaving the intensity page commits what the page shows. It pre-selects
+                        // Normal, so tapping straight through writes the default setup rather than
+                        // leaving the untouched stored defaults — which are not quite Normal.
+                        onClick = {
+                            if (step.commitsIntensityOnLeave()) onIntensityPick(intensity)
+                            if (step.isLast) onComplete() else step = step.next()
+                        },
                         enabled = nextEnabled,
                         interactionSource = nextInteraction,
                         modifier = Modifier
@@ -228,7 +247,7 @@ internal fun FirstLaunchWizard(
                         contentPadding = PaddingValues(0.dp)
                     ) {
                         Text(
-                            if (step < totalSteps - 1) s.nextButton else s.wizardStartButton,
+                            if (!step.isLast) s.nextButton else s.wizardStartButton,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -532,23 +551,26 @@ private fun SourceReactionChip(count: String, icon: ImageVector) {
     }
 }
 
-/** Wizard page: the beta ask — use it, report what breaks, and read this before uninstalling. */
+/** Wizard page: the alpha ask — use it, report what breaks, and read this before uninstalling. */
 @Composable
-private fun WizardBetaBlock(s: Strings.StringSet, neptunDown: Boolean, degraded: Boolean) {
+private fun WizardAlphaBlock(s: Strings.StringSet, neptunDown: Boolean, degraded: Boolean) {
     Column(modifier = Modifier.fillMaxWidth()) {
         WizardCard(borderColor = _ukraineYellow.copy(alpha = 0.3f)) {
             Text(
-                s.wizardBetaThanks,
+                s.wizardAlphaThanks,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(Modifier.height(14.dp))
-            WizardBullet(s.wizardBetaUse, _ukraineYellow)
+            WizardBullet(s.wizardAlphaUse, _ukraineYellow)
+            // The reliability caveat sits with the ask, not in the manuals: this app is paranoid
+            // on purpose, and the honest remedy (turn it down) is one page away.
+            WizardBullet(s.wizardAlphaReliability, _ukraineYellow)
             WizardBugBullet(s, pillColor(neptunDown, degraded), pillLabel(s, neptunDown, degraded))
-            WizardBullet(s.wizardBetaAi, _ukraineYellow)
+            WizardBullet(s.wizardAlphaAi, _ukraineYellow)
             Spacer(Modifier.height(12.dp))
             Text(
-                s.wizardBetaBattery,
+                s.wizardAlphaBattery,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -615,8 +637,8 @@ private fun WizardBullet(text: String, accent: Color) {
 @Composable
 private fun WizardBugBullet(s: Strings.StringSet, markColor: Color, markLabel: String) {
     val glyphId = "neptun"
-    val head = s.wizardBetaBugs.substringBefore(" — ")
-    val lead = s.wizardBetaBugs.substringAfter(" — ", "")
+    val head = s.wizardAlphaBugs.substringBefore(" — ")
+    val lead = s.wizardAlphaBugs.substringAfter(" — ", "")
     WizardBulletRow(
         text = buildAnnotatedString {
             withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
@@ -630,7 +652,7 @@ private fun WizardBugBullet(s: Strings.StringSet, markColor: Color, markLabel: S
                 append(' ')
                 withStyle(SpanStyle(color = markColor)) { append(markLabel) }
                 append(' ')
-                append(s.wizardBetaBugsTail)
+                append(s.wizardAlphaBugsTail)
             }
         },
         accent = _ukraineYellow,

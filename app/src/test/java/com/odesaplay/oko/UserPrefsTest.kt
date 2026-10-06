@@ -4,6 +4,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -18,6 +20,7 @@ class UserPrefsTest {
 
     @Before
     fun setUp() {
+        resetStores()
         prefs = UserPrefs(RuntimeEnvironment.getApplication())
     }
 
@@ -33,6 +36,7 @@ class UserPrefsTest {
         assertEquals(UserPreferences.DEFAULT.alertRegionMode, p.alertRegionMode)
         assertEquals(UserPreferences.DEFAULT.mapVisibleTypes, p.mapVisibleTypes)
         assertEquals(UserPreferences.DEFAULT.alertEnabledTypes, p.alertEnabledTypes)
+        assertTrue(p.notifyPolicyEnabled)
     }
 
     @Test
@@ -42,14 +46,14 @@ class UserPrefsTest {
         prefs.setThreatCardSize(ThreatCardSize.SMALL)
         prefs.setLanguage(AppLanguage.EN)
         prefs.setSheltersEnabled(false)
-        prefs.setNotifyPolicyEnabled(true)
+        prefs.setNotifyPolicyEnabled(false)
 
         val p = prefs.preferences.first()
         assertEquals(12, p.slowRedKm)
         assertEquals(ThreatCardSize.SMALL, p.threatCardSize)
         assertEquals(AppLanguage.EN, p.language)
         assertFalse(p.sheltersEnabled)
-        assertTrue(p.notifyPolicyEnabled)
+        assertFalse(p.notifyPolicyEnabled)
     }
 
     @Test
@@ -112,5 +116,106 @@ class UserPrefsTest {
 
         prefs.setNightSleep(false)
         assertTrue(prefs.preferences.first().nightOfficialRedEnabled)
+    }
+
+    /**
+     * The intensity presets write two dozen keys in one transaction, so the risk is a key spelled
+     * wrong or a field inverted: `batteryAskEnabled` is stored as `batteryOnboardShown`, and the
+     * patch's "the user wants the battery prompt" is the store's "we already asked". Assert the
+     * patch lands field for field rather than spot-checking the obvious ones.
+     */
+    @Test
+    fun `an intensity patch lands every field it owns`() = runTest {
+        prefs.clearAll()
+        val patch = AppIntensity.QUIET.patch()
+        prefs.applyIntensity(patch)
+
+        val p = prefs.preferences.first()
+        assertEquals(patch.sirenOverride, p.sirenOverride)
+        assertEquals(patch.criticalOfflineOverride, p.criticalOfflineOverride)
+        assertEquals(patch.criticalOfflineBypassSilent, p.criticalOfflineBypassSilent)
+        assertEquals(patch.bootRestartEnabled, p.bootRestartEnabled)
+        assertEquals(patch.periodicGps, p.periodicGps)
+        assertEquals(patch.notifyPolicyEnabled, p.notifyPolicyEnabled)
+        assertEquals(patch.zonePolicy, p.zonePolicy)
+        assertEquals(patch.digestWindow, p.digestWindow)
+        assertEquals(patch.digestPerType, p.digestPerType)
+        assertEquals(patch.digestMax, p.digestMax)
+        assertEquals(patch.slowRedKm, p.slowRedKm)
+        assertEquals(patch.slowYellowKm, p.slowYellowKm)
+        assertEquals(patch.fastRedMin, p.fastRedMin)
+        assertEquals(patch.fastYellowMin, p.fastYellowMin)
+        assertEquals(patch.slowRedArmed, p.slowRedArmed)
+        assertEquals(patch.slowYellowArmed, p.slowYellowArmed)
+        assertEquals(patch.fastRedArmed, p.fastRedArmed)
+        assertEquals(patch.fastYellowArmed, p.fastYellowArmed)
+        assertEquals(patch.alertTypes, p.alertEnabledTypes)
+        assertEquals(patch.followBullet, p.followBullet)
+        assertEquals(patch.highQualityExplosions, p.highQualityExplosions)
+        assertEquals(patch.deathAnimationStyle, p.deathAnimationStyle)
+        assertEquals(patch.sheltersEnabled, p.sheltersEnabled)
+        // Inverted on purpose in the patch: `false` here means "still ask about the battery".
+        assertFalse(p.batteryOnboardShown)
+    }
+
+    /** Map visibility is not a preset's business — a preset decides what rings, not what is drawn. */
+    @Test
+    fun `an intensity patch leaves the map alone`() = runTest {
+        prefs.clearAll()
+        prefs.setThreatMapVisible(ThreatType.RECON, false)
+
+        prefs.applyIntensity(AppIntensity.QUIET.patch())
+
+        val p = prefs.preferences.first()
+        assertFalse(p.mapVisibleTypes.contains(ThreatType.RECON))
+        // …while still not letting that type ring.
+        assertFalse(p.alertEnabledTypes.contains(ThreatType.RECON))
+    }
+
+    @Test
+    fun `re-applying an intensity restores it exactly`() = runTest {
+        prefs.clearAll()
+        val quiet = AppIntensity.QUIET.patch()
+        prefs.applyIntensity(quiet)
+        prefs.setSlowRedKm(3)
+        prefs.setFollowBullet(true)
+
+        prefs.applyIntensity(quiet)
+
+        val p = prefs.preferences.first()
+        assertEquals(quiet.slowRedKm, p.slowRedKm)
+        assertEquals(quiet.followBullet, p.followBullet)
+    }
+
+    /**
+     * A patch that claims the night window ends "Just let me sleep!", exactly as a hand edit does —
+     * otherwise the restore fires at the end of the night and silently re-mutes what was just armed.
+     */
+    @Test
+    fun `a patch that claims the night drops the sleep snapshot`() = runTest {
+        prefs.clearAll()
+        prefs.setNightSleep(true)
+        assertNotNull(prefs.preferences.first().nightSleepRestore)
+
+        prefs.applyIntensity(AppIntensity.ALWAYS_READY.patch())
+
+        val p = prefs.preferences.first()
+        assertNull("the restore must not outlive the choice that replaced it", p.nightSleepRestore)
+        assertTrue(p.nightOfficialRedEnabled)
+        assertTrue(p.nightZoneSirenOverride)
+        assertTrue(p.nightSlowYellowArmed)
+        assertFalse("every night bell on means the window is no longer a mute", p.nightSleepActive)
+    }
+
+    @Test
+    fun `a patch that leaves the night alone keeps the sleep snapshot`() = runTest {
+        prefs.clearAll()
+        prefs.setNightSleep(true)
+
+        prefs.applyIntensity(AppIntensity.QUIET.patch())
+
+        val p = prefs.preferences.first()
+        assertNotNull("applying a setup must not silently cancel the user's night mute", p.nightSleepRestore)
+        assertTrue(p.nightSleepActive)
     }
 }

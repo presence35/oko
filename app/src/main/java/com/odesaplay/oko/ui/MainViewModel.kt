@@ -74,6 +74,7 @@ data class UiState(
     val degraded: Boolean = false,                   // connected but stream quiet (orange pill)
     val monitoringRunning: Boolean = true,           // AlertService foreground monitor alive
     val bootRestartEnabled: Boolean = true,          // Settings: restart monitoring after reboot
+    val sleepNoticeEnabled: Boolean = false,         // Settings: "Oko was asleep" notice (opt-in)
     val threatsInner: List<NormalizedThreat> = emptyList(), // reaching within the red time tier
     val threatsOuter: List<NormalizedThreat> = emptyList(), // in the yellow time tier, beyond red
     val mapThreats: List<NormalizedThreat> = emptyList(),   // all active threats across Europe
@@ -242,6 +243,7 @@ data class SettingsState(
     val criticalOfflineOverride: Boolean get() = prefs.criticalOfflineOverride
     val criticalOfflineBypassSilent: Boolean get() = prefs.criticalOfflineBypassSilent
     val bootRestartEnabled: Boolean get() = prefs.bootRestartEnabled
+    val sleepNoticeEnabled: Boolean get() = prefs.sleepNoticeEnabled
     val nightEnabled: Boolean get() = prefs.nightEnabled
     val nightStartMin: Int get() = prefs.nightStartMin
     val nightEndMin: Int get() = prefs.nightEndMin
@@ -781,6 +783,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val raidMute = values[9] as RaidMute
         val notificationsDisabledBySystem = !(values[10] as Boolean)
         val bootRestartEnabled = rawPrefs.bootRestartEnabled
+        val sleepNoticeEnabled = rawPrefs.sleepNoticeEnabled
         // No 1s wall-clock flow: the model rebuild is event-driven, so stamp the build time
         // here. Per-second visuals (staleness dimming, marker motion) live in MapView's own
         // 1s loop; ghost/night freshness re-arms on the next frame or pref change.
@@ -942,6 +945,7 @@ showBorders = prefs.showBorders,
             raidMute = raidMute,
             monitoringRunning = monitoringRunning,
             bootRestartEnabled = bootRestartEnabled,
+            sleepNoticeEnabled = sleepNoticeEnabled,
             problems = problems,
             problemAlert = problemAlert
         )
@@ -1417,6 +1421,10 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setBootRestartEnabled(enabled) }
     }
 
+    fun setSleepNoticeEnabled(enabled: Boolean) {
+        viewModelScope.launch { prefs.setSleepNoticeEnabled(enabled) }
+    }
+
     /** Tap on the "Service OFFLINE" banner: bring the foreground monitor back up. */
     fun reactivateMonitoring() {
         AlertService.start(app)
@@ -1760,6 +1768,14 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setThreatIconZoom(enabled: Boolean) {
         viewModelScope.launch { prefs.setThreatIconZoom(enabled) }
+    }
+
+    /**
+     * Apply a ready-made setup. One-shot by design: this writes the fields the intensity owns and
+     * nothing re-applies it later, so every switch stays hand-editable afterwards.
+     */
+    fun applyIntensity(intensity: AppIntensity) {
+        viewModelScope.launch { prefs.applyIntensity(intensity.patch()) }
     }
 
     /** Wizard finished (Done): setup complete. */

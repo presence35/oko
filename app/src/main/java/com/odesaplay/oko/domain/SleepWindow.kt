@@ -164,19 +164,27 @@ object SleepPolicy {
 
     /**
      * Order matters and is the whole policy:
-     *  - the exemption is checked first because it is terminal — the problem it names is fixed, so
-     *    the row comes down whether or not it would still be worth posting;
+     *  - a switched-off feature is first, because it trumps everything including the exemption:
+     *    nothing is folded into the ledger, so nothing is ever published either;
+     *  - the exemption is next because it is terminal — the problem it names is fixed, so the row
+     *    comes down whether or not it would still be worth posting;
      *  - an unreadable feed, a sub-floor gap, or a window that [SleepEvidence.harmed] shows cost
      *    nothing is *silent*, all checked before the mute so noise is never held on to. A benign
      *    gap — the common case on a phone that Dozes without dropping its socket — earns no notice:
      *    the exemption ask is only justified at the moment something was actually missed.
+     *
+     * [enabled] is REQUIRED rather than defaulted on purpose. The setting defaults to off, so a
+     * default here could only ever be wrong in the direction of posting notices at a user who
+     * switched them off, and the compiler now makes every caller state its intent.
      */
     fun decide(
         window: SleepWindow,
         evidence: SleepEvidence,
+        enabled: Boolean,
         muted: Boolean = false,
         exemptionGranted: Boolean = false
     ): SleepDecision = when {
+        !enabled -> SleepDecision.Silent
         exemptionGranted -> SleepDecision.Dismiss
         !evidence.readable || window.durationMs < REPORT_AFTER_MS -> SleepDecision.Silent
         !evidence.harmed -> SleepDecision.Silent

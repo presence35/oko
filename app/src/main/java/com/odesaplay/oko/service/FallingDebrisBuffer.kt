@@ -48,7 +48,11 @@ class FallingDebrisBuffer(
 
         deadlineMs = nowMs() + durationSeconds * 1000L
         _secondsRemaining.value = durationSeconds
-        countdownJob = scope.launch(Dispatchers.Default) {
+        // On the scope it was handed, not a dispatcher of its own: the countdown is the caller's
+        // work, so it belongs to the caller's scope. (AlertService's scope is already a background
+        // one.) Pinning a dispatcher here also pinned the loop to real time, which is what stopped
+        // the tests below from controlling it.
+        countdownJob = scope.launch {
             while (true) {
                 val remaining = remainingSeconds()
                 _secondsRemaining.value = remaining

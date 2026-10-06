@@ -234,11 +234,12 @@ class AlertService : Service() {
     private var lastMonitorAlertLevel: AlertLevel = AlertLevel.NONE
 
     private var hasShownGpsFallbackToast = false
-    /** Last observed battery-exemption state, so the sleep notice is cleared on the TRANSITION.
-     *  Polling-and-cancelling every tick would be a binder call per tick forever, because a granted
-     *  exemption is sticky — and the sleep path cannot do it, since an exempt app stops sleeping
-     *  and therefore stops producing the windows that would trigger the check. */
-    private var lastExemptionGranted: Boolean? = null
+    /** Last observed "the notice must not be up" state, so the sleep row is retracted on the
+     *  TRANSITION. Two ways in — the exemption landing, or the user switching the notice off — and
+     *  one field for both because the reason to edge-detect is the same: polling-and-cancelling
+     *  every tick would be a binder call per tick forever, and neither cause ever produces the sleep
+     *  windows that could otherwise trigger a cleanup. */
+    private var lastNoticeRetracted: Boolean? = null
     @Volatile private var wasConnected = true
     private var offlineAlertJob: Job? = null
     private var offlineRestorePending = false
@@ -751,7 +752,10 @@ class AlertService : Service() {
                     // evaluated against `now`, so a tick that wakes up hours later would decide
                     // with a clock that is already ancient: stale threats revived, episodes
                     // synthesized and all-clears fired for alerts nobody was ever told about.
-                    // Skip that tick's decisions, log the gap, and re-baseline instead.
+                    // Re-baseline the deltas that cannot be trusted, then let this tick decide from a
+                    // clean slate: the tick is NOT skipped. A hidden skip here was misread for days as
+                    // "post-Doze wakes decide nothing" — they do decide, which is why a stall shows up
+                    // as a gap BETWEEN two decisions rather than as two consecutive gaps.
                     if (gap > SLEEP_GAP_REBASE_MS) {
                         resumeAfterSleep(tick, gap)
                     }
@@ -847,6 +851,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 // Held until here because the report is about the focus oblast's own episode, read
                 // through the shared gate above — the policy never re-implements official matching.
                 applySleepDecision(live, official.alert?.since, p)
+                retractSleepNotice(p)
                 publishSleepNotice(live, p)
                 val focusOblastLevel = official.level
                 val focusOblastRawLevel = officialRaw.level
@@ -1086,15 +1091,6 @@ val mappedThreats = registry.allThreats.map { list ->
             notificationManager.cancelNotification(NOTIF_MILESTONE)
             notificationManager.cancelNotification(NOTIF_OFFLINE_CRITICAL)
         }
-        // The sleep notice exists to ask for the battery exemption, so it must not outlive the
-        // answer. Checked here rather than in the sleep path because an exempt app stops sleeping:
-        // once the ask is answered there are no more windows to trigger a cleanup.
-        val exemptionGranted = BatteryOptimization.isIgnoringBatteryOptimizations(this)
-        if (lastExemptionGranted == false && exemptionGranted) {
-            sleepLedger = null
-            notificationManager.clearSleepNotice()
-        }
-        lastExemptionGranted = exemptionGranted
 
         val all = state.threats
 
@@ -1916,6 +1912,7 @@ val mappedThreats = registry.allThreats.map { list ->
         val decision = SleepPolicy.decide(
             pending.window,
             evidence,
+            enabled = prefs.sleepNoticeEnabled,
             muted = bellsMuted(),
             exemptionGranted = BatteryOptimization.isIgnoringBatteryOptimizations(this)
         )
@@ -1950,6 +1947,24 @@ val mappedThreats = registry.allThreats.map { list ->
     }
 
     /**
+     * Takes the row down when its reason is gone — the exemption landed, or the user switched the
+     * notice off — and empties the tally with it. Edge-detected on the transition rather than
+     * polled: `clearSleepNotice` is a binder call and both causes are sticky, so checking the
+     * condition every tick would fire forever. Checked here rather than in the sleep path because
+     * neither cause ever produces another sleep window: an exempt app stops sleeping, and a
+     * switched-off notice stops deciding.
+     */
+    private fun retractSleepNotice(prefs: UserPreferences) {
+        val retracted = BatteryOptimization.isIgnoringBatteryOptimizations(this) ||
+            !prefs.sleepNoticeEnabled
+        if (lastNoticeRetracted == retracted) return
+        lastNoticeRetracted = retracted
+        if (!retracted) return
+        sleepLedger = null
+        notificationManager.clearSleepNotice()
+    }
+
+    /**
      * Writes (or refreshes) the night's row from the accumulated tally. Driven by the evaluation
      * rather than by a stall, because the row's moment is the user's, not the stall's: it appears on
      * the first tick after they look at the phone, carrying everything that happened until then.
@@ -1959,7 +1974,10 @@ val mappedThreats = registry.allThreats.map { list ->
      * counter that only ever decorates one notification is not worth a disk write on this path.
      */
     private fun publishSleepNotice(live: LiveInputs, prefs: UserPreferences) {
-        val ledger = sleepLedger ?: return
+        val ledger = sleepLedger ?: return        // Belt-and-braces against the ordering of the tick body: the retract block runs later in
+        // this same lambda, so on the tick the user switches the notice off a ledger folded a
+        // moment ago could still be sitting here. Never publish at a user who asked for silence.
+        if (!prefs.sleepNoticeEnabled) return
         val now = live.now
         // Last night's row has retired: start a fresh tally so tonight is not summed into it.
         if (SleepPolicy.rowExpired(ledger, now)) {

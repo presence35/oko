@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -38,7 +37,10 @@ object WidgetUpdater {
 
     private const val UPDATE_INTERVAL_MS = 30_000L
 
-    private val Context.widgetSnapshotStore by preferencesDataStore(name = "widget_snapshot")
+    private const val STORE_NAME = "widget_snapshot"
+
+    /** Cached by file name, so this is a map lookup per call — see [PreferenceStores]. */
+    private fun store(context: Context) = PreferenceStores.of(context, STORE_NAME)
 
     object Keys {
         val threatCount = intPreferencesKey("threat_count")
@@ -128,7 +130,7 @@ object WidgetUpdater {
     }
 
     private suspend fun persist(context: Context, snapshot: WidgetSnapshot, lang: AppLanguage, iconSet: ThreatIconSet) {
-        context.widgetSnapshotStore.edit { prefs ->
+        store(context).edit { prefs ->
             prefs[Keys.threatCount] = snapshot.threatCount
             prefs[Keys.typeCounts] = snapshot.typeCounts.entries.joinToString(",") { (type, n) -> "${type.name}=$n" }
             prefs[Keys.activeZone] = snapshot.activeZone?.name.orEmpty()
@@ -168,7 +170,7 @@ object WidgetUpdater {
     )
 
     suspend fun readSnapshot(context: Context): WidgetSnapshot {
-        val prefs = context.widgetSnapshotStore.data.first()
+        val prefs = store(context).data.first()
         return WidgetSnapshot(
             threatCount = prefs[Keys.threatCount] ?: 0,
             typeCounts = parseTypeCounts(prefs[Keys.typeCounts].orEmpty()),
@@ -195,13 +197,13 @@ object WidgetUpdater {
     }
 
     suspend fun readLang(context: Context): AppLanguage {
-        val prefs = context.widgetSnapshotStore.data.first()
+        val prefs = store(context).data.first()
         return prefs[Keys.lang]?.let { lang -> AppLanguage.values().firstOrNull { it.name == lang } }
             ?: AppLanguage.EN
     }
 
     suspend fun readIconSet(context: Context): ThreatIconSet {
-        val prefs = context.widgetSnapshotStore.data.first()
+        val prefs = store(context).data.first()
         return prefs[Keys.iconSet]?.let { set -> ThreatIconSet.values().firstOrNull { it.name == set } }
             ?: ThreatIconSet.PHOTO
     }

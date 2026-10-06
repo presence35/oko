@@ -376,9 +376,12 @@ object LogBundle {
         return runCatching {
             am?.getHistoricalProcessExitReasons(context.packageName, 0, EXIT_HISTORY)
                 ?.mapNotNull { info ->
-                    // The CALLING process heads the list as a live record: reason OTHER, no memory
-                    // figures. It has not died, so reporting it as a death would invent one on
-                    // every single bundle and drown the real ones.
+                    // The CALLING process heads the list as a live record, with reason OTHER: it has
+                    // not died, so reporting it as a death would invent one on every single bundle
+                    // and drown the real ones. `REASON_OTHER` is what identifies it — the zero pss is
+                    // NOT evidence, since real crashes report it too (an SM-A505FN crash record
+                    // carries pss=0), so the two are ANDed only because wrongly dropping a live entry
+                    // is worse than keeping a dead OTHER one.
                     if (info.reason == ApplicationExitInfo.REASON_OTHER && info.pss == 0L) {
                         null
                     } else {

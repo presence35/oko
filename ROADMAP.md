@@ -3,72 +3,113 @@
 Planned-but-not-started features, tracked so a future session can pick them up. Nothing here is
 committed to a release.
 
-## Tell the user the app was asleep, and push for the battery exemption
+## App intensity — ready-made setups (implemented, kept as the design record)
 
-From two sent logs (2026-10-03/05, Pixel 7 / Android 17 and SM-A505FN / Android 11): with the
-screen off and the device idle, the whole process is CPU-suspended by Doze for 5-6 minutes at a
-stretch. Measured off the power timeline and the decision log, the app was blind for **48% of the
-day on the Samsung and 17% on the Pixel**, longest blind window 39 min and 22 min, on 301 and 165
-stalls respectively. Not a bug in the loop: every gap has `interactive=false, deviceIdle=true`, and
-the 466/634/469/405/450 s stalls contain *zero* power samples and *zero* connection-log entries —
-the process is suspended end to end, not just the decision coroutine. Only the two long stalls
-(2476 s, 1025 s) contain connection events, and those are the Doze maintenance windows where the
-CPU came back on. A threat that entered a zone mid-stall is not seen until the loop wakes: one
-demonstrated miss on the Samsung is a `ZONE_ENTER/FIRED` 7.8 min after a 7.8 min blackout.
+The app is deliberately paranoid about real-world failure: background survival, offline handling,
+aggressive sound, restart-after-reboot. That is correct near the front line and absurd in a living
+room, and the switches that throttle it were scattered across four settings pages. The closing
+wizard page now says so out loud ("built for bad conditions… turn it down in Reliability"), so the
+remedy had to be reachable without reading that sentence literally.
 
-**The loop is not the problem.** An earlier read of these logs claimed the wake-up tick "decides
-nothing" because `resumeAfterSleep` fires on every gap. That is wrong and is corrected here:
-`resumeAfterSleep` (`AlertService.kt:1788`) has no skip in it — it drops `lastZoneTiers`, sets
-`lastSweepAtMs = 0L` (which forces the next sweep *sooner*) and nulls `emptySince`, then
-`nowFlow.value = tick` runs unconditionally. The wake tick evaluates; it just does so from a clean
-slate rather than computing deltas across a gap nobody observed, which is correct — the deltas are
-the part that cannot be trusted. The comment above the call site ("Skip that tick's decisions")
-describes intent the code does not implement, and the data agrees: a 466 s stall shows as a gap
-*between* two decisions, not two gaps. Consequence: `SLEEP_GAP_REBASE_MS = 3 min` is a correct
-detector and must NOT be lowered to ~90 s — that would push ordinary hiccups onto the rebase path
-and discard hysteresis for nothing. There is no cheap in-app correctness win here.
+**Personas, one shot each.** `AppIntensity` = ALWAYS_READY / BALANCED / QUIET / WATCHING. Picking
+one writes the fields in `IntensityPatch` and is then forgotten — no live mode, because a profile
+that re-asserts itself silently undoes hand-tuning, which is the one thing a settings screen must
+not do. The same four cards are offered again in Settings → Reliability, because the alpha note
+tells people to go turn things down and hunting four pages is not "turning it down".
 
-So the whole remaining problem is **silence, not wrongness**: the app knows it slept (it logs
-`PAUSED` on every one of those stalls) and never tells the user. The exemption flow **already
-exists and is already surfaced** — `BatteryOptimization.requestExemption` is wired into
-`MainScreen`, `SettingsScreen` (the button renders whenever the app is not exempt) and the
-first-launch wizard, and the bundle reports `batteryUnoptimized`. Both test phones are un-exempt,
-so both are showing the button today. What is missing:
+What each owns, and what none of them may touch:
 
-- **Promote the sleep from a diagnostic to a fact with a consumer.** `resumeAfterSleep` already
-  receives both endpoints of the window; it currently writes a string (`"paused 22m"`) into a
-  diagnostic ring buffer. Make it a typed `SleepWindow` (engine-owned, like `OblastAlert`) and let a
-  **pure** `SleepPolicy` classify it. One producer (the single call site that can know the tick
-  stopped), one fact, consumers orchestrate — the existing no-mirror shape.
-- **Report only what carries a server timestamp.** Two claims are provable from the feed alone:
-  official-episode onsets inside the window, and tracks whose `confirmedAt` falls inside it. Both
-  are compared server-timestamp-to-server-timestamp, anchored on the newest `updatedAt` in the feed
-  as "server now", so no client/server clock skew can fabricate or hide one. This is also why no
-  pre-gap snapshot and no cold-cache flag are needed: a cold cache cannot invent a server-timed
-  event inside the window. Threats that appeared *and resolved* while blind stay uncountable — so
-  the copy says "an official alert started while Oko was asleep", never "you missed 14 alerts".
-- **Throttle by notification identity, not by state.** Reuse one notification id through the
-  existing `safeNotify(id, ...)` so a re-post *replaces* rather than stacks: one updating row per
-  sleep episode ("asleep 6 min" → "asleep 22 min"), coalescing for free with no `lastNagAtMs` and
-  no pref. 165-301 stalls a day makes this the load-bearing detail: a notification that nags is
-  worse than no notification. Clear it when the exemption is granted or the app is opened.
+| | Always ready | Normal | Quiet house | Just watching |
+|---|---|---|---|---|
+| always sound / bypass silent | on / on | off / off | off / off | off / off |
+| critical-offline override | on | on | on | **off** |
+| restart after reboot / periodic GPS | on / on | on / off | on / off | **off / off** |
+| battery ask | armed | armed | armed | **silenced** |
+| repeat-sound policy | every change | once per threat | digest 10 min, per type, max 5 | digest 60 min |
+| rings | 20/50 km, all 4 armed | 20/50, fast-yellow off | **15/40 km** | 20/50, **all 4 off** |
+| night window | **all 8 bells armed, both siren overrides on** | untouched | untouched | untouched |
+| types that ring | all | all | **all but aviation/recon/unknown** | **all but unknown** |
+| follow bullet / HQ blasts | on / on | on / on | **off / off** | **off / off** |
+| death animation | advanced | advanced | **simple** | classic |
+| shelters | on | on | on | **off** |
+
+Map visibility is never in the patch — a persona decides what rings, never what is drawn. Neither
+is morale, the tallies, language, the pinned city or map appearance: someone who picks
+"quiet house" still gets the neutralized counter, because that counter is the cheap thirty-second
+payoff and the effects are the expensive noise.
+
+**The night window is claimed, not stated** — `IntensityPatch.night` is the one nullable field,
+`IntensityNight`, set only by ALWAYS_READY (all eight bells armed, both siren overrides on). Every
+other preset must leave it `null`, or applying a setup would silently cancel the user's own "Just
+let me sleep!"; when a patch does claim it, the writer drops that sleep snapshot, the same rule
+`UserPrefs.editNightBell` already follows for a hand edit. `AppIntensityTest` asserts both halves,
+including that the ALWAYS_READY night preset resolves to `isMuted == false`.
+
+**The trap this surfaced, and the fix.** `NotifyPrefs.from(enabled, preset, …)` maps the
+repeat-sound master **off** to `EVERY_CHANGE`, and the stored default left that master off — so the
+stored `zonePolicy = ONCE_PER_THREAT` never ran and every install rang on every single update while
+the pref said otherwise. Fixed at the source: `UserPreferences.notifyPolicyEnabled` now defaults to
+**on**, so the default is one bell per threat (re-bell on reaching the red ring, every escalation
+still sounds). Every patch still states the master explicitly rather than relying on the default,
+and two tests now pin the pair: `AppIntensityTest` asserts that the shipped default *resolves* to
+`ONCE_PER_THREAT` through `NotifyPrefs.from`, and that `Normal` equals the default field for field.
+
+## Tell the user the app was asleep, and push for the battery exemption (notice SHIPPED)
+
+The notice is built and opt-in: Settings -> Reliability -> "Asleep notice" (`sleepNoticeEnabled`,
+default OFF). This section is kept as the measurement record and for what remains, which is no
+longer about building the notice.
+
+**The measurements.** From sent logs (2026-10-03/05, Pixel 7 / Android 17 and SM-A505FN /
+Android 11): with the screen off and the device idle the whole process is CPU-suspended by Doze for
+5-6 minutes at a stretch. Measured off the power timeline and the decision log, the app was blind
+for 48% of the day on the Samsung and 17% on the Pixel, longest blind window 39 min and 22 min, on
+301 and 165 stalls. Not a bug in the loop: every gap has `interactive=false, deviceIdle=true`, and
+the 466/634/469/405/450 s stalls contain zero power samples AND zero connection-log entries, so the
+process is suspended end to end. Only the two long stalls (2476 s, 1025 s) contain connection
+events, and those are the Doze maintenance windows where the CPU came back. One demonstrated miss on
+the Samsung is a `ZONE_ENTER/FIRED` 7.8 min after a 7.8 min blackout.
+
+**`SLEEP_GAP_REBASE_MS` is a correct detector; do NOT lower it.** The wake tick is not skipped:
+`resumeAfterSleep` drops only the deltas that cannot be trusted (`lastZoneTiers`, `lastSweepAtMs`,
+`emptySince`), and that same tick then decides from a clean slate. A stall therefore shows up as a
+gap BETWEEN two decisions, not as two gaps. Lowering the threshold to ~90 s would push ordinary
+hiccups onto the rebase path and discard hysteresis for nothing.
+
+**Shipped:** the typed `SleepWindow` / `SleepEvidence` / `SleepLedger` fact; the pure `SleepPolicy`
+(`decide` ordered so a switched-off feature, an unreadable feed, a sub-floor gap and a harmless
+window are all `Silent` before the mute is consulted; a raid mute `Hold`s rather than drops; a
+granted exemption `Dismiss`es); server-time evidence anchored on the feed's newest timestamp across
+threats AND alerts, so no clock skew can fabricate or hide a miss; one reused notification id, so
+everything coalesces into one updating row; `setTimeoutAfter(12 h)` for retirement; and the opt-in
+switch. The retirement replaced the original "clear it when the app is opened" idea on purpose:
+clearing on `onResume` would destroy the only reminder for an overnight event every time the user
+glanced at their phone.
+
+**Remaining:**
+
+- **The exemption ask is still just a Settings row.** The notice's button opens the generic
+  `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` dialog, because the intent is built inline in
+  `AlertNotificationManager`. `BatteryOptimization.requestExemptionOemAware()` already resolves the
+  OEM-specific screen and has NO production caller, only `BatteryOptimizationTest`. Wiring it into
+  that button is what sends a Samsung/Xiaomi user to the screen that actually fixes their device.
 - **Let the measured sleep history choose the copy instead of the vendor string.**
-  `BatteryOptimization.getOemInfo()`'s manufacturer table exists only to pick which settings screen
-  to open, and its `isAggressive` flag currently changes one *title adjective* — the EN and UA
-  bodies are byte-identical and the click path is identical (`SettingsScreen.kt:1276` calls
-  `requestExemption`, never the OEM-aware variant). `hasAutoStartIntent` is written 7x and read
-  0x. So either give `requestExemptionOemAware()` its one caller (the sleep notice's tap target, so
-  Samsung/Xiaomi land on their OEM screen) or delete it, and delete the write-only field. The plain
-  claim in its KDoc — that a Pixel returns `isAggressive = false` — is false, and the two have
-  disagreed since the same commit (`136af82`). Net line count should go **down**.
+  `getOemInfo()`'s manufacturer table exists only to pick a screen, and `isAggressive` changes one
+  *title adjective*: the EN and UA bodies are byte-identical and the click path is identical. The
+  KDoc that claimed a Pixel returns `isAggressive = false` is corrected, and `hasAutoStartIntent` is
+  read only by `BatteryOptimizationTest`, never in production.
 - **Keep the loud path off the battery.** A wake lock held across the idle tick, or
   `setExactAndAllowWhileIdle` on the official-alert path, are the only things that shrink the
-  windows themselves. They cost battery, which is the trade this app cannot afford to lose — try
-  them only if the exemption ask proves insufficient, and measure on the Samsung (worst by 3x).
+  windows themselves. They cost battery, which is the trade this app cannot afford to lose. Try them
+  only if the exemption ask proves insufficient, and measure on the Samsung (worst by 3x).
+- **Validate the notice on a device.** Build 780 (Ukraine) has 47 `PAUSED` rows, 34 at or above the
+  4-min floor, and no `REASON_CRASH`, so the path runs ~47 times without crashing, but nothing in
+  the bundle can show whether the row rendered. The Samsung (65.5% blind, longest 35 min) is where
+  "one permanent row" needs looking at.
 
-Open question for whoever picks this up: is the promise "we will not sleep through an official
-alert" (achievable with an alarm path) or "we will not sleep at all" (not achievable on an
-OEM-throttled Android 11 without the exemption)? The copy depends on the answer.
+Open question: is the promise "we will not sleep through an official alert" (achievable with an
+alarm path) or "we will not sleep at all" (not achievable on an OEM-throttled Android 11 without
+the exemption)? The copy depends on the answer.
 
 ## Inbound approach model (staging follow-up)
 

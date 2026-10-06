@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.outlined.CropFree
@@ -89,6 +90,8 @@ fun SettingsScreen(
     onCriticalOfflineOverrideChange: (Boolean) -> Unit,
     onCriticalOfflineBypassSilentChange: (Boolean) -> Unit,
     onBootRestartChange: (Boolean) -> Unit,
+    onSleepNoticeChange: (Boolean) -> Unit,
+    onApplyIntensity: (AppIntensity) -> Unit,
     onNightEnabledChange: (Boolean) -> Unit,
     onNightStartChange: (Int) -> Unit,
     onNightEndChange: (Int) -> Unit,
@@ -224,6 +227,7 @@ fun SettingsScreen(
     val moraleMasterEnabled = state.moraleMasterEnabled
     val moraleVoice = state.moraleVoice
     val bootRestartEnabled = state.bootRestartEnabled
+    val sleepNoticeEnabled = state.sleepNoticeEnabled
     val s = Strings.get(lang)
 
     // Search box: filters sections + standalone actions by curated keywords, surfaces suggestion
@@ -233,6 +237,10 @@ fun SettingsScreen(
     val searchNormalized = searchQuery.searchNorm()
     val searchWords = searchNormalized.split(" ").filter { it.isNotBlank() }
     var showBootRestartOffConfirm by remember { mutableStateOf(false) }
+    // The presets panel is pure view state: nothing about a preset is remembered once applied.
+    var presetsOpen by remember { mutableStateOf(false) }
+    // Which quadrant the subtext is describing. Starts null — nothing has been applied from here.
+    var presetShown by remember { mutableStateOf<AppIntensity?>(null) }
     val searching = searchNormalized.isNotEmpty()
     val searchDb = remember(pinnedCity) { buildSearchDb(pinnedCity) }
     val matchedSections = remember(searchNormalized, searchDb) {
@@ -645,6 +653,35 @@ fun SettingsScreen(
             Box(modifier = Modifier.weight(1f).padding(16.dp)) {
             when (section) {
                 SettingsSection.RELIABILITY -> SectionDetailBody(stateSummary = sectionSummary(section)) {
+                    // The escape hatch for the alpha note's advice: one tap instead of hunting the
+                    // four pages these switches live on.
+                    SettingsActionRow(
+                        icon = rememberVectorPainter(Icons.Filled.Tune),
+                        title = s.setupPresetTitle,
+                        subtitle = s.setupPresetDesc,
+                        onClick = { presetsOpen = !presetsOpen }
+                    )
+                    AnimatedVisibility(visible = presetsOpen) {
+                        Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
+                            IntensityPicker(
+                                s = s,
+                                selected = presetShown,
+                                onPick = { intensity ->
+                                    // Applied on tap, panel left open: the subtext then explains
+                                    // what was just written, and another tap tries something else.
+                                    onApplyIntensity(intensity)
+                                    presetShown = intensity
+                                }
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                s.setupPresetHint,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlwaysSoundRow(
                         s = s,
                         checked = sirenOverride,
@@ -674,6 +711,12 @@ fun SettingsScreen(
                         oemInfo = batteryOemInfo,
                         flash = flashId == "battery",
                         onAllow = { BatteryOptimization.requestExemption(appContext) }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SleepNoticeRow(
+                        s = s,
+                        checked = sleepNoticeEnabled,
+                        onChange = onSleepNoticeChange
                     )
                 }
                 // Unreachable by construction (`openSection` redirects shelters to the shelter
@@ -1424,8 +1467,7 @@ private fun CriticalOfflineRows(
     }
 }
 
-/** Restart-after-reboot, shared by Alerts and Reliability; turning it off asks for confirmation. */
-@Composable
+/** Restart-after-reboot, shared by Alerts and Reliability; turning it off asks for confirmation. */@Composable
 private fun BootRestartRow(
     s: Strings.StringSet,
     checked: Boolean,
@@ -1438,6 +1480,25 @@ private fun BootRestartRow(
         checked = checked,
         onCheckedChange = { v -> if (!v) onRequestDisable() else onChange(true) },
         emoji = "🛡️"
+    )
+}
+
+/**
+ * The opt-in "Oko was asleep" notice. Off by default, and it sits beside the battery-exemption
+ * block it feeds, because the notice exists to justify asking for the exemption.
+ */
+@Composable
+private fun SleepNoticeRow(
+    s: Strings.StringSet,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit
+) {
+    AlertToggleRow(
+        title = s.sleepNoticeSettingTitle,
+        description = s.sleepNoticeSettingDesc,
+        checked = checked,
+        onCheckedChange = onChange,
+        emoji = "😴"
     )
 }
 

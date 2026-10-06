@@ -56,7 +56,13 @@ data class UserPreferences(
     val slowYellowArmed: Boolean = true,
     val fastRedArmed: Boolean = true,
     val fastYellowArmed: Boolean = false,
-    val notifyPolicyEnabled: Boolean = false,
+    /**
+     * "Limit repeat sounds". ON, not off: with the master off, [NotifyPrefs.from] ignores
+     * [zonePolicy] and sounds EVERY_CHANGE — so the stored default of ONCE_PER_THREAT was a
+     * claim the app never kept. One bell per threat (re-belling when it reaches the red ring,
+     * plus every escalation) is what this pref has always said it does.
+     */
+    val notifyPolicyEnabled: Boolean = true,
     val zonePolicy: ZonePolicy = ZonePolicy.ONCE_PER_THREAT,
     val digestMax: Int = 10,
     val digestWindow: DigestWindow = DigestWindow.EPISODE,
@@ -120,6 +126,9 @@ data class UserPreferences(
     val moraleMasterEnabled: Boolean = true,
     val moraleVoice: MoraleVoice = MoraleVoice.RANDOM,
     val bootRestartEnabled: Boolean = true,
+    /** Off by default: the notice asks for a battery exemption, so it is opt-in rather than
+     *  something every existing user starts receiving after an update. */
+    val sleepNoticeEnabled: Boolean = false,
     val alertRegionMode: AlertRegionMode = AlertRegionMode.CITY_LABELS,
     val showBorders: Boolean = true,
     val showRegionBorders: Boolean = false,

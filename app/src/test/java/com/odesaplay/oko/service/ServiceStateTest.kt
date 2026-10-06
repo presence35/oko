@@ -1,5 +1,6 @@
 package com.odesaplay.oko.service
 
+import com.odesaplay.oko.resetStores
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -12,8 +13,8 @@ import org.robolectric.RuntimeEnvironment
 
 /**
  * Round-trip coverage for the DataStore-backed service store. Keys asserted as defaults are
- * deliberately never written by any test here, so the shared DataStore instance can't leak a
- * value into the defaults check.
+ * deliberately never written by any test here, so the store can't leak a value into the defaults
+ * check.
  */
 @RunWith(RobolectricTestRunner::class)
 class ServiceStateTest {
@@ -22,6 +23,7 @@ class ServiceStateTest {
 
     @Before
     fun setUp() {
+        resetStores()
         state = ServiceState(RuntimeEnvironment.getApplication())
     }
 

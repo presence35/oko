@@ -7,23 +7,25 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import com.odesaplay.oko.ThreatType
 
-private val Context.dataStore by preferencesDataStore(name = "user_prefs")
+private const val STORE_NAME = "user_prefs"
 
 class UserPrefs(private val context: Context) {
+
+    /** Resolved through [PreferenceStores] so a test can sandbox it. See that file for why. */
+    private val store by lazy { PreferenceStores.of(context, STORE_NAME) }
 
     /**
      * Every stored key/value as text, for diagnostics export. Reads the DataStore directly so a
      * newly added pref is covered without touching this class — the alternative, a hand-kept
      * mirror of every key, silently rots.
      */
-    suspend fun snapshot(): Map<String, String> = context.dataStore.data.first().asMap()
+    suspend fun snapshot(): Map<String, String> = store.data.first().asMap()
         .map { (key, value) -> key.name to value.toString() }
         .toMap()
 
@@ -101,6 +103,7 @@ class UserPrefs(private val context: Context) {
     private val moraleMasterEnabledKey = booleanPreferencesKey("morale_master_enabled")
     private val welcomeShootdownPlayedKey = booleanPreferencesKey("welcome_shootdown_played")
     private val bootRestartEnabledKey = booleanPreferencesKey("boot_restart_enabled")
+    private val sleepNoticeEnabledKey = booleanPreferencesKey("sleep_notice_enabled")
     private val fillAlertRegionsKey = booleanPreferencesKey("fill_alert_regions")
     private val alertRegionModeKey = stringPreferencesKey("alert_region_mode")
     private val showBordersKey = booleanPreferencesKey("show_borders")
@@ -114,7 +117,7 @@ class UserPrefs(private val context: Context) {
     private val digestPerTypeKey = booleanPreferencesKey("digest_per_type")
     private val languageKey = stringPreferencesKey("language")
 
-    val preferences: Flow<UserPreferences> = context.dataStore.data.map { it.toUserPreferences() }.distinctUntilChanged()
+    val preferences: Flow<UserPreferences> = store.data.map { it.toUserPreferences() }.distinctUntilChanged()
 
     private fun Preferences.toUserPreferences(): UserPreferences {
         // No stored override: the language follows the phone locale until the user picks one.
@@ -231,6 +234,7 @@ class UserPrefs(private val context: Context) {
             officialAlertCityScope = this[officialAlertCityScopeKey] ?: d.officialAlertCityScope,
             moraleMasterEnabled = this[moraleMasterEnabledKey] ?: d.moraleMasterEnabled,
             bootRestartEnabled = this[bootRestartEnabledKey] ?: d.bootRestartEnabled,
+            sleepNoticeEnabled = this[sleepNoticeEnabledKey] ?: d.sleepNoticeEnabled,
             alertRegionMode = alertRegionMode,
             showBorders = this[showBordersKey] ?: d.showBorders,
             showRegionBorders = this[showRegionBordersKey] ?: d.showRegionBorders,
@@ -242,8 +246,60 @@ class UserPrefs(private val context: Context) {
         )
     }
 
+    /**
+     * Write a whole [AppIntensity] in one transaction. A single `edit` means one emission: a
+     * dozen sequential setters would let collectors observe (and render) a half-applied setup.
+     *
+     * Map visibility is untouched on purpose — a preset decides what rings, never what is drawn.
+     *
+     * When the patch claims the night window, it drops the "Just let me sleep!" snapshot, exactly
+     * like [editNightBell] does for a hand edit: the user has just said what the night should do,
+     * so a restore they no longer want must not survive to be re-applied by the next tap.
+     */
+    suspend fun applyIntensity(patch: IntensityPatch) {
+        store.edit { p ->
+            p[sirenOverrideKey] = patch.sirenOverride
+            p[criticalOfflineOverrideKey] = patch.criticalOfflineOverride
+            p[criticalOfflineBypassSilentKey] = patch.criticalOfflineBypassSilent
+            p[bootRestartEnabledKey] = patch.bootRestartEnabled
+            p[periodicGpsKey] = patch.periodicGps
+            p[batteryOnboardShownKey] = !patch.batteryAskEnabled
+            p[notifyPolicyEnabledKey] = patch.notifyPolicyEnabled
+            p[zonePolicyKey] = patch.zonePolicy.name
+            p[digestWindowKey] = patch.digestWindow.name
+            p[digestPerTypeKey] = patch.digestPerType
+            p[digestMaxKey] = patch.digestMax.coerceIn(1, 10)
+            p[slowRedKmKey] = patch.slowRedKm
+            p[slowYellowKmKey] = patch.slowYellowKm
+            p[fastRedMinKey] = patch.fastRedMin
+            p[fastYellowMinKey] = patch.fastYellowMin
+            p[slowRedArmedKey] = patch.slowRedArmed
+            p[slowYellowArmedKey] = patch.slowYellowArmed
+            p[fastRedArmedKey] = patch.fastRedArmed
+            p[fastYellowArmedKey] = patch.fastYellowArmed
+            p[followBulletKey] = patch.followBullet
+            p[highQualityExplosionsKey] = patch.highQualityExplosions
+            p[deathAnimationStyleKey] = patch.deathAnimationStyle.name
+            p[sheltersEnabledKey] = patch.sheltersEnabled
+            for (type in ThreatType.values()) {
+                p[cachedBooleanKey("threat_alert_${type.name}")] = patch.alertTypes.contains(type)
+            }
+            patch.night?.let { n ->
+                p.remove(nightSleepRestoreKey)
+                p[nightZoneSirenOverrideKey] = n.zoneSirenOverride
+                p[nightOfficialSirenOverrideKey] = n.officialSirenOverride
+                p[nightOfficialRedEnabledKey] = n.officialRed
+                p[nightOfficialYellowEnabledKey] = n.officialYellow
+                p[nightSlowRedArmedKey] = n.slowRedArmed
+                p[nightSlowYellowArmedKey] = n.slowYellowArmed
+                p[nightFastRedArmedKey] = n.fastRedArmed
+                p[nightFastYellowArmedKey] = n.fastYellowArmed
+            }
+        }
+    }
+
     suspend fun setSlowRedKm(km: Int) {
-        context.dataStore.edit { prefs ->
+        store.edit { prefs ->
             prefs[slowRedKmKey] = km.coerceIn(1, 20)
             val red = prefs[slowRedKmKey] ?: UserPreferences.DEFAULT.slowRedKm
             val yellow = prefs[slowYellowKmKey] ?: UserPreferences.DEFAULT.slowYellowKm
@@ -252,14 +308,14 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setSlowYellowKm(km: Int) {
-        context.dataStore.edit { prefs ->
+        store.edit { prefs ->
             val red = prefs[slowRedKmKey] ?: UserPreferences.DEFAULT.slowRedKm
             prefs[slowYellowKmKey] = km.coerceIn(red + 2, 50)
         }
     }
 
     suspend fun setFastRedMin(min: Int) {
-        context.dataStore.edit { prefs ->
+        store.edit { prefs ->
             prefs[fastRedMinKey] = min.coerceIn(1, 5)
             val red = prefs[fastRedMinKey] ?: UserPreferences.DEFAULT.fastRedMin
             val yellow = prefs[fastYellowMinKey] ?: UserPreferences.DEFAULT.fastYellowMin
@@ -268,30 +324,30 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setFastYellowMin(min: Int) {
-        context.dataStore.edit { prefs ->
+        store.edit { prefs ->
             val red = prefs[fastRedMinKey] ?: UserPreferences.DEFAULT.fastRedMin
             prefs[fastYellowMinKey] = min.coerceIn(red + 2, 20)
         }
     }
 
     suspend fun setSlowRedZoneArmed(armed: Boolean) {
-        context.dataStore.edit { it[slowRedArmedKey] = armed }
+        store.edit { it[slowRedArmedKey] = armed }
     }
 
     suspend fun setSlowYellowZoneArmed(armed: Boolean) {
-        context.dataStore.edit { it[slowYellowArmedKey] = armed }
+        store.edit { it[slowYellowArmedKey] = armed }
     }
 
     suspend fun setFastRedZoneArmed(armed: Boolean) {
-        context.dataStore.edit { it[fastRedArmedKey] = armed }
+        store.edit { it[fastRedArmedKey] = armed }
     }
 
     suspend fun setFastYellowZoneArmed(armed: Boolean) {
-        context.dataStore.edit { it[fastYellowArmedKey] = armed }
+        store.edit { it[fastYellowArmedKey] = armed }
     }
 
     suspend fun setAlertsArmed(armed: Boolean) {
-        context.dataStore.edit {
+        store.edit {
             it[slowRedArmedKey] = armed
             it[slowYellowArmedKey] = armed
             it[fastRedArmedKey] = armed
@@ -300,45 +356,45 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setOfficialRedAlertsEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[officialRedAlertsKey] = enabled }
+        store.edit { it[officialRedAlertsKey] = enabled }
     }
 
     suspend fun setOfficialYellowAlertsEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[officialYellowAlertsKey] = enabled }
+        store.edit { it[officialYellowAlertsKey] = enabled }
     }
 
     suspend fun setOfficialAlertsEnabled(enabled: Boolean) {
-        context.dataStore.edit {
+        store.edit {
             it[officialRedAlertsKey] = enabled
             it[officialYellowAlertsKey] = enabled
         }
     }
 
     suspend fun setSirenOverride(override: Boolean) {
-        context.dataStore.edit { it[sirenOverrideKey] = override }
+        store.edit { it[sirenOverrideKey] = override }
     }
 
     suspend fun setFallingDebrisDelaySec(sec: Int) {
-        context.dataStore.edit { it[fallingDebrisDelaySecKey] = sec.coerceIn(0, 600) }
+        store.edit { it[fallingDebrisDelaySecKey] = sec.coerceIn(0, 600) }
     }
 
     suspend fun setAutoDismissAllClear(enabled: Boolean) {
-        context.dataStore.edit { it[autoDismissAllClearKey] = enabled }
+        store.edit { it[autoDismissAllClearKey] = enabled }
     }
 
     suspend fun setThreatMapVisible(type: ThreatType, visible: Boolean) {
-        context.dataStore.edit { it[cachedBooleanKey("threat_map_${type.name}")] = visible }
+        store.edit { it[cachedBooleanKey("threat_map_${type.name}")] = visible }
     }
 
     suspend fun setThreatAlertsEnabled(type: ThreatType, enabled: Boolean) {
-        context.dataStore.edit {
+        store.edit {
             it[cachedBooleanKey("threat_alert_${type.name}")] = enabled
             if (enabled) it[cachedBooleanKey("threat_map_${type.name}")] = true
         }
     }
 
     suspend fun setThreatMapVisibleBatch(types: Set<ThreatType>, visible: Boolean) {
-        context.dataStore.edit { prefs ->
+        store.edit { prefs ->
             for (type in types) prefs[cachedBooleanKey("threat_map_${type.name}")] = visible
         }
     }
@@ -346,15 +402,15 @@ class UserPrefs(private val context: Context) {
 
     fun explainerSeen(id: String): Flow<Boolean> {
         val key = cachedBooleanKey("explainer_seen_$id")
-        return context.dataStore.data.map { prefs -> prefs[key] ?: false }
+        return store.data.map { prefs -> prefs[key] ?: false }
     }
 
     suspend fun setExplainerSeen(id: String, seen: Boolean) {
-        context.dataStore.edit { it[cachedBooleanKey("explainer_seen_$id")] = seen }
+        store.edit { it[cachedBooleanKey("explainer_seen_$id")] = seen }
     }
 
     suspend fun resetAllTips() {
-        context.dataStore.edit { prefs ->
+        store.edit { prefs ->
             prefs[settingsHintRemainingKey] = 3
             prefs[threatToggleHintRemainingKey] = 3
             prefs[shelterTipRemainingKey] = 0
@@ -364,15 +420,15 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setDisclaimerCollapsed(collapsed: Boolean) {
-        context.dataStore.edit { it[disclaimerCollapsedKey] = collapsed }
+        store.edit { it[disclaimerCollapsedKey] = collapsed }
     }
 
     suspend fun setDisclaimerReadCount(count: Int) {
-        context.dataStore.edit { it[disclaimerReadCountKey] = count }
+        store.edit { it[disclaimerReadCountKey] = count }
     }
 
     suspend fun setFollowMe(follow: Boolean) {
-        context.dataStore.edit {
+        store.edit {
             it[followMeKey] = follow
             // Follow-me replaces the pin: leaving a stale pin behind resurfaced the old
             // city (and its latched official episode) after a later switch back.
@@ -381,200 +437,204 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setPinnedCity(nameUa: String?) {
-        context.dataStore.edit {
+        store.edit {
             if (nameUa == null) it.remove(pinnedCityKey) else it[pinnedCityKey] = nameUa
         }
     }
 
     suspend fun setPinnedCityWithFollow(nameUa: String?) {
-        context.dataStore.edit {
+        store.edit {
             if (nameUa == null) it.remove(pinnedCityKey) else it[pinnedCityKey] = nameUa
             if (nameUa != null) it[followMeKey] = false
         }
     }
 
     suspend fun setCriticalOfflineOverride(enabled: Boolean) {
-        context.dataStore.edit { it[criticalOfflineOverrideKey] = enabled }
+        store.edit { it[criticalOfflineOverrideKey] = enabled }
     }
 
     suspend fun setCriticalOfflineBypassSilent(enabled: Boolean) {
-        context.dataStore.edit { it[criticalOfflineBypassSilentKey] = enabled }
+        store.edit { it[criticalOfflineBypassSilentKey] = enabled }
     }
 
     suspend fun setWizardCompleted(done: Boolean) {
-        context.dataStore.edit { it[wizardCompletedKey] = done }
+        store.edit { it[wizardCompletedKey] = done }
     }
 
     suspend fun setSettingsHintRemaining(remaining: Int) {
-        context.dataStore.edit { it[settingsHintRemainingKey] = remaining.coerceAtLeast(0) }
+        store.edit { it[settingsHintRemainingKey] = remaining.coerceAtLeast(0) }
     }
 
     suspend fun setThreatToggleHintRemaining(remaining: Int) {
-        context.dataStore.edit { it[threatToggleHintRemainingKey] = remaining.coerceAtLeast(0) }
+        store.edit { it[threatToggleHintRemainingKey] = remaining.coerceAtLeast(0) }
     }
 
     suspend fun setShelterTipStage(stage: Int) {
-        context.dataStore.edit { it[shelterTipRemainingKey] = stage.coerceIn(0, 6) }
+        store.edit { it[shelterTipRemainingKey] = stage.coerceIn(0, 6) }
     }
 
     suspend fun setThreatCardSize(size: ThreatCardSize) {
-        context.dataStore.edit { it[threatCardSizeKey] = size.name }
+        store.edit { it[threatCardSizeKey] = size.name }
     }
 
     suspend fun setThreatIconSet(set: ThreatIconSet) {
-        context.dataStore.edit { it[threatIconSetKey] = set.name }
+        store.edit { it[threatIconSetKey] = set.name }
     }
 
     suspend fun setOverlapMode(mode: OverlapMode) {
-        context.dataStore.edit { it[overlapModeKey] = mode.name }
+        store.edit { it[overlapModeKey] = mode.name }
     }
 
     suspend fun setMoraleVoice(voice: MoraleVoice) {
-        context.dataStore.edit { it[moraleVoiceKey] = voice.name }
+        store.edit { it[moraleVoiceKey] = voice.name }
     }
 
     suspend fun setShowMapScale(show: Boolean) {
-        context.dataStore.edit { it[showMapScaleKey] = show }
+        store.edit { it[showMapScaleKey] = show }
     }
 
     suspend fun setShowMediumCities(show: Boolean) {
-        context.dataStore.edit { it[showMediumCitiesKey] = show }
+        store.edit { it[showMediumCitiesKey] = show }
     }
 
     suspend fun setShowSmallCities(show: Boolean) {
-        context.dataStore.edit { it[showSmallCitiesKey] = show }
+        store.edit { it[showSmallCitiesKey] = show }
     }
 
     suspend fun setSheltersEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[sheltersEnabledKey] = enabled }
+        store.edit { it[sheltersEnabledKey] = enabled }
     }
 
     suspend fun setSheltersWithKidsEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[sheltersWithKidsEnabledKey] = enabled }
+        store.edit { it[sheltersWithKidsEnabledKey] = enabled }
     }
 
     suspend fun setPeriodicGps(enabled: Boolean) {
-        context.dataStore.edit { it[periodicGpsKey] = enabled }
+        store.edit { it[periodicGpsKey] = enabled }
     }
 
     suspend fun setCalmMessagesEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[calmMessagesEnabledKey] = enabled }
+        store.edit { it[calmMessagesEnabledKey] = enabled }
     }
 
     suspend fun setHapticsEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[hapticsEnabledKey] = enabled }
+        store.edit { it[hapticsEnabledKey] = enabled }
     }
 
     suspend fun setOfficialAlertCityScope(enabled: Boolean) {
-        context.dataStore.edit { it[officialAlertCityScopeKey] = enabled }
+        store.edit { it[officialAlertCityScopeKey] = enabled }
     }
 
     suspend fun setMoraleMasterEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[moraleMasterEnabledKey] = enabled }
+        store.edit { it[moraleMasterEnabledKey] = enabled }
     }
 
     suspend fun setWelcomeShootdownPlayed(played: Boolean) {
-        context.dataStore.edit { it[welcomeShootdownPlayedKey] = played }
+        store.edit { it[welcomeShootdownPlayedKey] = played }
     }
 
     suspend fun setBootRestartEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[bootRestartEnabledKey] = enabled }
+        store.edit { it[bootRestartEnabledKey] = enabled }
+    }
+
+    suspend fun setSleepNoticeEnabled(enabled: Boolean) {
+        store.edit { it[sleepNoticeEnabledKey] = enabled }
     }
 
     suspend fun setAlertRegionMode(mode: AlertRegionMode) {
-        context.dataStore.edit { it[alertRegionModeKey] = mode.name }
+        store.edit { it[alertRegionModeKey] = mode.name }
     }
 
     suspend fun setShowBorders(enabled: Boolean) {
-        context.dataStore.edit { it[showBordersKey] = enabled }
+        store.edit { it[showBordersKey] = enabled }
     }
 
     suspend fun setShowRegionBorders(enabled: Boolean) {
-        context.dataStore.edit { it[showRegionBordersKey] = enabled }
+        store.edit { it[showRegionBordersKey] = enabled }
     }
 
     suspend fun setShowLargeCities(show: Boolean) {
-        context.dataStore.edit { it[showLargeCitiesKey] = show }
+        store.edit { it[showLargeCitiesKey] = show }
     }
 
     suspend fun setNotifyPolicyEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[notifyPolicyEnabledKey] = enabled }
+        store.edit { it[notifyPolicyEnabledKey] = enabled }
     }
 
     suspend fun setZonePolicy(policy: ZonePolicy) {
-        context.dataStore.edit { it[zonePolicyKey] = policy.name }
+        store.edit { it[zonePolicyKey] = policy.name }
     }
 
     suspend fun setDigestMax(max: Int) {
-        context.dataStore.edit { it[digestMaxKey] = max.coerceIn(1, 10) }
+        store.edit { it[digestMaxKey] = max.coerceIn(1, 10) }
     }
 
     suspend fun setDigestWindow(window: DigestWindow) {
-        context.dataStore.edit { it[digestWindowKey] = window.name }
+        store.edit { it[digestWindowKey] = window.name }
     }
 
     suspend fun setDigestPerType(perType: Boolean) {
-        context.dataStore.edit { it[digestPerTypeKey] = perType }
+        store.edit { it[digestPerTypeKey] = perType }
     }
 
     suspend fun setShowThreatIdsOnMap(show: Boolean) {
-        context.dataStore.edit { it[showThreatIdsOnMapKey] = show }
+        store.edit { it[showThreatIdsOnMapKey] = show }
     }
 
     suspend fun setHighQualityExplosions(enabled: Boolean) {
-        context.dataStore.edit { it[highQualityExplosionsKey] = enabled }
+        store.edit { it[highQualityExplosionsKey] = enabled }
     }
 
     suspend fun setDeathAnimationEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[deathAnimationEnabledKey] = enabled }
+        store.edit { it[deathAnimationEnabledKey] = enabled }
     }
 
     suspend fun setDeathAnimationStyle(style: DeathAnimationStyle) {
-        context.dataStore.edit { it[deathAnimationStyleKey] = style.name }
+        store.edit { it[deathAnimationStyleKey] = style.name }
     }
 
     suspend fun setFlybyAnimationEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[flybyAnimationEnabledKey] = enabled }
+        store.edit { it[flybyAnimationEnabledKey] = enabled }
     }
 
     suspend fun setFollowBullet(enabled: Boolean) {
-        context.dataStore.edit { it[followBulletKey] = enabled }
+        store.edit { it[followBulletKey] = enabled }
     }
 
     suspend fun setThreatIconZoom(enabled: Boolean) {
-        context.dataStore.edit { it[threatIconZoomKey] = enabled }
+        store.edit { it[threatIconZoomKey] = enabled }
     }
 
     suspend fun setNeutralizedTallyEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[neutralizedTallyEnabledKey] = enabled }
+        store.edit { it[neutralizedTallyEnabledKey] = enabled }
     }
 
     suspend fun setNeutralizedTallyAllUkraine(enabled: Boolean) {
-        context.dataStore.edit { it[neutralizedTallyAllUkraineKey] = enabled }
+        store.edit { it[neutralizedTallyAllUkraineKey] = enabled }
     }
 
     suspend fun setAlarmEpisodeTallyEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[alarmEpisodeTallyEnabledKey] = enabled }
+        store.edit { it[alarmEpisodeTallyEnabledKey] = enabled }
     }
 
     suspend fun setLegacyCacheCleaned(cleaned: Boolean) {
-        context.dataStore.edit { it[legacyCacheCleanedKey] = cleaned }
+        store.edit { it[legacyCacheCleanedKey] = cleaned }
     }
 
         suspend fun setBatteryOnboardShown(shown: Boolean) {
-        context.dataStore.edit { it[batteryOnboardShownKey] = shown }
+        store.edit { it[batteryOnboardShownKey] = shown }
     }
 
     suspend fun setServiceResurrected(resurrected: Boolean) {
-        context.dataStore.edit { it[serviceResurrectedKey] = resurrected }
+        store.edit { it[serviceResurrectedKey] = resurrected }
     }
 
     suspend fun setPermissionPromptDeferred(deferred: Boolean) {
-        context.dataStore.edit { it[permissionPromptDeferredKey] = deferred }
+        store.edit { it[permissionPromptDeferredKey] = deferred }
     }
 
     suspend fun setWizardDeferred(deferred: Boolean) {
-        context.dataStore.edit {
+        store.edit {
             it[wizardCompletedKey] = deferred
             it[batteryOnboardShownKey] = deferred
             it[serviceResurrectedKey] = false
@@ -583,19 +643,19 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setLanguage(lang: AppLanguage) {
-        context.dataStore.edit { it[languageKey] = lang.name }
+        store.edit { it[languageKey] = lang.name }
     }
 
     suspend fun setNightEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[nightEnabledKey] = enabled }
+        store.edit { it[nightEnabledKey] = enabled }
     }
 
     suspend fun setNightStartMin(min: Int) {
-        context.dataStore.edit { it[nightStartMinKey] = min.coerceIn(0, 1439) }
+        store.edit { it[nightStartMinKey] = min.coerceIn(0, 1439) }
     }
 
     suspend fun setNightEndMin(min: Int) {
-        context.dataStore.edit { it[nightEndMinKey] = min.coerceIn(0, 1439) }
+        store.edit { it[nightEndMinKey] = min.coerceIn(0, 1439) }
     }
 
     suspend fun setNightUseCustomZones(use: Boolean) {
@@ -605,7 +665,7 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setNightSlowRedKm(km: Int) {
-        context.dataStore.edit { prefs ->
+        store.edit { prefs ->
             prefs[nightSlowRedKmKey] = km.coerceIn(1, 20)
             val red = prefs[nightSlowRedKmKey] ?: UserPreferences.DEFAULT.nightSlowRedKm
             val yellow = prefs[nightSlowYellowKmKey] ?: UserPreferences.DEFAULT.nightSlowYellowKm
@@ -614,14 +674,14 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setNightSlowYellowKm(km: Int) {
-        context.dataStore.edit { prefs ->
+        store.edit { prefs ->
             val red = prefs[nightSlowRedKmKey] ?: UserPreferences.DEFAULT.nightSlowRedKm
             prefs[nightSlowYellowKmKey] = km.coerceIn(red + 2, 50)
         }
     }
 
     suspend fun setNightFastRedMin(min: Int) {
-        context.dataStore.edit { prefs ->
+        store.edit { prefs ->
             prefs[nightFastRedMinKey] = min.coerceIn(1, 5)
             val red = prefs[nightFastRedMinKey] ?: UserPreferences.DEFAULT.nightFastRedMin
             val yellow = prefs[nightFastYellowMinKey] ?: UserPreferences.DEFAULT.nightFastYellowMin
@@ -630,7 +690,7 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setNightFastYellowMin(min: Int) {
-        context.dataStore.edit { prefs ->
+        store.edit { prefs ->
             val red = prefs[nightFastRedMinKey] ?: UserPreferences.DEFAULT.nightFastRedMin
             prefs[nightFastYellowMinKey] = min.coerceIn(red + 2, 20)
         }
@@ -665,7 +725,7 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun setNightOfficialAlertCityScope(enabled: Boolean) {
-        context.dataStore.edit { it[nightOfficialAlertCityScopeKey] = enabled }
+        store.edit { it[nightOfficialAlertCityScopeKey] = enabled }
     }
 
     suspend fun setNightOfficialRedEnabled(enabled: Boolean) {
@@ -684,7 +744,7 @@ class UserPrefs(private val context: Context) {
      * them, which silently lost the night settings the preset had captured.
      */
     private suspend fun editNightBell(edit: (MutablePreferences) -> Unit) {
-        context.dataStore.edit { p ->
+        store.edit { p ->
             p.remove(nightSleepRestoreKey)
             edit(p)
         }
@@ -696,7 +756,7 @@ class UserPrefs(private val context: Context) {
      * muted values either both land or neither does.
      */
     suspend fun setNightSleep(enabled: Boolean) {
-        context.dataStore.edit { p ->
+        store.edit { p ->
             if (enabled) {
                 p[nightSleepRestoreKey] = nightSleepPresetOf(p).encode()
                 applyNightSleep(p, NightSleepPreset.MUTED)
@@ -748,6 +808,6 @@ class UserPrefs(private val context: Context) {
     }
 
     suspend fun clearAll() {
-        context.dataStore.edit { it.clear() }
+        store.edit { it.clear() }
     }
 }
