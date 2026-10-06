@@ -1247,7 +1247,11 @@ val mappedThreats = registry.allThreats.map { list ->
             // Region-latched: while the announced oblast is still raw-active, the
             // effective official is the latched one, not the current focus (pinned -> follow-me).
             if (effLevel != AlertLevel.NONE) {
-                val announcedFrontier = announcedFrontier(state)
+                // The identity names the EFFECTIVE episode — the latch-aware token that pairs with
+                // effCity above — never the live frontier: a restored latch holds the episode while
+                // the focus-scoped frontier is null (no fix yet, or the alert narrowed off the
+                // focus city), and there effLevel is non-NONE with no frontier to read a token from.
+                val effFrontier = OfficialFrontier.of(effLevel, effToken) ?: return null
                 val announced = if (effLevel == AlertLevel.RED) state.officialRedAlertsEnabled
                 else state.officialYellowAlertsEnabled
                 if (announced) {
@@ -1255,7 +1259,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     if (effLevel == AlertLevel.RED) {
                         val reasonThreat = effReasonId?.let { all[it] }
                         return Primary(
-                            identity = "$OFFICIAL_ID_RED${announcedFrontier!!.token}|$effCity|$effReasonId",
+                            identity = "$OFFICIAL_ID_RED${effFrontier.token}|$effCity|$effReasonId",
                             title = String.format(s.alertBannerFormat, effCity),
                             body = (effReason ?: effRegion ?: state.focusRegion) + etaSuffix(reasonThreat, state),
                             revealThreat = reasonThreat,
@@ -1266,7 +1270,7 @@ val mappedThreats = registry.allThreats.map { list ->
                         )
                     }
                     return Primary(
-                        identity = "$OFFICIAL_ID_YELLOW${announcedFrontier!!.token}|$effCity",
+                        identity = "$OFFICIAL_ID_YELLOW${effFrontier.token}|$effCity",
                         title = String.format(s.alertYellowBannerFormat, effCity),
                         body = effReason ?: effRegion ?: state.focusRegion,
                         revealThreat = null, silent = !onset, vibration = VIBRATION_STRONG,
@@ -1838,6 +1842,13 @@ val mappedThreats = registry.allThreats.map { list ->
      * by waiting out the 20-minute TTL — so tests assert them here. Not production API.
      */
     internal fun allClearLifecycleForTest(): Pair<Long?, Boolean> = allClearDeadlineMs to allClearClosed
+
+    /**
+     * The identity of the alert notification the last tick decided on. Production only ever compares
+     * it for change, so which episode it names — and for which city — is observable here alone.
+     * Not production API.
+     */
+    internal fun lastShownIdForTest(): String? = lastShownId
 
     /**
      * Retire the all-clear once its TTL has passed. Driven from the monitor tick against the wall

@@ -9,8 +9,10 @@ import com.odesaplay.oko.engine.ThreatEngine
 import com.odesaplay.oko.engine.ZoneParams
 import com.odesaplay.oko.engine.canonicalOblastId
 import com.odesaplay.oko.service.MonitoringStatus
+import com.odesaplay.oko.service.ServiceState
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -106,14 +108,15 @@ class AlertEpisodeClearTest {
         city: String = CITY,
         alerts: List<OblastAlert> = emptyList(),
         debrisSec: Int = 0,
-        autoDismiss: Boolean = true
+        autoDismiss: Boolean = true,
+        focusToken: String? = token
     ) = AlertService.MonitorState(
         focusOblastAlertActive = level == AlertLevel.RED,
         focusOblastYellowAlertActive = level == AlertLevel.YELLOW,
         focusOblastLevel = level,
         focusOblastRawLevel = level,
         focusOblastRawSince = "t0",
-        focusToken = token,
+        focusToken = focusToken,
         focusOblastAlertSince = "t0",
         focusBannerCity = city,
         focusCityUa = city,
@@ -153,6 +156,21 @@ class AlertEpisodeClearTest {
         digestWindow = DigestWindow.EPISODE,
         digestPerType = false
     )
+
+    /** Rebuild the service on top of the pair a process restart restores: the
+     *  `LEVEL|token|since|city[|cityUa|scoped]` row and the legacy token/city keys it gates on.
+     *  [handleState] then has to survive a first tick whose focus has not resolved yet. */
+    private fun restartWithLatchedEpisode(row: String) {
+        controller.destroy()
+        runBlocking {
+            val state = ServiceState(RuntimeEnvironment.getApplication())
+            val parts = row.split('|')
+            state.setOfficialAnnounced(parts[1], parts[2], null, parts[3])
+            state.setOfficialAnnouncedRow(row)
+        }
+        controller = Robolectric.buildService(AlertService::class.java).create()
+        runBlocking { service().awaitMonitoringReady() }
+    }
 
     @Test
     fun `all-clear names the episode's city, not where the focus moved to`() {
@@ -204,6 +222,21 @@ class AlertEpisodeClearTest {
         tick(4_000, monitor(redEnabled = true))
         assertNull("a stale latch must not fire an all-clear later", allClear())
         assertNull(allClearLifecycle().first)
+    }
+
+    @Test
+    fun `a restored episode survives a cold start that has no focus yet`() {
+        // The service restores its announced row before the first GPS fix lands, so the focus token
+        // is still null on the first tick. The effective level then comes from the latch while the
+        // live frontier is null — the state that used to crash the whole process on launch.
+        restartWithLatchedEpisode("YELLOW|$token|t0|$CITY||||0")
+        tick(1_000, monitor(level = AlertLevel.NONE, focusToken = null, alerts = listOf(alert)))
+
+        assertEquals(
+            "the restored episode must still be announced, named for its own city",
+            "yellow|$token|$CITY",
+            service().lastShownIdForTest()
+        )
     }
 
     @Test

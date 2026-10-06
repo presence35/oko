@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- Fixed a crash on launch: the app could die on the first tick after a restart while an official alert episode was still active, taking monitoring down with it 10-06_15:41:12
+- Beta page shows the real NEPTUN [icon] Online pill (same one as the header) so the mark in the bug-report instruction is one you have already tapped 10-06_15:21:20
+- Beta card cleaned up: header now says "Beta Test Group", the two log instructions merged into one, and the battery line is a single closing sentence 10-06_15:19:07
+- Beta wizard's "found a bug" / "draining battery" notes now point at the NEPTUN mark instead of calling it a dot, in all three languages 10-06_15:16:35
 - Beta wizard page now shows the real connection pill (Online/Degraded/Offline, tap opens Logs) instead of an unlabelled green dot 10-06_15:02:40
 - Orange connection pill, its notification and its log row now say what the state means — no updates from the feed — instead of claiming the link failed, in all three languages 10-06_14:47:37
 - Quiet feed no longer reads as a degraded connection: the orange edge moved from 42s to 4m20s, while OkHttp's ping and the silence backstop still reap a dead socket 10-06_14:37:17

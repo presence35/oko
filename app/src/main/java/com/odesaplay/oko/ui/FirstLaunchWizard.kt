@@ -543,7 +543,7 @@ private fun WizardBetaBlock(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         WizardCard(borderColor = _ukraineYellow.copy(alpha = 0.3f)) {
-            WizardBlockHeader(s.wizardBetaTitle, _ukraineYellow)
+            WizardBlockHeader(s.wizardBetaGroupTitle, _ukraineYellow)
             Spacer(Modifier.height(12.dp))
             Text(
                 s.wizardBetaThanks,
@@ -564,40 +564,15 @@ private fun WizardBetaBlock(
         Spacer(Modifier.height(18.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Spacer(Modifier.height(14.dp))
-        val connColor = pillColor(neptunDown, degraded)
-        val connLabel = pillLabel(s, neptunDown, degraded)
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Image(
-                painter = painterResource(R.drawable.neptun),
-                contentDescription = null,
-                modifier = Modifier.size(width = 14.dp, height = 14.dp),
-                colorFilter = ColorFilter.tint(connColor)
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                s.wizardSourceChannel,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.width(8.dp))
-            // The same pill the map header carries, on the page that first credits the source:
-            // a reader learns here that the source can be red, and that tapping explains why.
-            SourcePill(description = "$connLabel · ${s.logsTitle}", onClick = onOpenLogs) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(connColor)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = connLabel,
-                    color = connColor,
-                    style = MaterialTheme.typography.labelMedium
-                )
-            }
-        }
+        // The header's own pill, not a lookalike: the reader meets the exact glyph the bug-report
+        // copy points at, so they recognise it the first time they see it in the header. Tapping
+        // it here opens Logs, which is what the copy asks for.
+        ConnectionStatus(
+            neptunDown = neptunDown,
+            degraded = degraded,
+            onOpenLogs = onOpenLogs,
+            s = s
+        )
         Spacer(Modifier.height(6.dp))
         Text(
             s.wizardNeptunStatus,
