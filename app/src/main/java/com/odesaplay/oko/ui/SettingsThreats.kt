@@ -1,5 +1,6 @@
 package com.odesaplay.oko
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,20 +13,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.odesaplay.oko.IconCatalog
 import com.odesaplay.oko.ThreatTypeCatalog
 import com.odesaplay.oko.ThreatType
+import com.odesaplay.oko.engine.isFastType
+import com.odesaplay.oko.theme.AppPalette
 import kotlin.math.roundToInt
 
-/** A single threat type: a full-width art band, then name/desc with the Map/Alerts toggles, then
- *  the blurb. Deliberately card-less: the page body is already a card, so a card per type was
- *  card-in-card noise that gave the list no hierarchy. Separation is the caller's dividers plus
- *  the Fast/Slow group captions, and the page scrolls, so nothing needs folding. */
+/** A single threat type as a bordered card that stands apart from its neighbours and from the
+ *  page body — a thin divider was not enough separation. `details`/`joke` render in full (the page
+ *  scrolls); `description` stays a one-line gist. The Fast/Slow pill next to the speed badge
+ *  repeats the group a row belongs to, so the distinction survives a mid-list scan. */
 @Composable
 internal fun ThreatTypeRow(
     type: ThreatType,
@@ -47,18 +51,22 @@ internal fun ThreatTypeRow(
     val onAlerts = type !in silencedTypes
     val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
     val typicalSpeed = com.odesaplay.oko.engine.typicalSpeedKmh(type, typeCatalog)?.roundToInt()
+    val fast = isFastType(type, typeCatalog)
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .explainerFlash(flash)
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+    Surface(
+        modifier = Modifier.fillMaxWidth().explainerFlash(flash),
+        shape = RoundedCornerShape(16.dp),
+        color = Color(AppPalette.SurfaceVariant),
+        border = BorderStroke(1.dp, Color(AppPalette.Border))
     ) {
-        Column {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp)
+        ) {
             // The pack art is the point of this page: a 2.5x icon is the only way a user can
-            // actually tell the Shahed apart from the FPV at a glance. It gets its own full-width
-            // band above the name rather than sitting in the row beside it — at this size the row
-            // layout has nowhere left for the label or the toggles.
+            // actually tell the Shahed apart from the FPV at a glance, so it keeps its own
+            // full-width band above the name.
             Box(
                 modifier = Modifier.fillMaxWidth().height(180.dp),
                 contentAlignment = Alignment.Center
@@ -87,27 +95,19 @@ internal fun ThreatTypeRow(
                         )
                         typicalSpeed?.let {
                             Spacer(Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                            ) {
-                                Text(
-                                    "~$it ${s.speedUnit}",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Medium,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
+                            Pill("~$it ${s.speedUnit}", MaterialTheme.colorScheme.primary)
                         }
+                        Spacer(Modifier.width(6.dp))
+                        Pill(
+                            if (fast) s.fastGroupLabel else s.slowGroupLabel,
+                            if (fast) Color(AppPalette.AlertYellow) else TurtleGreen
+                        )
                     }
                     Spacer(Modifier.height(2.dp))
                     Text(
                         description,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Spacer(Modifier.width(4.dp))
@@ -126,20 +126,39 @@ internal fun ThreatTypeRow(
                     onClick = { onThreatAlertToggle(type, !onAlerts) }
                 )
             }
-            // Clamped: with the per-type expansion gone there is no way to reveal more, so this has
-            // to carry the gist on its own. `details` is clamped tighter than `joke` because it is
-            // the factual half — the joke is pure flavour and reads fine truncated.
-            val blurb = listOf(details, joke).filter { it.isNotBlank() }.joinToString(" ")
-            if (blurb.isNotBlank()) {
+            // Facts stay persona-proof in `details`; `joke` is the single flavour slot a
+            // persona may adjust, rendered separately so the two never blend. Neither is
+            // truncated — the page scrolls, so a safety fact never hides behind an ellipsis.
+            if (details.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    blurb,
+                    details,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (joke.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    joke,
+                    style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
+    }
+}
+
+/** A compact tinted capsule, e.g. the speed badge or the per-row Fast/Slow tag. */
+@Composable
+private fun Pill(text: String, tint: Color) {
+    Surface(shape = RoundedCornerShape(50), color = tint.copy(alpha = 0.16f)) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            color = tint,
+            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.labelSmall
+        )
     }
 }

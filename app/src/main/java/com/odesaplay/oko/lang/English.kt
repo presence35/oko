@@ -769,6 +769,7 @@ wizardBetaBattery = "Draining your battery? That's exactly the bug we need. Send
     ),
     logsPreview = Strings.LogPreviewStrings(
         tab = "Debug",
+        why = "When something breaks only on your phone, this file is how we find out why. Everything in it is listed below, and nothing leaves the phone until you tap Send.",
         willSendAs = "Sent as",
         size = "Size",
         builtAt = "Built",
@@ -846,6 +847,12 @@ wizardBetaBattery = "Draining your battery? That's exactly the bug we need. Send
         "Quiet is not emptiness",
         "Rest now, so you're ready later",
         "Peace looks good on you",
+    ),
+    deathAnimStyle = Strings.DeathAnimStyleStrings(
+        title = "Explosion style",
+        simple = "Simple",
+        classic = "Classic",
+        advanced = "Advanced",
     ),
 )
 

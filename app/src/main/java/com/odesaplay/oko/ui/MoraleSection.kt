@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.sp
 
 /** Single-select chip with the standard selector styling (same as OverlapModeChip). */
 @Composable
-private fun MoraleVoiceChip(
+internal fun MoraleVoiceChip(
     label: String,
     selected: Boolean,
     modifier: Modifier = Modifier,

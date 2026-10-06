@@ -62,6 +62,7 @@ class UserPrefs(private val context: Context) {
     private val showMediumCitiesKey = booleanPreferencesKey("show_medium_cities")
     private val showSmallCitiesKey = booleanPreferencesKey("show_small_cities")
     private val deathAnimationEnabledKey = booleanPreferencesKey("death_animation_enabled")
+    private val deathAnimationStyleKey = stringPreferencesKey("death_animation_style")
     private val followBulletKey = booleanPreferencesKey("follow_bullet")
     private val highQualityExplosionsKey = booleanPreferencesKey("high_quality_explosions")
     private val neutralizedTallyEnabledKey = booleanPreferencesKey("neutralized_tally_enabled")
@@ -133,6 +134,9 @@ class UserPrefs(private val context: Context) {
         val moraleVoice = this[moraleVoiceKey]?.let { stored ->
             MoraleVoice.values().firstOrNull { it.name == stored }
         } ?: d.moraleVoice
+        val deathAnimationStyle = this[deathAnimationStyleKey]?.let { stored ->
+            DeathAnimationStyle.values().firstOrNull { it.name == stored }
+        } ?: d.deathAnimationStyle
         val zonePolicy = this[zonePolicyKey]?.let { stored ->
             ZonePolicy.values().firstOrNull { it.name == stored }
         } ?: d.zonePolicy
@@ -190,6 +194,7 @@ class UserPrefs(private val context: Context) {
             showThreatIdsOnMap = this[showThreatIdsOnMapKey] ?: d.showThreatIdsOnMap,
             highQualityExplosions = this[highQualityExplosionsKey] ?: d.highQualityExplosions,
             deathAnimationEnabled = this[deathAnimationEnabledKey] ?: d.deathAnimationEnabled,
+            deathAnimationStyle = deathAnimationStyle,
             followBullet = this[followBulletKey] ?: d.followBullet,
             neutralizedTallyEnabled = this[neutralizedTallyEnabledKey] ?: d.neutralizedTallyEnabled,
             neutralizedTallyAllUkraine = this[neutralizedTallyAllUkraineKey] ?: d.neutralizedTallyAllUkraine,
@@ -530,6 +535,10 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setDeathAnimationEnabled(enabled: Boolean) {
         context.dataStore.edit { it[deathAnimationEnabledKey] = enabled }
+    }
+
+    suspend fun setDeathAnimationStyle(style: DeathAnimationStyle) {
+        context.dataStore.edit { it[deathAnimationStyleKey] = style.name }
     }
 
     suspend fun setFlybyAnimationEnabled(enabled: Boolean) {

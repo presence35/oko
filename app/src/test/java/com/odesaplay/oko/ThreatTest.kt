@@ -37,6 +37,19 @@ class ThreatTest {
     }
 
     @Test
+    fun `catalog - facts are persona-proof, joke is the only flavour slot`() {
+        val ballistic = ThreatTypeCatalog.INFO[ThreatType.BALLISTIC]!!
+        assertFalse(ballistic.detailsEn.contains("Kinzhal"))
+        assertFalse(ballistic.detailsUa.contains("Кинджал"))
+        val aviation = ThreatTypeCatalog.INFO[ThreatType.AVIATION]!!
+        assertTrue(aviation.detailsEn.contains("Kinzhal"))
+        val kab = ThreatTypeCatalog.INFO[ThreatType.KAB]!!
+        assertEquals("KAB", kab.shortLabel(AppLanguage.EN))
+        val recon = ThreatTypeCatalog.INFO[ThreatType.RECON]!!
+        assertTrue(recon.detailsEn.contains("5,000 m"))
+    }
+
+    @Test
     fun `catalog - SHAHED label is correct`() {
         val info = ThreatTypeCatalog.INFO[ThreatType.SHAHED]!!
         assertEquals("БпЛА", info.labelUa)

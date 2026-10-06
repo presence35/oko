@@ -260,11 +260,6 @@ fun LogsDropDownSheet(
     var newestFirst by rememberSaveable { mutableStateOf(true) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var legendExpanded by rememberSaveable { mutableStateOf(false) }
-    val uploadState by LogUpload.state.collectAsState()
-    // Reuses the `now` ticker this composable already runs — no second timer just to expire
-    // a rate-limit cooldown.
-    val retryAt = (uploadState as? UploadState.Failed)?.retryAtMillis
-    val coolingDown = retryAt != null && now < retryAt
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -351,65 +346,6 @@ fun LogsDropDownSheet(
                 fontWeight = FontWeight.Bold,
                 color = connColor
             )
-            Spacer(Modifier.width(4.dp))
-            val uploading = uploadState is UploadState.Building || uploadState is UploadState.Sending
-            IconButton(
-                onClick = { if (uploading) LogUpload.dismiss() else LogUpload.upload(context) },
-                enabled = !uploading && !coolingDown,
-                interactionSource = rememberHapticInteractionSource()
-            ) {
-                if (uploading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = Color(AppPalette.AlertYellow)
-                    )
-                } else {
-                    Icon(
-                        Icons.Outlined.CloudUpload,
-                        contentDescription = s.logsSendLogs,
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-        }
-
-        // Upload outcome — a tap with no confirmation gets tapped twice, and you get two bundles.
-        when (val st = uploadState) {
-            is UploadState.Done, is UploadState.Failed -> {
-                val ok = st is UploadState.Done
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { LogUpload.dismiss() }
-                        .background(Color(AppPalette.CardAlt))
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        if (ok) Icons.Filled.CheckCircle else Icons.Filled.Warning,
-                        contentDescription = null,
-                        tint = if (ok) Color(AppPalette.SafeGreen) else Color(AppPalette.AlertRed),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    val waitSec = retryAt?.let { ((it - now) / 1000L).coerceAtLeast(0L) }
-                    Text(
-                        when {
-                            ok -> "${s.logsSendLogsOk} ${(st as UploadState.Done).fileName}"
-                            // Actionable words plus a countdown, never a bare status code.
-                            waitSec != null -> "${s.logsSendLogsBusy} ${waitSec}s"
-                            else -> "${s.logsSendLogsFail}: ${(st as UploadState.Failed).reason}"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 2
-                    )
-                }
-            }
-            else -> Unit
         }
 
         // Tabs — taps drive the pager; swipes flow back via snapshotFlow above.
@@ -2096,10 +2032,18 @@ private fun GpsCard(entry: GpsLogEntry, s: Strings.StringSet, lang: AppLanguage,
 private fun DebugPreviewList(s: Strings.StringSet, lang: AppLanguage, now: Long) {
     val context = LocalContext.current
     val state by LogSnapshot.state.collectAsState()
+    val uploadState by LogUpload.state.collectAsState()
     // Build on first sight: the tab exists to be read before sending, so it must not open empty
     // when filling it costs one build.
     LaunchedEffect(Unit) { runCatching { LogSnapshot.ensure(context) } }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            s.logsPreviewWhy,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+        DebugSendCard(s, now, uploadState) { LogUpload.upload(context) }
         DebugPayloadHeader(s, lang, now, state) { LogSnapshot.refresh(context) }
         when (val st = state) {
             is LogSnapshot.State.Ready -> {
@@ -2109,6 +2053,85 @@ private fun DebugPreviewList(s: Strings.StringSet, lang: AppLanguage, now: Long)
             is LogSnapshot.State.Failed -> DebugNotice("${s.logsPreviewFailed}: ${st.reason}", DebugRed)
             is LogSnapshot.State.Building -> DebugNotice(s.logsPreviewEmpty, Color(AppPalette.AlertYellow), busy = true)
             LogSnapshot.State.Empty -> DebugNotice(s.logsPreviewEmpty, Color(AppPalette.DegradedOrange))
+        }
+    }
+}
+
+/** The Send control lives here, next to the payload it ships — not in the header, where a tap
+ *  could fire without the tester ever seeing what leaves the phone. */
+@Composable
+private fun DebugSendCard(
+    s: Strings.StringSet,
+    now: Long,
+    uploadState: UploadState,
+    onSend: () -> Unit
+) {
+    val uploading = uploadState is UploadState.Building || uploadState is UploadState.Sending
+    // Reuses the Debug tab's own `now` ticker — no second timer just to expire a cooldown.
+    val retryAt = (uploadState as? UploadState.Failed)?.retryAtMillis
+    val coolingDown = retryAt != null && now < retryAt
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(AppPalette.CardDeep))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Button(
+            onClick = onSend,
+            enabled = !uploading && !coolingDown,
+            interactionSource = rememberHapticInteractionSource()
+        ) {
+            if (uploading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    Icons.Outlined.CloudUpload,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(s.logsSendLogs)
+        }
+        // A tap with no confirmation gets tapped twice, and you get two bundles — so the outcome
+        // stays visible until dismissed, and a rate limit names its countdown.
+        when (val st = uploadState) {
+            is UploadState.Done, is UploadState.Failed -> {
+                val ok = st is UploadState.Done
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { LogUpload.dismiss() },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        if (ok) Icons.Filled.CheckCircle else Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = if (ok) Color(AppPalette.SafeGreen) else Color(AppPalette.AlertRed),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    val waitSec = retryAt?.let { ((it - now) / 1000L).coerceAtLeast(0L) }
+                    Text(
+                        when {
+                            ok -> "${s.logsSendLogsOk} ${(st as UploadState.Done).fileName}"
+                            // Actionable words plus a countdown, never a bare status code.
+                            waitSec != null -> "${s.logsSendLogsBusy} ${waitSec}s"
+                            else -> "${s.logsSendLogsFail}: ${(st as UploadState.Failed).reason}"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2
+                    )
+                }
+            }
+            else -> Unit
         }
     }
 }

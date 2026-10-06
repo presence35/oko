@@ -1,7 +1,6 @@
 package com.odesaplay.oko
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -19,7 +18,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -103,44 +101,47 @@ private class ActiveDeath(
 ) {
     var shards: Array<Shard>? = null
     var sparks: Array<Spark>? = null
+    /** Rasterized icon + per-shard source rects, built once at first explosion frame. */
+    var iconBmp: Bitmap? = null
+    var srcRects: Array<Rect>? = null
 }
 
-class ThreatDeathOverlay {
+class ThreatDeathOverlay : DeathAnimation {
 
     private val deaths = mutableListOf<ActiveDeath>()
 
     private val _active = MutableStateFlow(false)
-    val active: StateFlow<Boolean> = _active.asStateFlow()
+    override val active: StateFlow<Boolean> = _active.asStateFlow()
 
-    val isActive: Boolean get() = deaths.isNotEmpty()
+    override val isActive: Boolean get() = deaths.isNotEmpty()
 
-    var highQuality: Boolean = true
+    override var highQuality: Boolean = true
 
     private fun syncActive() {
         val nowActive = deaths.isNotEmpty()
         if (_active.value != nowActive) _active.value = nowActive
     }
 
-    fun isActiveFor(id: String?): Boolean = id != null && deaths.any { it.id == id }
+    override fun isActiveFor(id: String?): Boolean = id != null && deaths.any { it.id == id }
 
-    fun rebasePendingOrigins(newOrigin: () -> LatLng?) {
+    override fun rebasePendingOrigins(newOrigin: () -> LatLng?) {
         val now = SystemClock.elapsedRealtime()
         for (d in deaths) {
             if (now < d.start) d.origin = newOrigin()
         }
     }
 
-    fun spawn(
-        id: String? = null,
+    override fun spawn(
+        id: String?,
         geo: LatLng,
-        startGeo: LatLng = geo,
-        origin: LatLng? = null,
-        icon: Drawable? = null,
-        rotationDeg: Float = 0f,
-        alpha: Float = 1f,
-        quickBoom: Boolean = false,
-        fireAtDelayMs: Long = 0L,
-        type: ThreatType = ThreatType.UNKNOWN
+        startGeo: LatLng,
+        origin: LatLng?,
+        icon: Drawable?,
+        rotationDeg: Float,
+        alpha: Float,
+        quickBoom: Boolean,
+        fireAtDelayMs: Long,
+        type: ThreatType
     ) {
         if (deaths.size >= MAX_DEATHS) return
         val start = SystemClock.elapsedRealtime() + fireAtDelayMs.coerceAtLeast(0L)
@@ -158,7 +159,7 @@ class ThreatDeathOverlay {
         syncActive()
     }
 
-    fun spawnDud(id: String?, geo: LatLng, origin: LatLng?) {
+    override fun spawnDud(id: String?, geo: LatLng, origin: LatLng?) {
         if (origin == null || deaths.size >= MAX_DEATHS) return
         deaths.add(
             ActiveDeath(id, geo, geo, origin, SystemClock.elapsedRealtime(), null, 0f, 1f, dud = true)
@@ -166,7 +167,8 @@ class ThreatDeathOverlay {
         syncActive()
     }
 
-    fun clear() {
+    override fun clear() {
+        deaths.forEach { it.iconBmp?.recycle(); it.iconBmp = null }
         deaths.clear()
         syncActive()
     }
@@ -178,12 +180,6 @@ class ThreatDeathOverlay {
     }
     private val flashPaint = Paint().apply { isAntiAlias = true }
     private val sparkPaint = Paint().apply { isAntiAlias = true }
-    private val bulletPaint = Paint().apply { isAntiAlias = true }
-    private val trailPaint = Paint().apply {
-        isAntiAlias = true
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-    }
     private val shardPaint = Paint().apply {
         isAntiAlias = true
         isFilterBitmap = true
@@ -198,7 +194,8 @@ class ThreatDeathOverlay {
     }
     private var glowBitmap: Bitmap? = null
     private val reuseRect = RectF()
-    private var bulletBitmap: Bitmap? = null
+    private val shardDst = RectF()
+    private var bulletSprite: BulletSprite? = null
 
     private fun explosionGlow(density: Float): Bitmap {
         glowBitmap?.let { return it }
@@ -420,13 +417,13 @@ class ThreatDeathOverlay {
         }
     }
 
-    fun draw(
+    override fun draw(
         canvas: Canvas,
         density: Float,
         viewWidth: Float,
         viewHeight: Float,
         resources: android.content.res.Resources,
-        zoom: Double = 10.0,
+        zoom: Double,
         project: (lat: Double, lon: Double) -> PointF?
     ) {
         if (deaths.isEmpty()) return
@@ -434,12 +431,18 @@ class ThreatDeathOverlay {
 
         deaths.removeAll {
             val elapsed = now - it.start
-            elapsed > it.durationMs || (it.dud && elapsed > DEATH_EXPLOSION_START_MS)
+            val done = elapsed > it.durationMs || (it.dud && elapsed > DEATH_EXPLOSION_START_MS)
+            if (done) {
+                it.iconBmp?.recycle()
+                it.iconBmp = null
+            }
+            done
         }
         if (deaths.isEmpty()) {
             syncActive()
             return
         }
+        val bullet = bulletSprite ?: BulletSprite(resources).also { bulletSprite = it }
 
         for (d in deaths) {
             val rawElapsed = now - d.start
@@ -528,42 +531,11 @@ class ThreatDeathOverlay {
                             val headX = tx - sx
                             val headY = ty - sy
 
-                            // Fading trail behind the bullet.
-                            if (highQuality && p > 0.05f) {
-                                val trailLen = 0.18f.coerceAtMost(p)
-                                val tx0 = sx + (tx - sx) * (p - trailLen)
-                                val ty0 = sy + (ty - sy) * (p - trailLen)
-                                trailPaint.strokeWidth = 2.2f * density
-                                trailPaint.color = Color.argb(
-                                    (110 * (1f - p * 0.5f)).toInt().coerceIn(0, 140),
-                                    255, 220, 160
-                                )
-                                canvas.drawLine(tx0, ty0, bx, by, trailPaint)
-                            }
-
-                            canvas.save()
-                            canvas.translate(bx, by)
-                            canvas.rotate(
-                                (Math.toDegrees(atan2(headY.toDouble(), headX.toDouble())) + 90).toFloat()
+                            bullet.draw(
+                                canvas, bx, by,
+                                (Math.toDegrees(atan2(headY.toDouble(), headX.toDouble())) + 90).toFloat(),
+                                density
                             )
-                            val bitmap = bulletBitmap ?: run {
-                                BitmapFactory.decodeResource(resources, R.drawable.bullet)
-                                    ?.also { bulletBitmap = it }
-                            }
-                            if (bitmap != null) {
-                                val longHalf = 11f * density
-                                val bw = bitmap.width.toFloat()
-                                val bh = bitmap.height.toFloat()
-                                val scale = longHalf * 2f / max(bw, bh)
-                                val hw = bw * scale / 2f
-                                val hh = bh * scale / 2f
-                                canvas.drawBitmap(
-                                    bitmap, null,
-                                    RectF(-hw, -hh, hw, hh),
-                                    bulletPaint
-                                )
-                            }
-                            canvas.restore()
                         }
                     }
                 }
@@ -622,14 +594,6 @@ class ThreatDeathOverlay {
 
                 // 4. Icon shards — random direction, irregular UV chunks, drag + gravity
                 d.icon?.let { icon ->
-                    val iw = icon.intrinsicWidth.coerceAtLeast(1)
-                    val ih = icon.intrinsicHeight.coerceAtLeast(1)
-                    val iconBmp = Bitmap.createBitmap(iw, ih, Bitmap.Config.ARGB_8888)
-                    val iconCanvas = Canvas(iconBmp)
-                    icon.alpha = 255
-                    icon.setBounds(0, 0, iw, ih)
-                    icon.draw(iconCanvas)
-
                     if (d.shards == null) {
                         val inbound = d.origin?.let { o ->
                             val op = project(o.lat, o.lon)
@@ -641,11 +605,30 @@ class ThreatDeathOverlay {
                     if (d.sparks == null) {
                         d.sparks = createSparks(kind, hq, d.seed)
                     }
+                    val shards = d.shards!!
+                    val iw = icon.intrinsicWidth.coerceAtLeast(1)
+                    val ih = icon.intrinsicHeight.coerceAtLeast(1)
+                    val iconBmp = d.iconBmp ?: Bitmap.createBitmap(iw, ih, Bitmap.Config.ARGB_8888).also { bmp ->
+                        val iconCanvas = Canvas(bmp)
+                        icon.alpha = 255
+                        icon.setBounds(0, 0, iw, ih)
+                        icon.draw(iconCanvas)
+                        d.iconBmp = bmp
+                    }
+                    val rects = d.srcRects ?: Array(shards.size) { i ->
+                        val s = shards[i]
+                        Rect(
+                            (s.sx * iw).toInt().coerceIn(0, iw - 1),
+                            (s.sy * ih).toInt().coerceIn(0, ih - 1),
+                            ((s.sx + s.sw) * iw).toInt().coerceIn(((s.sx * iw).toInt() + 1).coerceAtMost(iw), iw),
+                            ((s.sy + s.sh) * ih).toInt().coerceIn(((s.sy * ih).toInt() + 1).coerceAtMost(ih), ih)
+                        )
+                    }.also { d.srcRects = it }
 
                     val g = 0.000045f * density // gravity px/ms²
-                    for (s in d.shards!!) {
-                        // Integrate with drag: v_eff decays, position uses average under drag.
-                        val dragFactor = s.drag.pow((elapsedMs / 400f).coerceIn(0f, 3f))
+                    for ((i, s) in shards.withIndex()) {
+                        // Linear drag falloff — same family as the old pow curve, no transcendentals.
+                        val dragFactor = 1f - (1f - s.drag) * (elapsedMs / 400f).coerceIn(0f, 3f)
                         val sx = x + s.vx * elapsedMs * dragFactor
                         val sy = y + s.vy * elapsedMs * dragFactor + 0.5f * g * elapsedMs * elapsedMs
                         val rot = s.spin * elapsedMs
@@ -658,20 +641,12 @@ class ThreatDeathOverlay {
                         val base = 9f * density * s.sizeMul * (1f - 0.25f * e)
                         val hw = base * s.aspect
                         val hh = base / s.aspect.coerceAtLeast(0.5f)
-                        val srcL = (s.sx * iw).toInt().coerceIn(0, iw - 1)
-                        val srcT = (s.sy * ih).toInt().coerceIn(0, ih - 1)
-                        val srcR = ((s.sx + s.sw) * iw).toInt().coerceIn(srcL + 1, iw)
-                        val srcB = ((s.sy + s.sh) * ih).toInt().coerceIn(srcT + 1, ih)
                         shardPaint.alpha = (255 * fade * life).toInt().coerceIn(0, 255)
                         canvas.save()
                         canvas.translate(sx, sy)
                         canvas.rotate(rot)
-                        canvas.drawBitmap(
-                            iconBmp,
-                            Rect(srcL, srcT, srcR, srcB),
-                            RectF(-hw, -hh, hw, hh),
-                            shardPaint
-                        )
+                        shardDst.set(-hw, -hh, hw, hh)
+                        canvas.drawBitmap(iconBmp, rects[i], shardDst, shardPaint)
                         canvas.restore()
                     }
                 }

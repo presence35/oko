@@ -133,6 +133,7 @@ fun SettingsScreen(
     onMoraleMasterChange: (Boolean) -> Unit,
     onMoraleVoiceChange: (MoraleVoice) -> Unit,
     onDeathAnimationChange: (Boolean) -> Unit,
+    onDeathAnimationStyleChange: (DeathAnimationStyle) -> Unit,
     onFlybyAnimationChange: (Boolean) -> Unit,
     onFollowBulletChange: (Boolean) -> Unit,
     onHighQualityExplosionsChange: (Boolean) -> Unit,
@@ -208,6 +209,7 @@ fun SettingsScreen(
     val periodicGps = state.periodicGps
     val calmMessagesEnabled = state.calmMessagesEnabled
     val deathAnimationEnabled = state.deathAnimationEnabled
+    val deathAnimationStyle = state.deathAnimationStyle
     val flybyAnimationEnabled = state.flybyAnimationEnabled
     val followBullet = state.followBullet
     val highQualityExplosions = state.highQualityExplosions
@@ -950,6 +952,28 @@ fun SettingsScreen(
                         IconSetSelector(lang = lang, selected = iconSet, onChange = onIconSetChange)
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).explainerFlash(flashId == "deathAnimStyle")) {
+                        Text(s.deathAnimStyleTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            DeathAnimationStyle.values().forEach { style ->
+                                MoraleVoiceChip(
+                                    label = when (style) {
+                                        DeathAnimationStyle.SIMPLE -> s.deathAnimStyleSimpleLabel
+                                        DeathAnimationStyle.CLASSIC -> s.deathAnimStyleClassicLabel
+                                        DeathAnimationStyle.ADVANCED -> s.deathAnimStyleAdvancedLabel
+                                    },
+                                    selected = deathAnimationStyle == style,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { onDeathAnimationStyleChange(style) }
+                                )
+                            }
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     // Legend for the two icon-only toggles that appear on every row below — without
                     // it a place pin and a bell mean nothing on first read.
                     Row(
@@ -992,7 +1016,13 @@ fun SettingsScreen(
                     Spacer(Modifier.height(4.dp))
                     val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
                     fastAndSlowGroups(lang, typeCatalog).forEachIndexed { index, (groupIcon, groupTitle, types) ->
-                        if (index > 0) Spacer(Modifier.height(12.dp))
+                        if (index > 0) {
+                            // A full-width rule plus breathing room so the Fast/Slow split reads
+                            // as a real boundary, not just another row gap.
+                            Spacer(Modifier.height(22.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Spacer(Modifier.height(14.dp))
+                        }
                         val groupMapOn = types.none { it in hiddenTypes }
                         val groupAlertsOn = types.none { it in silencedTypes }
                         // A caption plus the group's bulk toggles — not a collapsible header. The
@@ -1033,17 +1063,12 @@ fun SettingsScreen(
                             )
                         }
                         Column(
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            types.forEachIndexed { i, type ->
-                                // Divider between rows (not before the first) — this is what
-                                // separates the types now that they are no longer cards.
-                                if (i > 0) {
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(start = 98.dp),
-                                        color = MaterialTheme.colorScheme.outlineVariant
-                                    )
-                                }
+                            types.forEach { type ->
                                 ThreatTypeRow(
                                     type = type,
                                     lang = lang,

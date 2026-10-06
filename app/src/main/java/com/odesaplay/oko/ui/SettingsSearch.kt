@@ -105,6 +105,7 @@ internal val searchAnchors: List<SearchAnchor> = listOf(
     anchor("overlap", SettingsSection.SYSTEM, "overlap", "overlapping", "count", "перекриття", "рахунок"),
     anchor("iconZoom", SettingsSection.SYSTEM, "zoom", "icon zoom", "зум", "наближення"),
     anchor("iconSet", SettingsSection.THREATS, "icon", "icons", "icon set", "style", "іконка", "іконки", "набір", "стиль"),
+    anchor("deathAnimStyle", SettingsSection.THREATS, "explosion", "explosion style", "animation", "classic", "simple", "advanced", "вибух", "анімація", "стиль"),
     anchor("threatToggles", SettingsSection.THREATS, "threat", "threats", "type", "types", "group", "загроз", "тип", "група"),
     anchor("shelters", SettingsSection.SHELTERS, "shelter", "shelters", "directory", "укриття", "сховище", "бомбосховище"),
     anchor("followMe", SettingsSection.LOCATION, "follow me", "gps", "location", "слід", "за мною", "локація", "місце"),

@@ -284,6 +284,7 @@ data class SettingsState(
     val moraleMasterEnabled: Boolean get() = prefs.moraleMasterEnabled
     val moraleVoice: MoraleVoice get() = prefs.moraleVoice
     val deathAnimationEnabled: Boolean get() = prefs.deathAnimationEnabled
+    val deathAnimationStyle: DeathAnimationStyle get() = prefs.deathAnimationStyle
     val highQualityExplosions: Boolean get() = prefs.highQualityExplosions
     val flybyAnimationEnabled: Boolean get() = prefs.flybyAnimationEnabled
     val followBullet: Boolean get() = prefs.followBullet
@@ -1730,6 +1731,10 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setDeathAnimationEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setDeathAnimationEnabled(enabled) }
+    }
+
+    fun setDeathAnimationStyle(style: DeathAnimationStyle) {
+        viewModelScope.launch { prefs.setDeathAnimationStyle(style) }
     }
 
     fun setHighQualityExplosions(enabled: Boolean) {

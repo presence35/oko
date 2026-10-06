@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- Explosion style picker in Threats: Simple (cheap rings and sparks), Classic (the original look), or Advanced (fuller per-type bursts); the bullet is back to the old short shell with no trail in all three 10-06_13:34:02
+- Threat-type rows are now bordered cards with full untruncated facts and a Fast/Slow pill beside the speed badge; the Fast and Slow groups are split by a full-width rule 10-06_14:30:00
+- Threat facts frozen per type with joke as the only persona slot, rendered separately in italic; fixed KAB short label, ballistic/recon wording 10-06_14:20:00
+- Log upload moved into the Debug tab under a plain-English why-we-need-it line, next to the payload it ships, instead of a header icon 10-06_13:02:17
 - Logs screen has a Debug tab showing the exact payload Send will upload: every privacy-relevant line (fingerprint, saved city, alert city names, installer, all settings) with the literal JSON key as its label, plus a list of what is never in the file. Send reuses the previewed bundle, so what you read is what ships 10-06_12:54:03
 - Death animations reworked: threat icons shatter into irregular chunks with drag, spin and gravity, sparks fly on random angles, and each threat type gets its own fireball colour, smoke and debris 10-06_10:15:00
 - Oko now tells you when it was asleep: a Doze stall over 4 min posts one notice on the alert channel with how long monitoring was off, whether an official alert started in that time and how many threats were confirmed, plus a button to allow unrestricted background use 10-05_23:40:00

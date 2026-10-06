@@ -21,8 +21,8 @@ Only when the user says **"release it"**, perform a full release:
 - Changelog entries are short one-liners, EN only: `- EN text mm-dd_h:m:s`. UA/RU release notes fall back to EN at release time. No multi-paragraph essays.
 - The server `version.json` is generated from the **built APK** (`output-metadata.json` → versionCode/versionName, plus the APK's `sha256`) and the `## [Unreleased]` entries in `CHANGELOG.md` (auto-derived at release time). `uploadRelease` cross-checks the version against `app/version.properties` and fails on drift, uploads the APK before the manifest, then verifies the live copy. FTP creds live in `app/upload.properties` (git-ignored).
 - Version numbers: `versionCode` is a monotonic integer; `versionName` is human-readable. Keep both bumped together (the `bumpVersion` task does this).
-- **EN-only strings during normal work.** Do NOT translate strings to UA/RU — write only the
-  EN text, and put it in the UA and RU slots too as placeholders so `Strings` compiles).
+- **Always translate UI strings.** Every new `Strings` entry gets real UA and RU text in the
+  same change, matching the existing tone of each language file — never EN placeholders.
 - Reply with short, concise, only-needed! No long explanations
 
 ## Development conventions

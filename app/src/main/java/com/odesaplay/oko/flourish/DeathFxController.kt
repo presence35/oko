@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.odesaplay.oko.BehaviorOutcome
@@ -120,8 +122,23 @@ class DeathFxController(
     private val showDetail: (records: Int, groups: Int) -> String,
     private val scope: CoroutineScope
 ) {
-    /** The overlay itself — added to the map's overlay list and driven per frame. */
-    val overlay = ThreatDeathOverlay()
+    /** The overlay itself — a swappable [DeathAnimation] picked by the style pref.
+     *  Always read through this getter: the instance changes when the user picks a
+     *  different explosion style. */
+    val overlay: DeathAnimation get() = implFor(styleFlow.value)
+
+    private val impls = mutableMapOf<DeathAnimationStyle, DeathAnimation>()
+    private val styleFlow = MutableStateFlow(DeathAnimationStyle.ADVANCED)
+    private var lastHq = true
+
+    private fun implFor(style: DeathAnimationStyle): DeathAnimation =
+        impls.getOrPut(style) { style.create().also { it.highQuality = lastHq } }
+
+    /** Flattened liveness of whichever impl is current — stable across style switches,
+     *  unlike `overlay.active` which belongs to one instance. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val deathActive: StateFlow<Boolean> =
+        styleFlow.flatMapLatest { implFor(it).active }.stateIn(scope, SharingStarted.Eagerly, false)
 
     /** Master "Morale" gate: live mirror of the master pref. All flourish entry points
      *  no-op while it's off, and flipping it off ejects anything in flight ([clear]). */
@@ -148,7 +165,19 @@ class DeathFxController(
             UserPrefs(context).preferences
                 .map { it.highQualityExplosions }
                 .distinctUntilChanged()
-                .collect { hq -> overlay.highQuality = hq }
+                .collect { hq ->
+                    lastHq = hq
+                    impls.values.forEach { it.highQuality = hq }
+                }
+        }
+        scope.launch {
+            UserPrefs(context).preferences
+                .map { it.deathAnimationStyle }
+                .distinctUntilChanged()
+                .collect { style ->
+                    styleFlow.value = style
+                    impls.values.forEach { it.clear() }
+                }
         }
     }
 
@@ -210,7 +239,7 @@ class DeathFxController(
     init {
         scope.launch {
             combine(
-                _countdown, _autoStrikeActive, overlay.active, _replayProgress
+                _countdown, _autoStrikeActive, deathActive, _replayProgress
             ) { cd, auto, death, replay ->
                 cd != null || auto || death || replay != null
             }.collect { _flourishActive.value = it }
@@ -220,8 +249,8 @@ class DeathFxController(
         // first, so by the time this wakes there is nothing left to release.
         scope.launch {
             while (true) {
-                overlay.active.first { it }
-                overlay.active.first { !it }
+                deathActive.first { it }
+                deathActive.first { !it }
                 delay(DEATH_RESTORE_BEAT_MS)
                 releaseStruck(animate = true)
             }
@@ -232,7 +261,7 @@ class DeathFxController(
      *  during death animations so the projectile has geographic context. */
     val forceShowAllCities = MutableStateFlow(false)
 
-    val active: StateFlow<Boolean> get() = overlay.active
+    val active: StateFlow<Boolean> get() = deathActive
     val isActive: Boolean get() = overlay.isActive
 
     /** Whether the tally-tap replay is queued or running — while true, the replay owns the map
@@ -333,19 +362,19 @@ class DeathFxController(
                 for (n in 3 downTo 1) {
                     // If a manual death animation is in flight, hold the countdown at its
                     // current number until it finishes — the tick resumes seamlessly after.
-                    if (overlay.isActive) overlay.active.first { !it }
+                    if (overlay.isActive) deathActive.first { !it }
                     _countdown.value = n
                     delay(1000L)
                 }
                 // Final hold: don't fire while the manual explosion is still on screen.
-                if (overlay.isActive) overlay.active.first { !it }
+                if (overlay.isActive) deathActive.first { !it }
                 _countdown.value = null
                 _strikeType.value = null
                 _autoStrikeActive.value = true
                 pendingAutoStrike?.invoke()
                 pendingAutoStrike = null
                 // Wait for the death animation to finish naturally, then drop the active flag.
-                overlay.active.first { !it }
+                deathActive.first { !it }
                 _autoStrikeActive.value = false
             } finally {
                 // A replaced/cancelled countdown never fired — drop its pending count too.
@@ -364,17 +393,17 @@ class DeathFxController(
         countdownJob = scope.launch {
             try {
                 for (n in 3 downTo 1) {
-                    if (overlay.isActive) overlay.active.first { !it }
+                    if (overlay.isActive) deathActive.first { !it }
                     _countdown.value = n
                     delay(1000L)
                 }
-                if (overlay.isActive) overlay.active.first { !it }
+                if (overlay.isActive) deathActive.first { !it }
                 _countdown.value = null
                 _strikeType.value = null
                 _autoStrikeActive.value = true
                 pendingAutoStrike?.invoke()
                 pendingAutoStrike = null
-                overlay.active.first { !it }
+                deathActive.first { !it }
                 _autoStrikeActive.value = false
             } finally {
                 _pendingStrikeCount.update { (it - 1).coerceAtLeast(0) }

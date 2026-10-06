@@ -445,6 +445,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onMoraleMasterChange = remember { { viewModel.setMoraleEnabled(it) } },
                 onMoraleVoiceChange = remember { { viewModel.setMoraleVoice(it) } },
                 onDeathAnimationChange = remember { { viewModel.setDeathAnimationEnabled(it) } },
+                onDeathAnimationStyleChange = remember { { viewModel.setDeathAnimationStyle(it) } },
                 onFlybyAnimationChange = remember { { viewModel.setFlybyAnimationEnabled(it) } },
                 onFollowBulletChange = remember { { viewModel.setFollowBullet(it) } },
                 onHighQualityExplosionsChange = remember { { viewModel.setHighQualityExplosions(it) } },

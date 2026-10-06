@@ -30,6 +30,9 @@ enum class ThreatCardSize { SMALL, LARGE }
 
 enum class ThreatIconSet { PHOTO, ARMY, COMIC, RUSSIAN }
 
+/** Death-animation engine: cheap rings, the original look, or the fuller rebuild. */
+enum class DeathAnimationStyle { SIMPLE, CLASSIC, ADVANCED }
+
 /** How same-coordinate threats render on the map. */
 enum class OverlapMode { DEFAULT, COUNT }
 
@@ -78,6 +81,7 @@ data class UserPreferences(
     val showLargeCities: Boolean = true,
     val showThreatIdsOnMap: Boolean = false,
     val deathAnimationEnabled: Boolean = true,
+    val deathAnimationStyle: DeathAnimationStyle = DeathAnimationStyle.ADVANCED,
     val followBullet: Boolean = true,
     val highQualityExplosions: Boolean = true,
     val neutralizedTallyEnabled: Boolean = true,

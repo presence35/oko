@@ -769,6 +769,7 @@ wizardBetaBattery = "Быстро садится батарея? Это ровн
     ),
     logsPreview = Strings.LogPreviewStrings(
         tab = "Debug",
+        why = "When something breaks only on your phone, this file is how we find out why. Everything in it is listed below, and nothing leaves the phone until you tap Send.",
         willSendAs = "Sent as",
         size = "Size",
         builtAt = "Built",
@@ -846,5 +847,11 @@ wizardBetaBattery = "Быстро садится батарея? Это ровн
         "Тишина — это не пустота",
         "Отдохните сейчас, чтобы набраться сил",
         "Мирное небо вам к лицу",
+    ),
+    deathAnimStyle = Strings.DeathAnimStyleStrings(
+        title = "Стиль взрыва",
+        simple = "Простой",
+        classic = "Классический",
+        advanced = "Расширенный",
     ),
 )

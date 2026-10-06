@@ -29,7 +29,9 @@ enum class ThreatType(val apiKey: String) {
     }
 }
 
-/** Static display metadata for each threat type — icon glyph, UA/EN label, UA/EN legend description. */
+/** Static display metadata for each threat type — icon glyph, UA/EN label, UA/EN legend description.
+ *  Facts are persona-proof: label/description/details never vary by voice. Only joke is flavour
+ *  and the single slot a persona may adjust. */
 data class ThreatTypeInfo(
     val labelUa: String,
     val labelEn: String,
@@ -85,14 +87,14 @@ object ThreatTypeCatalog {
             labelEn = "Ballistic",
             descriptionUa = "Балістичні ракети з коротким часом підльоту — найвищий пріоритет.",
             descriptionEn = "Ballistic missiles with short flight time — highest priority.",
-            detailsUa = "Іскандер-М, KN-23, Кинджал — 3–8 Махів. Від пуску до прильоту 2–6 хв — часу лишити будівлю немає, лише укритися. Важка БЧ; перехоплення на кінцевій ділянці вкрай складне. Показана координата — екстраполяція від пуску, може бути неточною. Почув балістичну тривогу — негайно в укриття, не чекай підтвердження.",
-            detailsEn = "Iskander-M, KN-23, air-launched Kinzhal reach 3–8 Mach. Launch-to-impact: 2–6 min — time only to shelter, not to leave a building. Heavy warheads; terminal interception very hard. The shown position is usually extrapolated from launch/splash and can be far off. On a ballistic alert, take cover immediately — don't wait to confirm."
+            detailsUa = "Іскандер-М, KN-23 — 3–6 Махів. Від пуску до прильоту 2–6 хв — часу лишити будівлю немає, лише укритися. Важка БЧ; перехоплення на кінцевій ділянці вкрай складне. Показана координата — екстраполяція від пуску, може бути неточною. Почув балістичну тривогу — негайно в укриття, не чекай підтвердження.",
+            detailsEn = "Iskander-M and KN-23 reach 3–6 Mach. Launch-to-impact: 2–6 min — time only to shelter, not to leave a building. Heavy warheads; terminal interception very hard. The shown position is usually extrapolated from launch/splash and can be far off. On a ballistic alert, take cover immediately — don't wait to confirm."
         ),
         ThreatType.KAB to ThreatTypeInfo(
             labelUa = "КАБ",
             labelEn = "KAB",
             shortLabelUa = "КАБ",
-            shortLabelEn = "Kab",
+            shortLabelEn = "KAB",
             descriptionUa = "Керовані авіабомби, що застосовуються поблизу лінії фронту.",
             descriptionEn = "Guided aerial bombs, used near the front line.",
             detailsUa = "Керовані плануючі бомби (ФАБ-250…1500 + УМПК) скидають за десятки км і планують на 40–70 км, здебільшого по фронту. БЧ — сотні кг, тому влучання руйнівні. ~900 км/год, але в глибокий тил не дістають. Тривога КАБ важлива для прифронтових/прикордонних регіонів.",
@@ -113,8 +115,8 @@ object ThreatTypeCatalog {
             shortLabelEn = "Recon",
             descriptionUa = "Розвідувальна активність, що передує ударам.",
             descriptionEn = "Reconnaissance activity that precedes strikes.",
-            detailsUa = "Малі спостережні дрони (Орлан-10/30, ZALA, Supercam): 100–1500 м, 90–150 км/год, кілька годин у повітрі. БЧ не несуть — розвідка та коригування артилерії. Їхня поява часто передує ударам — це попередження. Для цивільних у глибокому тилу: ознака активності, а не пряма загроза.",
-            detailsEn = "Small observation drones (Orlan-10/30, ZALA, Supercam): 100–1,500 m, 90–150 km/h, hours aloft. No warhead — they spot and correct artillery. Their presence often precedes strikes, so a recon alert is a heads-up. For civilians deep behind the front: a warning sign, not a direct danger."
+            detailsUa = "Малі спостережні дрони (Орлан-10/30, ZALA, Supercam): 100–1500 м (Орлан — до ~5000 м), 90–150 км/год, кілька годин у повітрі. БЧ не несуть — розвідка та коригування артилерії. Їхня поява часто передує ударам — це попередження. Для цивільних у глибокому тилу: ознака активності, а не пряма загроза.",
+            detailsEn = "Small observation drones (Orlan-10/30, ZALA, Supercam): 100–1,500 m (Orlan up to ~5,000 m), 90–150 km/h, hours aloft. No warhead — they spot and correct artillery. Their presence often precedes strikes, so a recon alert is a heads-up. For civilians deep behind the front: a warning sign, not a direct danger."
         ),
         ThreatType.UNKNOWN to ThreatTypeInfo(
             labelUa = "Невідомий",

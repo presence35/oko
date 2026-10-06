@@ -759,6 +759,8 @@ object Strings {
      */
     data class LogPreviewStrings(
         val tab: String,
+        /** One or two sentences on why the file exists and that nothing sends itself. */
+        val why: String,
         val willSendAs: String,
         val size: String,
         /** Prefix for the build time; the timestamp is appended by the UI. */
@@ -813,6 +815,17 @@ object Strings {
         val settingLabels: List<String>
     )
 
+    /**
+     * Explosion-style picker copy. Its own holder because `Misc` sits on the JVM
+     * argument-slot ceiling (see [LogPreviewStrings]).
+     */
+    data class DeathAnimStyleStrings(
+        val title: String,
+        val simple: String,
+        val classic: String,
+        val advanced: String
+    )
+
     data class WordForms(
         val sources: List<String>,
         val resolvedThreats: List<String>,
@@ -840,6 +853,7 @@ object Strings {
         val logsPreview: LogPreviewStrings,
         val actionLog: ActionLog,
         val calmMessages: List<String>,
+        val deathAnimStyle: DeathAnimStyleStrings,
     ) {
         val appTitle: String get() = onboarding.appTitle
         val officialAlertBanner: String get() = onboarding.officialAlertBanner
@@ -1342,6 +1356,7 @@ object Strings {
         val logsSendLogsFail: String get() = logsExport.sendLogsFail
         val logsSendLogsBusy: String get() = logsExport.sendLogsBusy
         val logsFilterDebug: String get() = logsPreview.tab
+        val logsPreviewWhy: String get() = logsPreview.why
         val logsPreviewWillSendAs: String get() = logsPreview.willSendAs
         val logsPreviewSize: String get() = logsPreview.size
         val logsPreviewBuiltAt: String get() = logsPreview.builtAt
@@ -1444,6 +1459,10 @@ object Strings {
         val threatIconZoomDesc: String get() = misc.threatIconZoomDesc
         val deathAnimationTitle: String get() = misc.deathAnimationTitle
         val deathAnimationDesc: String get() = misc.deathAnimationDesc
+        val deathAnimStyleTitle: String get() = deathAnimStyle.title
+        val deathAnimStyleSimpleLabel: String get() = deathAnimStyle.simple
+        val deathAnimStyleClassicLabel: String get() = deathAnimStyle.classic
+        val deathAnimStyleAdvancedLabel: String get() = deathAnimStyle.advanced
         val followBulletTitle: String get() = misc.followBulletTitle
         val followBulletDesc: String get() = misc.followBulletDesc
         val hdExplosionTitle: String get() = misc.hdExplosionTitle
