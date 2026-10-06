@@ -37,7 +37,45 @@ class SleepPolicyTest {
     fun `the reporting floor is inclusive and nothing below it is held`() {
         assertEquals(
             SleepDecision.Post::class,
-            SleepPolicy.decide(window(SleepPolicy.REPORT_AFTER_MS), readable()).let { it::class }
+            SleepPolicy.decide(window(SleepPolicy.REPORT_AFTER_MS), readable(confirmed = 1)).let { it::class }
+        )
+    }
+
+    /**
+     * The whole point of the gate: a gap the feed shows missed nothing is not worth waking anyone
+     * for. A Doze window that dropped no socket and confirmed no threat is the common case on a
+     * phone that sleeps without going blind, and it must go silent rather than earn the exemption
+     * ask on the strength of merely having been deferred.
+     */
+    @Test
+    fun `a readable sleep that missed nothing is silent`() {
+        assertEquals(SleepDecision.Silent, SleepPolicy.decide(window(20 * 60_000L), readable()))
+    }
+
+    /** A threat confirmed while the loop was not running is real harm and must be reported. */
+    @Test
+    fun `a confirmed threat in the window is reported`() {
+        assertEquals(
+            SleepDecision.Post::class,
+            SleepPolicy.decide(window(20 * 60_000L), readable(confirmed = 1))::class
+        )
+    }
+
+    /** ...as is an official onset, even with a threat feed that shows nothing. */
+    @Test
+    fun `an official onset alone is reported`() {
+        assertEquals(
+            SleepDecision.Post::class,
+            SleepPolicy.decide(window(20 * 60_000L), readable(official = true))::class
+        )
+    }
+
+    /** ...but a mute never holds a sleep we would not have reported anyway. */
+    @Test
+    fun `a mute does not hold a sleep that missed nothing`() {
+        assertEquals(
+            SleepDecision.Silent,
+            SleepPolicy.decide(window(20 * 60_000L), readable(), muted = true)
         )
     }
 

@@ -52,6 +52,13 @@ data class SleepEvidence(
      */
     val readable: Boolean get() = feedNowMillis != null
 
+    /**
+     * True when the window provably cost something: a threat was confirmed while the loop was not
+     * running, or an official episode came on. A gap the feed shows missed nothing is not worth
+     * interrupting a sleeping user for — the exemption ask is only justified by real harm.
+     */
+    val harmed: Boolean get() = confirmedInWindow > 0 || officialOnsetInWindow
+
     companion object {
         val UNKNOWN = SleepEvidence(feedNowMillis = null, confirmedInWindow = 0)
     }
@@ -157,10 +164,12 @@ object SleepPolicy {
 
     /**
      * Order matters and is the whole policy:
-     *  - an unreadable feed or a sub-floor gap is *silent*, checked before the mute so noise is
-     *    never held on to;
      *  - the exemption is checked first because it is terminal — the problem it names is fixed, so
-     *    the row comes down whether or not it would still be worth posting.
+     *    the row comes down whether or not it would still be worth posting;
+     *  - an unreadable feed, a sub-floor gap, or a window that [SleepEvidence.harmed] shows cost
+     *    nothing is *silent*, all checked before the mute so noise is never held on to. A benign
+     *    gap — the common case on a phone that Dozes without dropping its socket — earns no notice:
+     *    the exemption ask is only justified at the moment something was actually missed.
      */
     fun decide(
         window: SleepWindow,
@@ -170,6 +179,7 @@ object SleepPolicy {
     ): SleepDecision = when {
         exemptionGranted -> SleepDecision.Dismiss
         !evidence.readable || window.durationMs < REPORT_AFTER_MS -> SleepDecision.Silent
+        !evidence.harmed -> SleepDecision.Silent
         muted -> SleepDecision.Hold
         else -> SleepDecision.Post(window, evidence)
     }
