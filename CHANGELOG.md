@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- Beta wizard page now shows the real connection pill (Online/Degraded/Offline, tap opens Logs) instead of an unlabelled green dot 10-06_15:02:40
+- Orange connection pill, its notification and its log row now say what the state means — no updates from the feed — instead of claiming the link failed, in all three languages 10-06_14:47:37
 - Quiet feed no longer reads as a degraded connection: the orange edge moved from 42s to 4m20s, while OkHttp's ping and the silence backstop still reap a dead socket 10-06_14:37:17
 - Shelter settings collapsed into the shelter screen: one settings row opens it and holds the map-button switch, and the duplicate "show shelters on map" button is gone 10-06_16:52:00
 - Sleep notice is now one summary per night that waits until you look at the phone, reporting the total blind time and how many gaps, instead of repeating "off for 4 min" after every doze 10-06_16:35:12

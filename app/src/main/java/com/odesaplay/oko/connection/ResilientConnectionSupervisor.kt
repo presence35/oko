@@ -55,6 +55,10 @@ class ResilientConnectionSupervisor(
          *  of it, so raising the edge can never put the reaper in front of it. OkHttp's 60s ping is
          *  the fast local detector; this only mops up. */
         const val SILENCE_TIMEOUT_MS = DEGRADED_STALE_MS + 4 * WATCHDOG_TICK_MS
+        /** Most awake time one tick may credit. A process thawed after a freeze reports a gap the
+         *  loop was never awake to observe, so an uncapped credit mints a fake quiet episode on
+         *  resume. Kept well under [DEGRADED_STALE_MS] for exactly that reason. */
+        const val WATCHDOG_AWAKE_CREDIT_MS = WATCHDOG_TICK_MS * 2
         const val BASE_BACKOFF_MS = 1_000L
         const val MAX_BACKOFF_MS = 30_000L
         /** Offline/Connecting with a live network and no reconnect progress past this → force retry. */
@@ -67,6 +71,17 @@ class ResilientConnectionSupervisor(
         fun backoffDelayMs(attempt: Int, jitter: Double = Random.nextDouble(0.75, 1.25)): Long {
             val expDelay = min(MAX_BACKOFF_MS.toDouble(), BASE_BACKOFF_MS * 2.0.pow(attempt.coerceAtMost(6).toDouble())).toLong()
             return (expDelay * jitter).toLong().coerceIn(BASE_BACKOFF_MS, MAX_BACKOFF_MS)
+        }
+
+        /** What the byte-silence watchdog should do at [silenceMs] of unbeaten quiet. Extracted so
+         *  both thresholds and their ordering are testable without a live socket. There is no
+         *  "first byte" guard here — the caller owns "connected and has heard a byte at least once".
+         *  TEAR_DOWN outranks DEGRADE, so a socket already past the reaper is never first reported
+         *  degraded, and a running quiet episode is not re-reported on every tick. */
+        internal fun silenceWatchdogAction(silenceMs: Long, alreadyDegraded: Boolean): SilenceWatchdogAction = when {
+            silenceMs >= SILENCE_TIMEOUT_MS -> SilenceWatchdogAction.TEAR_DOWN
+            silenceMs >= DEGRADED_STALE_MS && !alreadyDegraded -> SilenceWatchdogAction.DEGRADE
+            else -> SilenceWatchdogAction.NONE
         }
     }
 
@@ -246,9 +261,10 @@ class ResilientConnectionSupervisor(
                 delay(WATCHDOG_TICK_MS)
                 val nowMono = Monotonic.now()
                 // Awake time only: the gap between two ticks is the only stretch we were actually
-                // running to hear a frame. Capped at one period so a stall cannot bank credit.
+                // running to hear a frame. Capped at WATCHDOG_AWAKE_CREDIT_MS so a stall cannot bank
+                // credit — a thaw must not look like quiet the loop never observed.
                 val awake = watchdogAwakeMs.addAndGet(
-                    (nowMono - previousTickMono).coerceIn(0L, WATCHDOG_TICK_MS * 2)
+                    (nowMono - previousTickMono).coerceIn(0L, WATCHDOG_AWAKE_CREDIT_MS)
                 )
                 previousTickMono = nowMono
                 onWatchdogTick?.invoke(nowMono)
@@ -258,21 +274,25 @@ class ResilientConnectionSupervisor(
 
                 if (cs.isConnected && lastByte > 0L) {
                     val silenceDuration = awake - lastIncomingByteAwake.get()
-                    // Silence watchdog: SILENCE_TIMEOUT_MS of OBSERVED silence without a byte -> force tear-down
-                    if (silenceDuration >= SILENCE_TIMEOUT_MS) {
-                        Log.w(TAG, "Byte Silence Watchdog expired ($silenceDuration ms) - forcing socket restart")
-                        recordEvent(ConnEventKind.CONNECTION_LOST, detail = "${SILENCE_TIMEOUT_MS / 1000}s silence timeout")
-                        closeCurrentSocket("Silence timeout")
-                        scheduleReconnectWithBackoff("silence watchdog")
-                    } else if (silenceDuration >= DEGRADED_STALE_MS && cs !is ConnectionState.Degraded) {
-                        val gen = connectionGeneration.get()
-                        updateConnectionState(ConnectionState.Degraded(
-                            generation = gen,
-                            openedAtMs = System.currentTimeMillis() - silenceDuration,
-                            lastFrameAtMs = System.currentTimeMillis() - silenceDuration,
-                            quietDurationMs = silenceDuration
-                        ))
-                        recordEvent(ConnEventKind.DEGRADED)
+                    when (silenceWatchdogAction(silenceDuration, cs is ConnectionState.Degraded)) {
+                        // SILENCE_TIMEOUT_MS of OBSERVED silence without a byte -> force tear-down
+                        SilenceWatchdogAction.TEAR_DOWN -> {
+                            Log.w(TAG, "Byte Silence Watchdog expired ($silenceDuration ms) - forcing socket restart")
+                            recordEvent(ConnEventKind.CONNECTION_LOST, detail = "${SILENCE_TIMEOUT_MS / 1000}s silence timeout")
+                            closeCurrentSocket("Silence timeout")
+                            scheduleReconnectWithBackoff("silence watchdog")
+                        }
+                        SilenceWatchdogAction.DEGRADE -> {
+                            val gen = connectionGeneration.get()
+                            updateConnectionState(ConnectionState.Degraded(
+                                generation = gen,
+                                openedAtMs = System.currentTimeMillis() - silenceDuration,
+                                lastFrameAtMs = System.currentTimeMillis() - silenceDuration,
+                                quietDurationMs = silenceDuration
+                            ))
+                            recordEvent(ConnEventKind.DEGRADED)
+                        }
+                        SilenceWatchdogAction.NONE -> Unit
                     }
                 }
 
@@ -500,3 +520,7 @@ class ResilientConnectionSupervisor(
         }
     }
 }
+
+/** What the byte-silence watchdog should do on one tick, decided by
+ *  [ResilientConnectionSupervisor.silenceWatchdogAction]. */
+internal enum class SilenceWatchdogAction { NONE, DEGRADE, TEAR_DOWN }

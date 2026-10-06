@@ -76,10 +76,15 @@ internal fun FirstLaunchWizard(
     fastYellowArmed: Boolean,
     sheltersEnabled: Boolean,
     morale: Boolean,
+    step: Int,
+    neptunDown: Boolean,
+    degraded: Boolean,
     onThreatAlertToggle: (ThreatType, Boolean) -> Unit,
     onFollowMeChange: (Boolean) -> Unit,
     onPinnedCityChange: (City?) -> Unit,
     onMoraleChange: (Boolean) -> Unit,
+    onStepChange: (Int) -> Unit,
+    onOpenLogs: () -> Unit,
     onSlowRedChange: (Int) -> Unit,
     onSlowYellowChange: (Int) -> Unit,
     onSlowRedArmedChange: (Boolean) -> Unit,
@@ -89,7 +94,6 @@ internal fun FirstLaunchWizard(
 ) {
     val s = Strings.get(current)
     val totalSteps = 6
-    var step by remember { mutableStateOf(0) }
     var locationMode by remember { mutableStateOf<String?>(null) }
     val notifPermLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -105,7 +109,7 @@ internal fun FirstLaunchWizard(
             }
         }
     }
-    BackHandler(enabled = step > 0) { step-- }
+    BackHandler(enabled = step > 0) { onStepChange(step - 1) }
     val stepTitle = when (step) {
         0 -> s.wizardPageTitle
         1 -> s.onboardingTipsTitle
@@ -167,7 +171,7 @@ internal fun FirstLaunchWizard(
                         onSlowRedArmedChange = onSlowRedArmedChange,
                         onSlowYellowArmedChange = onSlowYellowArmedChange
                     )
-                    else -> WizardBetaBlock(s)
+                    else -> WizardBetaBlock(s, neptunDown, degraded, onOpenLogs)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -179,7 +183,7 @@ internal fun FirstLaunchWizard(
                 val backInteraction = remember { MutableInteractionSource() }
                 if (step > 0) {
                     IconButton(
-                        onClick = { step-- },
+                        onClick = { onStepChange(step - 1) },
                         interactionSource = backInteraction,
                         modifier = Modifier.pressTick(backInteraction)
                     ) {
@@ -209,7 +213,7 @@ internal fun FirstLaunchWizard(
                     contentAlignment = Alignment.Center
                 ) {
                     Button(
-                        onClick = { if (step < totalSteps - 1) step++ else onComplete() },
+                        onClick = { if (step < totalSteps - 1) onStepChange(step + 1) else onComplete() },
                         enabled = nextEnabled,
                         interactionSource = nextInteraction,
                         modifier = Modifier
@@ -531,7 +535,12 @@ private fun SourceReactionChip(count: String, icon: ImageVector) {
 
 /** Wizard page: the beta ask — use it, report what breaks, and read this before uninstalling. */
 @Composable
-private fun WizardBetaBlock(s: Strings.StringSet) {
+private fun WizardBetaBlock(
+    s: Strings.StringSet,
+    neptunDown: Boolean,
+    degraded: Boolean,
+    onOpenLogs: () -> Unit
+) {
     Column(modifier = Modifier.fillMaxWidth()) {
         WizardCard(borderColor = _ukraineYellow.copy(alpha = 0.3f)) {
             WizardBlockHeader(s.wizardBetaTitle, _ukraineYellow)
@@ -555,12 +564,14 @@ private fun WizardBetaBlock(s: Strings.StringSet) {
         Spacer(Modifier.height(18.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Spacer(Modifier.height(14.dp))
+        val connColor = pillColor(neptunDown, degraded)
+        val connLabel = pillLabel(s, neptunDown, degraded)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Image(
                 painter = painterResource(R.drawable.neptun),
                 contentDescription = null,
                 modifier = Modifier.size(width = 14.dp, height = 14.dp),
-                colorFilter = ColorFilter.tint(Color(AppPalette.SafeGreen))
+                colorFilter = ColorFilter.tint(connColor)
             )
             Spacer(Modifier.width(6.dp))
             Text(
@@ -569,13 +580,23 @@ private fun WizardBetaBlock(s: Strings.StringSet) {
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(Modifier.width(6.dp))
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(Color(AppPalette.SafeGreen))
-            )
+            Spacer(Modifier.width(8.dp))
+            // The same pill the map header carries, on the page that first credits the source:
+            // a reader learns here that the source can be red, and that tapping explains why.
+            SourcePill(description = "$connLabel · ${s.logsTitle}", onClick = onOpenLogs) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(connColor)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = connLabel,
+                    color = connColor,
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
         }
         Spacer(Modifier.height(6.dp))
         Text(

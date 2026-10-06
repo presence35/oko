@@ -45,7 +45,7 @@ class ConnEventLabelTest {
 
     @Test
     fun `DEGRADED uses connEventDegraded`() {
-        assertEquals("Connection degraded", ConnEvent(1000L, ConnEventKind.DEGRADED).label(s))
+        assertEquals("Feed quiet", ConnEvent(1000L, ConnEventKind.DEGRADED).label(s))
     }
 
     @Test
