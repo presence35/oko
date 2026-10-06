@@ -387,8 +387,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 onBack = remember { { screen = Screen.MAP } },
                 onThreatMapToggle = remember<(ThreatType, Boolean) -> Unit> { { type, visible -> viewModel.setThreatMapVisible(type, visible) } },
                 onThreatAlertToggle = remember<(ThreatType, Boolean) -> Unit> { { type, enabled -> viewModel.setThreatAlertsEnabled(type, enabled) } },
-                onThreatMapToggleAll = remember<(Set<ThreatType>, Boolean) -> Unit> { { types, visible -> viewModel.setGroupThreatMapVisible(types, visible) } },
-                onThreatAlertToggleAll = remember<(Set<ThreatType>, Boolean) -> Unit> { { types, enabled -> viewModel.setGroupThreatAlertsEnabled(types, enabled) } },
 onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } },
                 onOfficialRedAlertsChange = remember { { viewModel.setOfficialRedAlertsEnabled(it) } },
                 onOfficialYellowAlertsChange = remember { { viewModel.setOfficialYellowAlertsEnabled(it) } },
@@ -505,12 +503,6 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onWithKidsChange = { viewModel.setSheltersWithKidsEnabled(it) },
                 sheltersEnabled = uiState.sheltersEnabled,
                 onSheltersEnabledChange = { viewModel.setSheltersEnabled(it) },
-                onShowOnMap = {
-                    viewModel.setSheltersEnabled(true)
-                    showNearbyShelters = true
-                    shelterZoomTick++
-                    screen = Screen.MAP
-                },
                 onBack = { screen = if (sheltersFromSettings) Screen.SETTINGS else Screen.MAP }
             )
         }

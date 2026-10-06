@@ -17,7 +17,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -30,7 +29,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.outlined.CropFree
-import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.*
@@ -80,8 +78,6 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onThreatMapToggle: (ThreatType, Boolean) -> Unit,
     onThreatAlertToggle: (ThreatType, Boolean) -> Unit,
-    onThreatMapToggleAll: (Set<ThreatType>, Boolean) -> Unit,
-    onThreatAlertToggleAll: (Set<ThreatType>, Boolean) -> Unit,
     onOfficialAlertsChange: (Boolean) -> Unit,
     onOfficialRedAlertsChange: (Boolean) -> Unit,
     onOfficialYellowAlertsChange: (Boolean) -> Unit,
@@ -339,9 +335,15 @@ fun SettingsScreen(
     // one setting, and landing on a page of twenty rows with nothing highlighted is how they end
     // up concluding the setting does not exist.
     val openSection: (SettingsSection) -> Unit = { sec ->
-        onRouteChange(SettingsRoute.Detail(sec))
-        if (searching) {
-            anchorFor(searchWords)?.takeIf { it.section == sec }?.let { flashBlock(it.id) }
+        // Shelters have no detail page: the whole shelter surface (directory, kids toggle, map
+        // button switch) lives on the shelter screen, so a search hit must land there too.
+        if (sec == SettingsSection.SHELTERS) {
+            onOpenShelterList()
+        } else {
+            onRouteChange(SettingsRoute.Detail(sec))
+            if (searching) {
+                anchorFor(searchWords)?.takeIf { it.section == sec }?.let { flashBlock(it.id) }
+            }
         }
     }
 
@@ -591,6 +593,22 @@ fun SettingsScreen(
                             )
                         }
                     )
+                    SettingsSection.SHELTERS -> SettingsRootRow(
+                        icon = sectionIcon(sec),
+                        title = sectionTitle(sec),
+                        subtitle = sectionSummary(sec),
+                        // The row IS the entry point: it opens the shelter screen instead of a
+                        // settings page of its own. The switch stays here so the map button can be
+                        // re-enabled from the list even when it is hidden on the map.
+                        onClick = onOpenShelterList,
+                        trailing = {
+                            Switch(
+                                checked = sheltersEnabled,
+                                onCheckedChange = onSheltersEnabledChange,
+                                interactionSource = rememberHapticInteractionSource()
+                            )
+                        }
+                    )
                     else -> SettingsRootRow(
                         icon = sectionIcon(sec),
                         title = sectionTitle(sec),
@@ -617,6 +635,10 @@ fun SettingsScreen(
             val section = (route as SettingsRoute.Detail).section
             Box(modifier = Modifier.weight(1f).padding(16.dp)) {
             when (section) {
+                // Unreachable by construction (`openSection` redirects shelters to the shelter
+                // screen); a restored legacy route must bounce there too rather than render an
+                // empty settings page.
+                SettingsSection.SHELTERS -> LaunchedEffect(Unit) { onOpenShelterList() }
             SettingsSection.LOCATION -> SectionDetailBody(stateSummary = sectionSummary(section)) {
                     AlertToggleRow(
                         title = s.followMeTitle,
@@ -898,53 +920,6 @@ fun SettingsScreen(
                         onSleepToggle = onNightSleepToggle
                     )
             }
-            SettingsSection.SHELTERS -> SectionDetailBody(stateSummary = sectionSummary(section)) {
-                    AlertToggleRow(
-                        title = s.shelterSettingsTitle,
-                        description = s.shelterSettingsDesc,
-                        checked = sheltersEnabled,
-                        flash = flashId == "shelters",
-                        onCheckedChange = onSheltersEnabledChange
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    // The directory row is always reachable, even when the map button toggle
-                    // is off — turning the button off must not hide the list of shelters.
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .hapticClickable { onOpenShelterList() }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.LocationOn,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                s.shelterViewListLabel,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                s.shelterViewListDesc,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-            }
             SettingsSection.THREATS -> SectionDetailBody(stateSummary = sectionSummary(section)) {
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).explainerFlash(flashId == "iconSet")) {
                         Text(s.iconSetTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -955,112 +930,48 @@ fun SettingsScreen(
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).explainerFlash(flashId == "deathAnimStyle")) {
                         Text(s.deathAnimStyleTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(10.dp))
+                        // IntrinsicSize.Min + fillMaxHeight keeps the three cards the same height even when one caption
+                        // wraps to two lines; without it each chip sizes to its own text.
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             DeathAnimationStyle.values().forEach { style ->
-                                MoraleVoiceChip(
+                                SelectorChip(
                                     label = when (style) {
                                         DeathAnimationStyle.SIMPLE -> s.deathAnimStyleSimpleLabel
                                         DeathAnimationStyle.CLASSIC -> s.deathAnimStyleClassicLabel
                                         DeathAnimationStyle.ADVANCED -> s.deathAnimStyleAdvancedLabel
                                     },
+                                    caption = when (style) {
+                                        DeathAnimationStyle.SIMPLE -> s.deathAnimStyleSimpleNote
+                                        DeathAnimationStyle.CLASSIC -> s.deathAnimStyleClassicNote
+                                        DeathAnimationStyle.ADVANCED -> s.deathAnimStyleAdvancedNote
+                                    },
+                                    // Ranks how heavy each style is on the phone: particles, shards,
+                                    // smoke — so the choice is legible before you try it.
+                                    intensity = when (style) {
+                                        DeathAnimationStyle.SIMPLE -> 1
+                                        DeathAnimationStyle.CLASSIC -> 2
+                                        DeathAnimationStyle.ADVANCED -> 3
+                                    },
                                     selected = deathAnimationStyle == style,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1f).fillMaxHeight(),
                                     onClick = { onDeathAnimationStyleChange(style) }
                                 )
                             }
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    // Legend for the two icon-only toggles that appear on every row below — without
-                    // it a place pin and a bell mean nothing on first read.
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp, top = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            s.threatsLegendLabel,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Icon(
-                            Icons.Filled.Place,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            s.threatsLegendMap,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Icon(
-                            Icons.Filled.Notifications,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            s.threatsLegendAlerts,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
                     val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
-                    fastAndSlowGroups(lang, typeCatalog).forEachIndexed { index, (groupIcon, groupTitle, types) ->
+                    // No group headers or bulk toggles: each card carries its own Fast/Slow pill and
+                    // its own Map/Alerts toggles, so the headers only repeated what the rows say.
+                    // The full-width rule between the groups keeps the fast/slow split readable.
+                    fastAndSlowGroups(lang, typeCatalog).forEachIndexed { index, (_, _, types) ->
                         if (index > 0) {
-                            // A full-width rule plus breathing room so the Fast/Slow split reads
-                            // as a real boundary, not just another row gap.
                             Spacer(Modifier.height(22.dp))
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             Spacer(Modifier.height(14.dp))
-                        }
-                        val groupMapOn = types.none { it in hiddenTypes }
-                        val groupAlertsOn = types.none { it in silencedTypes }
-                        // A caption plus the group's bulk toggles — not a collapsible header. The
-                        // page scrolls, so folding a group away only hid rows.
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 16.dp, end = 16.dp, bottom = 2.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(id = groupIcon),
-                                contentDescription = if (groupIcon == R.drawable.ic_lightning) s.fastGroupIconDesc else s.slowGroupIconDesc,
-                                tint = if (groupIcon == R.drawable.ic_turtle) TurtleGreen else Color.Unspecified,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                groupTitle,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconToggle(
-                                icon = Icons.Filled.Place,
-                                contentDescription = s.threatsGroupMapDesc,
-                                on = groupMapOn,
-                                enabled = true,
-                                onClick = { onThreatMapToggleAll(types, !groupMapOn) }
-                            )
-                            IconToggle(
-                                icon = Icons.Filled.Notifications,
-                                contentDescription = s.threatsGroupAlertsDesc,
-                                on = groupAlertsOn,
-                                enabled = true,
-                                onClick = { onThreatAlertToggleAll(types, !groupAlertsOn) }
-                            )
                         }
                         Column(
                             modifier = Modifier

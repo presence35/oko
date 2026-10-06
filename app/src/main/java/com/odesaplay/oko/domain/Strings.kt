@@ -153,11 +153,6 @@ object Strings {
         val threatAlertLabel: String,
         val fastGroupLabel: String,
         val slowGroupLabel: String,
-        val threatsLegendLabel: String,
-        val threatsLegendMap: String,
-        val threatsLegendAlerts: String,
-        val threatsGroupMapDesc: String,
-        val threatsGroupAlertsDesc: String,
         val fastGroupIconDesc: String,
         val slowGroupIconDesc: String,
         val mapToggleHintPrefix: String,
@@ -242,6 +237,7 @@ object Strings {
         val bootRestartPaused: String,
         val sleepNoticeTitle: String,
         val sleepNoticeOffFormat: String,
+        val sleepNoticeOffSummaryFormat: String,
         val sleepNoticeOfficialClause: String,
         val sleepNoticeAllowClause: String
     )
@@ -537,8 +533,6 @@ object Strings {
         val shelterScreenTitle: String,
         val shelterOpenInMaps: String,
         val shelterEmpty: String,
-        val shelterSettingsTitle: String,
-        val shelterSettingsDesc: String,
         val shelterDistanceM: String,
         val shelterDistanceKm: String,
         val shelterWalkMinutes: String,
@@ -548,7 +542,6 @@ object Strings {
         val shelterWithKidsTitle: String,
         val shelterWithKidsDesc: String,
         val shelterShowOnMap: String,
-        val shelterShowSheltersOnMap: String,
         val shelterGpsUnknown: String,
         val periodicGpsTitle: String,
         val periodicGpsDesc: String,
@@ -573,8 +566,6 @@ object Strings {
         val problemFixA11y: String,
         val shelterLongPressTip: String,
         val shelterTapTip: String,
-        val shelterViewListLabel: String,
-        val shelterViewListDesc: String,
         val shelterTypeBasic: String,
         val shelterTypeMobile: String,
         val shelterTypeBunker: String,
@@ -823,7 +814,10 @@ object Strings {
         val title: String,
         val simple: String,
         val classic: String,
-        val advanced: String
+        val advanced: String,
+        val simpleNote: String,
+        val classicNote: String,
+        val advancedNote: String
     )
 
     data class WordForms(
@@ -999,16 +993,6 @@ object Strings {
         val threatAlertLabel: String get() = settings.threatAlertLabel
         val fastGroupLabel: String get() = settings.fastGroupLabel
         val slowGroupLabel: String get() = settings.slowGroupLabel
-        val threatsLegendLabel: String get() = settings.threatsLegendLabel
-
-        val threatsLegendMap: String get() = settings.threatsLegendMap
-
-        val threatsLegendAlerts: String get() = settings.threatsLegendAlerts
-
-        val threatsGroupMapDesc: String get() = settings.threatsGroupMapDesc
-
-        val threatsGroupAlertsDesc: String get() = settings.threatsGroupAlertsDesc
-
         val fastGroupIconDesc: String get() = settings.fastGroupIconDesc
         val slowGroupIconDesc: String get() = settings.slowGroupIconDesc
         val mapToggleHintPrefix: String get() = settings.mapToggleHintPrefix
@@ -1281,6 +1265,7 @@ object Strings {
         val batteryOemBody: String get() = misc.batteryOemBody
         val sleepNoticeTitle: String get() = status.sleepNoticeTitle
         val sleepNoticeOffFormat: String get() = status.sleepNoticeOffFormat
+        val sleepNoticeOffSummaryFormat: String get() = status.sleepNoticeOffSummaryFormat
         val sleepNoticeOfficialClause: String get() = status.sleepNoticeOfficialClause
         val sleepNoticeAllowClause: String get() = status.sleepNoticeAllowClause
         val showThreatIdsOnMapTitle: String get() = misc.showThreatIdsOnMapTitle
@@ -1463,6 +1448,9 @@ object Strings {
         val deathAnimStyleSimpleLabel: String get() = deathAnimStyle.simple
         val deathAnimStyleClassicLabel: String get() = deathAnimStyle.classic
         val deathAnimStyleAdvancedLabel: String get() = deathAnimStyle.advanced
+        val deathAnimStyleSimpleNote: String get() = deathAnimStyle.simpleNote
+        val deathAnimStyleClassicNote: String get() = deathAnimStyle.classicNote
+        val deathAnimStyleAdvancedNote: String get() = deathAnimStyle.advancedNote
         val followBulletTitle: String get() = misc.followBulletTitle
         val followBulletDesc: String get() = misc.followBulletDesc
         val hdExplosionTitle: String get() = misc.hdExplosionTitle
@@ -1490,8 +1478,6 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val shelterScreenTitle: String get() = misc.shelterScreenTitle
         val shelterOpenInMaps: String get() = misc.shelterOpenInMaps
         val shelterEmpty: String get() = misc.shelterEmpty
-        val shelterSettingsTitle: String get() = misc.shelterSettingsTitle
-        val shelterSettingsDesc: String get() = misc.shelterSettingsDesc
         val shelterDistanceM: String get() = misc.shelterDistanceM
         val shelterDistanceKm: String get() = misc.shelterDistanceKm
         val shelterWalkMinutes: String get() = misc.shelterWalkMinutes
@@ -1501,7 +1487,6 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val shelterWithKidsTitle: String get() = misc.shelterWithKidsTitle
         val shelterWithKidsDesc: String get() = misc.shelterWithKidsDesc
         val shelterShowOnMap: String get() = misc.shelterShowOnMap
-        val shelterShowSheltersOnMap: String get() = misc.shelterShowSheltersOnMap
         val shelterGpsUnknown: String get() = misc.shelterGpsUnknown
         val periodicGpsTitle: String get() = misc.periodicGpsTitle
         val periodicGpsDesc: String get() = misc.periodicGpsDesc
@@ -1526,8 +1511,6 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val updatingPreciseGpsToast: String get() = misc.updatingPreciseGpsToast
         val shelterLongPressTip: String get() = misc.shelterLongPressTip
         val shelterTapTip: String get() = misc.shelterTapTip
-        val shelterViewListLabel: String get() = misc.shelterViewListLabel
-        val shelterViewListDesc: String get() = misc.shelterViewListDesc
         val shelterTypeBasic: String get() = misc.shelterTypeBasic
         val shelterTypeMobile: String get() = misc.shelterTypeMobile
         val shelterTypeBunker: String get() = misc.shelterTypeBunker
@@ -1690,12 +1673,18 @@ fun confirmedThreatsPhrase(count: Int, lang: AppLanguage): String {
  * clause is its own complete sentence, so nothing needs stitching across languages and a clause
  * that does not apply is simply absent rather than rendering as a zero.
  *
+ * The opening reads the [SleepLedger], so a night of stalls reports its total rather than the floor
+ * the first one happened to cross; a single stall keeps the plain form and never says "across 1 gap".
+ *
  * Pure, and takes its [StringSet] rather than fetching one, so every combination is testable.
  */
-fun sleepNoticeBody(s: Strings.StringSet, window: SleepWindow, evidence: SleepEvidence): String = buildList {
-    add(String.format(s.sleepNoticeOffFormat, window.minutes))
-    if (evidence.officialOnsetInWindow) add(s.sleepNoticeOfficialClause)
-    if (evidence.confirmedInWindow > 0) add(confirmedThreatsPhrase(evidence.confirmedInWindow, s.language))
+fun sleepNoticeBody(s: Strings.StringSet, ledger: SleepLedger): String = buildList {
+    add(
+        if (ledger.stalls <= 1) String.format(s.sleepNoticeOffFormat, ledger.worstMinutes)
+        else String.format(s.sleepNoticeOffSummaryFormat, ledger.minutes, ledger.stalls)
+    )
+    if (ledger.officialOnset) add(s.sleepNoticeOfficialClause)
+    if (ledger.confirmed > 0) add(confirmedThreatsPhrase(ledger.confirmed, s.language))
     add(s.sleepNoticeAllowClause)
 }.joinToString(" ")
 

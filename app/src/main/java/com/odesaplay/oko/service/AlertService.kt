@@ -10,10 +10,12 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import java.util.Calendar
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -178,6 +180,14 @@ class AlertService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var monitoringJob: Job? = null
+
+    /** Completed once [monitoringJob]'s restore phase has read the persisted official-episode row
+     *  and the tick loop is about to start. A test driving [handleState] directly must await this
+     *  first: a tick that lands before the restore would announce its episode and then have the
+     *  latch wiped by the restore that lands after it. Production is ordered by construction (the
+     *  restore runs before the tick loop is launched in the same coroutine). */
+    private val monitoringReady = CompletableDeferred<Unit>()
+    internal suspend fun awaitMonitoringReady() = monitoringReady.await()
     /** True once the FGS was (re)started with the location type. Left false when a background
      *  start had to fall back (no location exemption), so the next foreground start re-promotes. */
     private var locationFgsActive = false
@@ -241,6 +251,12 @@ class AlertService : Service() {
     private val pendingSleep = MutableStateFlow<PendingSleep?>(null)
 
     /**
+     * The current night's stalls, folded as each is classified. The row is written from this, not
+     * from the stall, so one night produces one summary carrying its own total.
+     */
+    private var sleepLedger: SleepLedger? = null
+
+    /**
      * One evaluation's inputs, named at class scope rather than inside the monitoring coroutine
      * because [applySleepDecision] is a member and needs to receive the same snapshot the
      * evaluation saw. Source-agnostic by construction: engine currency in, nothing wire-shaped.
@@ -251,6 +267,9 @@ class AlertService : Service() {
         val gps: LatLng?,
         val now: Long,
         val alertsReady: Boolean,
+        /** Whether the user is actually looking. The sleep row waits for it, so the report lands
+         *  with the night's total rather than as a floor-rounded number at 3am. */
+        val screenOn: Boolean,
         /** The sleep this tick closed, if any. Rides the feed so the classification sees the same
          *  snapshot the evaluation does, and is consumed exactly once. */
         val sleep: PendingSleep? = null
@@ -349,7 +368,10 @@ class AlertService : Service() {
     @Volatile private var episodeActive = false
     @Volatile private var currentToken: String? = null
 
-    private data class MonitorState(
+    /** One tick's inputs, assembled by the combine above. `internal` rather than private so a
+     *  test can drive [handleState] directly — the episode/all-clear gates are only reachable
+     *  through it. Not public API: nothing outside this module builds one. */
+    internal data class MonitorState(
         val focusOblastAlertActive: Boolean,
         val focusOblastYellowAlertActive: Boolean,
         val focusOblastLevel: AlertLevel,
@@ -470,6 +492,11 @@ class AlertService : Service() {
                 }
             }
         }
+        // The receiver only ever sees a transition, so a restart — which is exactly when a night
+        // sleep is reported — would otherwise read the initial value and think the user is looking.
+        // The sleep row waits on this, so it must state the truth at start, not just after a flip.
+        screenOnFlow.value =
+            (getSystemService(Context.POWER_SERVICE) as? PowerManager)?.isInteractive ?: true
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -707,6 +734,9 @@ class AlertService : Service() {
                 offlineRestorePending = true
             }
 
+            // The restore is done and the tick loop is about to take over; see [monitoringReady].
+            monitoringReady.complete(Unit)
+
             val nowFlow = MutableStateFlow(System.currentTimeMillis())
             launch {
                 var previous = System.currentTimeMillis()
@@ -742,7 +772,8 @@ val mappedThreats = registry.allThreats.map { list ->
                 registry.connectionState,
                 registry.degradedSince,
                 registry.alertsReady,
-                pendingSleep
+                pendingSleep,
+                screenOnFlow
             ) { values: Array<Any?> ->
                 @Suppress("UNCHECKED_CAST")
                 LiveInputs(
@@ -751,6 +782,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     gps = values[2] as LatLng?,
                     now = values[3] as Long,
                     alertsReady = values[6] as Boolean,
+                    screenOn = values[8] as Boolean,
                     sleep = values[7] as PendingSleep?
                 )
             }
@@ -815,6 +847,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 // Held until here because the report is about the focus oblast's own episode, read
                 // through the shared gate above — the policy never re-implements official matching.
                 applySleepDecision(live, official.alert?.since, p)
+                publishSleepNotice(live, p)
                 val focusOblastLevel = official.level
                 val focusOblastRawLevel = officialRaw.level
                 val focusOblastRawSince = officialRaw.alert?.since
@@ -906,7 +939,10 @@ val mappedThreats = registry.allThreats.map { list ->
         }
     }
 
-    private suspend fun handleState(state: MonitorState, now: Long, engine: ThreatEngine) {
+    /** One tick of decisions. `internal` rather than private so a test can drive a single tick
+     *  against a fabricated [MonitorState]; every time-dependent input it uses is already a
+     *  parameter (`state`, `now`), which is what makes that possible. */
+    internal suspend fun handleState(state: MonitorState, now: Long, engine: ThreatEngine) {
         val s = Strings.get(state.lang)
 
         // One observation per tick; writes only on transition, so the 1s/30s loop is free.
@@ -935,7 +971,7 @@ val mappedThreats = registry.allThreats.map { list ->
         // an in-process timer that a sleeping CPU would freeze: the all-clear TTL and the debris
         // countdown. Both used to be one-shot `delay` jobs, so after doze the all-clear sat in
         // the shade for hours and the countdown froze at whatever number it had reached.
-        retireAllClearIfExpired()
+        retireAllClearIfExpired(now)
         if (debrisBuffer.isRunning) debrisBuffer.shrinkTo(state.fallingDebrisDelaySec.coerceIn(0, 600))
 
         // Focus moved (pinned <-> GPS, or a new pinned city): the latched official episode
@@ -1054,7 +1090,10 @@ val mappedThreats = registry.allThreats.map { list ->
         // answer. Checked here rather than in the sleep path because an exempt app stops sleeping:
         // once the ask is answered there are no more windows to trigger a cleanup.
         val exemptionGranted = BatteryOptimization.isIgnoringBatteryOptimizations(this)
-        if (lastExemptionGranted == false && exemptionGranted) notificationManager.clearSleepNotice()
+        if (lastExemptionGranted == false && exemptionGranted) {
+            sleepLedger = null
+            notificationManager.clearSleepNotice()
+        }
         lastExemptionGranted = exemptionGranted
 
         val all = state.threats
@@ -1396,7 +1435,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     }
                     // Armed from the one post that opens the notification; the debris re-posts
                     // must never restart the clock.
-                    scheduleAllClearExpiry(state.autoDismissAllClear)
+                    scheduleAllClearExpiry(state.autoDismissAllClear, now)
                 }
                 setRaidMute(raidMute.cleared())
                 DebugLog.recordOfficial(
@@ -1784,13 +1823,21 @@ val mappedThreats = registry.allThreats.map { list ->
      * opens the notification; the debris re-posts neither reset nor re-arm it — the TTL is
      * defined to run from the first post, and re-arming would leave it in the shade forever.
      * Returns true when it armed a new timer, false when one already pends for this notification.
+     * [now] is the tick's wall clock, passed in so the TTL stays a pure function of the tick.
      */
-    private fun scheduleAllClearExpiry(autoDismiss: Boolean): Boolean {
+    private fun scheduleAllClearExpiry(autoDismiss: Boolean, now: Long): Boolean {
         if (allClearDeadlineMs != null) return false
         if (!autoDismiss) return false
-        allClearDeadlineMs = System.currentTimeMillis() + ALL_CLEAR_TTL_MS
+        allClearDeadlineMs = now + ALL_CLEAR_TTL_MS
         return true
     }
+
+    /**
+     * The all-clear's live lifecycle as (deadline, closed). Only [retireAllClearIfExpired] and
+     * the debris ticks read these fields in production, and both are otherwise observable solely
+     * by waiting out the 20-minute TTL — so tests assert them here. Not production API.
+     */
+    internal fun allClearLifecycleForTest(): Pair<Long?, Boolean> = allClearDeadlineMs to allClearClosed
 
     /**
      * Retire the all-clear once its TTL has passed. Driven from the monitor tick against the wall
@@ -1798,13 +1845,13 @@ val mappedThreats = registry.allThreats.map { list ->
      * timer has not moved while hours have — the all-clear then sat in the shade with a frozen
      * countdown, which is the "it never auto-cleared" report.
      */
-    private fun retireAllClearIfExpired() {
+    private fun retireAllClearIfExpired(now: Long) {
         val deadline = allClearDeadlineMs ?: return
-        if (System.currentTimeMillis() < deadline) return
+        if (now < deadline) return
         allClearDeadlineMs = null
         if (allClearClosed) return
         clearAllClearNotification()
-        DebugLog.recordAllClearExpired(lastCleanAllClearCity, System.currentTimeMillis())
+        DebugLog.recordAllClearExpired(lastCleanAllClearCity, now)
     }
 
     /** One user action, recorded in the audit trail's own Actions filter. High-signal only —
@@ -1879,17 +1926,43 @@ val mappedThreats = registry.allThreats.map { list ->
 
         when (decision) {
             SleepDecision.Silent -> Unit
-            SleepDecision.Dismiss -> notificationManager.clearSleepNotice()
-            is SleepDecision.Post -> {
-                val s = Strings.get(prefs.language)
-                notificationManager.postSleepNotice(
-                    s.sleepNoticeTitle,
-                    sleepNoticeBody(s, decision.window, decision.evidence),
-                    s.batteryAllowButton
-                )
+            SleepDecision.Dismiss -> {
+                // The fix landed: the tally goes with the row it justified.
+                sleepLedger = null
+                notificationManager.clearSleepNotice()
             }
+            is SleepDecision.Post ->
+                sleepLedger = (sleepLedger ?: SleepLedger.EMPTY)
+                    .plus(pending.window, decision.evidence)
             SleepDecision.Hold -> Unit // handled above
         }
+    }
+
+    /**
+     * Writes (or refreshes) the night's row from the accumulated tally. Driven by the evaluation
+     * rather than by a stall, because the row's moment is the user's, not the stall's: it appears on
+     * the first tick after they look at the phone, carrying everything that happened until then.
+     *
+     * The tally is process-local on purpose. A restart loses the running count but not the row —
+     * same id, so the next report replaces it instead of adding a second one — and persisting a
+     * counter that only ever decorates one notification is not worth a disk write on this path.
+     */
+    private fun publishSleepNotice(live: LiveInputs, prefs: UserPreferences) {
+        val ledger = sleepLedger ?: return
+        val now = live.now
+        // Last night's row has retired: start a fresh tally so tonight is not summed into it.
+        if (SleepPolicy.rowExpired(ledger, now)) {
+            sleepLedger = null
+            return
+        }
+        if (!SleepPolicy.noticeDue(ledger, now, live.screenOn)) return
+        val s = Strings.get(prefs.language)
+        notificationManager.postSleepNotice(
+            s.sleepNoticeTitle,
+            sleepNoticeBody(s, ledger),
+            s.batteryAllowButton
+        )
+        sleepLedger = ledger.posted(now)
     }
 
 private fun logAction(reason: DebugLogReason, label: String, detail: String? = null) {

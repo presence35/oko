@@ -153,3 +153,43 @@ migration or be done standalone with a simple grid-bucket approach.
 
 Timer in footer "how long this alert has been active"
 Fill settings pills: city name, fill, border only
+
+## Deferred alert-path follow-ups (only if reproduced)
+
+Two known-weak spots found while auditing the all-clear/episode path (2026-10-06). Neither is a
+correctness bug today; both change product behaviour, so they wait for a real report.
+
+- **Zone-empty grace is one tick.** `AlertService.ALL_CLEAR_GRACE_MS = 0L`: the zone-empty path
+  cancels the alert notification and releases the raid mute on the second consecutive empty tick
+  (~1 s while alerting), because `emptySince` already debounces once. A GPS/feed flicker that
+  blinks a threat out and back can therefore blink the notification off and re-post it. Raise it
+  (5 s was the original value) only if a field report shows the flicker; otherwise it is a magic
+  constant with no reproduced symptom.
+- **Critical-offline alarm ignores the raid mute.** `AlertService.handleState`'s critical-offline
+  branch fires `dispatchCriticalOffline` + a notification while `bellsMuted()` is true; it honours
+  only the offline-specific "ignore 30 min" deadline. That is arguably correct — the alarm means
+  "the app has gone blind", which is worst during a raid, and `criticalOfflineBypassSilent` exists
+  to make it pierce silence. If it must be muted too, route it through the one silence-decision
+  owner (`SilentReason`) rather than adding a local `&& !bellsMuted()`.
+
+## Alert-path testability (partly done)
+
+`buildPrimary`/`reconcileEpisode`/`reconcileNotif` are private locals inside
+`AlertService.handleState`, so the suite could not reach them and four all-clear bugs shipped
+unverified. `handleState` + `MonitorState` are now `internal` and `AlertEpisodeClearTest` drives
+real ticks against a fabricated state (`AlertService.monitoringReady` orders the test against the
+onCreate restore; `clearPersistedServiceState()` isolates the shared DataStore). Remaining:
+
+- `Primary.zone: ThreatZone?` still means two things — "this is a zone threat" (three consumers
+  branch on it) and, in `postAlert`, "derive the channel from the level". Replace with a sealed
+  `AlertSource` (`Zone(tier, threat)` / `Official`) so a channel tweak cannot reclassify an alert;
+  that double meaning is how the official-alerts-on-the-wrong-channel bug was introduced and how a
+  plausible-looking wrong fix slipped past review.
+- Optionally extract one pure `decideEpisode(EpisodeState, EpisodeFacts) -> EpisodeOutcome` if the
+  tick seam stops being enough; not needed for the current tests.
+- **`UserPrefsTest`'s night-sleep snapshot test is order-dependent.** `touching a night bell drops
+  the sleep snapshot` passes alone and flips in a full run as soon as another test class touches
+  the shared `user_prefs` DataStore — observed when `clearPersistedServiceState()` was briefly
+  widened to clear prefs too. The test calls `UserPrefs.clearAll()` itself, so the coupling lives
+  in whatever the other class wrote. Prefs isolation belongs to whoever owns that store's tests:
+  do not widen the service-level fixture to cover `user_prefs`.

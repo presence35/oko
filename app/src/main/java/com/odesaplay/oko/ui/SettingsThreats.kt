@@ -18,6 +18,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.odesaplay.oko.IconCatalog
 import com.odesaplay.oko.ThreatTypeCatalog
@@ -27,9 +28,10 @@ import com.odesaplay.oko.theme.AppPalette
 import kotlin.math.roundToInt
 
 /** A single threat type as a bordered card that stands apart from its neighbours and from the
- *  page body — a thin divider was not enough separation. `details`/`joke` render in full (the page
- *  scrolls); `description` stays a one-line gist. The Fast/Slow pill next to the speed badge
- *  repeats the group a row belongs to, so the distinction survives a mid-list scan. */
+ *  page body — a thin divider was not enough separation. Order: title + speed + Fast/Slow tag +
+ *  the two toggles, short description, the 2.5x pack art, then the full facts and the italic
+ *  joke (the page scrolls, so nothing is truncated). The Fast/Slow pill repeats the group a row
+ *  belongs to, so the distinction survives a mid-list scan now that the group headers are gone. */
 @Composable
 internal fun ThreatTypeRow(
     type: ThreatType,
@@ -64,50 +66,28 @@ internal fun ThreatTypeRow(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 12.dp)
         ) {
-            // The pack art is the point of this page: a 2.5x icon is the only way a user can
-            // actually tell the Shahed apart from the FPV at a glance, so it keeps its own
-            // full-width band above the name.
-            Box(
-                modifier = Modifier.fillMaxWidth().height(180.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(
-                        if (type == ThreatType.UNKNOWN) R.drawable.ic_unknown_cat
-                        else IconCatalog.res(type, iconSet)
-                    ),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(if (type == ThreatType.UNKNOWN) Modifier.scale(1.15f) else Modifier)
-                )
-            }
-            Spacer(Modifier.height(10.dp))
+            // Title row: name, speed, Fast/Slow tag, then the two toggles hard right. The
+            // label+pills share the leftover width so the toggles always sit at the far edge.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            label,
-                            fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        typicalSpeed?.let {
-                            Spacer(Modifier.width(6.dp))
-                            Pill("~$it ${s.speedUnit}", MaterialTheme.colorScheme.primary)
-                        }
-                        Spacer(Modifier.width(6.dp))
-                        Pill(
-                            if (fast) s.fastGroupLabel else s.slowGroupLabel,
-                            if (fast) Color(AppPalette.AlertYellow) else TurtleGreen
-                        )
-                    }
-                    Spacer(Modifier.height(2.dp))
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        label,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    typicalSpeed?.let {
+                        Spacer(Modifier.width(6.dp))
+                        Pill("~$it ${s.speedUnit}", MaterialTheme.colorScheme.primary)
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Pill(
+                        if (fast) s.fastGroupLabel else s.slowGroupLabel,
+                        if (fast) Color(AppPalette.AlertYellow) else TurtleGreen
                     )
                 }
                 Spacer(Modifier.width(4.dp))
@@ -126,11 +106,37 @@ internal fun ThreatTypeRow(
                     onClick = { onThreatAlertToggle(type, !onAlerts) }
                 )
             }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            // The pack art is the point of this page: a 2.5x icon is the only way a user can
+            // actually tell the Shahed apart from the FPV at a glance, so it keeps its own
+            // full-width band under the title.
+            Box(
+                modifier = Modifier.fillMaxWidth().height(180.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(
+                        if (type == ThreatType.UNKNOWN) R.drawable.ic_unknown_cat
+                        else IconCatalog.res(type, iconSet)
+                    ),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (type == ThreatType.UNKNOWN) Modifier.scale(1.15f) else Modifier)
+                )
+            }
             // Facts stay persona-proof in `details`; `joke` is the single flavour slot a
             // persona may adjust, rendered separately so the two never blend. Neither is
             // truncated — the page scrolls, so a safety fact never hides behind an ellipsis.
             if (details.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
                     details,
                     style = MaterialTheme.typography.bodySmall,

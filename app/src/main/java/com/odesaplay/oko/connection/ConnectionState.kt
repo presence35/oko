@@ -87,7 +87,7 @@ sealed interface ConnectionState {
     ) : ConnectionState
 
     /**
-     * Connected (socket is open), but no frame has arrived for >= [DEGRADED_STALE_MS] (42s).
+     * Connected (socket is open), but no frame has arrived for >= [DEGRADED_STALE_MS] (4m20s).
      * Indicates a degraded link / silent stall before the hard watchdog drops it.
      */
     data class Degraded(

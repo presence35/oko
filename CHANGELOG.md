@@ -1,13 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+- Quiet feed no longer reads as a degraded connection: the orange edge moved from 42s to 4m20s, while OkHttp's ping and the silence backstop still reap a dead socket 10-06_14:37:17
+- Shelter settings collapsed into the shelter screen: one settings row opens it and holds the map-button switch, and the duplicate "show shelters on map" button is gone 10-06_16:52:00
+- Sleep notice is now one summary per night that waits until you look at the phone, reporting the total blind time and how many gaps, instead of repeating "off for 4 min" after every doze 10-06_16:35:12
+- Explosion-style picker now says what each option looks like and how heavy it is, instead of three bare labels 10-06_15:10:00
 - The all-clear's 20-minute auto-dismiss works again, and its countdown keeps ticking after an episode is superseded 10-06_13:40:54
 - The all-clear names the city the alert was raised for, not wherever you have moved since 10-06_13:40:54
 - Yellow official alerts sound through their own outer channel instead of the red/inner one 10-06_13:40:54
 - Night mode now fully overrides the day city-scope setting on the map and in the widget, and the widget's rings use your night zone thresholds like the app 10-06_13:40:54
 - A night window with the same start and end time now means "no night" for notifications too, instead of leaving alerts in night mode 10-06_13:40:54
 - Explosion style picker in Threats: Simple (cheap rings and sparks), Classic (the original look), or Advanced (fuller per-type bursts); the bullet is back to the old short shell with no trail in all three 10-06_13:34:02
-- Threat-type rows are now bordered cards with full untruncated facts and a Fast/Slow pill beside the speed badge; the Fast and Slow groups are split by a full-width rule 10-06_14:30:00
+- Threat types page reworked: each type is its own bordered card (title, speed, Fast/Slow pill and its Map/Alerts toggles on top, then the short description, the big art, then the full untruncated facts) — the Fast/Slow group headers, their bulk toggles and the toggle legend are gone 10-06_14:30:00
 - Threat facts frozen per type with joke as the only persona slot, rendered separately in italic; fixed KAB short label, ballistic/recon wording 10-06_14:20:00
 - Log upload moved into the Debug tab under a plain-English why-we-need-it line, next to the payload it ships, instead of a header icon 10-06_13:02:17
 - Logs screen has a Debug tab showing the exact payload Send will upload: every privacy-relevant line (fingerprint, saved city, alert city names, installer, all settings) with the literal JSON key as its label, plus a list of what is never in the file. Send reuses the previewed bundle, so what you read is what ships 10-06_12:54:03

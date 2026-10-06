@@ -58,6 +58,50 @@ data class SleepEvidence(
 }
 
 /**
+ * A night's stalls folded into one fact.
+ *
+ * The notice's unit is the night, not the stall. A device that stalls every few minutes posts the
+ * same floor-rounded number dozens of times overnight (see [SleepWindow]'s measurements), and each
+ * one is the same message the user has already declined to act on — noise that buries the rows that
+ * matter. Folding happens where the evidence exists (`AlertService.applySleepDecision`), so the sum
+ * is over disjoint windows and [confirmed]/[officialOnset] need no de-duplication.
+ *
+ * Immutable, so the service only ever swaps one value for another and the arithmetic stays testable.
+ */
+data class SleepLedger(
+    val stalls: Int,
+    val blindMs: Long,
+    val worstMs: Long,
+    val confirmed: Int,
+    val officialOnset: Boolean,
+    /** When the row was last written, or null while nothing has been posted yet. */
+    val postedAtMillis: Long? = null,
+    /** Whether [officialOnset] has already been shown, so a fresh onset can pierce the refresh cap. */
+    val reportedOfficialOnset: Boolean = false
+) {
+    val minutes: Int get() = (blindMs / 60_000L).coerceAtLeast(1L).toInt()
+    val worstMinutes: Int get() = (worstMs / 60_000L).coerceAtLeast(1L).toInt()
+
+    fun plus(window: SleepWindow, evidence: SleepEvidence): SleepLedger = copy(
+        stalls = stalls + 1,
+        blindMs = blindMs + window.durationMs,
+        worstMs = maxOf(worstMs, window.durationMs),
+        confirmed = confirmed + evidence.confirmedInWindow,
+        officialOnset = officialOnset || evidence.officialOnsetInWindow
+    )
+
+    /** Marks the row written at [now], so the refresh cap and the next night's reset can be judged. */
+    fun posted(now: Long): SleepLedger =
+        copy(postedAtMillis = now, reportedOfficialOnset = officialOnset)
+
+    companion object {
+        val EMPTY = SleepLedger(
+            stalls = 0, blindMs = 0L, worstMs = 0L, confirmed = 0, officialOnset = false
+        )
+    }
+}
+
+/**
  * What to do about a sleep. Sealed so [AlertService] has no arms to get wrong: it consumes the
  * pending sleep, calls [SleepPolicy.decide] once, and executes. Every branch that could be
  * mis-ordered — muted, exempt, too short, unreadable feed — is decided in one pure, tested place,
@@ -105,6 +149,13 @@ object SleepPolicy {
     const val NOTICE_TTL_MS = 12 * 60 * 60_000L
 
     /**
+     * How long the row may sit unchanged before a grown tally is worth re-writing. The screen gate
+     * already confines a write to a moment the user is looking, so this only stops a phone that is
+     * in and out of a pocket all evening from re-writing the row every few minutes.
+     */
+    const val REFRESH_AFTER_MS = 4 * 60 * 60_000L
+
+    /**
      * Order matters and is the whole policy:
      *  - an unreadable feed or a sub-floor gap is *silent*, checked before the mute so noise is
      *    never held on to;
@@ -122,6 +173,28 @@ object SleepPolicy {
         muted -> SleepDecision.Hold
         else -> SleepDecision.Post(window, evidence)
     }
+
+    /**
+     * Whether the accumulated tally should (re)write the shade row now.
+     *
+     * [screenOn] is the point of the whole thing: a stall reported at 3am is read with breakfast
+     * anyway, so the row waits for the moment the user is actually holding the phone — and by then
+     * it can carry the night's total instead of the single floor-rounded number that arrived first.
+     * Nothing is hidden by the wait: an official raid is announced by its own path, never this row.
+     */
+    fun noticeDue(ledger: SleepLedger, now: Long, screenOn: Boolean): Boolean = when {
+        ledger.stalls == 0 -> false
+        rowExpired(ledger, now) -> false
+        !screenOn -> false
+        ledger.postedAtMillis == null -> true
+        ledger.officialOnset && !ledger.reportedOfficialOnset -> true
+        now - ledger.postedAtMillis >= REFRESH_AFTER_MS -> true
+        else -> false
+    }
+
+    /** True once the row has outlived [NOTICE_TTL_MS]: that is last night's summary, not this night's. */
+    fun rowExpired(ledger: SleepLedger, now: Long): Boolean =
+        ledger.postedAtMillis?.let { now - it >= NOTICE_TTL_MS } == true
 
     /**
      * Reads the evidence out of the post-wake feed. Called once, on the tick that closes a sleep,

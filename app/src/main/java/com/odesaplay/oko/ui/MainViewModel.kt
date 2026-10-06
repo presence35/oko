@@ -1605,20 +1605,6 @@ fun setAlertsArmed(armed: Boolean) {
         }
     }
 
-    fun setGroupThreatMapVisible(types: Set<ThreatType>, visible: Boolean) {
-        viewModelScope.launch {
-            prefs.setThreatMapVisibleBatch(types, visible)
-            maybeShowToggleHint(mapToast = true)
-        }
-    }
-
-    fun setGroupThreatAlertsEnabled(types: Set<ThreatType>, enabled: Boolean) {
-        viewModelScope.launch {
-            prefs.setThreatAlertsEnabledBatch(types, enabled)
-            maybeShowToggleHint(mapToast = false)
-        }
-    }
-
     /** One-time hint (first 3 Map/Alerts toggles ever): a brief toast explaining how they work. */
     private suspend fun maybeShowToggleHint(mapToast: Boolean) {
         val p = prefs.preferences.first()

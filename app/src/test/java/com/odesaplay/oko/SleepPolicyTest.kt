@@ -191,6 +191,74 @@ class SleepPolicyTest {
         assertEquals(serverNow, SleepPolicy.officialOnsetMillis(iso(serverNow)))
     }
 
+    // ---- ledger -------------------------------------------------------------------------------
+
+    /**
+     * The fold is over disjoint windows, so the totals are plain sums and an official onset is an
+     * OR — no de-duplication is needed, and a whole night collapses to one number.
+     */
+    @Test
+    fun `the ledger folds a night of stalls into one tally`() {
+        val ledger = SleepLedger.EMPTY
+            .plus(window(5 * 60_000L), readable(confirmed = 2, official = true))
+            .plus(window(9 * 60_000L), readable(confirmed = 3))
+
+        assertEquals(2, ledger.stalls)
+        assertEquals(14 * 60_000L, ledger.blindMs)
+        assertEquals(9 * 60_000L, ledger.worstMs)
+        assertEquals(5, ledger.confirmed)
+        assertEquals(true, ledger.officialOnset)
+        assertEquals(14, ledger.minutes)
+    }
+
+    /** Nothing is due before a stall, and nothing is due while nobody is looking. */
+    @Test
+    fun `the row waits for a stall and for the screen`() {
+        assertTrue(!SleepPolicy.noticeDue(SleepLedger.EMPTY, serverNow, screenOn = true))
+
+        val ledger = SleepLedger.EMPTY.plus(window(6 * 60_000L), readable())
+        assertTrue(!SleepPolicy.noticeDue(ledger, serverNow, screenOn = false))
+        assertTrue(SleepPolicy.noticeDue(ledger, serverNow, screenOn = true))
+    }
+
+    /** Once written, the row is left alone until the tally has grown enough to be worth re-reading. */
+    @Test
+    fun `a written row is not rewritten until the refresh cap`() {
+        val posted = SleepLedger.EMPTY.plus(window(6 * 60_000L), readable()).posted(serverNow)
+
+        assertTrue(!SleepPolicy.noticeDue(posted, serverNow + 60_000L, screenOn = true))
+        assertTrue(!SleepPolicy.noticeDue(posted, serverNow + SleepPolicy.REFRESH_AFTER_MS - 1, screenOn = true))
+        assertTrue(SleepPolicy.noticeDue(posted, serverNow + SleepPolicy.REFRESH_AFTER_MS, screenOn = true))
+    }
+
+    /**
+     * A fresh official onset is the one fact that must not wait for the cap: it is the case the
+     * whole feature exists for, and the user could not have heard it.
+     */
+    @Test
+    fun `a new official onset pierces the refresh cap`() {
+        val posted = SleepLedger.EMPTY.plus(window(6 * 60_000L), readable()).posted(serverNow)
+        val afterOnset = posted.plus(window(6 * 60_000L), readable(official = true))
+
+        assertTrue(SleepPolicy.noticeDue(afterOnset, serverNow + 60_000L, screenOn = true))
+        // ...but only once: the onset already shown must not reopen the row.
+        val reported = afterOnset.posted(serverNow + 60_000L)
+        assertTrue(!SleepPolicy.noticeDue(reported, serverNow + 120_000L, screenOn = true))
+    }
+
+    /**
+     * The row retires itself after its TTL. That retired row is last night's summary, so the tally
+     * must not carry into tonight's.
+     */
+    @Test
+    fun `a row past its TTL starts a new night`() {
+        val posted = SleepLedger.EMPTY.plus(window(6 * 60_000L), readable()).posted(serverNow)
+
+        assertTrue(!SleepPolicy.rowExpired(posted, serverNow + SleepPolicy.NOTICE_TTL_MS - 1))
+        assertTrue(SleepPolicy.rowExpired(posted, serverNow + SleepPolicy.NOTICE_TTL_MS))
+        assertTrue(!SleepPolicy.noticeDue(posted, serverNow + SleepPolicy.NOTICE_TTL_MS, screenOn = true))
+    }
+
     // ---- body composition ---------------------------------------------------------------------
 
     /**
@@ -202,18 +270,34 @@ class SleepPolicyTest {
         val s = Strings.get(AppLanguage.EN)
         val w = window(20 * 60_000L)
 
-        val quiet = sleepNoticeBody(s, w, SleepEvidence(serverNow, 0, false))
+        val quiet = sleepNoticeBody(s, SleepLedger.EMPTY.plus(w, SleepEvidence(serverNow, 0, false)))
         assertTrue(quiet.contains("20 min"))
         assertTrue(!quiet.contains("confirmed"))
         assertTrue(!quiet.contains("official alert"))
 
-        val both = sleepNoticeBody(s, w, SleepEvidence(serverNow, 3, true))
+        val both = sleepNoticeBody(s, SleepLedger.EMPTY.plus(w, SleepEvidence(serverNow, 3, true)))
         assertTrue(both.contains("An official alert started in that time."))
         assertTrue(both.contains("3 threats confirmed"))
         assertTrue(both.contains(s.sleepNoticeAllowClause))
 
-        val one = sleepNoticeBody(s, w, SleepEvidence(serverNow, 1, false))
+        val one = sleepNoticeBody(s, SleepLedger.EMPTY.plus(w, SleepEvidence(serverNow, 1, false)))
         assertTrue("the singular form must not read as `1 threats`", one.contains("1 threat confirmed"))
+    }
+
+    /**
+     * A single stall reads as the plain sentence; a night reports its total instead of the floor the
+     * first one crossed, and never says "across 1 gap".
+     */
+    @Test
+    fun `a night of stalls reports its total, not the last one`() {
+        val s = Strings.get(AppLanguage.EN)
+        val single = SleepLedger.EMPTY.plus(window(4 * 60_000L), readable())
+        assertTrue(sleepNoticeBody(s, single).contains("off for 4 min."))
+
+        val night = single.plus(window(6 * 60_000L), readable()).plus(window(5 * 60_000L), readable())
+        val body = sleepNoticeBody(s, night)
+        assertTrue(body.contains("15 min across 3 gaps"))
+        assertTrue(!body.contains("4 min"))
     }
 
     private fun iso(millis: Long) = java.time.Instant.ofEpochMilli(millis).toString()

@@ -627,8 +627,8 @@ class ThreatDeathOverlay : DeathAnimation {
 
                     val g = 0.000045f * density // gravity px/ms²
                     for ((i, s) in shards.withIndex()) {
-                        // Linear drag falloff — same family as the old pow curve, no transcendentals.
-                        val dragFactor = 1f - (1f - s.drag) * (elapsedMs / 400f).coerceIn(0f, 3f)
+                        // Integrate with drag: v_eff decays, position uses average under drag.
+                        val dragFactor = s.drag.pow((elapsedMs / 400f).coerceIn(0f, 3f))
                         val sx = x + s.vx * elapsedMs * dragFactor
                         val sy = y + s.vy * elapsedMs * dragFactor + 0.5f * g * elapsedMs * elapsedMs
                         val rot = s.spin * elapsedMs

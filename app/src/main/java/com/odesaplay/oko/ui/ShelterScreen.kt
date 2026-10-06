@@ -31,7 +31,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -63,7 +62,6 @@ fun ShelterScreen(
     onWithKidsChange: (Boolean) -> Unit,
     sheltersEnabled: Boolean,
     onSheltersEnabledChange: (Boolean) -> Unit,
-    onShowOnMap: () -> Unit,
     onBack: () -> Unit
 ) {
     val s = Strings.get(lang)
@@ -156,7 +154,6 @@ fun ShelterScreen(
                     onWithKidsChange = onWithKidsChange,
                     sheltersEnabled = sheltersEnabled,
                     onSheltersEnabledChange = onSheltersEnabledChange,
-                    onShowOnMap = onShowOnMap,
                     onForceRefresh = forceGps,
                     showSettingsFallback = showSettingsFallback,
                     onOpenSettings = {
@@ -209,7 +206,6 @@ private fun GpsHeaderRow(
     onWithKidsChange: (Boolean) -> Unit,
     sheltersEnabled: Boolean,
     onSheltersEnabledChange: (Boolean) -> Unit,
-    onShowOnMap: () -> Unit,
     onForceRefresh: () -> Unit,
     showSettingsFallback: Boolean,
     onOpenSettings: () -> Unit
@@ -363,20 +359,6 @@ private fun GpsHeaderRow(
                     onCheckedChange = onWithKidsChange,
                     interactionSource = rememberHapticInteractionSource()
                 )
-            }
-            Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = onShowOnMap,
-                interactionSource = rememberHapticInteractionSource(),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Map,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(s.shelterShowSheltersOnMap)
             }
             if (showSettingsFallback) {
                 Spacer(Modifier.height(8.dp))

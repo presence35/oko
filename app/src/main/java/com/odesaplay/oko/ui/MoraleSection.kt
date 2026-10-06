@@ -2,6 +2,7 @@ package com.odesaplay.oko
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
@@ -19,38 +22,77 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Single-select chip with the standard selector styling (same as OverlapModeChip). */
+/** Single-select chip with the standard selector styling (same as OverlapModeChip). [caption] and
+ *  [intensity] turn the plain label into a small self-explaining card: a caption says what the
+ *  option actually looks like, and 1–3 dots rank how heavy it is on the phone. */
 @Composable
-internal fun MoraleVoiceChip(
+internal fun SelectorChip(
     label: String,
     selected: Boolean,
     modifier: Modifier = Modifier,
+    caption: String? = null,
+    intensity: Int = 0,
     onClick: () -> Unit
 ) {
+    val accent = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(12.dp),
         color = if (selected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
         border = BorderStroke(
-            1.dp,
+            if (selected) 2.dp else 1.dp,
             if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
         ),
         modifier = modifier.hapticClickable(onClick = onClick)
     ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()
-        )
+        Column(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                textAlign = TextAlign.Center,
+                maxLines = 1
+            )
+            if (intensity > 0) {
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    repeat(3) { i ->
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(if (i < intensity) accent else accent.copy(alpha = 0.22f))
+                        )
+                    }
+                }
+            }
+            if (!caption.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    caption,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (selected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
 
@@ -101,7 +143,7 @@ internal fun MoraleToggles(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     row.forEach { v ->
-                        MoraleVoiceChip(
+                        SelectorChip(
                             label = v.label(lang),
                             selected = v == voice,
                             modifier = Modifier.weight(1f),

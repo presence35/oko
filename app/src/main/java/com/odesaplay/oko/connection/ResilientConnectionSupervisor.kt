@@ -35,7 +35,7 @@ import kotlin.random.Random
  *
  * Invariants:
  * 1. OS Network Gate: Does NOT spin reconnect loops while offline. Wakes immediately upon network validation.
- * 2. 168-Second Byte Silence Watchdog: Actively tears down dead sockets when no frame/ping byte arrives.
+ * 2. Byte-Silence Watchdog: tears down a dead socket after SILENCE_TIMEOUT_MS of observed silence.
  * 3. Thread-safe, non-blocking coroutines.
  */
 class ResilientConnectionSupervisor(
@@ -47,11 +47,16 @@ class ResilientConnectionSupervisor(
 ) {
     companion object {
         const val DEFAULT_WS_URL = "wss://neptun.in.ua/api/v1/stream"
-        const val DEGRADED_STALE_MS = 42_000L
-        const val SILENCE_TIMEOUT_MS = DEGRADED_STALE_MS * 4
+        /** Quiet-feed edge: no frame for this long and the socket stops claiming delivery. 4m20s. */
+        const val DEGRADED_STALE_MS = 260_000L
+        const val WATCHDOG_TICK_MS = 30_000L
+        /** Byte-silence backstop: a socket that pongs but never speaks is force-restarted after this
+         *  much OBSERVED silence. Derived as the quiet edge plus a few watchdog ticks, not a multiple
+         *  of it, so raising the edge can never put the reaper in front of it. OkHttp's 60s ping is
+         *  the fast local detector; this only mops up. */
+        const val SILENCE_TIMEOUT_MS = DEGRADED_STALE_MS + 4 * WATCHDOG_TICK_MS
         const val BASE_BACKOFF_MS = 1_000L
         const val MAX_BACKOFF_MS = 30_000L
-        const val WATCHDOG_TICK_MS = 30_000L
         /** Offline/Connecting with a live network and no reconnect progress past this → force retry. */
         const val STUCK_OFFLINE_MS = MAX_BACKOFF_MS + 20_000L
         private const val MAX_CONN_EVENTS = 50
@@ -253,10 +258,10 @@ class ResilientConnectionSupervisor(
 
                 if (cs.isConnected && lastByte > 0L) {
                     val silenceDuration = awake - lastIncomingByteAwake.get()
-                    // Silence watchdog: 168s of OBSERVED silence without a byte -> force tear-down
+                    // Silence watchdog: SILENCE_TIMEOUT_MS of OBSERVED silence without a byte -> force tear-down
                     if (silenceDuration >= SILENCE_TIMEOUT_MS) {
                         Log.w(TAG, "Byte Silence Watchdog expired ($silenceDuration ms) - forcing socket restart")
-                        recordEvent(ConnEventKind.CONNECTION_LOST, detail = "168s silence timeout")
+                        recordEvent(ConnEventKind.CONNECTION_LOST, detail = "${SILENCE_TIMEOUT_MS / 1000}s silence timeout")
                         closeCurrentSocket("Silence timeout")
                         scheduleReconnectWithBackoff("silence watchdog")
                     } else if (silenceDuration >= DEGRADED_STALE_MS && cs !is ConnectionState.Degraded) {

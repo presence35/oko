@@ -26,6 +26,9 @@ class AlertServiceTest {
 
     @Before
     fun setUp() {
+        // The service restores its persisted episode/mute state in onCreate; start from a known
+        // store (see clearPersistedServiceState).
+        clearPersistedServiceState()
         controller = Robolectric.buildService(AlertService::class.java).create()
     }
 
