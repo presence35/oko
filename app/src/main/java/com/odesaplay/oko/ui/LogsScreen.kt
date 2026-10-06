@@ -114,6 +114,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -143,8 +144,9 @@ private val DebugBlue = Color(AppPalette.Primary)
 private const val VISIBLE_INITIAL = 25
 private const val VISIBLE_STEP = 50
 
-/** Which data source to show. */
-private enum class LogsFilter { DECISIONS, CONNECTIONS, SOURCES }
+/** Which data source to show. DEBUG is the outbound payload itself — the only tab that answers
+ *  "what is this app about to tell the server about me". */
+private enum class LogsFilter { DECISIONS, CONNECTIONS, SOURCES, DEBUG }
 
 /** Decisions read as a raid story (default), the raw event list, or the user-action trail.
  *  A tap is not an event about a threat, so it gets its own lens instead of being mixed into
@@ -237,7 +239,7 @@ fun LogsDropDownSheet(
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     var visibleCount by remember { mutableIntStateOf(VISIBLE_INITIAL) }
     var filter by rememberSaveable { mutableStateOf(LogsFilter.DECISIONS) }
-    val tabFilters = remember { listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES) }
+    val tabFilters = remember { listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES, LogsFilter.DEBUG) }
     val pagerState = rememberPagerState(pageCount = { tabFilters.size })
     // Single truth: pager -> filter. Tab taps animate the pager; swipes flow back here.
     LaunchedEffect(pagerState) {
@@ -411,7 +413,7 @@ fun LogsDropDownSheet(
         }
 
         // Tabs — taps drive the pager; swipes flow back via snapshotFlow above.
-        val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources)
+        val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources, s.logsFilterDebug)
         ScrollableTabRow(
             selectedTabIndex = pagerState.currentPage,
             containerColor = Color(AppPalette.CardAlt),
@@ -544,7 +546,9 @@ private fun LogsTabPage(
     val scope = rememberCoroutineScope()
     val isDecisions = pageFilter == LogsFilter.DECISIONS
     val isActions = isDecisions && mode == LogsMode.ACTIONS
-    val rows: List<LogRow> = if (pageFilter == LogsFilter.SOURCES) emptyList() else
+    // SOURCES draws its own cards; DEBUG renders the payload instead of a log window.
+    val isSelfDrawn = pageFilter == LogsFilter.SOURCES || pageFilter == LogsFilter.DEBUG
+    val rows: List<LogRow> = if (isSelfDrawn) emptyList() else
         buildRows(window, connEntries, gpsEntries, now, isDecisions, newestFirst, scopeMode, focusToken, outcomeFilter, searchQuery, lang)
     // Story mode is the default read: cluster the same filtered events into raids. "My oblast"
     // is the write-time aboutMe flag — in my oblast, or something I would have heard — never a
@@ -640,12 +644,17 @@ private fun LogsTabPage(
                 SourcesList(s, now, lang, iconSet)
             }
         }
+        if (pageFilter == LogsFilter.DEBUG) {
+            item(key = "debugpayload") {
+                DebugPreviewList(s, lang, now)
+            }
+        }
         if (pageFilter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty()) {
             item(key = "retrylog") {
                 RetryLogCard(connEvents, connRetry, s, now) { AppSources.registry.dismissLogCard() }
             }
         }
-        if (visible.isEmpty() && pageFilter != LogsFilter.SOURCES
+        if (visible.isEmpty() && !isSelfDrawn
             && !(pageFilter == LogsFilter.CONNECTIONS && connEvents.isNotEmpty())) {
             item {
                 Text(
@@ -2072,6 +2081,257 @@ private fun GpsCard(entry: GpsLogEntry, s: Strings.StringSet, lang: AppLanguage,
                 )
             }
         }
+    }
+}
+
+/**
+ * The Debug tab: the outbound payload as the tester is about to send it.
+ *
+ * Renders [LogSnapshot]'s memoized bundle — the same object [LogUpload] POSTs — so this is a view of
+ * the actual bytes rather than a description of them. Row content comes from [LogPreview], which
+ * reads the payload by key path; the only prose here is section titles and notes, which is what
+ * keeps the two from disagreeing.
+ */
+@Composable
+private fun DebugPreviewList(s: Strings.StringSet, lang: AppLanguage, now: Long) {
+    val context = LocalContext.current
+    val state by LogSnapshot.state.collectAsState()
+    // Build on first sight: the tab exists to be read before sending, so it must not open empty
+    // when filling it costs one build.
+    LaunchedEffect(Unit) { runCatching { LogSnapshot.ensure(context) } }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        DebugPayloadHeader(s, lang, now, state) { LogSnapshot.refresh(context) }
+        when (val st = state) {
+            is LogSnapshot.State.Ready -> {
+                LogPreview.project(st.bundle).forEach { DebugSectionCard(it, s) }
+                DebugNeverSent(s)
+            }
+            is LogSnapshot.State.Failed -> DebugNotice("${s.logsPreviewFailed}: ${st.reason}", DebugRed)
+            is LogSnapshot.State.Building -> DebugNotice(s.logsPreviewEmpty, Color(AppPalette.AlertYellow), busy = true)
+            LogSnapshot.State.Empty -> DebugNotice(s.logsPreviewEmpty, Color(AppPalette.DegradedOrange))
+        }
+    }
+}
+
+/** What the tester is about to hand over, and how old the figures are. */
+@Composable
+private fun DebugPayloadHeader(
+    s: Strings.StringSet,
+    lang: AppLanguage,
+    now: Long,
+    state: LogSnapshot.State,
+    onRefresh: () -> Unit
+) {
+    val ready = state as? LogSnapshot.State.Ready
+    val busy = state is LogSnapshot.State.Building
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(AppPalette.CardDeep))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Outlined.CloudUpload,
+                contentDescription = null,
+                tint = Color(AppPalette.AlertYellow),
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                s.logsPreviewWillSendAs,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.weight(1f))
+            if (busy) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = Color(AppPalette.AlertYellow)
+                )
+            } else {
+                IconButton(
+                    onClick = onRefresh,
+                    interactionSource = rememberHapticInteractionSource()
+                ) {
+                    Icon(
+                        Icons.Filled.Refresh,
+                        contentDescription = s.logsPreviewRefresh,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+        if (ready != null) {
+            Text(
+                ready.fileName,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = Color.White,
+                maxLines = 2
+            )
+            Row {
+                Text(
+                    "${s.logsPreviewSize}: ${ready.bytes} B",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "${s.logsPreviewBuiltAt} ${formatDateTime(lang, ready.builtAtMillis)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            // Past the TTL the figures are no longer about the phone in hand, and Send will build a
+            // new bundle — say so here rather than let the tab quietly describe a stale snapshot.
+            if (now - ready.builtAtMillis >= LogSnapshot.TTL_MS) {
+                Text(
+                    s.logsPreviewStale,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(AppPalette.AlertYellow)
+                )
+            }
+        }
+    }
+}
+
+/** One payload block: title, the `path: value` lines, then the note that explains the block. */
+@Composable
+private fun DebugSectionCard(section: PreviewSection, s: Strings.StringSet) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(AppPalette.CardAlt))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            s.logsPreviewSectionTitles.getOrElse(section.id.ordinal) { section.id.name },
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(AppPalette.Primary)
+        )
+        section.rows.forEach { DebugRowLine(it) }
+        DebugNotes(section.id, s)
+    }
+}
+
+/**
+ * A payload line. The label is the literal JSON path that ships, so a reader can find it in the
+ * file; [PreviewRow.sensitive] lines are the ones that identify the person or the place and get
+ * the warning colour rather than being buried among the build strings.
+ */
+@Composable
+private fun DebugRowLine(row: PreviewRow) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            row.path,
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            modifier = Modifier.weight(0.45f)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            row.value,
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = if (row.sensitive) FontWeight.Bold else FontWeight.Normal,
+            color = if (row.sensitive) Color(AppPalette.AlertYellow) else Color.White,
+            maxLines = 4,
+            modifier = Modifier.weight(0.55f)
+        )
+    }
+}
+
+/** The block's own caveat. Keyed by section id, never by position, so a new section cannot pick up
+ *  another's note. */
+@Composable
+private fun DebugNotes(id: PreviewSectionId, s: Strings.StringSet) {
+    val notes = when (id) {
+        PreviewSectionId.DEVICE -> listOf(s.logsPreviewNoteDeviceIdentifies)
+        PreviewSectionId.LOCATION -> listOf(s.logsPreviewNoteGpsAccuracy, s.logsPreviewNoteLocalitySource)
+        PreviewSectionId.THREATS -> listOf(s.logsPreviewNoteThreatRowsIncluded)
+        PreviewSectionId.SETTINGS -> listOf(s.logsPreviewNotePrefsComplete)
+        PreviewSectionId.USAGE, PreviewSectionId.INSTALL -> emptyList()
+    }
+    notes.forEach {
+        Text(
+            it,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
+
+/** The claims the payload cannot make about itself. Static copy, deliberately kept next to the
+ *  projection so a reviewer of either one sees the other. */
+@Composable
+private fun DebugNeverSent(s: Strings.StringSet) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(AppPalette.CardAlt))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(
+            s.logsPreviewNeverSentTitle,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = DebugGreen
+        )
+        s.logsPreviewNeverSent.forEach { claim ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.CheckCircle,
+                    contentDescription = null,
+                    tint = DebugGreen,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    claim,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
+
+/** Empty/building/failed state for the payload card, so the tab is never a blank screen. */
+@Composable
+private fun DebugNotice(text: String, tint: Color, busy: Boolean = false) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(AppPalette.CardAlt))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (busy) {
+            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = tint)
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.labelSmall,
+            color = tint,
+            maxLines = 3
+        )
     }
 }
 

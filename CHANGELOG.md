@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Logs screen has a Debug tab showing the exact payload Send will upload: every privacy-relevant line (fingerprint, saved city, alert city names, installer, all settings) with the literal JSON key as its label, plus a list of what is never in the file. Send reuses the previewed bundle, so what you read is what ships 10-06_12:54:03
 - Death animations reworked: threat icons shatter into irregular chunks with drag, spin and gravity, sparks fly on random angles, and each threat type gets its own fireball colour, smoke and debris 10-06_10:15:00
 - Oko now tells you when it was asleep: a Doze stall over 4 min posts one notice on the alert channel with how long monitoring was off, whether an official alert started in that time and how many threats were confirmed, plus a button to allow unrestricted background use 10-05_23:40:00
 - Sent logs now say who killed the app: the phone's own exit history (crash, low memory, swiped away, update) plus when the build was installed, so an unexplained restart is no longer a mystery 10-05_21:40:00

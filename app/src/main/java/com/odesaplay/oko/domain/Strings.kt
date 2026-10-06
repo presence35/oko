@@ -751,6 +751,35 @@ object Strings {
     )
 
     /**
+     * Copy for the Debug tab — the payload the tester is about to send. Its own holder for the same
+     * reason as [LogExportStrings] and [ActionLog]: `Misc` sits on the JVM argument-slot ceiling.
+     *
+     * [sectionTitles] is indexed by [PreviewSectionId.ordinal] and the notes are named one per note
+     * rather than pooled, so neither vocabulary can drift away from the code that asks for it.
+     */
+    data class LogPreviewStrings(
+        val tab: String,
+        val willSendAs: String,
+        val size: String,
+        /** Prefix for the build time; the timestamp is appended by the UI. */
+        val builtAt: String,
+        val stale: String,
+        val refresh: String,
+        val empty: String,
+        val failed: String,
+        val neverSentTitle: String,
+        /** Section titles, in [PreviewSectionId] order. */
+        val sectionTitles: List<String>,
+        val noteDeviceIdentifies: String,
+        val noteGpsAccuracy: String,
+        val noteLocalitySource: String,
+        val noteThreatRowsIncluded: String,
+        val notePrefsComplete: String,
+        /** What is provably absent from the payload, one claim per line. */
+        val neverSent: List<String>
+    )
+
+    /**
      * Copy for the audit trail's Actions filter and the alert-silence notice. Its own holder for
      * the same reason as [LogExportStrings] — `Misc` has no room left — and because these strings
      * are read out of context (a logged row, a one-line notice), not out of a settings screen.
@@ -808,6 +837,7 @@ object Strings {
         val subtitles: Subtitles,
         val wordForms: WordForms,
         val logsExport: LogExportStrings,
+        val logsPreview: LogPreviewStrings,
         val actionLog: ActionLog,
         val calmMessages: List<String>,
     ) {
@@ -1311,6 +1341,22 @@ object Strings {
         val logsSendLogsOk: String get() = logsExport.sendLogsOk
         val logsSendLogsFail: String get() = logsExport.sendLogsFail
         val logsSendLogsBusy: String get() = logsExport.sendLogsBusy
+        val logsFilterDebug: String get() = logsPreview.tab
+        val logsPreviewWillSendAs: String get() = logsPreview.willSendAs
+        val logsPreviewSize: String get() = logsPreview.size
+        val logsPreviewBuiltAt: String get() = logsPreview.builtAt
+        val logsPreviewStale: String get() = logsPreview.stale
+        val logsPreviewRefresh: String get() = logsPreview.refresh
+        val logsPreviewEmpty: String get() = logsPreview.empty
+        val logsPreviewFailed: String get() = logsPreview.failed
+        val logsPreviewNeverSentTitle: String get() = logsPreview.neverSentTitle
+        val logsPreviewSectionTitles: List<String> get() = logsPreview.sectionTitles
+        val logsPreviewNoteDeviceIdentifies: String get() = logsPreview.noteDeviceIdentifies
+        val logsPreviewNoteGpsAccuracy: String get() = logsPreview.noteGpsAccuracy
+        val logsPreviewNoteLocalitySource: String get() = logsPreview.noteLocalitySource
+        val logsPreviewNoteThreatRowsIncluded: String get() = logsPreview.noteThreatRowsIncluded
+        val logsPreviewNotePrefsComplete: String get() = logsPreview.notePrefsComplete
+        val logsPreviewNeverSent: List<String> get() = logsPreview.neverSent
         val debugLogOpen: String get() = misc.debugLogOpen
         val debugLogDay: String get() = misc.debugLogDay
         val debugLogNight: String get() = misc.debugLogNight

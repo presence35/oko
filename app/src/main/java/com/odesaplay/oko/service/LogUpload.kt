@@ -66,12 +66,14 @@ object LogUpload {
         scope.launch {
             try {
                 _state.value = UploadState.Building
-                val bundle = LogBundle.build(app, UserPrefs(app))
-                val body = bundle.toString().toRequestBody(JSON_MEDIA)
-                _state.value = UploadState.Sending(body.contentLength())
+                // The bundle comes from LogSnapshot, never from here: the Debug tab shows the same
+                // object, so "what the tester read" and "what this POST carries" cannot diverge.
+                val snapshot = LogSnapshot.ensure(app)
+                val body = snapshot.body.toRequestBody(JSON_MEDIA)
+                _state.value = UploadState.Sending(snapshot.bytes.toLong())
                 val request = Request.Builder()
                     .url(ENDPOINT)
-                    .header("X-Log-Name", LogBundle.fileName(app))
+                    .header("X-Log-Name", snapshot.fileName)
                     .post(body)
                     .build()
                 client.newCall(request).execute().use { response ->
