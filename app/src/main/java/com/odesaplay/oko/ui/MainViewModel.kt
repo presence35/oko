@@ -828,7 +828,9 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             nowMono = nowMono,
             reveal = live.reveal,
             flourish = live.flourish,
-            officialAlertCityScope = prefs.officialAlertCityScope || (nightActive && prefs.nightOfficialAlertCityScope),
+            officialAlertCityScope = effectiveCityScope(
+                prefs.officialAlertCityScope, prefs.nightOfficialAlertCityScope, nightActive
+            ),
             showBorders = prefs.showBorders,
             showRegionBorders = prefs.showRegionBorders
         )

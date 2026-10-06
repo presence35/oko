@@ -71,11 +71,9 @@ import com.odesaplay.oko.DebugLogReason
 import com.odesaplay.oko.data.ManifestResult
 import com.odesaplay.oko.data.SystemEntry
 import com.odesaplay.oko.data.SystemEntryKind
-import com.odesaplay.oko.NightZones
 import com.odesaplay.oko.Strings
 import com.odesaplay.oko.UserPrefs
 import com.odesaplay.oko.engine.distanceFlat
-import com.odesaplay.oko.isWithinNight
 import com.odesaplay.oko.AlarmEpisodeTally
 import com.odesaplay.oko.NeutralizedTally
 import com.odesaplay.oko.engine.ThreatEngine
@@ -762,24 +760,10 @@ val mappedThreats = registry.allThreats.map { list ->
                 prefs.preferences
             ) { live, p ->
                 val (rawThreats, alerts, gps, now, alertsReady) = live
-                val nowMin = nowMinuteOfDay()
-                val nightActive = p.nightEnabled && isWithinNight(nowMin, p.nightStartMin, p.nightEndMin)
+                val nightActive = isNightActive(NightConfig(p.nightEnabled, p.nightStartMin, p.nightEndMin), now)
                 val dayParams = ZoneParams(p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin)
-                val nightZones = NightZones(
-                    slowRedKm = p.nightSlowRedKm,
-                    slowYellowKm = p.nightSlowYellowKm,
-                    fastRedMin = p.nightFastRedMin,
-                    fastYellowMin = p.nightFastYellowMin,
-                    slowRedArmed = p.nightSlowRedArmed,
-                    slowYellowArmed = p.nightSlowYellowArmed,
-                    fastRedArmed = p.nightFastRedArmed,
-                    fastYellowArmed = p.nightFastYellowArmed
-                )
-                val params = if (nightActive && p.nightUseCustomZones) {
-                    effectiveZoneParams(dayParams, nightZones, true, nightActive)
-                } else {
-                    dayParams
-                }
+                val nightZones = p.nightZones
+                val params = effectiveZoneParams(dayParams, nightZones, p.nightUseCustomZones, nightActive)
                 // Armed bells are per group×tier, stored for day and night, resolved per tick
                 // (mirror rule) — the same effectiveArmed the ViewModel/ZonesSheet use.
                 val armed = effectiveArmed(
@@ -823,8 +807,10 @@ val mappedThreats = registry.allThreats.map { list ->
                 // gate) from the same matcher the UI/widget consume (mirror rule). Red and
                 // yellow share this path — official is official; only the notif toggles
                 // and tint/copy differ downstream.
-                val effectiveCityScope = p.officialAlertCityScope || (nightActive && p.nightOfficialAlertCityScope)
-                val official = alerts.officialStateFor(focusToken, focusCityUa, effectiveCityScope)
+                val cityScopeActive = effectiveCityScope(
+                    p.officialAlertCityScope, p.nightOfficialAlertCityScope, nightActive
+                )
+                val official = alerts.officialStateFor(focusToken, focusCityUa, cityScopeActive)
                 val officialRaw = alerts.officialStateFor(focusToken, null, false)
                 // Held until here because the report is about the focus oblast's own episode, read
                 // through the shared gate above — the policy never re-implements official matching.
@@ -912,7 +898,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     digestMax = p.digestMax,
                     digestWindow = p.digestWindow,
                     digestPerType = p.digestPerType,
-                    cityScopeEffective = effectiveCityScope
+                    cityScopeEffective = cityScopeActive
                 ) to now
             }.collect { (state, now) ->
                 handleState(state, now, engine)
@@ -1372,15 +1358,15 @@ val mappedThreats = registry.allThreats.map { list ->
             }
             val suppressAllClear = sounding && allClearSameArea(state)
             // The level's own toggle, never the red||yellow master: an episode whose level is
-            // switched off was never announced, so it must not be "cleared" either.
-            if (!suppressAllClear && latched != null && !latchedAlive && state.officialLevelEnabled(latched.level)) {
+            // switched off was never announced, so it must not be "cleared" either — but its
+            // latch must not stay armed either, or re-enabling the level later would fire a
+            // stale all-clear for an episode that ended long ago.
+            val levelStillWanted = latched != null && state.officialLevelEnabled(latched.level)
+            if (!suppressAllClear && latched != null && !latchedAlive && levelStillWanted) {
                 if (latched.resolveRestored(latchedConfirmedLive, EpisodeTransition.ENDED) == RestoredResolution.EXPIRE_SILENTLY) {
                     // Resurrected latch never observed live in this lifetime: the episode
                     // ended while we were dead. Drop it without notification, chime or log.
-                    clearOfficialAnnounced()
-                    lastAnnouncedFrontier = null
-                lastAnnouncedRow = null
-                    latchedConfirmedLive = false
+                    dropOfficialEpisode()
                     return@reconcileEpisode
                 }
                 if (alertable.isEmpty()) cancelAlert()
@@ -1403,11 +1389,14 @@ val mappedThreats = registry.allThreats.map { list ->
                 // it just has nothing to update.
                 if (!mutedNow) {
                     if (delay > 0) {
-                        postAllClear(s, state.focusBannerCity, debrisSeconds = delay, silent = false, replay = lastEpisodeReplay)
+                        postAllClear(s, allClearCity, debrisSeconds = delay, silent = false, replay = lastEpisodeReplay)
                         debrisBuffer.start(durationSeconds = delay)
                     } else {
-                        postAllClear(s, state.focusBannerCity, debrisSeconds = 0, silent = false, replay = lastEpisodeReplay)
+                        postAllClear(s, allClearCity, debrisSeconds = 0, silent = false, replay = lastEpisodeReplay)
                     }
+                    // Armed from the one post that opens the notification; the debris re-posts
+                    // must never restart the clock.
+                    scheduleAllClearExpiry(state.autoDismissAllClear)
                 }
                 setRaidMute(raidMute.cleared())
                 DebugLog.recordOfficial(
@@ -1420,12 +1409,14 @@ val mappedThreats = registry.allThreats.map { list ->
                     scopeOblastId = latched.token,
                     now = System.currentTimeMillis()
                 )
-                lastAnnouncedFrontier = null
-                lastAnnouncedRow = null
-                latchedConfirmedLive = false
-                clearOfficialAnnounced()
+                dropOfficialEpisode()
                 scopedOffLogged = true
                 lastLoggedRawFrontier = null
+            } else if (!suppressAllClear && latched != null && !latchedAlive) {
+                // The level is switched off: no all-clear (it was never announced through that
+                // gate), but the latch is dropped so it can never fire one late. The
+                // `OFFICIAL_OFF` row below still closes its audit story.
+                dropOfficialEpisode()
             }
             if (!scopedOffLogged && raw == null && lastLoggedRawFrontier != null) {
                 // Raw alert ended outside the notif scope: close its audit row silently.
@@ -1678,8 +1669,12 @@ val mappedThreats = registry.allThreats.map { list ->
         muted: Boolean = false,
         actions: AlertActions? = null
     ) {
+        // A zone alert carries its own zone; an official alert (zone == null) takes its channel
+        // from its level — yellow is an outer voice, red an inner one. Never default to INNER:
+        // that is the red / red-alarm channel.
+        val channelZone = zone ?: if (level.lowercase() == "yellow") ThreatZone.OUTER else ThreatZone.INNER
         notificationManager.postAlertNotification(
-            zone = zone ?: ThreatZone.INNER,
+            zone = channelZone,
             title = title,
             body = body,
             sirenOverride = sirenOverride,
@@ -1741,7 +1736,20 @@ val mappedThreats = registry.allThreats.map { list ->
         }
     }
 
+    /** The in-memory half of an episode teardown: latch, frontier and the "observed live" fact.
+     *  Every ending that is not an all-clear post goes through here, so none of the three can
+     *  leak into the next episode. [clearOfficialAnnounced] persists the row. */
+    private fun dropOfficialEpisode() {
+        clearOfficialAnnounced()
+        lastAnnouncedFrontier = null
+        lastAnnouncedRow = null
+        latchedConfirmedLive = false
+    }
+
     private fun postAllClear(s: Strings.StringSet, city: String, debrisSeconds: Int = 0, silent: Boolean = false, muted: Boolean = false, replay: List<FlourishRecord> = emptyList()) {
+        // A post is the open: the debris tick and the TTL belong to THIS notification, not to
+        // whatever the user swiped or a new episode superseded before it.
+        allClearClosed = false
         val body = if (debrisSeconds > 0) {
             val mm = debrisSeconds / 60
             val ss = debrisSeconds % 60
@@ -1772,14 +1780,12 @@ val mappedThreats = registry.allThreats.map { list ->
     }
 
     /**
-     * Arms the all-clear TTL, at most once per live notification. Must be called at every
-     * all-clear post, but a repeated post (this runs per tick while the dead latch is still
-     * visible) must NOT restart the clock: the TTL is defined to run from the first post, and
-     * re-arming would leave the notification in the shade indefinitely. Returns true when it
-     * armed a new timer, false when one was already pends for the live notification.
+     * Arms the all-clear TTL, at most once per live notification. Called from the post that
+     * opens the notification; the debris re-posts neither reset nor re-arm it — the TTL is
+     * defined to run from the first post, and re-arming would leave it in the shade forever.
+     * Returns true when it armed a new timer, false when one already pends for this notification.
      */
     private fun scheduleAllClearExpiry(autoDismiss: Boolean): Boolean {
-        allClearClosed = false
         if (allClearDeadlineMs != null) return false
         if (!autoDismiss) return false
         allClearDeadlineMs = System.currentTimeMillis() + ALL_CLEAR_TTL_MS
@@ -1966,11 +1972,6 @@ private fun nextUpdateCheckMillis(from: Long): Long {
         scope.cancel()
         super.onDestroy()
     }
-}
-
-internal fun nowMinuteOfDay(): Int {
-    val cal = Calendar.getInstance()
-    return cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
 }
 
 internal fun vibrationPattern(level: Int): LongArray = when (level) {

@@ -45,12 +45,7 @@ fun isNightActive(config: NightConfig, nowMillis: Long): Boolean {
     if (!config.enabled || config.startMin == config.endMin) return false
     val now = LocalDateTime.ofInstant(Instant.ofEpochMilli(nowMillis), ZoneId.systemDefault())
         .toLocalTime()
-    val minute = now.hour * 60 + now.minute
-    return if (config.startMin < config.endMin) {
-        minute in config.startMin until config.endMin
-    } else {
-        minute >= config.startMin || minute < config.endMin
-    }
+    return isWithinNight(now.hour * 60 + now.minute, config.startMin, config.endMin)
 }
 
 /** The active zone thresholds: night custom values while the window is active, else the day ones. */
@@ -80,7 +75,9 @@ fun effectiveArmed(
     day
 }
 
-/** Simple minute-based night window check. Overnight windows (start > end) wrap past midnight. */
+/** Simple minute-based night window check. Overnight windows (start > end) wrap past midnight.
+ *  Assumes a non-empty window: with `start == end` the wrap branch would read as *forever*, so
+ *  rejecting that case is the caller's job ([isNightActive] does). */
 fun isWithinNight(nowMin: Int, startMin: Int, endMin: Int): Boolean =
     if (startMin < endMin) nowMin in startMin until endMin
     else nowMin >= startMin || nowMin < endMin
@@ -88,6 +85,21 @@ fun isWithinNight(nowMin: Int, startMin: Int, endMin: Int): Boolean =
 /** The official-alert enable for this tick: the night value while the window is active, else the day one. */
 fun effectiveOfficialEnabled(day: Boolean, night: Boolean, nightActive: Boolean): Boolean =
     if (nightActive) night else day
+
+/** The active city-scope gate: the night value while the window is active, else the day one.
+ *  Same `if (nightActive)` idiom as [effectiveZoneParams]/[effectiveArmed]/[effectiveOfficialEnabled]
+ *  — a consumer that ORs the two instead (`day || night`) cannot turn scoping off for the night,
+ *  and the map ends up disagreeing with the service. */
+fun effectiveCityScope(day: Boolean, night: Boolean, nightActive: Boolean): Boolean =
+    if (nightActive) night else day
+
+/** The night-mode zone values as one value object, so the service and the widget cannot read a
+ *  different subset of the night prefs (the widget used to read none of them). */
+val UserPreferences.nightZones: NightZones
+    get() = NightZones(
+        nightSlowRedKm, nightSlowYellowKm, nightFastRedMin, nightFastYellowMin,
+        nightSlowRedArmed, nightSlowYellowArmed, nightFastRedArmed, nightFastYellowArmed
+    )
 
 /**
  * The night settings the "Just let me sleep!" button owns — the four armed bells, the two

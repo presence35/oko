@@ -78,15 +78,27 @@ object WidgetUpdater {
                     clock
                 ) { core, gps, now -> Triple(core, gps, now) },
                 prefs.preferences.map { p ->
-                    Pair(
-                        ZoneParams(p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin),
-                        Tail(p.followMe, p.pinnedCity, p.language, p.threatIconSet, p.mapVisibleTypes)
+                    Tail(
+                        followMe = p.followMe,
+                        pinned = p.pinnedCity,
+                        lang = p.language,
+                        iconSet = p.threatIconSet,
+                        mapEnabled = p.mapVisibleTypes,
+                        dayParams = ZoneParams(p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin),
+                        nightZones = p.nightZones,
+                        nightWindow = NightConfig(p.nightEnabled, p.nightStartMin, p.nightEndMin),
+                        useNightZones = p.nightUseCustomZones
                     )
                 }.distinctUntilChanged()
-            ) { core, (params, tail) ->
+            ) { core, tail ->
                 val (threats, alerts) = core.first as Pair<Map<String, NormalizedThreat>, List<OblastAlert>>
                 val gps = core.second
                 val now = core.third
+                // Night is decided HERE, from the same `now` the snapshot uses. Deriving it inside
+                // the prefs map froze the widget on day thresholds from dusk until the next pref
+                // change.
+                val nightActive = isNightActive(tail.nightWindow, now)
+                val params = effectiveZoneParams(tail.dayParams, tail.nightZones, tail.useNightZones, nightActive)
                 val focus = resolveFocus(tail.followMe, gps, LocationTracker.isFresh(now), tail.pinned)
                 computeWidgetSnapshot(
                     threats = threats,
@@ -148,7 +160,11 @@ object WidgetUpdater {
         val pinned: String?,
         val lang: AppLanguage,
         val iconSet: ThreatIconSet,
-        val mapEnabled: Set<ThreatType>
+        val mapEnabled: Set<ThreatType>,
+        val dayParams: ZoneParams,
+        val nightZones: NightZones,
+        val nightWindow: NightConfig,
+        val useNightZones: Boolean
     )
 
     suspend fun readSnapshot(context: Context): WidgetSnapshot {

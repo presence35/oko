@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- The all-clear's 20-minute auto-dismiss works again, and its countdown keeps ticking after an episode is superseded 10-06_13:40:54
+- The all-clear names the city the alert was raised for, not wherever you have moved since 10-06_13:40:54
+- Yellow official alerts sound through their own outer channel instead of the red/inner one 10-06_13:40:54
+- Night mode now fully overrides the day city-scope setting on the map and in the widget, and the widget's rings use your night zone thresholds like the app 10-06_13:40:54
+- A night window with the same start and end time now means "no night" for notifications too, instead of leaving alerts in night mode 10-06_13:40:54
 - Explosion style picker in Threats: Simple (cheap rings and sparks), Classic (the original look), or Advanced (fuller per-type bursts); the bullet is back to the old short shell with no trail in all three 10-06_13:34:02
 - Threat-type rows are now bordered cards with full untruncated facts and a Fast/Slow pill beside the speed badge; the Fast and Slow groups are split by a full-width rule 10-06_14:30:00
 - Threat facts frozen per type with joke as the only persona slot, rendered separately in italic; fixed KAB short label, ballistic/recon wording 10-06_14:20:00

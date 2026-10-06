@@ -86,6 +86,16 @@ class NightModeTest {
     }
 
     @Test
+    fun `city scope follows the night window, never an OR`() {
+        // Day on / night off must be able to turn scoping OFF for the night: `day || night`
+        // cannot express that, and it disagreed with the widget.
+        assertFalse(effectiveCityScope(day = true, night = false, nightActive = true))
+        assertTrue(effectiveCityScope(day = false, night = true, nightActive = true))
+        assertTrue(effectiveCityScope(day = true, night = false, nightActive = false))
+        assertFalse(effectiveCityScope(day = false, night = true, nightActive = false))
+    }
+
+    @Test
     fun `night sleep preset round-trips all nine flags`() {
         val preset = NightSleepPreset(
             useCustomZones = true,
