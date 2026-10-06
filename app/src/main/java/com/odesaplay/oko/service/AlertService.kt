@@ -53,6 +53,7 @@ import com.odesaplay.oko.engine.officialStateFor
 import com.odesaplay.oko.Transliteration
 import com.odesaplay.oko.isOfficialLevelEnabled
 import com.odesaplay.oko.ThreatType
+import com.odesaplay.oko.ThreatTypeCatalog
 import com.odesaplay.oko.engine.ThreatZone
 import com.odesaplay.oko.engine.toThreatType
 import com.odesaplay.oko.engine.toEngineString
@@ -93,6 +94,7 @@ class AlertService : Service() {
         const val ACTION_ALERT_OK = AlertNotificationManager.ACTION_ALERT_OK
         const val ACTION_MUTE_RAID = AlertNotificationManager.ACTION_MUTE_RAID
         const val ACTION_MUTE_10 = AlertNotificationManager.ACTION_MUTE_10
+        const val ACTION_MUTE_TYPE = AlertNotificationManager.ACTION_MUTE_TYPE
         const val ACTION_CLEAR_MUTE = "com.odesaplay.oko.CLEAR_MUTE"
         const val EXTRA_REVEAL_ID = AlertNotificationManager.EXTRA_REVEAL_ID
         const val EXTRA_REVEAL_LAT = AlertNotificationManager.EXTRA_REVEAL_LAT
@@ -577,6 +579,23 @@ class AlertService : Service() {
                     DebugLogReason.MUTED, s0.actionLog.muteRaid,
                     "${MUTE_10_MS / 60_000} min"
                 )
+            }
+            ACTION_MUTE_TYPE -> {
+                // The type's bells go off for good — the same fact as the Settings toggle, so
+                // undoing it lives there too. A red/yellow official alert is a separate fact and
+                // keeps standing: only this type's zone bells stop.
+                val type = intent.getStringExtra(AlertNotificationManager.EXTRA_MUTE_TYPE)
+                    ?.let { name -> ThreatType.entries.firstOrNull { it.name == name } }
+                if (type != null && type != ThreatType.UNKNOWN) {
+                    scope.launch {
+                        UserPrefs(applicationContext).setThreatAlertsEnabled(type, false)
+                        notificationManager.cancelNotification(NOTIF_ALERT)
+                        logAction(
+                            DebugLogReason.MUTED, s0.actionLog.muteType,
+                            ThreatTypeCatalog.INFO[type]?.shortLabel(AppLanguage.EN).orEmpty()
+                        )
+                    }
+                }
             }
             ACTION_CLEAR_MUTE -> {
                 setRaidMute(RaidMute.None)
@@ -1278,6 +1297,22 @@ val mappedThreats = registry.allThreats.map { list ->
             return null
         }
 
+        /**
+         * The "Mute <type>" action for the alert about to be posted, or null when there is no
+         * type to mute: no revealed threat (a plain region red, any yellow), an unconfirmed
+         * [ThreatType.UNKNOWN], or a type whose bells are already off — a button that says "mute"
+         * about something already muted is a lie, so those alerts keep [AlertActions.ok].
+         */
+        fun muteTypeActionFor(primary: Primary?, state: MonitorState): MuteTypeAction? {
+            val type = primary?.revealThreat?.type?.toThreatType() ?: return null
+            if (type == ThreatType.UNKNOWN || type !in state.enabled) return null
+            val info = ThreatTypeCatalog.INFO[type] ?: return null
+            return MuteTypeAction(
+                label = String.format(Strings.get(state.lang).alertActionMuteTypeFormat, info.shortLabel(state.lang)),
+                type = type
+            )
+        }
+
         /** Reconcile official-episode side-effects for ANY level: wakeLock, DebugLog ON
          *  (always — the log sees every official episode even when its notifs are off
          *  or a zone alert wins the tick), persistence, all-clear. */
@@ -1491,6 +1526,7 @@ val mappedThreats = registry.allThreats.map { list ->
             val s = Strings.get(state.lang)
             val actions = AlertActions(
                 ok = s.alertActionOk,
+                muteType = muteTypeActionFor(primary, state),
                 muteRaid = s.alertActionMuteRaid,
                 mute10 = s.alertActionMute10
             )

@@ -361,8 +361,15 @@ Treat these as a contract. If you change one, update **every** place that relies
   tests covering the core change. No exceptions to (2): undocumented core changes
   are how the phantom "20s grace" happened.
 - **Alert notif actions; "mute raid" suppresses the whole raid.** Alert notifications carry three
-  action buttons (OK / Mute raid / Mute 10 min); labels live in `Strings`, persona stays in
-  title/body. Mute is a single owner, `domain/RaidMute.kt`: while `silent(now)` a **new** alert
+  action buttons; labels live in `Strings`, persona stays in title/body. The first button is
+  **Mute &lt;type&gt;** — the alert's revealed type, its bells off for good via the same
+  `threat_alert_<TYPE>` pref the Settings type toggle writes (undo lives there too) — and falls
+  back to plain **OK** when the alert has no attributable type (a region-only red, any yellow, an
+  `UNKNOWN`, or a type whose bells are already off). `AlertService.muteTypeActionFor` is the only
+  place that decision is made; the PendingIntent is per type (`30 + ordinal`) so two types never
+  share extras. Muting a type silences that type's zone bells only — an official red/yellow is a
+  separate fact and keeps standing; `AlertActions.ok` / `Mute raid` / `Mute 10 min` behave as
+  before. Mute is a single owner, `domain/RaidMute.kt`: while `silent(now)` a **new** alert
   is not posted at all — no sound, no vibration, no notification, official alert and all-clear
   included (the all-clear still releases the mute, so the next raid rings). GPS/connection
   warnings are not part of the raid and keep posting. The attack itself is still recorded: the

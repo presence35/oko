@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- The alert notification's first button is now "Mute &lt;type&gt;" — silence one threat kind (e.g. drones) for good, undo it in Settings → Threats; region-only red and yellow alerts keep "OK" 10-06_22:20:00
+- The first-run wizard's channel post now shows the Telegram logo and name next to NEPTUN 10-06_22:20:00
 - The five Morale voices now read as real Russian instead of English text under a Russian name 10-06_21:53:12
 
 ## [0.6.790]

@@ -314,6 +314,7 @@ object Strings {
         val notifOfficialFormat: String,
         val notifOfficialWithReasonFormat: String,
         val alertActionOk: String,
+        val alertActionMuteTypeFormat: String,
         val alertActionMuteRaid: String,
         val alertActionMute10: String,
         val offlineStatusTitle: String,
@@ -802,6 +803,7 @@ object Strings {
         val ignoreOffline: String,
         val alertDismissed: String,
         val muteRaid: String,
+        val muteType: String,
         val unmuteRaid: String,
         val untilClear: String,
         val mutedFor: String,
@@ -1270,6 +1272,7 @@ object Strings {
         val notifOfficialFormat: String get() = threat.notifOfficialFormat
         val notifOfficialWithReasonFormat: String get() = threat.notifOfficialWithReasonFormat
         val alertActionOk: String get() = threat.alertActionOk
+        val alertActionMuteTypeFormat: String get() = threat.alertActionMuteTypeFormat
         val alertActionMuteRaid: String get() = threat.alertActionMuteRaid
         val alertActionMute10: String get() = threat.alertActionMute10
         val offlineStatusTitle: String get() = threat.offlineStatusTitle

@@ -28,8 +28,20 @@ import com.odesaplay.oko.UserPrefs
 import com.odesaplay.oko.NeutralizedTally
 import com.odesaplay.oko.service.ServiceState
 
+/**
+ * The alert notification's first button: silence every alert of one threat type for good, the
+ * same fact as the type toggle in Settings. Null when the alert is not attributable to a type
+ * (a plain region red, any yellow), and the row falls back to [AlertActions.ok].
+ */
+data class MuteTypeAction(val label: String, val type: ThreatType)
+
 /** Alert-notification action-button labels. Persona lives in the title/body, never here. */
-data class AlertActions(val ok: String, val muteRaid: String, val mute10: String)
+data class AlertActions(
+    val ok: String,
+    val muteType: MuteTypeAction?,
+    val muteRaid: String,
+    val mute10: String
+)
 
 /**
  * Handles notification channels, notification building, and dispatching for [AlertService].
@@ -45,12 +57,14 @@ class AlertNotificationManager(private val context: Context) {
         const val ACTION_ALERT_OK = "com.odesaplay.oko.ALERT_OK"
         const val ACTION_MUTE_RAID = "com.odesaplay.oko.MUTE_RAID"
         const val ACTION_MUTE_10 = "com.odesaplay.oko.MUTE_10"
+        const val ACTION_MUTE_TYPE = "com.odesaplay.oko.MUTE_TYPE"
 
         const val EXTRA_REVEAL_ID = "reveal_threat_id"
         const val EXTRA_REVEAL_LAT = "reveal_threat_lat"
         const val EXTRA_REVEAL_LON = "reveal_threat_lon"
         const val EXTRA_SHOW_UPDATE = "show_update"
         const val EXTRA_SHOW_MAP = "show_map"
+        const val EXTRA_MUTE_TYPE = "mute_threat_type"
 
         const val CHANNEL_MONITOR = "monitor"
         const val CHANNEL_ALERTS_INNER = "alerts_inner"
@@ -353,7 +367,9 @@ const val NOTIF_MONITORING_PAUSED = 9
             // Full silence (channel sound + vibration); setOnlyAlertOnce is a repost knob.
             .setSilent(muted)
         actions?.let { a ->
-            b.addAction(0, a.ok, alertAction(ACTION_ALERT_OK, 21))
+            val muteType = a.muteType
+            if (muteType != null) b.addAction(0, muteType.label, muteTypeAction(muteType.type))
+            else b.addAction(0, a.ok, alertAction(ACTION_ALERT_OK, 21))
             b.addAction(0, a.muteRaid, alertAction(ACTION_MUTE_RAID, 22))
             b.addAction(0, a.mute10, alertAction(ACTION_MUTE_10, 23))
         }
@@ -592,9 +608,10 @@ const val NOTIF_MONITORING_PAUSED = 9
         }
     }
 
-    /** Alert action button -> [AlertService] (OK / Mute raid / Mute 10 min). */
-    private fun alertAction(action: String, requestCode: Int): PendingIntent {
+    /** Alert action button -> [AlertService] (OK / Mute raid / Mute 10 min / Mute type). */
+    private fun alertAction(action: String, requestCode: Int, extra: Pair<String, String>? = null): PendingIntent {
         val intent = Intent(context, AlertService::class.java).setAction(action)
+        extra?.let { intent.putExtra(it.first, it.second) }
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             PendingIntent.getForegroundService(context, requestCode, intent, flags)
@@ -602,6 +619,11 @@ const val NOTIF_MONITORING_PAUSED = 9
             PendingIntent.getService(context, requestCode, intent, flags)
         }
     }
+
+    /** "Mute <type>" -> [AlertService]. The request code is per type, so two types never share a
+     *  PendingIntent (they carry different extras and would overwrite each other). */
+    private fun muteTypeAction(type: ThreatType): PendingIntent =
+        alertAction(ACTION_MUTE_TYPE, 30 + type.ordinal, EXTRA_MUTE_TYPE to type.name)
 
     private fun updatePendingIntent(): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
