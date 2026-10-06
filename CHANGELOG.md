@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 - The alpha note now tells you which battery use is normal: a bright screen costs battery either way, but a fast drop while the phone sits idle is the bug worth reporting 10-06_18:05:00
 - Settings → Reliability has an opt-in "Asleep notice": Oko tells you when monitoring stopped for a while and something was missed, with a button to allow unrestricted background use. Off by default 10-06_17:20:00
 - "Always ready" now covers the night hours too: every night bell armed and both siren overrides on, and it cancels an in-flight "Just let me sleep!" instead of letting it come back and undo the choice 10-06_20:41:12
@@ -36,6 +37,12 @@
 - Log upload moved into the Debug tab under a plain-English why-we-need-it line, next to the payload it ships, instead of a header icon 10-06_13:02:17
 - Logs screen has a Debug tab showing the exact payload Send will upload: every privacy-relevant line (fingerprint, saved city, alert city names, installer, all settings) with the literal JSON key as its label, plus a list of what is never in the file. Send reuses the previewed bundle, so what you read is what ships 10-06_12:54:03
 - Death animations reworked: threat icons shatter into irregular chunks with drag, spin and gravity, sparks fly on random angles, and each threat type gets its own fireball colour, smoke and debris 10-06_10:15:00
+
+## [Released through 0.6.789]
+
+Shipped in earlier sideloads. Kept for the record; folded out of [Unreleased] so the
+release notes describe one build instead of the whole project history.
+
 - Oko now tells you when it was asleep: a Doze stall over 4 min posts one notice on the alert channel with how long monitoring was off, whether an official alert started in that time and how many threats were confirmed, plus a button to allow unrestricted background use 10-05_23:40:00
 - Sent logs now say who killed the app: the phone's own exit history (crash, low memory, swiped away, update) plus when the build was installed, so an unexplained restart is no longer a mystery 10-05_21:40:00
 - Real UA/RU translations for every remaining English placeholder string 10-05_17:00:15
@@ -58,124 +65,67 @@
 - Added a GPL-3.0-only LICENSE and documented the license + source-build path in the README 10-04_20:14:47
 - A release build without app/keystore.properties now fails by default instead of being the only mode; -PallowUnsignedRelease is the explicit opt-in for a distributor that signs its own source build (F-Droid) 10-04_20:14:47
 - Pinned the Gradle wrapper with distributionSha256Sum and dropped the committed debug.keystore 10-04_20:14:47
-
 - Sent logs now report how many times the app process was killed and restarted overnight, and the longest window alerts were blind, instead of leaving it to be inferred from gaps 10-04_18:30:00
-
 - Oko no longer turns your alarm volume up behind your back: sirens still fire on the alarm stream with "Sirens always sound", but the volume is yours to set 10-04_15:05:00
-
 - Sent logs are no longer overwritten: each upload is timestamped (e.g. `samsung_SM-A505FN_742_20261004-143222.json`), so repeated sends from one phone keep their own file 10-04_17:45:00
-
 - Muting a raid now really mutes it: no sound, no vibration and no notification for anything that starts inside the window (the all-clear releases it, so the next raid rings) 10-04_14:20:00
-
 - "Mute 10 min" now survives the app or service being recycled, and stops claiming a mute after its time is up 10-04_14:20:00
-
 - A city-level alert that ends now gives you its all-clear. The episode was announced for your city but ended only when the whole oblast went quiet, so a neighbouring district kept your siren from ever clearing 10-04_14:20:00
-
 - A threat card no longer shows the zone radius as its distance: "22 km" was literally your yellow ring, so a marker outside the ring still read "Approaching". Real position, real distance, real ETA; "Approaching <city>" is now a quiet line under them 10-04_14:20:00
-
 - The map now says "Sleep well" when "Just let me sleep!" is on, instead of a generic "Zone alerts are off" that also covered a night window or a hand-set switch 10-04_14:20:00
-
 - "Just let me sleep!" can no longer hide itself: its row stays visible with the night window switched off, and editing a night bell by hand no longer leaves a broken restore behind 10-04_14:20:00
-
 - The map's zone buttons say what they mean: lit when a bell of that colour is armed, a half bell when only one of the two is (fast-yellow ships off, so yellow always looked ambiguous), and the bell glyph appears while a raid is muted 10-04_14:20:00
-
 - Logs → a live raid is now marked "ongoing" and counts to the present, instead of showing a finished span that ended at the last event 10-04_14:20:00
-
 - Logs → a red alert downgraded to yellow is recorded, so an hour of yellow no longer reads as an hour of red 10-04_14:20:00
-
 - Logs → new Actions view: what you muted, ignored, retried or switched, plus the bell/official/night settings, with the time 10-04_14:20:00
-
 - Logs → the "N threats resolved" notification is finally recorded, so it can no longer sit next to a "0 notified" header 10-04_14:20:00
-
 - Falling-debris countdown follows the clock instead of a timer: it no longer freezes or restarts when the phone sleeps, and lowering the setting shortens the countdown already running 10-04_14:20:00
-
 - The all-clear auto-dismiss now survives the phone sleeping and a re-post, instead of sitting in the shade all night 10-04_14:20:00
-
 - Overnight on a phone without battery optimisation: the monitor re-syncs instead of deciding from a stale clock (no phantom reconnects, no ghost all-clears), and the timeline records the gap 10-04_14:20:00
-
 - Lighter Russian FPV icon, which was nearly invisible on the dark map 10-04_14:20:00
-
 - The all-clear no longer fires for an alert level you had switched off, and switching a level off mid-alert now drops its own notification instead of leaving it in the shade 10-04_02:05:00
-
 - The all-clear no longer pops over the screen as a heads-up banner; it stays a sound plus a shade entry, like the all-clear tone the morale summary already uses 10-04_02:05:00
-
 - The all-clear no longer fires its own alarm-stream chime: it sounds through its notification channel like the alert it closes, so silent mode, Do Not Disturb and a muted channel silence it too — it used to pierce all of them, even for a phone whose alert never sounded 10-04_01:40:00
-
 - An all-clear with a falling-debris countdown now sounds when the alert actually ends; before, the countdown left it completely silent 10-04_01:40:00
-
 - Logs header gets a back arrow and a roomier NEPTUN mark, status word and send button 10-04_00:55:00
-
 - The battery/power timeline in a sent log now survives app restarts, so a tester who installs a build and taps "Send logs" gets a real timeline instead of a single sample 10-04_00:55:00
-
 - Sending logs: a rate-limited tap now says how long to wait and the button re-enables itself, instead of reporting "HTTP 429" 10-04_00:15:00
-
 - Logs: decisions are grouped by oblast again. Rows whose place was a village or a raion ("Маякі", "Odeskyi district") lost their oblast and silently dropped out of the OBLAST grouping — about half of all rows 10-03_22:40:00
-
 - Logs screen: new "Send logs" button uploads a full diagnostics bundle (device, power/battery timeline, memory, CPU, all prefs, every log buffer) on one tap 10-03_21:05:00
-
 - The all-clear chime no longer gets cut off after a fraction of a second: an alert still interrupts it, but routine cleanup no longer can 10-03_12:05:00
-
 - "Limit repeat sounds" is now its own block: four compact policy tiles, with the description and the digest controls unfolding underneath the one you picked 10-03_12:05:00
-
 - NEPTUN's confirmation count is stripped cleanly again — it arrived with its own period and left a ": 2." tail that broke the area-level chip and course text 10-02_18:20:00
-
 - App updates are now verified before installing: the download is checked against the checksum published with the release, and the APK is confirmed to be this app, signed with the same key, and actually newer 10-02_17:27:04
-
 - The release now takes the version from the built APK, publishes its checksum, and re-checks the live copy — a bad upload fails the release instead of shipping an update nobody can install 10-02_17:27:04
-
 - The monitoring notification can no longer be collapsed behind another Oko notification: every notification now has its own group, and the trident one is a group of its own 10-02_15:40:00
-
 - Official alerts are one episode per region and siren once: yellow turning red sounds the siren a single time (a level that flaps never repeats it), and a downgrade just updates the notification instead of logging a second alert 10-02_15:40:00
-
 - A red official alert notification no longer lingers after the alert is downgraded or over 10-02_15:40:00
-
 - The offline notification is dismissed once the connection is back, even with critical-offline switched off - it used to sit in the shade for hours 10-02_15:40:00
-
 - A tap-to-resume prompt no longer sits next to the monitoring notification after monitoring actually starts 10-02_15:40:00
-
 - Area-only threats show their "Area only" chip in the empty metric slot, and the small card's P now sits before R 10-02_15:40:00
-
 - A single-type resolved tally names the type in the title ("15 Drones resolved") instead of a separate breakdown line 10-02_15:40:00
-
 - The map and alerts no longer go dead when monitoring is restarted: stopping the service used to tear down the whole app's data feed, so a refused or restarted foreground service left the map empty and could take the death animation down with it 10-01_14:17:34
-
 - Auto-restart now respects the "Restart monitoring after reboot" switch everywhere — the emergency worker used to resurrect monitoring (and post a resume prompt every 15 minutes) even with the switch off 10-01_14:17:34
-
 - Threats that disappear between live snapshots now register as resolved (tally + death animation) instead of silently vanishing, except across a reconnect, where the held last-known threats stay quiet rather than fake a burst of kills 10-01_14:17:34
-
 - The resolved-threat tally no longer under-counts during a burst of kills 10-01_14:17:34
-
 - Fixed a false "NEPTUN SDK changed" row in the Decisions log on first launch 10-01_14:17:34
-
 - The all-clear notification now retires 20 minutes after it appears even if it gets posted twice — a repeated post used to restart that countdown and leave the all-clear sitting in the shade indefinitely 09-30_00:00:00
-
 - Fixed the connection log coming up empty after a location event: the location log's saved history was being overwritten by its own restore on service start 09-30_00:00:00
-
 - Location events now appear in the connection log properly: access coming back gets its own row, and turning GPS off is picked up when you touch the screen instead of up to 15 minutes later 09-30_00:00:00
-
 - Fixed the monitoring notification falsely claiming "Location unavailable — check GPS access" whenever the last position was over 30 minutes old: a phone sitting still is fed by no one (passive fixes only copy what other apps ask for), so the app now re-checks its position every 15 minutes and only says "check location access" when permission is actually revoked or location is switched off — otherwise it says "not verified for N min" 09-30_00:00:00
-
 - The connection log now also records location health — unverified stretches, recoveries with the fix's accuracy, and how far the position had drifted — in the same timeline as network events 09-30_00:00:00
-
 - The "GPS check every 15 min" setting is now "Check position on long trips" and explains what Oko checks on its own 09-30_00:00:00
-
 - The collapsed Alerts card now lists City level and Always sound next to Red/Yellow, and drops to "Official alerts: OFF" when the master toggle is off 09-30_00:00:00
-
 - The all-clear notification now retires itself 20 minutes after it appears, so an old one can't sit in the shade looking fresh; toggle in Settings, and each retirement shows in the Decisions log as a dim one-line footnote 09-30_00:00:00
-
 - Fixed a freeze on first launch: the alert service used to read settings on the main thread while starting, which could lock the screen on a fresh install 09-29_23:52:00
-
 - Stop now wipes the shootdown flourish completely — the shot threat is back on the map the instant you press it, instead of after the explosion's pause 09-29_23:20:00
-
 - The card no longer repeats "GPS off — no zone data" on every threat; the header's warning icon already says it 09-29_23:20:00
 - The precision bar now spreads across the uncertainties the feed actually reports — ±10 km and ±70 km no longer look identical 09-29_23:20:00
 - The header's warning icon is a single clean glyph instead of a mangled overlap 09-29_23:20:00
 - The area-level pill is now just "Area only" 09-29_23:20:00
 - Area-level drone warnings show as the area-level chip again — the source now appends a confirmation count to the text, which slipped past the pattern that recognised it 09-29_22:55:00
-
 - The shootdown flourish no longer invents a flight path: area-level advisories and parked tracks now explode where they sit instead of flying off on a made-up course 09-29_22:05:00
 - A threat's course is now only what the source reported — the id-hash pseudo-course no longer counts as motion, so an area-level advisory stops drifting across the map 09-29_22:20:00
-
 - The header's status chip is now a tappable warning icon with no words — tap it and it takes you straight to whatever needs fixing (Android notification settings, the GPS permission, the zones panel); a toast on first appearance says what is wrong 09-29_17:40:00
 - A missing, stale or out-of-country position is now reported instead of silently trusted — the map marks "waiting for GPS access" where the position should be 09-29_17:40:00
 - Wizard's first screen now says what this app is and is not — two cards, with a real source-channel screenshot (replaces the intro paragraph) 09-29_21:1:29
@@ -185,7 +135,6 @@
 - Logs: reads as a raid story now — the day is grouped into sessions (from the official alert's on to its off, adopting a drone reported in the 2 minutes before the siren), each a one-line headline ("21:10 – 21:47 · Notified", or why it stayed silent) that expands to the events inside; a Story/List switch keeps the raw trail 09-30_10:00:00
 - Logs: "My oblast" scope fixed — it now keys on whether an event was evaluated against you (in your oblast, or something you'd have heard), instead of guessing from where the threat itself was, so it no longer shows an empty list 09-30_10:00:00
 - Logs: header rebuilt as one clean row (Story/List · My oblast/All · Filters) so no control hides off-screen; fixed the clipped search placeholder; unified wording on "notified / covered / not notified"; dropped the redundant "red"/"yellow" word on coloured cards; removed the duplicate suppressed-bell glyph 09-30_10:00:00
-
 ## [0.6.713]
 
 ## [0.6.708]
