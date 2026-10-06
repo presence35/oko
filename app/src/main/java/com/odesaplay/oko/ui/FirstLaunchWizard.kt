@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
@@ -76,15 +77,12 @@ internal fun FirstLaunchWizard(
     fastYellowArmed: Boolean,
     sheltersEnabled: Boolean,
     morale: Boolean,
-    step: Int,
     neptunDown: Boolean,
     degraded: Boolean,
     onThreatAlertToggle: (ThreatType, Boolean) -> Unit,
     onFollowMeChange: (Boolean) -> Unit,
     onPinnedCityChange: (City?) -> Unit,
     onMoraleChange: (Boolean) -> Unit,
-    onStepChange: (Int) -> Unit,
-    onOpenLogs: () -> Unit,
     onSlowRedChange: (Int) -> Unit,
     onSlowYellowChange: (Int) -> Unit,
     onSlowRedArmedChange: (Boolean) -> Unit,
@@ -94,6 +92,7 @@ internal fun FirstLaunchWizard(
 ) {
     val s = Strings.get(current)
     val totalSteps = 6
+    var step by remember { mutableStateOf(0) }
     var locationMode by remember { mutableStateOf<String?>(null) }
     val notifPermLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -109,7 +108,7 @@ internal fun FirstLaunchWizard(
             }
         }
     }
-    BackHandler(enabled = step > 0) { onStepChange(step - 1) }
+    BackHandler(enabled = step > 0) { step-- }
     val stepTitle = when (step) {
         0 -> s.wizardPageTitle
         1 -> s.onboardingTipsTitle
@@ -171,7 +170,7 @@ internal fun FirstLaunchWizard(
                         onSlowRedArmedChange = onSlowRedArmedChange,
                         onSlowYellowArmedChange = onSlowYellowArmedChange
                     )
-                    else -> WizardBetaBlock(s, neptunDown, degraded, onOpenLogs)
+                    else -> WizardBetaBlock(s, neptunDown, degraded)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -183,7 +182,7 @@ internal fun FirstLaunchWizard(
                 val backInteraction = remember { MutableInteractionSource() }
                 if (step > 0) {
                     IconButton(
-                        onClick = { onStepChange(step - 1) },
+                        onClick = { step-- },
                         interactionSource = backInteraction,
                         modifier = Modifier.pressTick(backInteraction)
                     ) {
@@ -213,7 +212,7 @@ internal fun FirstLaunchWizard(
                     contentAlignment = Alignment.Center
                 ) {
                     Button(
-                        onClick = { if (step < totalSteps - 1) onStepChange(step + 1) else onComplete() },
+                        onClick = { if (step < totalSteps - 1) step++ else onComplete() },
                         enabled = nextEnabled,
                         interactionSource = nextInteraction,
                         modifier = Modifier
@@ -535,16 +534,9 @@ private fun SourceReactionChip(count: String, icon: ImageVector) {
 
 /** Wizard page: the beta ask — use it, report what breaks, and read this before uninstalling. */
 @Composable
-private fun WizardBetaBlock(
-    s: Strings.StringSet,
-    neptunDown: Boolean,
-    degraded: Boolean,
-    onOpenLogs: () -> Unit
-) {
+private fun WizardBetaBlock(s: Strings.StringSet, neptunDown: Boolean, degraded: Boolean) {
     Column(modifier = Modifier.fillMaxWidth()) {
         WizardCard(borderColor = _ukraineYellow.copy(alpha = 0.3f)) {
-            WizardBlockHeader(s.wizardBetaGroupTitle, _ukraineYellow)
-            Spacer(Modifier.height(12.dp))
             Text(
                 s.wizardBetaThanks,
                 style = MaterialTheme.typography.bodyMedium,
@@ -552,7 +544,7 @@ private fun WizardBetaBlock(
             )
             Spacer(Modifier.height(14.dp))
             WizardBullet(s.wizardBetaUse, _ukraineYellow)
-            WizardBullet(s.wizardBetaBugs, _ukraineYellow)
+            WizardBugBullet(s, pillColor(neptunDown, degraded))
             WizardBullet(s.wizardBetaAi, _ukraineYellow)
             Spacer(Modifier.height(12.dp))
             Text(
@@ -564,15 +556,28 @@ private fun WizardBetaBlock(
         Spacer(Modifier.height(18.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Spacer(Modifier.height(14.dp))
-        // The header's own pill, not a lookalike: the reader meets the exact glyph the bug-report
-        // copy points at, so they recognise it the first time they see it in the header. Tapping
-        // it here opens Logs, which is what the copy asks for.
-        ConnectionStatus(
-            neptunDown = neptunDown,
-            degraded = degraded,
-            onOpenLogs = onOpenLogs,
-            s = s
-        )
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Image(
+                painter = painterResource(R.drawable.neptun),
+                contentDescription = null,
+                modifier = Modifier.size(width = 14.dp, height = 14.dp),
+                colorFilter = ColorFilter.tint(Color(AppPalette.SafeGreen))
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                s.wizardSourceChannel,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color(AppPalette.SafeGreen))
+            )
+        }
         Spacer(Modifier.height(6.dp))
         Text(
             s.wizardNeptunStatus,
@@ -624,8 +629,54 @@ private fun WizardBlockHeader(text: String, accent: Color) {
 /** "Claim — detail": the claim is bold, the detail muted. */
 @Composable
 private fun WizardBullet(text: String, accent: Color) {
-    val head = text.substringBefore(" — ")
-    val tail = text.substringAfter(" — ", "")
+    WizardBulletRow(claimThenDetail(text), accent)
+}
+
+/** The bug-report bullet. Its instruction ends with the REAL NEPTUN mark drawn inside the
+ *  sentence — the reader is told to tap a picture of the thing, not a description of it. The
+ *  mark is tinted with the source's own tier, so it is the same mark the header shows. */
+@Composable
+private fun WizardBugBullet(s: Strings.StringSet, markColor: Color) {
+    val glyphId = "neptun"
+    val head = s.wizardBetaBugs.substringBefore(" — ")
+    val lead = s.wizardBetaBugs.substringAfter(" — ", "")
+    WizardBulletRow(
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
+                append(head)
+            }
+            withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
+                append(" — ")
+                append(lead)
+                append(' ')
+                appendInlineContent(glyphId, "[neptun]")
+                append(' ')
+                append(s.wizardBetaBugsTail)
+            }
+        },
+        accent = _ukraineYellow,
+        inlineContent = mapOf(
+            glyphId to InlineTextContent(
+                Placeholder(16.sp, 16.sp, PlaceholderVerticalAlign.TextCenter)
+            ) {
+                // Named for TalkBack: a screen reader cannot see the mark this sentence asks for.
+                Icon(
+                    painter = painterResource(R.drawable.neptun),
+                    contentDescription = s.wizardSourceChannel,
+                    tint = markColor
+                )
+            }
+        )
+    )
+}
+
+/** One bullet layout for every bullet — check, gap, body — so the beta card's rows stay in step. */
+@Composable
+private fun WizardBulletRow(
+    text: AnnotatedString,
+    accent: Color,
+    inlineContent: Map<String, InlineTextContent> = emptyMap()
+) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
         Icon(
             imageVector = Icons.Filled.Check,
@@ -635,21 +686,30 @@ private fun WizardBullet(text: String, accent: Color) {
         )
         Spacer(Modifier.width(10.dp))
         Text(
-            buildAnnotatedString {
-                withStyle(
-                    SpanStyle(
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                ) { append(head) }
-                if (tail.isNotEmpty()) {
-                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                        append(" — $tail")
-                    }
-                }
-            },
-            style = MaterialTheme.typography.bodyMedium
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            inlineContent = inlineContent
         )
+    }
+}
+
+/** The bold claim and the muted rest of a "claim — detail" string. */
+@Composable
+private fun claimThenDetail(text: String): AnnotatedString {
+    val head = text.substringBefore(" — ")
+    val tail = text.substringAfter(" — ", "")
+    return buildAnnotatedString {
+        withStyle(
+            SpanStyle(
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        ) { append(head) }
+        if (tail.isNotEmpty()) {
+            withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
+                append(" — $tail")
+            }
+        }
     }
 }
 

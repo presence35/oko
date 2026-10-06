@@ -65,10 +65,10 @@ object Strings {
         val wizardNeptunStatus: String,
         val wizardMapAttribution: String,
         val wizardBetaTitle: String,
-        val wizardBetaGroupTitle: String,
         val wizardBetaThanks: String,
         val wizardBetaUse: String,
         val wizardBetaBugs: String,
+        val wizardBetaBugsTail: String,
         val wizardBetaAi: String,
         val wizardBetaBattery: String,
         val settingsSearchHint: String,
@@ -912,7 +912,7 @@ object Strings {
         val wizardNeptunStatus: String get() = onboarding.wizardNeptunStatus
         val wizardMapAttribution: String get() = onboarding.wizardMapAttribution
         val wizardBetaTitle: String get() = onboarding.wizardBetaTitle
-        val wizardBetaGroupTitle: String get() = onboarding.wizardBetaGroupTitle
+        val wizardBetaBugsTail: String get() = onboarding.wizardBetaBugsTail
         val wizardBetaThanks: String get() = onboarding.wizardBetaThanks
         val wizardBetaUse: String get() = onboarding.wizardBetaUse
         val wizardBetaBugs: String get() = onboarding.wizardBetaBugs

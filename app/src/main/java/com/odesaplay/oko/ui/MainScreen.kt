@@ -213,9 +213,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     var guideFromSettings by remember { mutableStateOf(false) }
     var sheltersFromSettings by remember { mutableStateOf(false) }
     var wizardFromSettings by remember { mutableStateOf(false) }
-    // Hoisted out of the wizard: the beta page's pill opens Logs, which replaces the wizard for a
-    // moment — the page must come back where the reader left it, not at page 1.
-    var wizardStep by remember { mutableIntStateOf(0) }
     var headerHeightPx by remember { mutableStateOf(0) }
     // The wizard owns the screen while it's up — the map is not even composed then (no tile
     // flash before it covers the viewport). While prefs are still loading (wizardCompleted
@@ -460,7 +457,6 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                     {
                         viewModel.relaunchSetup()
                         wizardFromSettings = true
-                        wizardStep = 0
                     }
                 },
                 onResetTips = {
@@ -563,7 +559,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
     // First-install: a full-screen wizard — tips, which threats matter, location,
     // then zone controls and a feature preview. Alerts are delivered as notifications/toasts while the wizard
     // is up, but the wizard no longer ejects — the user finishes onboarding first.
-    if (wizardShown && screen != Screen.LOGS) {
+    if (wizardShown) {
         FirstLaunchWizard(
             current = uiState.language,
             iconSet = uiState.iconSet,
@@ -578,11 +574,8 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
             fastYellowArmed = uiState.fastYellowArmed,
             sheltersEnabled = uiState.sheltersEnabled,
             morale = settingsState.moraleMasterEnabled,
-            step = wizardStep,
             neptunDown = uiState.neptunDown,
             degraded = uiState.degraded,
-            onStepChange = { wizardStep = it },
-            onOpenLogs = { screen = Screen.LOGS },
             onThreatAlertToggle = { type, enabled -> viewModel.setThreatAlertsEnabled(type, enabled) },
             onFollowMeChange = { viewModel.setFollowMe(it) },
             onPinnedCityChange = { viewModel.setPinnedCity(it) },
