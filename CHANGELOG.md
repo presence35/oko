@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.790]
+
 - The alpha note now tells you which battery use is normal: a bright screen costs battery either way, but a fast drop while the phone sits idle is the bug worth reporting 10-06_18:05:00
 - Settings → Reliability has an opt-in "Asleep notice": Oko tells you when monitoring stopped for a while and something was missed, with a button to allow unrestricted background use. Off by default 10-06_17:20:00
 - "Always ready" now covers the night hours too: every night bell armed and both siren overrides on, and it cancels an in-flight "Just let me sleep!" instead of letting it come back and undo the choice 10-06_20:41:12
