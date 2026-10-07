@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.work.*
 import com.odesaplay.oko.AlertService
 import com.odesaplay.oko.UserPrefs
+import com.odesaplay.oko.WakeEventLog
+import com.odesaplay.oko.WakeKind
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.first
 
@@ -42,6 +44,7 @@ class EmergencyResurrectionWorker(
     }
 
     override suspend fun doWork(): Result {
+        WakeEventLog.record(WakeKind.WORKER)
         if (MonitoringStatus.running.value) return Result.success()
         val prefs = UserPrefs(applicationContext)
         // Same policy as AlertWatchdog: with auto-restart switched off, resurrecting from the

@@ -166,7 +166,7 @@ data class UiState(
     val batteryOnboardShown: Boolean = false,
     val serviceResurrected: Boolean = false,
     val threatCardSize: ThreatCardSize = ThreatCardSize.LARGE,
-    val iconSet: ThreatIconSet = ThreatIconSet.PHOTO,
+    val iconSet: ThreatIconSet = ThreatIconSet.DEFAULT,
     val overlapMode: OverlapMode = OverlapMode.DEFAULT,
     val showMapScale: Boolean = true,
     val showMediumCities: Boolean = true,
@@ -182,7 +182,7 @@ data class UiState(
     val alertYellowRaionKeys: Set<Pair<String, String>> = emptySet(),
     val alertingOblastCount: Int = 0,
     val moraleMasterEnabled: Boolean = false,
-    val moraleVoice: MoraleVoice = MoraleVoice.RANDOM,
+    val moralePersona: MoralePersona = MoralePersona.RANDOM,
     val deathAnimationEnabled: Boolean = true,
     val flybyAnimationEnabled: Boolean = true,
     val followBullet: Boolean = true,
@@ -268,12 +268,13 @@ data class SettingsState(
     val pinnedCity: City? get() = prefs.pinnedCity?.let { Cities.byUa[it] }
     val pinnedCityName: String? get() = prefs.pinnedCity
     val periodicGps: Boolean get() = prefs.periodicGps
-    val calmMessagesEnabled: Boolean get() = prefs.moraleMasterEnabled && prefs.calmMessagesEnabled
+    // The shared gate, not the raw pref: one answer to "is morale on" for every consumer.
+    val calmMessagesEnabled: Boolean get() = moraleGate.isOn && prefs.calmMessagesEnabled
     val hapticsEnabled: Boolean get() = prefs.hapticsEnabled ?: true
     val disclaimerCollapsed: Boolean get() = prefs.disclaimerCollapsed
     val disclaimerReadCount: Int get() = prefs.disclaimerReadCount
     val threatCardSize: ThreatCardSize get() = prefs.threatCardSize
-    val iconSet: ThreatIconSet get() = prefs.threatIconSet
+    val iconSet: ThreatIconSet get() = if (prefs.moraleMasterEnabled) prefs.threatIconSet else ThreatIconSet.DEFAULT
     val overlapMode: OverlapMode get() = prefs.overlapMode
     val showMapScale: Boolean get() = prefs.showMapScale
     val showMediumCities: Boolean get() = prefs.showMediumCities
@@ -285,7 +286,7 @@ data class SettingsState(
     val sheltersEnabled: Boolean get() = prefs.sheltersEnabled
     val sheltersWithKids: Boolean get() = prefs.sheltersWithKidsEnabled
     val moraleMasterEnabled: Boolean get() = prefs.moraleMasterEnabled
-    val moraleVoice: MoraleVoice get() = prefs.moraleVoice
+    val moralePersona: MoralePersona get() = prefs.moralePersona
     val deathAnimationEnabled: Boolean get() = prefs.deathAnimationEnabled
     val deathAnimationStyle: DeathAnimationStyle get() = prefs.deathAnimationStyle
     val highQualityExplosions: Boolean get() = prefs.highQualityExplosions
@@ -607,7 +608,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val showBorders: Boolean,
         val showRegionBorders: Boolean,
         val moraleMasterEnabled: Boolean,
-        val moraleVoice: MoraleVoice,
+        val moralePersona: MoralePersona,
         val deathAnimationEnabled: Boolean,
         val flybyAnimationEnabled: Boolean,
         val followBullet: Boolean,
@@ -710,7 +711,7 @@ val sheltersEnabled: Boolean,
             showBorders = showBorders,
             showRegionBorders = showRegionBorders,
             moraleMasterEnabled = moraleMasterEnabled,
-            moraleVoice = moraleVoice,
+            moralePersona = moralePersona,
             deathAnimationEnabled = deathAnimationEnabled,
             flybyAnimationEnabled = flybyAnimationEnabled,
             followBullet = followBullet,
@@ -921,8 +922,9 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             threatCardSize = prefs.cardSize,
             // Photo is the app's default look and needs no unlock. The other packs are part of
             // what the Morale master switches on, so with it off the map falls back to Photo
-            // rather than leaving a flourish pack on screen that nothing animates.
-            iconSet = if (prefs.moraleMasterEnabled) prefs.iconSet else ThreatIconSet.PHOTO,
+            // rather than leaving a flourish pack on screen that nothing animates. Read through
+            // the shared gate, not the pref, so there is one answer to "is morale on".
+            iconSet = if (moraleGate.isOn) prefs.iconSet else ThreatIconSet.PHOTO,
             overlapMode = prefs.overlapMode,
             showMapScale = prefs.showMapScale,
             showMediumCities = prefs.showMediumCities,
@@ -933,7 +935,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
 showBorders = prefs.showBorders,
             showRegionBorders = prefs.showRegionBorders,
             moraleMasterEnabled = prefs.moraleMasterEnabled,
-            moraleVoice = prefs.moraleVoice,
+            moralePersona = prefs.moralePersona,
             deathAnimationEnabled = prefs.deathAnimationEnabled,
             flybyAnimationEnabled = prefs.flybyAnimationEnabled,
             followBullet = prefs.followBullet,
@@ -945,7 +947,7 @@ showBorders = prefs.showBorders,
             sheltersEnabled = prefs.sheltersEnabled,
             sheltersWithKids = prefs.sheltersWithKids,
             periodicGps = prefs.periodicGps,
-            calmMessagesEnabled = prefs.moraleMasterEnabled && prefs.calmMessagesEnabled,
+            calmMessagesEnabled = moraleGate.isOn && prefs.calmMessagesEnabled,
             hapticsEnabled = resolveHaptics(prefs.hapticsEnabled),
             shelterIndex = shelterIndex,
             shelterOverlayUp = live.shelterModeActive,
@@ -1665,8 +1667,8 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setOverlapMode(mode) }
     }
 
-    fun setMoraleVoice(voice: MoraleVoice) {
-        viewModelScope.launch { prefs.setMoraleVoice(voice) }
+    fun setMoralePersona(persona: MoralePersona) {
+        viewModelScope.launch { prefs.setMoralePersona(persona) }
     }
 
     fun setShowMediumCities(show: Boolean) {

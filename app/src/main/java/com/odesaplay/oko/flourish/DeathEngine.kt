@@ -2,7 +2,6 @@ package com.odesaplay.oko
 
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.PointF
 import android.graphics.drawable.Drawable
 import android.os.SystemClock
@@ -12,28 +11,33 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.PI
 import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Full-length elite death: projectile flight plus explosion, on the classic 5s clock. */
-internal const val ELITE_DEATH_DURATION_MS = 5000L
+/** Total length of a death: projectile flight plus explosion, on one clock for every style. */
+internal const val DEATH_DURATION_MS = 5000L
+
+/** The projectile hits and the explosion begins this many ms into the animation. */
+const val DEATH_EXPLOSION_START_MS = 2000L
+
+/** Explosion window ends this many ms after it starts; the neutralized card fades across it. */
+const val DEATH_EXPLOSION_LEN_MS = DEATH_DURATION_MS - DEATH_EXPLOSION_START_MS
 
 /** Compressed explosion for quick-boom deaths (intermediate replay groups). */
-internal const val ELITE_QUICK_EXPLOSION_LEN_MS = 800L
+internal const val QUICK_EXPLOSION_LEN_MS = 800L
 
 /**
- * Concurrent-death ceiling for the elite styles. A hard bound, never an expectation: it is
- * only ever reached when a phone sits untouched long enough to bank an overnight replay show.
+ * Concurrent-death ceiling. A hard bound, never an expectation: it is only ever reached when a
+ * phone sits untouched long enough to bank an overnight replay show. Global on purpose — there is
+ * exactly one engine, so a cap here is the cap for the whole map no matter how the deaths are styled.
  */
-internal const val ELITE_MAX_DEATHS = 420
+internal const val MAX_DEATHS = 420
 
 /**
- * How much of the explosion body a style is allowed to spend on a single blast this frame.
+ * How much of the explosion body a blast may spend this frame.
  *
- * This is the whole budget conversation in one number, so no style has to know why it is
- * being held back: [EliteDeathBase] hands the same [budget] to every elite and expects the
- * cheapest tier above [CHEAP] to still be recognisably that style.
+ * This is the whole performance conversation in one enum, so no body has to know why it is being
+ * held back: the engine hands the same [ExplosionBudget] to every body and expects the cheapest
+ * tier above [CHEAP] to still be recognisably that style.
  */
 enum class ExplosionBudget {
     /** Ring + core flash only. Always drawn, never skipped — the blast must still read. */
@@ -48,7 +52,7 @@ enum class ExplosionBudget {
     val richerThanCheap: Boolean get() = this != CHEAP
 }
 
-/** Explosion personality per threat type — the elite styles read it, never the raw [ThreatType]. */
+/** Explosion personality per threat type — bodies read it, never the raw [ThreatType]. */
 enum class EliteKind { SHAHED, BALLISTIC, CRUISE, FPV, AVIATION, KAB, RECON, UNKNOWN;
 
     companion object {
@@ -65,7 +69,7 @@ enum class EliteKind { SHAHED, BALLISTIC, CRUISE, FPV, AVIATION, KAB, RECON, UNK
     }
 }
 
-/** One tracked death. [payload] is scratch space owned by the concrete style. */
+/** One tracked death, plus the body that will draw it. [payload] is the body's own scratch. */
 class EliteDeath(
     val id: String?,
     val geo: LatLng,
@@ -78,25 +82,40 @@ class EliteDeath(
     val dud: Boolean,
     val durationMs: Long,
     val kind: EliteKind,
-    val seed: Int
+    val seed: Int,
+    /** Assigned once at spawn. Fixed styles get their one body; a shuffled engine deals one. */
+    val body: ExplosionBody
 ) {
     var payload: Any? = null
+
+    /**
+     * Screen-space bearing of the inbound shot, resolved once on the first explosion frame. Only
+     * Advanced reads it (to bias shards away from where the threat came from), but computing it
+     * here keeps the projection lambda out of bodies.
+     */
+    var inboundAngleRad: Float? = null
 }
 
 /**
- * Shared scaffolding for the elite explosion styles: the death list, the spawn/prune contract
- * and the whole pre-explosion half of the lifecycle (pre-spawned icon, gliding threat, inbound
- * projectile from just off the screen edge). A concrete style supplies only [drawExplosion] —
- * the part that actually differs — so each elite file contains just its own look.
+ * The one engine behind every explosion style. It owns the whole lifecycle — the death list, the
+ * spawn/prune contract, the pre-spawned icon, the gliding threat, the inbound projectile, the dud
+ * fly-past and the frame budget — and delegates exactly one thing to a style: how a blast looks,
+ * via [ExplosionBody].
  *
- * It also owns the frame budget. Cost here is per-blast turbulence times concurrent blasts, so
- * no phone escapes it: the base times its own explosion work, steps [budget] down when the
- * rolling average overruns, and steps back up when there is headroom. The caller never decides
- * how to degrade — it only says [economyMode] ("this is a show, not a single shot").
+ * That split is what makes a per-threat shuffled style possible without a composite. There is one
+ * death list, one [MAX_DEATHS] cap, one `active` flow and one `economyMode` no matter how many
+ * different styles are on screen at once; each death simply remembers which body draws it.
  */
-abstract class EliteDeathBase : DeathAnimation {
+class DeathEngine(
+    /** The styles this engine may draw with. One entry is a fixed style; several is a shuffle. */
+    bodies: List<ExplosionBody>,
+    private val shuffled: Boolean = false
+) : DeathAnimation {
 
-    protected val deaths = mutableListOf<EliteDeath>()
+    private val allBodies = bodies
+    private val bag = if (shuffled) ShuffleBag(bodies) else null
+
+    private val deaths = mutableListOf<EliteDeath>()
 
     private val _active = MutableStateFlow(false)
     override val active: StateFlow<Boolean> = _active.asStateFlow()
@@ -107,6 +126,14 @@ abstract class EliteDeathBase : DeathAnimation {
 
     /** True during a replay show: hold back the full body so hundreds of blasts stay fluid. */
     override var economyMode: Boolean = false
+
+    /** A fixed style shows its own look; a shuffled engine shows the "all of them" mark. */
+    override val preview: ExplosionPreview =
+        if (shuffled) ExplosionPreview(Color.WHITE, Color.rgb(255, 200, 90), ExplosionShape.MIXED)
+        else allBodies.first().preview
+
+    /** Pay every body's one-time setup before the first blast needs it. */
+    fun warmUp() = allBodies.forEach { (it as? ExplosionWarmer)?.warmUp() }
 
     private fun syncActive() {
         val nowActive = deaths.isNotEmpty()
@@ -132,7 +159,8 @@ abstract class EliteDeathBase : DeathAnimation {
         fireAtDelayMs: Long,
         type: ThreatType
     ) {
-        if (deaths.size >= ELITE_MAX_DEATHS) return
+        if (deaths.size >= MAX_DEATHS) return
+        val kind = EliteKind.fromType(type)
         val start = SystemClock.elapsedRealtime() + fireAtDelayMs.coerceAtLeast(0L)
         val seed = (id?.hashCode() ?: 0) xor start.toInt() xor type.ordinal * 0x9E3779B9.toInt()
         deaths.add(
@@ -146,17 +174,18 @@ abstract class EliteDeathBase : DeathAnimation {
                 rotationDeg = rotationDeg,
                 alpha = alpha,
                 dud = false,
-                durationMs = if (quickBoom) DEATH_EXPLOSION_START_MS + ELITE_QUICK_EXPLOSION_LEN_MS
-                else ELITE_DEATH_DURATION_MS,
-                kind = EliteKind.fromType(type),
-                seed = seed
+                durationMs = if (quickBoom) DEATH_EXPLOSION_START_MS + QUICK_EXPLOSION_LEN_MS
+                else DEATH_DURATION_MS,
+                kind = kind,
+                seed = seed,
+                body = bag?.deal(kind) ?: allBodies.first()
             )
         )
         syncActive()
     }
 
     override fun spawnDud(id: String?, geo: LatLng, origin: LatLng?) {
-        if (origin == null || deaths.size >= ELITE_MAX_DEATHS) return
+        if (origin == null || deaths.size >= MAX_DEATHS) return
         deaths.add(
             EliteDeath(
                 id = id,
@@ -170,13 +199,15 @@ abstract class EliteDeathBase : DeathAnimation {
                 dud = true,
                 durationMs = DEATH_EXPLOSION_START_MS,
                 kind = EliteKind.UNKNOWN,
-                seed = (id?.hashCode() ?: 0) xor 0x1F123BB5
+                seed = (id?.hashCode() ?: 0) xor 0x1F123BB5,
+                body = bag?.deal(EliteKind.UNKNOWN) ?: allBodies.first()
             )
         )
         syncActive()
     }
 
     override fun clear() {
+        deaths.forEach { it.body.release(it) }
         deaths.clear()
         budget = ExplosionBudget.FULL
         syncActive()
@@ -202,7 +233,7 @@ abstract class EliteDeathBase : DeathAnimation {
         deaths.removeAll {
             val elapsed = now - it.start
             val done = elapsed > it.durationMs || (it.dud && elapsed > DEATH_EXPLOSION_START_MS)
-            if (done) releasePayload(it)
+            if (done) it.body.release(it)
             done
         }
         if (deaths.isEmpty()) {
@@ -251,46 +282,37 @@ abstract class EliteDeathBase : DeathAnimation {
 
             if (t >= boomT && !d.dud) {
                 val e = ((t - boomT) / boomLenT).coerceIn(0f, 1f)
+                // Resolve the inbound bearing once, on the first explosion frame.
+                if (d.inboundAngleRad == null && d.origin != null) {
+                    project(d.origin!!.lat, d.origin!!.lon)?.let { o ->
+                        d.inboundAngleRad = atan2((y - o.y).toDouble(), (x - o.x).toDouble()).toFloat()
+                    }
+                }
                 val spend = when {
                     richLeft > 0 -> { richLeft--; ExplosionBudget.FULL }
                     frameBudget.richerThanCheap -> ExplosionBudget.SOLID
                     else -> ExplosionBudget.CHEAP
                 }
-                drawExplosion(
+                d.body.draw(
                     canvas = canvas,
-                    d = d,
+                    death = d,
                     x = x,
                     y = y,
                     e = e,
                     fade = 1f - e,
                     density = density,
-                    maxR = maxRFor(spend, density, zoomScale),
+                    // Radius is the body's own: each style keeps the exact size it shipped with.
+                    maxR = d.body.radius(density, zoomScale),
                     elapsedMs = (t - boomT) * dur,
-                    budget = spend
+                    budget = spend,
+                    hq = highQuality
                 )
             }
         }
         recordFrameCost(System.nanoTime() - startedNs)
     }
 
-    /** The one thing a concrete elite style has to define. `e` runs 0..1 across the explosion. */
-    protected abstract fun drawExplosion(
-        canvas: Canvas,
-        d: EliteDeath,
-        x: Float,
-        y: Float,
-        e: Float,
-        fade: Float,
-        density: Float,
-        maxR: Float,
-        elapsedMs: Float,
-        budget: ExplosionBudget
-    )
-
-    /** Per-death scratch cleanup on prune; styles holding recycled bitmaps override it. */
-    protected open fun releasePayload(d: EliteDeath) {}
-
-    protected fun drawIcon(canvas: Canvas, d: EliteDeath, pt: PointF?) {
+    private fun drawIcon(canvas: Canvas, d: EliteDeath, pt: PointF?) {
         val icon = d.icon ?: return
         val pt = pt ?: return
         val w = icon.intrinsicWidth.coerceAtLeast(1) / 2f
@@ -361,27 +383,6 @@ abstract class EliteDeathBase : DeathAnimation {
 
         /** Consecutive frames needed to move one tier, so a single slow frame can't demote. */
         private const val STEP_FRAMES = 12
-
-        fun hotCore(kind: EliteKind): Int = when (kind) {
-            EliteKind.BALLISTIC -> Color.WHITE
-            EliteKind.AVIATION -> Color.rgb(190, 225, 255)
-            EliteKind.CRUISE -> Color.rgb(255, 180, 80)
-            EliteKind.FPV -> Color.rgb(255, 230, 140)
-            else -> Color.WHITE
-        }
-
-        fun ember(kind: EliteKind): Int = when (kind) {
-            EliteKind.FPV -> Color.rgb(255, 220, 100)
-            EliteKind.SHAHED -> Color.rgb(255, 160, 40)
-            EliteKind.BALLISTIC -> Color.rgb(255, 240, 180)
-            EliteKind.AVIATION -> Color.rgb(180, 220, 255)
-            EliteKind.CRUISE -> Color.rgb(255, 190, 90)
-            else -> Color.rgb(255, 193, 7)
-        }
-
-        /** Slow expansion of the shock ring as a fraction of the explosion's max radius. */
-        fun shockRadius(maxR: Float, e: Float, speed: Float = 1.35f): Float =
-            maxR * (0.1f + speed * e)
     }
 
     private var costAvgNs = COST_LOW_NS
@@ -389,9 +390,9 @@ abstract class EliteDeathBase : DeathAnimation {
     private var calmFrames = 0
 
     /**
-     * The self-throttle. It times this style's own explosion work — not the whole frame, which
-     * includes tile rendering the style has no business judging — and moves one tier at a time
-     * after a sustained run, so a single slow frame can never demote a style mid-blast.
+     * The self-throttle. It times this engine's own explosion work — not the whole frame, which
+     * includes tile rendering it has no business judging — and moves one tier at a time after a
+     * sustained run, so a single slow frame can never demote a style mid-blast.
      */
     private fun frameBudget(concurrent: Int): ExplosionBudget {
         // A replay show, or more live blasts than anyone can afford in full: a flat body is the
@@ -430,13 +431,28 @@ abstract class EliteDeathBase : DeathAnimation {
         if (costNs <= 0L) return
         costAvgNs = (costAvgNs * 3 + costNs) / 4
     }
-
-    private fun maxRFor(budget: ExplosionBudget, density: Float, zoomScale: Float): Float =
-        when (budget) {
-            ExplosionBudget.FULL -> 52f * density * zoomScale
-            ExplosionBudget.SOLID -> 44f * density * zoomScale
-            ExplosionBudget.CHEAP -> 34f * density * zoomScale
-        }
 }
 
 internal const val ELITE_TAU = (2.0 * PI).toFloat()
+
+/** The white-hot centre colour for a threat type. */
+fun hotCore(kind: EliteKind): Int = when (kind) {
+    EliteKind.BALLISTIC -> Color.WHITE
+    EliteKind.AVIATION -> Color.rgb(190, 225, 255)
+    EliteKind.CRUISE -> Color.rgb(255, 180, 80)
+    EliteKind.FPV -> Color.rgb(255, 230, 140)
+    else -> Color.WHITE
+}
+
+/** The ember/particle colour for a threat type. */
+fun ember(kind: EliteKind): Int = when (kind) {
+    EliteKind.FPV -> Color.rgb(255, 220, 100)
+    EliteKind.SHAHED -> Color.rgb(255, 160, 40)
+    EliteKind.BALLISTIC -> Color.rgb(255, 240, 180)
+    EliteKind.AVIATION -> Color.rgb(180, 220, 255)
+    EliteKind.CRUISE -> Color.rgb(255, 190, 90)
+    else -> Color.rgb(255, 193, 7)
+}
+
+/** Slow expansion of the shock ring as a fraction of the explosion's max radius. */
+fun shockRadius(maxR: Float, e: Float, speed: Float = 1.35f): Float = maxR * (0.1f + speed * e)

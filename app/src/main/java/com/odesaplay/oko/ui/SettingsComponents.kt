@@ -89,7 +89,7 @@ internal fun Modifier.explainerFlash(active: Boolean): Modifier {
 @Composable
 internal fun AlertToggleRow(
     title: String,
-    description: String,
+    description: String? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     icon: Painter? = null,
@@ -180,12 +180,14 @@ internal fun AlertToggleRow(
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(3.dp))
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            description?.let {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             note?.let {
                 Spacer(Modifier.height(6.dp))
                 if (noteIcon != null) {

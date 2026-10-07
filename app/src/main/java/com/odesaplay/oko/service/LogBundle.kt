@@ -300,6 +300,12 @@ object LogBundle {
                     p("scheduledAt", e.scheduledAt)
                 }
             }.toJson())
+            p("wakeEvents", WakeEventLog.entries.value.map { e ->
+                JSONObject().apply {
+                    p("atMillis", e.atMillis)
+                    p("kind", e.kind.name)
+                }
+            }.toJson())
             p("gps", GpsLog.entries.value.map { e ->
                 JSONObject().apply {
                     p("atMillis", e.atMillis)
@@ -324,6 +330,10 @@ object LogBundle {
                     p("batteryUnoptimized", e.batteryUnoptimized)
                     p("processStartMonoMs", e.processStartMonoMs)
                     p("processCpuMs", e.processCpuMs)
+                    p("uptimeMs", e.uptimeMs)
+                    p("uidRxBytes", e.uidRxBytes)
+                    p("uidTxBytes", e.uidTxBytes)
+                    p("transport", e.transport)
                     p("feedThreats", e.feedThreats)
                     p("activeZones", e.activeZones)
                     p("screenBrightness", e.screenBrightness)
@@ -472,6 +482,12 @@ object LogBundle {
         val generations = LinkedHashSet<Long>()
         val pcts = ArrayList<Int>()
         val cpuPct = ArrayList<Double>()
+        var wallMs = 0L
+        var upMs = 0L
+        var sleepPairs = 0
+        var rxTotal = 0L
+        var txTotal = 0L
+        var uidPairs = 0
 
         for (i in power.indices) {
             val s = power[i]
@@ -483,9 +499,33 @@ object LogBundle {
                 // huge negative, and a sample predating the field reads as unknown, not as zero.
                 val cpu = s.processCpuMs
                 val priorCpu = previousCpu
-                if (cpu != null && priorCpu != null && gapMs > 0 && cpu >= priorCpu &&
-                    s.processStartMonoMs == power[i - 1].processStartMonoMs) {
+                val prev = power[i - 1]
+                val sameGen = s.processStartMonoMs != null &&
+                    s.processStartMonoMs == prev.processStartMonoMs
+                if (cpu != null && priorCpu != null && gapMs > 0 && cpu >= priorCpu && sameGen) {
                     cpuPct.add((cpu - priorCpu) * 100.0 / gapMs)
+                }
+                // Deep sleep and UID traffic share the same continuity gate: uptime freezes in
+                // deep sleep and resets on reboot, and the UID counters reset on reboot too —
+                // which always starts a new process generation, so same-generation plus
+                // non-decreasing is the whole guard for both.
+                if (sameGen && gapMs > 0) {
+                    val up = s.uptimeMs
+                    val priorUp = prev.uptimeMs
+                    if (up != null && priorUp != null && up >= priorUp) {
+                        wallMs += gapMs
+                        upMs += up - priorUp
+                        sleepPairs++
+                    }
+                    val rx = s.uidRxBytes
+                    val priorRx = prev.uidRxBytes
+                    if (rx != null && priorRx != null && rx >= priorRx) {
+                        rxTotal += rx - priorRx
+                        uidPairs++
+                    }
+                    val tx = s.uidTxBytes
+                    val priorTx = prev.uidTxBytes
+                    if (tx != null && priorTx != null && tx >= priorTx) txTotal += tx - priorTx
                 }
                 // A new process generation inside a gap means the process died. The gap is an
                 // UPPER BOUND on blindness: it also covers the wait before the new process's
@@ -528,6 +568,15 @@ object LogBundle {
             p("cpuPctMean", cpuPct.takeIf { it.isNotEmpty() }?.average())
             p("cpuPctMax", cpuPct.maxOrNull())
             p("cpuIntervals", cpuPct.size.takeIf { cpuPct.isNotEmpty() })
+            // Share of the span the CPU was suspended: the answer to "did this phone sleep".
+            // Null, not 0: no uptime-carrying pair is "cannot tell", and 0 would claim it never slept.
+            p("deepSleepPct", if (sleepPairs > 0 && wallMs > 0) {
+                ((wallMs - upMs).coerceAtLeast(0) * 100.0 / wallMs)
+            } else null)
+            // Our own radio use over the span. Same null contract: counters nobody carried are
+            // unknown, and a span across a reboot starts a new generation, which resets the gate.
+            p("uidRxKbTotal", rxTotal.takeIf { uidPairs > 0 }?.let { it / 1024 })
+            p("uidTxKbTotal", txTotal.takeIf { uidPairs > 0 }?.let { it / 1024 })
             p("batteryPctMin", pcts.minOrNull())
             p("batteryPctMax", pcts.maxOrNull())
         }

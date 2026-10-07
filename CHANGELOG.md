@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- Logs now record deep-sleep share, our own radio bytes and network transport per sample, plus a wake-events block, so the next battery report answers itself 10-07_18:25:00
+- Fixed duplicate power-timeline rows: the tick re-fired on every input change with a stale clock, inflating every sample count 10-07_18:25:00
+- The explosion-style grid now draws each style's cheap body while detailed effects are off, so the toggle previews what it actually switches 10-07_18:20:00
+- Morale off now snaps every icon back to the plain photo pack — map, threat cards, settings and the home-screen widget — instead of leaving the flourish pack on screen 10-07_18:05:00
+- The Morale persona picker is now labelled Tone (was Voice), and the persona/pack split is explicit in code 10-07_18:02:50
 - The Morale section no longer claims explosions and the counter are on while Morale itself is off 10-07_14:05:00
 - Morale off now stops a MiG flyby already in its pass, and a notification-tap flyby can no longer slip through on a stale switch value 10-07_14:05:00
 - A finished tally replay no longer leaves the explosion style stuck in its cheap "show" mode, so later kills are drawn full again 10-07_14:05:00
@@ -11,6 +16,9 @@
 - The baked "Film" explosion no longer re-tints its frames every frame, which was the biggest cost in it, and Aftermath's smoke now rises well after the fireball and thickens as it climbs 10-07_2:20:00
 - "Detailed explosion effects" moved next to the explosion-style picker, where it actually applies 10-07_2:20:00
 - Turning Morale off now really means off: the map falls back to the plain photo icons and nothing animates, instead of leaving a flourish icon pack on screen that plays nothing 10-07_2:20:00
+- Over a night of several alarms the summary now accumulates instead of replacing itself: same city, same night — one row with the summed minutes and the alarm count ("27min · 2 alarms"), and the tap replays the whole night 10-07_20:17:21
+- The "Oko was asleep" notice now waits ~20 seconds after you pick the phone up before it posts, instead of landing on top of whatever you picked it up for 10-07_18:13:10
+- The first-run wizard now writes "Settings" as the screen's name everywhere it mentions it, each time with the gear icon — it used to be lowercase in two places and one mention had no icon at all 10-07_18:13:10
 - Fixed the alarm summary reporting the wrong length: the window no longer closes when your focus moves off the region or while the feed hasn't reported, and a summary never states a duration for an alarm the app didn't watch begin (a restart mid-alarm) 10-07_17:24:26
 - The alarm summary without a duration is now in your language instead of English 10-07_17:46:01
 - Logs now carry per-sample process CPU time, so a battery report can be attributed to the app or to the screen without guessing 10-06_19:40:00

@@ -132,7 +132,7 @@ fun SettingsScreen(
     onSheltersEnabledChange: (Boolean) -> Unit,
     onOpenShelterList: () -> Unit = {},
     onMoraleMasterChange: (Boolean) -> Unit,
-    onMoraleVoiceChange: (MoraleVoice) -> Unit,
+    onMoralePersonaChange: (MoralePersona) -> Unit,
     onDeathAnimationChange: (Boolean) -> Unit,
     onDeathAnimationStyleChange: (DeathAnimationStyle) -> Unit,
     onFlybyAnimationChange: (Boolean) -> Unit,
@@ -227,7 +227,7 @@ fun SettingsScreen(
     val digestPerType = state.digestPerType
     val overlapMode = state.overlapMode
     val moraleMasterEnabled = state.moraleMasterEnabled
-    val moraleVoice = state.moraleVoice
+    val moralePersona = state.moralePersona
     val bootRestartEnabled = state.bootRestartEnabled
     val sleepNoticeEnabled = state.sleepNoticeEnabled
     val s = Strings.get(lang)
@@ -1015,9 +1015,12 @@ fun SettingsScreen(
                                         DeathAnimationStyle.BREACH -> s.deathAnimStyleBreachLabel
                                         DeathAnimationStyle.FILM -> s.deathAnimStyleFilmLabel
                                         DeathAnimationStyle.AFTERMATH -> s.deathAnimStyleAftermathLabel
+                                        DeathAnimationStyle.RANDOM -> s.deathAnimStyleRandomLabel
                                     }
                                 },
-                                onChange = onDeathAnimationStyleChange
+                                onChange = onDeathAnimationStyleChange,
+                                shuffleLabel = s.deathAnimStyleRandomLabel,
+                                detailed = highQualityExplosions
                             )
                             Spacer(Modifier.height(4.dp))
                             // Detail belongs to the style picker, not to a different section:
@@ -1042,6 +1045,7 @@ fun SettingsScreen(
                                     DeathAnimationStyle.BREACH -> s.deathAnimStyleBreachNote
                                     DeathAnimationStyle.FILM -> s.deathAnimStyleFilmNote
                                     DeathAnimationStyle.AFTERMATH -> s.deathAnimStyleAftermathNote
+                                    DeathAnimationStyle.RANDOM -> s.deathAnimStyleRandomNote
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1058,7 +1062,7 @@ fun SettingsScreen(
                             lang = lang,
                             selected = iconSet,
                             onChange = onIconSetChange,
-                            packs = if (moraleMasterEnabled) ThreatIconSet.values().toList() else listOf(ThreatIconSet.PHOTO)
+                            packs = if (moraleMasterEnabled) ThreatIconSet.values().toList() else listOf(ThreatIconSet.DEFAULT)
                         )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1233,13 +1237,13 @@ fun SettingsScreen(
                     AlertToggleRow(title = s.threatIconZoomTitle, description = s.threatIconZoomDesc, checked = threatIconZoom, onCheckedChange = onThreatIconZoomChange, icon = rememberVectorPainter(Icons.Default.ZoomIn), iconTint = MaterialTheme.colorScheme.onSurfaceVariant, flash = flashId == "iconZoom")
             }
             // Master switch lives on the root row; with it off the page says so instead of showing
-            // nothing but the voice-pack note.
+            // nothing but the persona-pack note.
             SettingsSection.FLOURISH -> SectionDetailBody(stateSummary = sectionSummary(section)) {
                     AnimatedVisibility(visible = moraleMasterEnabled) {
                         MoraleToggles(
                             s = s,
-                            voice = moraleVoice,
-                            onVoiceChange = onMoraleVoiceChange,
+                            persona = moralePersona,
+                            onPersonaChange = onMoralePersonaChange,
                             calmMessagesEnabled = calmMessagesEnabled,
                             flybyAnimationEnabled = flybyAnimationEnabled,
                             deathAnimationEnabled = deathAnimationEnabled,
@@ -1258,8 +1262,8 @@ fun SettingsScreen(
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Text(
-                        remember(lang, moraleVoice) {
-                            moraleVoicePack(lang, resolveMoraleVoice(moraleVoice)).note
+                        remember(lang, moralePersona) {
+                            moralePersonaPack(lang, resolveMoralePersona(moralePersona)).note
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

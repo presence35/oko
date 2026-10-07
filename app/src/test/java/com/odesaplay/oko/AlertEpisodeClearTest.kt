@@ -52,6 +52,16 @@ class AlertEpisodeClearTest {
     )
     private val token = alert.canonicalOblastId()!!
 
+    private val otherAlert = OblastAlert(
+        key = "Дніпропетровська область",
+        name = "Дніпропетровська область",
+        oblast = "Дніпропетровська область",
+        since = "t0",
+        wide = true,
+        level = "red"
+    )
+    private val otherToken = otherAlert.canonicalOblastId()!!
+
     private companion object {
         const val MIN = 60_000L
         const val CITY = "Сєвєроводськ"
@@ -104,6 +114,20 @@ class AlertEpisodeClearTest {
     private fun alarmSummaryTitle(notification: Notification?): String? =
         notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()
 
+    /**
+     * The shade row is replaced, not added to: every post reuses the one id, so awaiting "any
+     * summary" returns the previous alarm's row instead of waiting for this one. Await the title
+     * itself.
+     */
+    private fun awaitSummaryTitle(expected: String): String? {
+        repeat(300) {
+            val title = alarmSummaryTitle(alarmSummary())
+            if (title == expected) return title
+            Thread.sleep(10)
+        }
+        return alarmSummaryTitle(alarmSummary())
+    }
+
     /** (deadline, closed) — the two facts only the TTL and the debris ticks read. */
     private fun allClearLifecycle() = service().allClearLifecycleForTest()
 
@@ -113,10 +137,22 @@ class AlertEpisodeClearTest {
 
     private fun live() = monitor(level = AlertLevel.RED, alerts = listOf(alert))
 
+    private fun liveOther() = monitor(
+        level = AlertLevel.RED,
+        alerts = listOf(otherAlert),
+        city = OTHER_CITY,
+        focusToken = otherToken
+    )
+
     private fun announce(now: Long) {
         tick(now, live())
         // Second live tick: the persisted latch is now re-read, so it counts as "observed live".
         tick(now + 1, live())
+    }
+
+    private fun announceOther(now: Long) {
+        tick(now, liveOther())
+        tick(now + 1, liveOther())
     }
 
     private fun monitor(
@@ -358,6 +394,61 @@ class AlertEpisodeClearTest {
         assertEquals(
             "$CITY: alarm summary",
             alarmSummaryTitle(awaitAlarmSummary())
+        )
+    }
+
+    /**
+     * The night accumulates: a second alarm an hour later does not evict the first report — it
+     * becomes one more alarm in that row, with the minutes summed.
+     */
+    @Test
+    fun `two alarms for one city merge into one row`() {
+        announce(1_000)
+        tick(1_000 + 5 * MIN, monitor())
+
+        announce(1_000 + 10 * MIN)
+        tick(1_000 + 32 * MIN, monitor())
+
+        assertEquals(
+            "$CITY: 27min · 2 alarms",
+            awaitSummaryTitle("$CITY: 27min · 2 alarms")
+        )
+    }
+
+    /**
+     * Two cities are two stories. The second region's alarm starts its own row rather than
+     * summing into the first region's.
+     */
+    @Test
+    fun `an alarm for another city does not merge`() {
+        announce(1_000)
+        tick(1_000 + 5 * MIN, monitor())
+
+        announceOther(1_000 + 10 * MIN)
+        tick(1_000 + 15 * MIN, monitor(city = OTHER_CITY, focusToken = otherToken))
+
+        assertEquals(
+            "$OTHER_CITY: 5min alarm summary",
+            awaitSummaryTitle("$OTHER_CITY: 5min alarm summary")
+        )
+    }
+
+    /**
+     * Last night's summary is not tonight's. Past the merge window the next alarm starts fresh
+     * rather than summing into a row from half a day ago.
+     */
+    @Test
+    fun `a row past the merge window does not merge`() {
+        announce(1_000)
+        tick(1_000 + 5 * MIN, monitor())
+
+        val nextDay = 1_000 + 13 * 60 * MIN
+        announce(nextDay)
+        tick(nextDay + 7 * MIN, monitor())
+
+        assertEquals(
+            "$CITY: 7min alarm summary",
+            awaitSummaryTitle("$CITY: 7min alarm summary")
         )
     }
 }

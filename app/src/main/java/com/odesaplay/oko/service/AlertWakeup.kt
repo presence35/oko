@@ -8,6 +8,8 @@ import android.content.Intent
 import android.os.Build
 import com.odesaplay.oko.AlertService
 import com.odesaplay.oko.UserPrefs
+import com.odesaplay.oko.WakeEventLog
+import com.odesaplay.oko.WakeKind
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
@@ -82,6 +84,7 @@ object AlertWakeup {
  */
 class AlertWakeupReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        WakeEventLog.record(WakeKind.ALARM)
         val appContext = context.applicationContext
         if (MonitoringStatus.running.value) {
             // Alive: the thaw is the whole point, so only the chain needs attention.

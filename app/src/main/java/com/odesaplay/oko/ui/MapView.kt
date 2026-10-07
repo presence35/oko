@@ -352,7 +352,7 @@ fun NeptunMapView(
     uiState: UiState,
     selectedThreatId: StateFlow<String?>,
     lang: AppLanguage,
-    iconSet: ThreatIconSet = ThreatIconSet.PHOTO,
+    iconSet: ThreatIconSet = ThreatIconSet.DEFAULT,
     onScaleChange: (Double) -> Unit,
     onThreatTapped: (NormalizedThreat) -> Unit,
     onMapTapped: () -> Unit,

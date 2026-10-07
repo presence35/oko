@@ -443,7 +443,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                     }
                 },
                 onMoraleMasterChange = remember { { viewModel.setMoraleEnabled(it) } },
-                onMoraleVoiceChange = remember { { viewModel.setMoraleVoice(it) } },
+                onMoralePersonaChange = remember { { viewModel.setMoralePersona(it) } },
                 onDeathAnimationChange = remember { { viewModel.setDeathAnimationEnabled(it) } },
                 onDeathAnimationStyleChange = remember { { viewModel.setDeathAnimationStyle(it) } },
                 onFlybyAnimationChange = remember { { viewModel.setFlybyAnimationEnabled(it) } },
@@ -1239,8 +1239,8 @@ private fun MapScreen(
                             silencedTypes = uiState.silencedTypes,
                             focusLocation = uiState.focusLocation,
                             iconSet = uiState.iconSet,
-                            calmMessage = remember(uiState.language, uiState.calmMessagesEnabled, uiState.moraleVoice) {
-                                noThreatsMessage(uiState.language, uiState.calmMessagesEnabled, uiState.moraleVoice)
+                            calmMessage = remember(uiState.language, uiState.calmMessagesEnabled, uiState.moralePersona) {
+                                noThreatsMessage(uiState.language, uiState.calmMessagesEnabled, uiState.moralePersona)
                             },
                             debrisText = debrisFooterText(s),
                             onThreatStripTap = onThreatStripTap

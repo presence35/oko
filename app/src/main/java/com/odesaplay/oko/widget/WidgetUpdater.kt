@@ -84,7 +84,7 @@ object WidgetUpdater {
                         followMe = p.followMe,
                         pinned = p.pinnedCity,
                         lang = p.language,
-                        iconSet = p.threatIconSet,
+                        iconSet = if (p.moraleMasterEnabled) p.threatIconSet else ThreatIconSet.DEFAULT,
                         mapEnabled = p.mapVisibleTypes,
                         dayParams = ZoneParams(p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin),
                         nightZones = p.nightZones,
@@ -205,7 +205,7 @@ object WidgetUpdater {
     suspend fun readIconSet(context: Context): ThreatIconSet {
         val prefs = store(context).data.first()
         return prefs[Keys.iconSet]?.let { set -> ThreatIconSet.values().firstOrNull { it.name == set } }
-            ?: ThreatIconSet.PHOTO
+            ?: ThreatIconSet.DEFAULT
     }
 }
 

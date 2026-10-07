@@ -163,6 +163,15 @@ object SleepPolicy {
     const val REFRESH_AFTER_MS = 4 * 60 * 60_000L
 
     /**
+     * How long the screen must stay on before the row may be written. The tick loop runs every
+     * second while the screen is up, so without this the notice lands within a second of the screen
+     * lighting — on top of the phone the user picked up to do something else. Long enough to cover
+     * "check the time, start a call", short enough that the row is still there for the rest of the
+     * morning.
+     */
+    const val WAKE_SETTLE_MS = 21_000L
+
+    /**
      * Order matters and is the whole policy:
      *  - a switched-off feature is first, because it trumps everything including the exemption:
      *    nothing is folded into the ledger, so nothing is ever published either;
@@ -195,15 +204,19 @@ object SleepPolicy {
     /**
      * Whether the accumulated tally should (re)write the shade row now.
      *
-     * [screenOn] is the point of the whole thing: a stall reported at 3am is read with breakfast
-     * anyway, so the row waits for the moment the user is actually holding the phone — and by then
-     * it can carry the night's total instead of the single floor-rounded number that arrived first.
+     * [screenOnSinceMillis] is the point of the whole thing: a stall reported at 3am is read with
+     * breakfast anyway, so the row waits for the moment the user is actually holding the phone — and
+     * by then it can carry the night's total instead of the single floor-rounded number that arrived
+     * first. It is the *timestamp* rather than a flag, because the screen-on edge alone was too
+     * eager: a one-second screen wakes the notice onto a user who is still putting the phone down
+     * and picking up what they came for. `null` means the screen is off.
      * Nothing is hidden by the wait: an official raid is announced by its own path, never this row.
      */
-    fun noticeDue(ledger: SleepLedger, now: Long, screenOn: Boolean): Boolean = when {
+    fun noticeDue(ledger: SleepLedger, now: Long, screenOnSinceMillis: Long?): Boolean = when {
         ledger.stalls == 0 -> false
         rowExpired(ledger, now) -> false
-        !screenOn -> false
+        screenOnSinceMillis == null -> false
+        now - screenOnSinceMillis < WAKE_SETTLE_MS -> false
         ledger.postedAtMillis == null -> true
         ledger.officialOnset && !ledger.reportedOfficialOnset -> true
         now - ledger.postedAtMillis >= REFRESH_AFTER_MS -> true

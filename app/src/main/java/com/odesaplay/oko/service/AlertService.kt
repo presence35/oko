@@ -246,11 +246,17 @@ class AlertService : Service() {
     @Volatile private var wasConnected = true
     private var offlineAlertJob: Job? = null
     private var offlineRestorePending = false
-    private val screenOnFlow = MutableStateFlow(true)
+    /**
+     * Whether the user is holding the phone, and since when. A bare flag could not carry the second
+     * half, and that half is the sleep row's whole policy: it waits for the screen to come on and
+     * then waits again [SleepPolicy.WAKE_SETTLE_MS] before it is written, because a notification
+     * landing the instant the screen lights interrupts the one thing the user picked the phone up for.
+     */
+    private val screenFlow = MutableStateFlow(ScreenState(on = true, sinceMillis = 0L))
     /**
      * A sleep the loop just came out of, waiting to be reported. Set by the tick coroutine, read and
      * consumed by the evaluation coroutine — a StateFlow because that is already the hand-off shape
-     * here ([nowFlow], [screenOnFlow]), and because the evaluation needs a re-run when it changes.
+     * here ([nowFlow], [screenFlow]), and because the evaluation needs a re-run when it changes.
      */
     private val pendingSleep = MutableStateFlow<PendingSleep?>(null)
 
@@ -265,6 +271,8 @@ class AlertService : Service() {
      * because [applySleepDecision] is a member and needs to receive the same snapshot the
      * evaluation saw. Source-agnostic by construction: engine currency in, nothing wire-shaped.
      */
+    private data class ScreenState(val on: Boolean, val sinceMillis: Long)
+
     private data class LiveInputs(
         val rawThreats: Map<String, NormalizedThreat>,
         val alerts: List<OblastAlert>,
@@ -273,7 +281,7 @@ class AlertService : Service() {
         val alertsReady: Boolean,
         /** Whether the user is actually looking. The sleep row waits for it, so the report lands
          *  with the night's total rather than as a floor-rounded number at 3am. */
-        val screenOn: Boolean,
+        val screen: ScreenState,
         /** The sleep this tick closed, if any. Rides the feed so the classification sees the same
          *  snapshot the evaluation does, and is consumed exactly once. */
         val sleep: PendingSleep? = null
@@ -491,16 +499,23 @@ class AlertService : Service() {
         screenReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
-                    Intent.ACTION_SCREEN_ON -> screenOnFlow.value = true
-                    Intent.ACTION_SCREEN_OFF -> screenOnFlow.value = false
+                    Intent.ACTION_SCREEN_ON ->
+                        screenFlow.value = ScreenState(on = true, sinceMillis = System.currentTimeMillis())
+                    Intent.ACTION_SCREEN_OFF ->
+                        screenFlow.value = ScreenState(on = false, sinceMillis = System.currentTimeMillis())
                 }
             }
         }
         // The receiver only ever sees a transition, so a restart — which is exactly when a night
         // sleep is reported — would otherwise read the initial value and think the user is looking.
         // The sleep row waits on this, so it must state the truth at start, not just after a flip.
-        screenOnFlow.value =
-            (getSystemService(Context.POWER_SERVICE) as? PowerManager)?.isInteractive ?: true
+        // "Looking at it now" starts counting from this moment, not from whenever the screen was
+        // last lit: a restart is what reports a night of sleep, and a row that believes the
+        // screen went on hours ago would post the instant it starts.
+        screenFlow.value = ScreenState(
+            on = (getSystemService(Context.POWER_SERVICE) as? PowerManager)?.isInteractive ?: true,
+            sinceMillis = System.currentTimeMillis()
+        )
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -765,7 +780,7 @@ class AlertService : Service() {
             launch {
                 var previous = System.currentTimeMillis()
                 while (true) {
-                    val fast = screenOnFlow.value
+                    val fast = screenFlow.value.on
                     delay(if (fast) MONITOR_TICK_MS else MONITOR_TICK_IDLE_MS)
                     val tick = System.currentTimeMillis()
                     val gap = tick - previous
@@ -800,7 +815,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 registry.degradedSince,
                 registry.alertsReady,
                 pendingSleep,
-                screenOnFlow
+                screenFlow
             ) { values: Array<Any?> ->
                 @Suppress("UNCHECKED_CAST")
                 LiveInputs(
@@ -809,7 +824,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     gps = values[2] as LatLng?,
                     now = values[3] as Long,
                     alertsReady = values[6] as Boolean,
-                    screenOn = values[8] as Boolean,
+                    screen = values[8] as ScreenState,
                     sleep = values[7] as PendingSleep?
                 )
             }
@@ -2058,7 +2073,7 @@ val mappedThreats = registry.allThreats.map { list ->
             sleepLedger = null
             return
         }
-        if (!SleepPolicy.noticeDue(ledger, now, live.screenOn)) return
+        if (!SleepPolicy.noticeDue(ledger, now, live.screen.takeIf { it.on }?.sinceMillis)) return
         val s = Strings.get(prefs.language)
         notificationManager.postSleepNotice(
             s.sleepNoticeTitle,

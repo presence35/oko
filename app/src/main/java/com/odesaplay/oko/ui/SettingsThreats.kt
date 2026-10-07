@@ -100,7 +100,7 @@ internal fun ThreatTypeRow(
                     Spacer(Modifier.width(6.dp))
                     Pill(
                         if (fast) s.fastGroupLabel else s.slowGroupLabel,
-                        if (fast) Color(AppPalette.AlertYellow) else TurtleGreen
+                        if (fast) ZoneRedColor else ZoneYellowColor
                     )
                 }
                 Spacer(Modifier.width(4.dp))
@@ -186,6 +186,16 @@ private const val BUBBLE_LEFT = 0.655f
 private const val BUBBLE_TOP = 0.200f
 private const val BUBBLE_WIDTH = 0.335f
 
+/** How much smaller the long word of the name is drawn next to the short one, and how far down
+ *  the finished block sits from the face's centre (as a fraction of the face's height). */
+private const val CRATE_LONG_LINE_SCALE = 0.90f
+private const val CRATE_LETTER_DROP = 0.08f
+
+/** The warp follows the crate's face and lands the lettering at about -8.7 deg; the crate's
+ *  bottom edge runs at -15.5 deg, and this is the extra counterclockwise turn that puts the
+ *  letters on that line. Both measured off `ic_unknown_cat.webp`. */
+private const val CRATE_LETTER_TILT = -6.8f
+
 /** The crate lettering mirrors the original art: the first word on its own line, the rest under
  *  it, so UA/EN/RU all break the same way instead of relying on where the text happens to wrap. */
 private fun crateLabel(name: String): List<String> =
@@ -197,6 +207,9 @@ private fun crateLabel(name: String): List<String> =
  * then warped onto the face quad, so the letters converge with the planks the way painted type
  * would — and every language lands the same fit without per-language constants. Because the fit
  * is relative, a large system font scale grows the letters into the face rather than out of it.
+ * [CRATE_LONG_LINE_SCALE] sets the long word against the short one, [CRATE_LETTER_DROP] nudges
+ * the pair down off the crate's rim and [CRATE_LETTER_TILT] turns the finished block onto the
+ * crate's bottom edge.
  */
 @Composable
 private fun CrateLettering(name: String, modifier: Modifier) {
@@ -227,10 +240,23 @@ private fun CrateLettering(name: String, modifier: Modifier) {
             lineHeight = style.lineHeight * fit
         )
         val lines = text.map { measurer.measure(it, fittedStyle) }
-        val fittedWidth = blockWidth * fit
-        val fittedHeight = lines.sumOf { it.size.height }.toFloat()
-        val blockLeft = left + ((right - left) - fittedWidth) / 2f
-        val blockTop = top + ((bottom - top) - fittedHeight) / 2f
+        // The Schrödinger word is the longer of the two in every language; drawing it a touch
+        // smaller evens the pair out the way the original lettering reads.
+        val longest = lines.indices.maxByOrNull { lines[it].size.width } ?: 0
+        val drawn = lines.mapIndexed { index, line ->
+            if (index != longest) line
+            else measurer.measure(
+                text[index],
+                fittedStyle.copy(
+                    fontSize = fittedStyle.fontSize * CRATE_LONG_LINE_SCALE,
+                    lineHeight = fittedStyle.lineHeight * CRATE_LONG_LINE_SCALE
+                )
+            )
+        }
+        val drawnWidth = drawn.maxOf { it.size.width }.toFloat()
+        val drawnHeight = drawn.sumOf { it.size.height }.toFloat()
+        val blockLeft = left + ((right - left) - drawnWidth) / 2f
+        val blockTop = top + ((bottom - top) - drawnHeight) / 2f + (bottom - top) * CRATE_LETTER_DROP
         // The face's box -> the face quad: one homography gives the lettering the crate's own
         // perspective, so the letters converge with the planks the way painted type would.
         val warp = android.graphics.Matrix().apply {
@@ -244,13 +270,20 @@ private fun CrateLettering(name: String, modifier: Modifier) {
             )
         }
         withTransform({ transform(Matrix().apply { setFrom(warp) }) }) {
-            var lineTop = blockTop
-            lines.forEach { line ->
-                drawText(
-                    line,
-                    topLeft = Offset(blockLeft + (fittedWidth - line.size.width) / 2f, lineTop)
+            withTransform({
+                rotate(
+                    degrees = CRATE_LETTER_TILT,
+                    pivot = Offset(blockLeft + drawnWidth / 2f, blockTop + drawnHeight / 2f)
                 )
-                lineTop += line.size.height
+            }) {
+                var lineTop = blockTop
+                drawn.forEach { line ->
+                    drawText(
+                        line,
+                        topLeft = Offset(blockLeft + (drawnWidth - line.size.width) / 2f, lineTop)
+                    )
+                    lineTop += line.size.height
+                }
             }
         }
     }

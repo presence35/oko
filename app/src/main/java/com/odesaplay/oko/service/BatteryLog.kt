@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.TrafficStats
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
@@ -60,7 +63,18 @@ data class BatterySample(
      *  this you cannot tell "app leaked waketime" from "user had the map open at full
      *  brightness". Under auto-brightness this reports the user's SLIDER, so it is a relative
      *  proxy, not the emitted luminance. Null when the setting cannot be read. */
-    val screenBrightness: Float? = null
+    val screenBrightness: Float? = null,
+    /** `SystemClock.uptimeMillis()`: freezes in deep sleep, so wall-minus-uptime per interval
+     *  is an exact sleep meter. Resets on reboot, which always starts a new process generation. */
+    val uptimeMs: Long? = null,
+    /** This UID's cumulative rx/tx bytes (`TrafficStats`, no permission). The attribution
+     *  clincher: tiny deltas beside a large battery drop mean someone else's radio billed to us.
+     *  Null when the platform reports UNSUPPORTED. Reset only on reboot. */
+    val uidRxBytes: Long? = null,
+    val uidTxBytes: Long? = null,
+    /** Active-network transport: "wifi", "cell" or "other". The radio-cost question is
+     *  unanswerable without it — a persistent socket on 5G and on wifi are different batteries. */
+    val transport: String? = null
 )
 
 /**
@@ -100,7 +114,20 @@ object BatteryLog {
     @Volatile private var appContext: Context? = null
     @Volatile private var store: File? = null
     @Volatile private var lastSampleMono = 0L
+    @Volatile private var lastRecordedWall = 0L
     private var linesOnDisk = 0
+
+    /**
+     * Both gates, extracted so the stale-clock case is unit-testable. The mono gate is the
+     * cadence; the wall gate is the dedupe: `AlertService.handleState` re-fires on every input
+     * change (location fix, prefs write) with an unchanged tick clock, and without the wall
+     * gate each re-fire past 25s of mono mints another row under the same millisecond —
+     * identical timestamps, different content, every count in the bundle silently inflated.
+     * A backward wall jump stalls sampling until the wall passes, the same accepted tradeoff
+     * as the mono gate's.
+     */
+    internal fun throttleAllows(now: Long, lastWall: Long, mono: Long, lastMono: Long): Boolean =
+        mono - lastMono >= SAMPLE_INTERVAL_MS && now > lastWall
 
     /** Idempotent — both AlertService and MainActivity attach. */
     fun attach(context: Context) {
@@ -148,8 +175,9 @@ object BatteryLog {
         // Throttle AFTER the context check: updating the clock before it means one early call
         // with no context would silently swallow the next 25s of samples.
         val mono = SystemClock.elapsedRealtime()
-        if (mono - lastSampleMono < SAMPLE_INTERVAL_MS) return
+        if (!throttleAllows(now, lastRecordedWall, mono, lastSampleMono)) return
         lastSampleMono = mono
+        lastRecordedWall = now
         val pm = ctx.getSystemService(PowerManager::class.java)
         val sticky = ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val entry = BatterySample(
@@ -178,6 +206,23 @@ object BatteryLog {
             screenBrightness = runCatching {
                 val raw = Settings.System.getInt(ctx.contentResolver, Settings.System.SCREEN_BRIGHTNESS)
                 if (raw in 1..254) raw / 255f else null
+            }.getOrNull(),
+            uptimeMs = SystemClock.uptimeMillis(),
+            uidRxBytes = runCatching {
+                TrafficStats.getUidRxBytes(Process.myUid()).takeIf { it != TrafficStats.UNSUPPORTED.toLong() }
+            }.getOrNull(),
+            uidTxBytes = runCatching {
+                TrafficStats.getUidTxBytes(Process.myUid()).takeIf { it != TrafficStats.UNSUPPORTED.toLong() }
+            }.getOrNull(),
+            transport = runCatching {
+                val cm = ctx.getSystemService(ConnectivityManager::class.java)
+                val caps = cm?.getNetworkCapabilities(cm.activeNetwork)
+                when {
+                    caps == null -> null
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cell"
+                    else -> "other"
+                }
             }.getOrNull()
         )
         val current = _entries.value
@@ -223,6 +268,10 @@ object BatteryLog {
         s.feedThreats?.let { put("feed", it) }
         s.activeZones?.let { put("zn", it) }
         s.screenBrightness?.let { put("bri", it.toDouble()) }
+        s.uptimeMs?.let { put("up", it) }
+        s.uidRxBytes?.let { put("rx", it) }
+        s.uidTxBytes?.let { put("tx", it) }
+        s.transport?.let { put("net", it) }
     }.toString()
 
     private fun parse(line: String): BatterySample? = runCatching {
@@ -242,7 +291,11 @@ object BatteryLog {
             processCpuMs = o.optLongOrNull("cpu"),
             feedThreats = o.optIntOrNull("feed"),
             activeZones = o.optIntOrNull("zn"),
-            screenBrightness = o.optDoubleOrNull("bri")?.toFloat()
+            screenBrightness = o.optDoubleOrNull("bri")?.toFloat(),
+            uptimeMs = o.optLongOrNull("up"),
+            uidRxBytes = o.optLongOrNull("rx"),
+            uidTxBytes = o.optLongOrNull("tx"),
+            transport = if (o.has("net")) o.optString("net") else null
         )
     }.getOrNull()
 

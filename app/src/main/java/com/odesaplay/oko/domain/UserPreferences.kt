@@ -28,12 +28,16 @@ fun systemLanguage(): AppLanguage = when (java.util.Locale.getDefault().language
 
 enum class ThreatCardSize { SMALL, LARGE }
 
-enum class ThreatIconSet { PHOTO, ARMY, COMIC, RUSSIAN }
+enum class ThreatIconSet {
+    PHOTO, ARMY, COMIC, RUSSIAN;
+    companion object {
+        val DEFAULT = PHOTO
+    }
+}
 
-/** Death-animation engine: cheap rings, the original look, the fuller rebuild, plus three
- *  elites named for what they actually do — hard streaks, pre-baked film, a lingering bloom.
- *  Each is a self-contained [DeathAnimation] plugin. */
-enum class DeathAnimationStyle { SIMPLE, CLASSIC, ADVANCED, BREACH, FILM, AFTERMATH }
+/** Death-animation engine: six named looks, or [RANDOM], which deals one per blast.
+ *  Each is a [com.odesaplay.oko.ExplosionBody] plugin behind one shared engine. */
+enum class DeathAnimationStyle { SIMPLE, CLASSIC, ADVANCED, BREACH, FILM, AFTERMATH, RANDOM }
 
 /** How same-coordinate threats render on the map. */
 enum class OverlapMode { DEFAULT, COUNT }
@@ -41,9 +45,10 @@ enum class OverlapMode { DEFAULT, COUNT }
 /** How official-alert regions are visualized on the map. */
 enum class AlertRegionMode { CITY_LABELS, FILL, BORDER }
 
-/** Personality voice for the Morale section copy. RANDOM resolves to a deterministic
- *  voice-of-day (pure function of date — no stored state, no timers). */
-enum class MoraleVoice { RANDOM, PLAIN, WARM, SPICY, SLANG, VIYSKO, BABUSIA }
+/** Who speaks the Morale copy — the persona. Its tone of wording is the *pack* beneath
+ *  (`MoralePersonas.kt`), which is the layer the user actually picks. RANDOM resolves to a
+ *  deterministic persona-of-day (pure function of date — no stored state, no timers). */
+enum class MoralePersona { RANDOM, PLAIN, WARM, SPICY, SLANG, VIYSKO, BABUSIA }
 
 @Immutable
 data class UserPreferences(
@@ -81,7 +86,7 @@ data class UserPreferences(
     val criticalOfflineOverride: Boolean = true,
     val criticalOfflineBypassSilent: Boolean = false,
     val threatCardSize: ThreatCardSize = ThreatCardSize.LARGE,
-    val threatIconSet: ThreatIconSet = ThreatIconSet.PHOTO,
+    val threatIconSet: ThreatIconSet = ThreatIconSet.DEFAULT,
     val overlapMode: OverlapMode = OverlapMode.DEFAULT,
     val showMapScale: Boolean = true,
     val showMediumCities: Boolean = true,
@@ -126,7 +131,7 @@ data class UserPreferences(
     val hapticsEnabled: Boolean? = true,
     val officialAlertCityScope: Boolean = false,
     val moraleMasterEnabled: Boolean = true,
-    val moraleVoice: MoraleVoice = MoraleVoice.RANDOM,
+    val moralePersona: MoralePersona = MoralePersona.RANDOM,
     val bootRestartEnabled: Boolean = true,
     /** Off by default: the notice asks for a battery exemption, so it is opt-in rather than
      *  something every existing user starts receiving after an update. */

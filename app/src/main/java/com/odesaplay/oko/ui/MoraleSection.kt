@@ -53,7 +53,9 @@ import kotlin.math.sin
 @Composable
 internal fun ExplosionPreviewThumb(
     preview: ExplosionPreview,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** The HQ toggle's state: off draws the cheap body the engine actually renders. */
+    detailed: Boolean = true
 ) {
     val hot = remember(preview.hot) { Color(preview.hot) }
     val mid = remember(preview.mid) { Color(preview.mid) }
@@ -63,7 +65,8 @@ internal fun ExplosionPreviewThumb(
         when (preview.shape) {
             ExplosionShape.RINGS -> {
                 val ring = mid
-                repeat(3) { i ->
+                val count = if (detailed) 3 else 1
+                repeat(count) { i ->
                     val rr = r * (0.55f + i * 0.42f)
                     drawCircle(
                         color = ring.copy(alpha = (0.9f - i * 0.26f).coerceAtLeast(0.12f)),
@@ -75,21 +78,24 @@ internal fun ExplosionPreviewThumb(
                 drawCircle(color = hot, radius = r * 0.32f, center = c)
             }
             ExplosionShape.BALL -> {
-                drawCircle(color = mid.copy(alpha = 0.55f), radius = r, center = c)
+                if (detailed) drawCircle(color = mid.copy(alpha = 0.55f), radius = r, center = c)
                 drawCircle(color = mid, radius = r * 0.72f, center = c)
                 drawCircle(color = hot, radius = r * 0.34f, center = c)
             }
             ExplosionShape.BLOOM -> {
-                drawCircle(color = mid.copy(alpha = 0.35f), radius = r * 1.18f, center = c)
+                if (detailed) drawCircle(color = mid.copy(alpha = 0.35f), radius = r * 1.18f, center = c)
                 drawCircle(color = mid.copy(alpha = 0.6f), radius = r * 0.88f, center = c)
                 drawCircle(color = hot.copy(alpha = 0.9f), radius = r * 0.46f, center = c)
                 // The smoke column is what makes Aftermath read as Aftermath.
-                drawCircle(color = Color(0xFF3A3734).copy(alpha = 0.55f), radius = r * 0.34f, center = c + Offset(0f, r * 1.35f))
-                drawCircle(color = Color(0xFF3A3734).copy(alpha = 0.32f), radius = r * 0.24f, center = c + Offset(r * 0.35f, r * 1.85f))
+                if (detailed) {
+                    drawCircle(color = Color(0xFF3A3734).copy(alpha = 0.55f), radius = r * 0.34f, center = c + Offset(0f, r * 1.35f))
+                    drawCircle(color = Color(0xFF3A3734).copy(alpha = 0.32f), radius = r * 0.24f, center = c + Offset(r * 0.35f, r * 1.85f))
+                }
             }
             ExplosionShape.STREAK -> {
-                repeat(9) { i ->
-                    val ang = (i * (2.0 * PI / 9.0) + 0.3).toFloat()
+                val count = if (detailed) 9 else 5
+                repeat(count) { i ->
+                    val ang = (i * (2.0 * PI / count) + 0.3).toFloat()
                     val reach = r * (1.15f + (i % 3) * 0.22f)
                     val dir = Offset(cos(ang), sin(ang)) * reach
                     drawLine(
@@ -103,9 +109,10 @@ internal fun ExplosionPreviewThumb(
                 drawCircle(color = hot, radius = r * 0.3f, center = c)
             }
             ExplosionShape.SHARDS -> {
-                drawCircle(color = mid.copy(alpha = 0.4f), radius = r * 0.9f, center = c)
-                repeat(7) { i ->
-                    val ang = (i * (2.0 * PI / 7.0) + 0.9).toFloat()
+                if (detailed) drawCircle(color = mid.copy(alpha = 0.4f), radius = r * 0.9f, center = c)
+                val count = if (detailed) 7 else 4
+                repeat(count) { i ->
+                    val ang = (i * (2.0 * PI / count) + 0.9).toFloat()
                     val dir = Offset(cos(ang), sin(ang))
                     val reach = r * (0.8f + (i % 3) * 0.3f)
                     val mid0 = c + dir * r * 0.55f
@@ -122,6 +129,30 @@ internal fun ExplosionPreviewThumb(
                     )
                 }
             }
+            ExplosionShape.MIXED -> {
+                // The shuffled style's mark: one of each silhouette, overlapped. It has to read
+                // as "all of them" rather than as a seventh look.
+                val count = if (detailed) 5 else 3
+                repeat(count) { i ->
+                    val ang = (i * (2.0 * PI / count)).toFloat()
+                    val dir = Offset(cos(ang), sin(ang))
+                    drawLine(
+                        color = mid,
+                        start = c + dir * r * 0.45f,
+                        end = c + dir * r * 1.15f,
+                        strokeWidth = r * 0.14f,
+                        cap = StrokeCap.Round
+                    )
+                }
+                drawCircle(color = mid.copy(alpha = 0.45f), radius = r, center = c)
+                drawCircle(color = hot.copy(alpha = 0.9f), radius = r * 0.4f, center = c)
+                if (detailed) drawCircle(
+                    color = mid.copy(alpha = 0.35f),
+                    radius = r * 0.72f,
+                    center = c,
+                    style = Stroke(width = r * 0.12f)
+                )
+            }
         }
     }
 }
@@ -136,7 +167,8 @@ internal fun DeathStyleCard(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    detailed: Boolean = true
 ) {
     val preview = remember(style) { style.create().preview }
     Surface(
@@ -164,7 +196,7 @@ internal fun DeathStyleCard(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                ExplosionPreviewThumb(preview, Modifier.size(40.dp))
+                ExplosionPreviewThumb(preview, Modifier.size(40.dp), detailed)
             }
             Spacer(Modifier.height(7.dp))
             Text(label, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center, maxLines = 1)
@@ -181,6 +213,11 @@ internal fun DeathAnimStyleGrid(
     selected: DeathAnimationStyle,
     labelOf: (DeathAnimationStyle) -> String,
     onChange: (DeathAnimationStyle) -> Unit,
+    /** Shuffle lives outside the grid: it is a mode over the six, not a seventh style. */
+    shuffleLabel: String? = null,
+    onShuffleChange: ((Boolean) -> Unit)? = null,
+    /** The HQ toggle's state: off draws every card's cheap body. */
+    detailed: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val styles = remember { listOf(
@@ -203,10 +240,27 @@ internal fun DeathAnimStyleGrid(
                         label = labelOf(style),
                         selected = selected == style,
                         modifier = Modifier.weight(1f).fillMaxHeight(),
+                        detailed = detailed,
                         onClick = { onChange(style) }
                     )
                 }
             }
+        }
+        if (shuffleLabel != null && onShuffleChange != null) {
+            Spacer(Modifier.height(10.dp))
+            AlertToggleRow(
+                title = shuffleLabel,
+                description = null,
+                checked = selected == DeathAnimationStyle.RANDOM,
+                onCheckedChange = {
+                    // One switch, one pref: turning it on stores RANDOM, turning it off falls back
+                    // to a concrete style so the preference is never left pointing at nothing.
+                    onChange(
+                        if (it) DeathAnimationStyle.RANDOM
+                        else DeathAnimationStyle.entries.first { e -> e != DeathAnimationStyle.RANDOM && e != selected }
+                    )
+                }
+            )
         }
     }
 }
@@ -277,8 +331,8 @@ internal fun SelectorChip(
 @Composable
 internal fun MoraleToggles(
     s: Strings.StringSet,
-    voice: MoraleVoice,
-    onVoiceChange: (MoraleVoice) -> Unit,
+    persona: MoralePersona,
+    onPersonaChange: (MoralePersona) -> Unit,
     calmMessagesEnabled: Boolean,
     flybyAnimationEnabled: Boolean,
     deathAnimationEnabled: Boolean,
@@ -296,24 +350,24 @@ internal fun MoraleToggles(
 ) {
     val lang = s.language
     // Pure derivation: no timers, no state — midnight rollover lands on next recomposition.
-    val effective = resolveMoraleVoice(voice)
-    val pack = remember(lang, effective) { moraleVoicePack(lang, effective) }
+    val effective = resolveMoralePersona(persona)
+    val pack = remember(lang, effective) { moralePersonaPack(lang, effective) }
     Column {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(
-                moraleVoiceSectionTitle(lang),
+                moralePersonaTitle(lang),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                if (voice == MoraleVoice.RANDOM) randomTodayLabel(lang, effective.label(lang))
+                if (persona == MoralePersona.RANDOM) randomTodayLabel(lang, effective.label(lang))
                 else effective.label(lang),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(10.dp))
-            MoraleVoice.values().toList().chunked(4).forEach { row ->
+            MoralePersona.values().toList().chunked(4).forEach { row ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -321,9 +375,9 @@ internal fun MoraleToggles(
                     row.forEach { v ->
                         SelectorChip(
                             label = v.label(lang),
-                            selected = v == voice,
+                            selected = v == persona,
                             modifier = Modifier.weight(1f),
-                            onClick = { onVoiceChange(v) }
+                            onClick = { onPersonaChange(v) }
                         )
                     }
                 }

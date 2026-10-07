@@ -11,21 +11,30 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Elite style "Aftermath" — the slow one. A wide, soft bloom that keeps burning after the blast
- * has gone, throwing angular debris that falls under gravity while a smoke column climbs out of
- * the impact and hangs. Where "Breach" punches and clears, this one smoulders.
+ * Aftermath — the slow one, and the only one the older styles cannot imitate: a wide soft bloom
+ * that keeps burning after the blast has gone, angular debris thrown clear and then falling, and
+ * a smoke column that climbs out of the impact and hangs.
  *
  * The body is a shared [ElitePuff] plus lobes and a low shock ring; on API 33+ a wide AGSL bloom
- * replaces the lobes. Either way the read is the same: soft, wide, and the longest tail of the
- * three.
+ * replaces the lobes. Its shader is deliberately low-octave — the read is "soft", so extra
+ * per-pixel detail buys nothing here and costs on every blast.
  */
-class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
+class AftermathBody : ExplosionBody, ExplosionWarmer {
+
+    override val id: DeathAnimationStyle = DeathAnimationStyle.AFTERMATH
 
     override val preview: ExplosionPreview = ExplosionPreview(
         hot = Color.rgb(255, 236, 190),
         mid = Color.rgb(255, 140, 50),
         shape = ExplosionShape.BLOOM,
         scale = 1.15f
+    )
+
+    override val baseRadius: Float = 52f
+
+    /** Falling debris and a hanging column suit the heavy, long-burning targets. */
+    override val kinds: Set<EliteKind> = setOf(
+        EliteKind.BALLISTIC, EliteKind.CRUISE, EliteKind.KAB, EliteKind.SHAHED, EliteKind.RECON, EliteKind.UNKNOWN
     )
 
     private val bodyPaint = Paint().apply {
@@ -43,8 +52,8 @@ class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
     private val corePuff = ElitePuff(sizeDp = 48)
 
     /**
-     * Compiled on first use, not in the constructor — see [EliteBreachDeathOverlay.shader] for
-     * why. [warmUp] moves the cost off the blast path entirely.
+     * Compiled on first use, not at construction — see [BreachBody.shader] for why. [warmUp] moves
+     * the cost off the blast path entirely.
      */
     private val shader: android.graphics.RuntimeShader? by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -52,7 +61,6 @@ class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
         } else null
     }
 
-    /** Compile the shader ahead of the first kill so no blast ever pays for it. */
     override fun warmUp() {
         shader
     }
@@ -60,9 +68,9 @@ class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
     private var debris: FloatArray? = null
     private var column: FloatArray? = null
 
-    override fun drawExplosion(
+    override fun draw(
         canvas: Canvas,
-        d: EliteDeath,
+        death: EliteDeath,
         x: Float,
         y: Float,
         e: Float,
@@ -70,21 +78,18 @@ class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
         density: Float,
         maxR: Float,
         elapsedMs: Float,
-        budget: ExplosionBudget
+        budget: ExplosionBudget,
+        hq: Boolean
     ) {
-        drawBody(canvas, d, x, y, e, fade, density, maxR, budget)
+        drawBody(canvas, death, x, y, e, fade, density, maxR, budget)
         if (budget == ExplosionBudget.CHEAP) return
-        if (budget == ExplosionBudget.SOLID) {
-            drawDebris(canvas, d, x, y, e, fade, density, maxR, 4)
-            return
-        }
-        drawDebris(canvas, d, x, y, e, fade, density, maxR, if (highQuality) 8 else 5)
-        drawColumn(canvas, d, x, y, e, fade, density, maxR)
+        drawDebris(canvas, death, x, y, e, fade, density, maxR, if (budget == ExplosionBudget.FULL && hq) 8 else 4)
+        if (budget == ExplosionBudget.FULL) drawColumn(canvas, death, x, y, e, maxR)
     }
 
     private fun drawBody(
         canvas: Canvas,
-        d: EliteDeath,
+        death: EliteDeath,
         x: Float,
         y: Float,
         e: Float,
@@ -93,18 +98,18 @@ class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
         maxR: Float,
         budget: ExplosionBudget
     ) {
-        val mid = ember(d.kind)
+        val mid = ember(death.kind)
         // Sized to the bloom itself, not to maxR: the puff plus its shader quad is the single
-        // most expensive thing an elite draws, and it never needs to cover the whole radius.
-        val bloomR = maxR * (0.5f + 0.4f * (1f - e)) * budgetScale(budget)
+        // most expensive thing a body draws, and it never needs to cover the whole radius.
+        val bloomR = maxR * (0.5f + 0.4f * (1f - e)) * radiusScale(budget)
 
         val sh = if (budget == ExplosionBudget.FULL) shader else null
         if (sh != null) {
-            val hot = hotCore(d.kind)
+            val hot = hotCore(death.kind)
             sh.setFloatUniform("uCenter", x, y)
             sh.setFloatUniform("uExtent", bloomR)
             sh.setFloatUniform("uE", e)
-            sh.setFloatUniform("uSeed", (d.seed and 0xFFFF) / 65535f * 8f)
+            sh.setFloatUniform("uSeed", (death.seed and 0xFFFF) / 65535f * 8f)
             sh.setFloatUniform("uHot", Color.red(hot) / 255f, Color.green(hot) / 255f, Color.blue(hot) / 255f)
             sh.setFloatUniform("uMid", Color.red(mid) / 255f, Color.green(mid) / 255f, Color.blue(mid) / 255f)
             bodyPaint.shader = sh
@@ -120,7 +125,7 @@ class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
                 x - bloomR * 0.22f,
                 y - bloomR * 0.16f,
                 bloomR * 0.66f,
-                hotCore(d.kind),
+                hotCore(death.kind),
                 (150 * fade).toInt().coerceIn(0, 255)
             )
         }
@@ -135,10 +140,16 @@ class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
         canvas.drawCircle(x, y, shockRadius(maxR, e, 1.05f).coerceAtLeast(1f), flatPaint)
     }
 
+    private fun radiusScale(budget: ExplosionBudget): Float = when (budget) {
+        ExplosionBudget.FULL -> 1f
+        ExplosionBudget.SOLID -> 0.85f
+        ExplosionBudget.CHEAP -> 0.7f
+    }
+
     /** Angular debris thrown clear of the blast, then falling — the "after" in Aftermath. */
     private fun drawDebris(
         canvas: Canvas,
-        d: EliteDeath,
+        death: EliteDeath,
         x: Float,
         y: Float,
         e: Float,
@@ -147,8 +158,8 @@ class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
         maxR: Float,
         count: Int
     ) {
-        val arr = debris ?: buildDebris(d).also { debris = it }
-        val color = ember(d.kind)
+        val arr = debris ?: buildDebris(death).also { debris = it }
+        val color = ember(death.kind)
         var drawn = 0
         var i = 0
         while (i < arr.size && drawn < count) {
@@ -181,24 +192,22 @@ class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
     }
 
     /**
-     * The smoke column: a puff bank that rises out of the impact, thickens as it climbs and
-     * fades slowly at the very end. It must not exist from the first frame — a column that is
-     * there from impact reads as fog lying over the map, not as aftermath.
+     * The smoke column: a puff bank that rises out of the impact, thickens as it climbs and fades
+     * slowly at the very end. It must not exist from the first frame — a column that is there from
+     * impact reads as fog lying over the map, not as aftermath.
      */
     private fun drawColumn(
         canvas: Canvas,
-        d: EliteDeath,
+        death: EliteDeath,
         x: Float,
         y: Float,
         e: Float,
-        fade: Float,
-        density: Float,
         maxR: Float
     ) {
         if (e < COLUMN_START) return
         // Ramp in over the first slice of the column so it fades up rather than popping on.
         val intro = ((e - COLUMN_START) / COLUMN_FADE_IN).coerceIn(0f, 1f)
-        val arr = column ?: buildColumn(d).also { column = it }
+        val arr = column ?: buildColumn(death).also { column = it }
         val rise = maxR * 1.35f
         // Holds its opacity across the tail instead of fading with the blast, so the column is
         // still there when the fireball is gone — that is what makes it aftermath and not smoke.
@@ -221,9 +230,9 @@ class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
         }
     }
 
-    private fun buildDebris(d: EliteDeath): FloatArray {
+    private fun buildDebris(death: EliteDeath): FloatArray {
         val arr = FloatArray(MAX_DEBRIS * 4)
-        val rnd = Random(d.seed xor 0x7F4A7C15)
+        val rnd = Random(death.seed xor 0x7F4A7C15)
         for (i in arr.indices step 4) {
             arr[i] = rnd.nextFloat() * ELITE_TAU
             arr[i + 1] = 0.5f + rnd.nextFloat() * 1.15f
@@ -233,21 +242,15 @@ class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
         return arr
     }
 
-    private fun buildColumn(d: EliteDeath): FloatArray {
+    private fun buildColumn(death: EliteDeath): FloatArray {
         val arr = FloatArray(MAX_COLUMN * 3)
-        val rnd = Random(d.seed xor 0x27D4EB2F)
+        val rnd = Random(death.seed xor 0x27D4EB2F)
         for (i in arr.indices step 3) {
             arr[i] = rnd.nextFloat() * 1.2f - 0.6f
             arr[i + 1] = rnd.nextFloat()
             arr[i + 2] = 0.7f + rnd.nextFloat() * 0.9f
         }
         return arr
-    }
-
-    private fun budgetScale(budget: ExplosionBudget): Float = when (budget) {
-        ExplosionBudget.FULL -> 1f
-        ExplosionBudget.SOLID -> 0.85f
-        ExplosionBudget.CHEAP -> 0.7f
     }
 
     private companion object {

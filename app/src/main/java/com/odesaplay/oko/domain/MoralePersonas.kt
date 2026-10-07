@@ -3,7 +3,7 @@ package com.odesaplay.oko
 import java.time.LocalDate
 import kotlin.math.abs
 
-data class MoraleVoicePack(
+data class MoralePersonaPack(
     val calmDesc: String,
     val flybyDesc: String,
     val deathDesc: String,
@@ -16,16 +16,16 @@ data class MoraleVoicePack(
     val calm: List<String>
 )
 
-fun resolveMoraleVoice(selected: MoraleVoice, today: LocalDate = LocalDate.now()): MoraleVoice {
-    if (selected != MoraleVoice.RANDOM) return selected
-    val voices = MoraleVoice.values().filter { it != MoraleVoice.RANDOM }
-    return voices[(abs(today.toEpochDay()) % voices.size).toInt()]
+fun resolveMoralePersona(selected: MoralePersona, today: LocalDate = LocalDate.now()): MoralePersona {
+    if (selected != MoralePersona.RANDOM) return selected
+    val personas = MoralePersona.values().filter { it != MoralePersona.RANDOM }
+    return personas[(abs(today.toEpochDay()) % personas.size).toInt()]
 }
 
-fun moraleVoicePack(lang: AppLanguage, voice: MoraleVoice): MoraleVoicePack {
-    if (voice == MoraleVoice.PLAIN) {
+fun moralePersonaPack(lang: AppLanguage, persona: MoralePersona): MoralePersonaPack {
+    if (persona == MoralePersona.PLAIN) {
         val s = Strings.get(lang)
-        return MoraleVoicePack(
+        return MoralePersonaPack(
             calmDesc = s.calmMessagesDesc,
             flybyDesc = s.flybyAnimationDesc,
             deathDesc = s.deathAnimationDesc,
@@ -39,31 +39,31 @@ fun moraleVoicePack(lang: AppLanguage, voice: MoraleVoice): MoraleVoicePack {
         )
     }
     /**
- * Every voice has its own Russian pack. RU used to read the English one under a Russian label,
+ * Every persona has its own Russian pack. RU used to read the English one under a Russian label,
  * which is worse than either language on its own: the name promised one thing and the copy
- * delivered another. [MoraleVoicesTest] fails if a pack ever falls back to English again.
+ * delivered another. [MoralePersonasTest] fails if a pack ever falls back to English again.
  */
-return lang.pick(ukrainianPack(voice), englishPack(voice), russianPack(voice))
+return lang.pick(ukrainianPack(persona), englishPack(persona), russianPack(persona))
 }
 
-fun MoraleVoice.label(lang: AppLanguage): String = when (this) {
-    MoraleVoice.RANDOM -> lang.pick("Випадково", "Random", "Случайно")
-    MoraleVoice.PLAIN -> lang.pick("Просто", "Plain", "Просто")
-    MoraleVoice.WARM -> lang.pick("Тепло", "Warm", "Тепло")
-    MoraleVoice.SPICY -> lang.pick("З перцем", "Spicy", "С перцем")
-    MoraleVoice.SLANG -> lang.pick("Сленг", "Slang", "Сленг")
-    MoraleVoice.VIYSKO -> lang.pick("Військо", "Viysko", "Военное")
-    MoraleVoice.BABUSIA -> lang.pick("Бабуся", "Babusia", "Бабуля")
+fun MoralePersona.label(lang: AppLanguage): String = when (this) {
+    MoralePersona.RANDOM -> lang.pick("Випадково", "Random", "Случайно")
+    MoralePersona.PLAIN -> lang.pick("Просто", "Plain", "Просто")
+    MoralePersona.WARM -> lang.pick("Тепло", "Warm", "Тепло")
+    MoralePersona.SPICY -> lang.pick("З перцем", "Spicy", "С перцем")
+    MoralePersona.SLANG -> lang.pick("Сленг", "Slang", "Сленг")
+    MoralePersona.VIYSKO -> lang.pick("Військо", "Viysko", "Военное")
+    MoralePersona.BABUSIA -> lang.pick("Бабуся", "Babusia", "Бабуля")
 }
 
-fun moraleVoiceSectionTitle(lang: AppLanguage): String =
-    lang.pick("Голос", "Voice", "Голос")
+fun moralePersonaTitle(lang: AppLanguage): String =
+    lang.pick("Тон", "Tone", "Тон")
 
-fun randomTodayLabel(lang: AppLanguage, voiceLabel: String): String =
-    lang.pick("Випадково · сьогодні: $voiceLabel", "Random · today: $voiceLabel", "Случайно · сегодня: $voiceLabel")
+fun randomTodayLabel(lang: AppLanguage, personaLabel: String): String =
+    lang.pick("Випадково · сьогодні: $personaLabel", "Random · today: $personaLabel", "Случайно · сегодня: $personaLabel")
 
-private fun englishPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
-    MoraleVoice.WARM -> MoraleVoicePack(
+private fun englishPack(persona: MoralePersona): MoralePersonaPack = when (persona) {
+    MoralePersona.WARM -> MoralePersonaPack(
         calmDesc = "A kind word when the sky is quiet.",
         flybyDesc = "A friendly jet passes by now and then, just to say hi.",
         deathDesc = "A small send-off for threats that leave the feed.",
@@ -92,7 +92,7 @@ private fun englishPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
             "Tomorrow can wait"
         )
     )
-    MoraleVoice.SPICY -> MoraleVoicePack(
+    MoralePersona.SPICY -> MoralePersonaPack(
         calmDesc = "Wholesome words while it\u2019s quiet.",
         flybyDesc = "A MiG photobombs your map. No permission asked.",
         deathDesc = "Threat leaves the feed? Fireworks. That\u2019s the rule.",
@@ -121,7 +121,7 @@ private fun englishPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
             "Plot twist: nothing happened"
         )
     )
-    MoraleVoice.SLANG -> MoraleVoicePack(
+    MoralePersona.SLANG -> MoralePersonaPack(
         calmDesc = "Tyho. Just quiet — take a breather.",
         flybyDesc = "A MiG does a flyby. Krasyvo, that\u2019s it.",
         deathDesc = "Target leaves the feed? That\u2019s bavovna. Pure morale.",
@@ -150,7 +150,7 @@ private fun englishPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
             "Slava the quiet. Rest up"
         )
     )
-    MoraleVoice.VIYSKO -> MoraleVoicePack(
+    MoralePersona.VIYSKO -> MoralePersonaPack(
         calmDesc = "Status line while no contacts on scope.",
         flybyDesc = "Scheduled flyby. Map effect only.",
         deathDesc = "Contact lost from feed: rendered as interception. Display only.",
@@ -179,7 +179,7 @@ private fun englishPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
             "Stand by for nothing. Enjoy"
         )
     )
-    MoraleVoice.BABUSIA -> MoraleVoicePack(
+    MoralePersona.BABUSIA -> MoralePersonaPack(
         calmDesc = "A warm word from babusia while it\u2019s quiet.",
         flybyDesc = "A nice plane flies by, sonechko. Just to look at.",
         deathDesc = "The bad thing went away, khtyf — gone! Don\u2019t you worry.",
@@ -211,8 +211,8 @@ private fun englishPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
     else -> throw IllegalArgumentException("PLAIN is built from Strings, RANDOM never resolves here")
 }
 
-private fun ukrainianPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
-    MoraleVoice.WARM -> MoraleVoicePack(
+private fun ukrainianPack(persona: MoralePersona): MoralePersonaPack = when (persona) {
+    MoralePersona.WARM -> MoralePersonaPack(
         calmDesc = "Добре слово, поки тихо.",
         flybyDesc = "Дружній літак іноді пролітає повз — просто привітатись.",
         deathDesc = "Маленьке прощання для загроз, що зникли зі стрічки.",
@@ -241,7 +241,7 @@ private fun ukrainianPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
             "Завтра зачекає"
         )
     )
-    MoraleVoice.SPICY -> MoraleVoicePack(
+    MoralePersona.SPICY -> MoralePersonaPack(
         calmDesc = "Теплі слова, поки тихо.",
         flybyDesc = "МіГ фотобомбить твою мапу. Дозволу не питав.",
         deathDesc = "Загроза зникла зі стрічки? Феєрверк. Таке правило.",
@@ -270,7 +270,7 @@ private fun ukrainianPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
             "Сюжетний твіст: нічого не сталось"
         )
     )
-    MoraleVoice.SLANG -> MoraleVoicePack(
+    MoralePersona.SLANG -> MoralePersonaPack(
         calmDesc = "Тихо. Можна видихнути.",
         flybyDesc = "МіГ робить прохід. Красіво, і все.",
         deathDesc = "Ціль зникла зі стрічки? Це бавовна. Чисто для настрою.",
@@ -299,7 +299,7 @@ private fun ukrainianPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
             "Слава тиші. Відпочивай"
         )
     )
-    MoraleVoice.VIYSKO -> MoraleVoicePack(
+    MoralePersona.VIYSKO -> MoralePersonaPack(
         calmDesc = "Рядок статусу, поки контактів немає.",
         flybyDesc = "Плановий прохід. Лише ефект на мапі.",
         deathDesc = "Контакт втрачено зі стрічки: відображено як перехоплення. Тільки дисплей.",
@@ -328,7 +328,7 @@ private fun ukrainianPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
             "Чекай нічого. Насолоджуйся"
         )
     )
-    MoraleVoice.BABUSIA -> MoraleVoicePack(
+    MoralePersona.BABUSIA -> MoralePersonaPack(
         calmDesc = "Тепле слово від бабусі, поки тихо.",
         flybyDesc = "Гарний літачок пролетів, сонечко. Просто подивитись.",
         deathDesc = "Погане полетіло геть, хух — і нема! Не переживай.",
@@ -361,12 +361,12 @@ private fun ukrainianPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
 }
 
 /**
- * Every voice has its own Russian pack. RU used to read the English one under a Russian label,
+ * Every persona has its own Russian pack. RU used to read the English one under a Russian label,
  * which is worse than either language on its own: the name promised one thing and the copy
- * delivered another. `MoraleVoicesTest` fails if a pack ever falls back to English again.
+ * delivered another. `MoralePersonasTest` fails if a pack ever falls back to English again.
  */
-private fun russianPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
-    MoraleVoice.WARM -> MoraleVoicePack(
+private fun russianPack(persona: MoralePersona): MoralePersonaPack = when (persona) {
+    MoralePersona.WARM -> MoralePersonaPack(
         calmDesc = "Тёплое слово, когда небо спокойно.",
         flybyDesc = "Мимо пролетает добрый самолёт — просто чтобы поздороваться.",
         deathDesc = "Небольшое прощание для тех, кто покидает эфир.",
@@ -395,7 +395,7 @@ private fun russianPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
             "Завтра подождёт"
         )
     )
-    MoraleVoice.SPICY -> MoraleVoicePack(
+    MoralePersona.SPICY -> MoralePersonaPack(
         calmDesc = "Тёплые слова, пока тихо.",
         flybyDesc = "МиГ фоткает вашу карту. Разрешения не спрашивали.",
         deathDesc = "Угроза покидает эфир? Фейерверк. Правило есть правило.",
@@ -424,7 +424,7 @@ private fun russianPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
             "Сюжет-поворот: ничего не случилось"
         )
     )
-    MoraleVoice.SLANG -> MoraleVoicePack(
+    MoralePersona.SLANG -> MoralePersonaPack(
         calmDesc = "Тишняк. Просто тихо — переведи дух.",
         flybyDesc = "МиГ пролетает. Красиво, вот это да.",
         deathDesc = "Цель ушла из эфира? Это бабах. Чистый боевой дух.",
@@ -453,7 +453,7 @@ private fun russianPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
             "Слава тишине. Отдыхай"
         )
     )
-    MoraleVoice.VIYSKO -> MoraleVoicePack(
+    MoralePersona.VIYSKO -> MoralePersonaPack(
         calmDesc = "Сводка обстановки, пока контактов нет.",
         flybyDesc = "Плановый пролёт. Только визуальный эффект на карте.",
         deathDesc = "Контакт пропал из эфира: отображается как перехват. Только отображение.",
@@ -482,7 +482,7 @@ private fun russianPack(voice: MoraleVoice): MoraleVoicePack = when (voice) {
             "Быть готовым ко всему. И наслаждайтесь"
         )
     )
-    MoraleVoice.BABUSIA -> MoraleVoicePack(
+    MoralePersona.BABUSIA -> MoralePersonaPack(
         calmDesc = "Тёплое слово от бабули, пока тихо.",
         flybyDesc = "Мимо пролетает красивый самолётик, катюша. Просто чтобы глянуть.",
         deathDesc = "Плохая вещь ушла, сынок — всё, пропала! Не переживай.",

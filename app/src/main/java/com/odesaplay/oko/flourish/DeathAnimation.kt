@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * The silhouette a style draws, reduced to what a static thumbnail can show. Settings renders
- * this once per card, so a style declares its own look here instead of the UI hardcoding a
+ * this once per card, so a body declares its own look here instead of the UI hardcoding a
  * phrasebook — a new style gets a recognisable preview for free.
  */
 data class ExplosionPreview(
@@ -42,26 +42,75 @@ enum class ExplosionShape {
     STREAK,
 
     /** A ball torn into chunks. */
-    SHARDS
+    SHARDS,
+
+    /** More than one of the above — the shuffled style's mark. */
+    MIXED
 }
 
 /**
- * Optional companion to [DeathAnimation]: a style that has one-time setup (a shader compile, a
- * baked sheet) exposes it so the controller can pay that cost before the first blast instead of
- * during it. Styles with nothing to prepare simply don't implement it.
+ * Optional companion to [DeathAnimation] and [ExplosionBody]: a body with one-time setup (a shader
+ * compile, a baked sheet) exposes it so the cost is paid before the first blast instead of during
+ * it. Bodies with nothing to prepare simply don't implement it.
  */
 interface ExplosionWarmer {
     fun warmUp()
 }
 
 /**
+ * One explosion look. The engine ([DeathEngine]) owns everything a death does — flight, pruning,
+ * budget — and hands a body the blast window only.
+ *
+ * Bodies are plugins with no lifecycle of their own: they keep whatever caches they want for the
+ * session ([release] is the single hook for per-death scratch) and are never asked to decide
+ * anything about a blast except how it looks.
+ */
+interface ExplosionBody {
+    /** The style this body implements — its identity for the picker and the shuffle bag. */
+    val id: DeathAnimationStyle
+
+    /** What it looks like, for the settings card thumbnail. */
+    val preview: ExplosionPreview
+
+    /**
+     * Blast radius in px at density 1, before the zoom multiplier. Each body keeps the exact size
+     * it shipped with, which is why this is the body's number and not the engine's.
+     */
+    val baseRadius: Float
+
+    /**
+     * The blast radius for this frame. Bodies own their sizing outright — Simple, for one, never
+     * grew with zoom and must not start now.
+     */
+    fun radius(density: Float, zoomScale: Float): Float = baseRadius * density * zoomScale
+
+    /** Kinds this body suits; empty means it suits anything and can be dealt for any threat. */
+    val kinds: Set<EliteKind> get() = emptySet()
+
+    /** `e` runs 0..1 across the explosion; `budget` says how much the body may spend. */
+    fun draw(
+        canvas: Canvas,
+        death: EliteDeath,
+        x: Float,
+        y: Float,
+        e: Float,
+        fade: Float,
+        density: Float,
+        maxR: Float,
+        elapsedMs: Float,
+        budget: ExplosionBudget,
+        hq: Boolean
+    )
+
+    /** Per-death scratch cleanup on prune. Bodies with nothing per-death leave it alone. */
+    fun release(death: EliteDeath) {}
+}
+
+/**
  * Swappable death-animation engine. The map view only ever talks to this interface
- * ([DeathFxController.overlay]), so styles come and go without touching UI code.
- * Implementations: [SimpleDeathOverlay] (cheap rings + sparks, no bitmaps),
- * [ClassicDeathOverlay] (the original look, frozen), [ThreatDeathOverlay] (fuller), and the
- * three elites [EliteBreachDeathOverlay] / [EliteFilmDeathOverlay] / [EliteAftermathDeathOverlay],
- * which share [EliteDeathBase] for everything but the explosion body itself. A style with
- * one-time setup implements [ExplosionWarmer] so that cost is paid before the first blast.
+ * ([DeathFxController.overlay]), so styles come and go without touching UI code. There is one
+ * implementation, [DeathEngine]; which look it draws is decided by the bodies it was built with,
+ * which in turn come from the [death_animation_style] pref.
  */
 interface DeathAnimation {
     val active: StateFlow<Boolean>
@@ -71,10 +120,13 @@ interface DeathAnimation {
     /**
      * Set by the flourish controller while a replay show is running, so a style holding hundreds
      * of blasts can play a cheaper pass without the caller knowing how to degrade it.
+     *
+     * This is a performance brake and nothing else. Whether flourish is *allowed* to happen at
+     * all is `moraleGate.isOn` — never confuse the two.
      */
     var economyMode: Boolean
 
-    /** What this style looks like, for the settings card thumbnail. Defaults to a plain ball. */
+    /** What this style looks like, for the settings card thumbnail. */
     val preview: ExplosionPreview get() = ExplosionPreview(Color.WHITE, Color.rgb(255, 193, 7), ExplosionShape.BALL)
 
     fun isActiveFor(id: String?): Boolean
@@ -104,18 +156,35 @@ interface DeathAnimation {
     )
 }
 
-fun DeathAnimationStyle.create(): DeathAnimation = when (this) {
-    DeathAnimationStyle.SIMPLE -> SimpleDeathOverlay()
-    DeathAnimationStyle.CLASSIC -> ClassicDeathOverlay()
-    DeathAnimationStyle.ADVANCED -> ThreatDeathOverlay()
-    DeathAnimationStyle.BREACH -> EliteBreachDeathOverlay()
-    DeathAnimationStyle.FILM -> EliteFilmDeathOverlay()
-    DeathAnimationStyle.AFTERMATH -> EliteAftermathDeathOverlay()
+/** Every body the engine can draw with, keyed by the style that owns it. */
+private val bodiesByStyle: Map<DeathAnimationStyle, () -> ExplosionBody> = mapOf(
+    DeathAnimationStyle.SIMPLE to { SimpleBody() },
+    DeathAnimationStyle.CLASSIC to { ClassicBody() },
+    DeathAnimationStyle.ADVANCED to { AdvancedBody() },
+    DeathAnimationStyle.BREACH to { BreachBody() },
+    DeathAnimationStyle.FILM to { FilmBody() },
+    DeathAnimationStyle.AFTERMATH to { AftermathBody() }
+)
+
+/** The styles a shuffled run may deal from. */
+internal val shufflePool: List<DeathAnimationStyle> = bodiesByStyle.keys.toList()
+
+/**
+ * The engine for [this] style. A fixed style gets its one body; [DeathAnimationStyle.RANDOM] gets
+ * the whole pool with per-threat dealing, which is only affordable because there is one engine —
+ * one death list, one cap, one budget — behind every body.
+ */
+fun DeathAnimationStyle.create(): DeathAnimation {
+    // RANDOM has no single body: the engine draws every blast with a dealt one instead.
+    if (this == DeathAnimationStyle.RANDOM) {
+        return DeathEngine(shufflePool.map { bodiesByStyle.getValue(it)() }, shuffled = true)
+    }
+    return DeathEngine(listOf(bodiesByStyle.getValue(this)()))
 }
 
 /**
- * The one sanctioned bullet sprite: the old short shell, no trail. Shared by all
- * styles so the projectile reads the same no matter the explosion picked.
+ * The one sanctioned bullet sprite: the old short shell, no trail. Shared by every style so the
+ * projectile reads the same no matter the explosion picked.
  */
 internal class BulletSprite(resources: Resources) {
     private val res = resources
@@ -141,8 +210,8 @@ internal class BulletSprite(resources: Resources) {
 }
 
 /**
- * A cached white-hot radial puff, shared by the elite styles. Each elite lays its own lobes and
- * debris over this, which is why no elite pays for a per-frame `RadialGradient`.
+ * A cached white-hot radial puff, shared by the bodies that build their look from offset blobs.
+ * Keeping it here means no body pays for a per-frame `RadialGradient`.
  */
 internal class ElitePuff(val sizeDp: Int) {
     private var bitmap: Bitmap? = null

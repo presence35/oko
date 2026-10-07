@@ -231,7 +231,7 @@ private fun ThreatElapsedBadge(
 fun ThreatPopupCard(
     threat: NormalizedThreat,
     lang: AppLanguage,
-    iconSet: ThreatIconSet = ThreatIconSet.PHOTO,
+    iconSet: ThreatIconSet = ThreatIconSet.DEFAULT,
     proximity: ThreatProximity?,
     zoneTier: ThreatZone? = null,
     approachingCity: String? = null,

@@ -1,5 +1,10 @@
 package com.odesaplay.oko
 
+import com.odesaplay.oko.BatteryLog
+import com.odesaplay.oko.BatterySample
+import com.odesaplay.oko.WakeEvent
+import com.odesaplay.oko.WakeEventLog
+import com.odesaplay.oko.WakeKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,7 +19,10 @@ class LogBundleTest {
         battery: Int? = 50,
         interactive: Boolean? = false,
         zones: Int? = 0,
-        cpu: Long? = null
+        cpu: Long? = null,
+        up: Long? = null,
+        rx: Long? = null,
+        tx: Long? = null
     ) = BatterySample(
         atMillis = atMillis,
         batteryPct = battery,
@@ -28,6 +36,9 @@ class LogBundleTest {
         batteryUnoptimized = false,
         processStartMonoMs = start,
         processCpuMs = cpu,
+        uptimeMs = up,
+        uidRxBytes = rx,
+        uidTxBytes = tx,
         feedThreats = 10,
         activeZones = zones
     )
@@ -164,6 +175,70 @@ class LogBundleTest {
         assertTrue(summary.isNull("cpuPctMean"))
         assertTrue(summary.isNull("cpuPctMax"))
         assertTrue(summary.isNull("cpuIntervals"))
+    }
+
+    @Test
+    fun `stale tick clock does not mint a second row`() {
+        assertTrue(BatteryLog.throttleAllows(now = 1_000L, lastWall = 0L, mono = 30_000L, lastMono = 0L))
+        // Same wall instant re-fired after 25s of mono: the combine replay case.
+        assertTrue(!BatteryLog.throttleAllows(now = 1_000L, lastWall = 1_000L, mono = 60_000L, lastMono = 30_000L))
+        // Mono cadence still applies on a fresh clock.
+        assertTrue(!BatteryLog.throttleAllows(now = 2_000L, lastWall = 1_000L, mono = 40_000L, lastMono = 30_000L))
+    }
+
+    @Test
+    fun `deep sleep is wall minus uptime over same-generation pairs`() {
+        val summary = LogBundle.summarisePower(
+            listOf(
+                sample(0L, up = 10_000L),
+                sample(25_000L, up = 15_000L)
+            )
+        )
+        // 25s of wall, 5s awake = 80% asleep.
+        assertEquals(80.0, summary.getDouble("deepSleepPct"), 0.001)
+    }
+
+    @Test
+    fun `a pair spanning a restart carries no sleep figure`() {
+        val summary = LogBundle.summarisePower(
+            listOf(
+                sample(0L, up = 500_000L, start = 1_000L),
+                sample(25_000L, up = 10L, start = 2_000L)
+            )
+        )
+        assertTrue(summary.isNull("deepSleepPct"))
+    }
+
+    @Test
+    fun `uid traffic totals count only forward deltas`() {
+        val summary = LogBundle.summarisePower(
+            listOf(
+                sample(0L, rx = 1_048_576L, tx = 1_024L),
+                sample(25_000L, rx = 2_097_152L, tx = 2_048L)
+            )
+        )
+        assertEquals(1024, summary.getLong("uidRxKbTotal"))
+        assertEquals(1, summary.getLong("uidTxKbTotal"))
+    }
+
+    @Test
+    fun `no uptime or uid fields means cannot tell, not zero`() {
+        val summary = LogBundle.summarisePower(
+            listOf(sample(0L), sample(25_000L))
+        )
+        assertTrue(summary.isNull("deepSleepPct"))
+        assertTrue(summary.isNull("uidRxKbTotal"))
+        assertTrue(summary.isNull("uidTxKbTotal"))
+    }
+
+    @Test
+    fun `wake events keep only the latest`() {
+        val events = (1..40).fold(emptyList<WakeEvent>()) { acc, i ->
+            WakeEventLog.append(acc, WakeEvent(i.toLong(), WakeKind.ALARM), WakeEventLog.MAX_ENTRIES)
+        }
+        assertEquals(WakeEventLog.MAX_ENTRIES, events.size)
+        assertEquals(40L, events.last().atMillis)
+        assertEquals(9L, events.first().atMillis)
     }
 
     private fun exit(

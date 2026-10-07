@@ -2,6 +2,7 @@ package com.odesaplay.oko
 
 import com.odesaplay.oko.engine.OblastAlert
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -302,11 +303,37 @@ class SleepPolicyTest {
     /** Nothing is due before a stall, and nothing is due while nobody is looking. */
     @Test
     fun `the row waits for a stall and for the screen`() {
-        assertTrue(!SleepPolicy.noticeDue(SleepLedger.EMPTY, serverNow, screenOn = true))
+        assertTrue(!SleepPolicy.noticeDue(SleepLedger.EMPTY, serverNow, screenOnSinceMillis = serverNow))
 
         val ledger = SleepLedger.EMPTY.plus(window(6 * 60_000L), readable())
-        assertTrue(!SleepPolicy.noticeDue(ledger, serverNow, screenOn = false))
-        assertTrue(SleepPolicy.noticeDue(ledger, serverNow, screenOn = true))
+        assertTrue(!SleepPolicy.noticeDue(ledger, serverNow, screenOnSinceMillis = null))
+        assertTrue(
+            "a screen that has been on past the settle gate, so due",
+            SleepPolicy.noticeDue(
+                ledger,
+                serverNow + SleepPolicy.WAKE_SETTLE_MS,
+                screenOnSinceMillis = serverNow
+            )
+        )
+    }
+
+    /**
+     * The screen-on edge on its own was too eager. The tick loop runs every second while the screen
+     * is up, so the row landed within a second of the phone lighting up — on top of the user who
+     * just picked it up to do the thing they picked it up for.
+     */
+    @Test
+    fun `the row waits for the screen to have been on long enough`() {
+        val ledger = SleepLedger.EMPTY.plus(window(6 * 60_000L), readable())
+
+        assertFalse(
+            "still settling, so not due",
+            SleepPolicy.noticeDue(ledger, serverNow + SleepPolicy.WAKE_SETTLE_MS - 1, screenOnSinceMillis = serverNow)
+        )
+        assertTrue(
+            "settled, so due",
+            SleepPolicy.noticeDue(ledger, serverNow + SleepPolicy.WAKE_SETTLE_MS, screenOnSinceMillis = serverNow)
+        )
     }
 
     /** Once written, the row is left alone until the tally has grown enough to be worth re-reading. */
@@ -314,9 +341,9 @@ class SleepPolicyTest {
     fun `a written row is not rewritten until the refresh cap`() {
         val posted = SleepLedger.EMPTY.plus(window(6 * 60_000L), readable()).posted(serverNow)
 
-        assertTrue(!SleepPolicy.noticeDue(posted, serverNow + 60_000L, screenOn = true))
-        assertTrue(!SleepPolicy.noticeDue(posted, serverNow + SleepPolicy.REFRESH_AFTER_MS - 1, screenOn = true))
-        assertTrue(SleepPolicy.noticeDue(posted, serverNow + SleepPolicy.REFRESH_AFTER_MS, screenOn = true))
+        assertTrue(!SleepPolicy.noticeDue(posted, serverNow + 60_000L, screenOnSinceMillis = serverNow))
+        assertTrue(!SleepPolicy.noticeDue(posted, serverNow + SleepPolicy.REFRESH_AFTER_MS - 1, screenOnSinceMillis = serverNow))
+        assertTrue(SleepPolicy.noticeDue(posted, serverNow + SleepPolicy.REFRESH_AFTER_MS, screenOnSinceMillis = serverNow))
     }
 
     /**
@@ -328,10 +355,10 @@ class SleepPolicyTest {
         val posted = SleepLedger.EMPTY.plus(window(6 * 60_000L), readable()).posted(serverNow)
         val afterOnset = posted.plus(window(6 * 60_000L), readable(official = true))
 
-        assertTrue(SleepPolicy.noticeDue(afterOnset, serverNow + 60_000L, screenOn = true))
+        assertTrue(SleepPolicy.noticeDue(afterOnset, serverNow + 60_000L, screenOnSinceMillis = serverNow))
         // ...but only once: the onset already shown must not reopen the row.
         val reported = afterOnset.posted(serverNow + 60_000L)
-        assertTrue(!SleepPolicy.noticeDue(reported, serverNow + 120_000L, screenOn = true))
+        assertTrue(!SleepPolicy.noticeDue(reported, serverNow + 120_000L, screenOnSinceMillis = serverNow))
     }
 
     /**
@@ -344,7 +371,7 @@ class SleepPolicyTest {
 
         assertTrue(!SleepPolicy.rowExpired(posted, serverNow + SleepPolicy.NOTICE_TTL_MS - 1))
         assertTrue(SleepPolicy.rowExpired(posted, serverNow + SleepPolicy.NOTICE_TTL_MS))
-        assertTrue(!SleepPolicy.noticeDue(posted, serverNow + SleepPolicy.NOTICE_TTL_MS, screenOn = true))
+        assertTrue(!SleepPolicy.noticeDue(posted, serverNow + SleepPolicy.NOTICE_TTL_MS, screenOnSinceMillis = serverNow))
     }
 
     // ---- body composition ---------------------------------------------------------------------

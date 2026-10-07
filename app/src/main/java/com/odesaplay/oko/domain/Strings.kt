@@ -45,7 +45,6 @@ object Strings {
         val moreExitDesc: String,
         val wizardCareTitle: String,
         val wizardCareSubtitle: String,
-        val wizardCareSubtitleGearSuffix: String,
         val wizardCareOn: String,
         val wizardCareOff: String,
         val wizardStartButton: String,
@@ -539,6 +538,8 @@ object Strings {
         val alarmEpisodeTallyDesc: String,
         val alarmEpisodeTitleFormat: String,
         val alarmEpisodeTitleNoDuration: String,
+        val alarmEpisodeTitleMergedFormat: String,
+        val alarmEpisodeTitleMergedNoDuration: String,
         val alarmEpisodeBodyFormat: String,
         val alarmEpisodeQuietText: String,
         val moraleNote: String,
@@ -844,12 +845,14 @@ object Strings {
         val breach: String,
         val film: String,
         val aftermath: String,
+        val random: String,
         val simpleNote: String,
         val classicNote: String,
         val advancedNote: String,
         val breachNote: String,
         val filmNote: String,
-        val aftermathNote: String
+        val aftermathNote: String,
+        val randomNote: String
     )
 
     data class WordForms(
@@ -860,6 +863,8 @@ object Strings {
         val preciseGps: List<String>,
         /** "3 threats confirmed" — the sleep notice's count, plural forms per language. */
         val confirmedThreats: List<String>,
+        /** "2 alarms" — the merged alarm summary's count, plural forms per language. */
+        val alarmCount: List<String>,
     )
 
     data class StringSet(
@@ -923,7 +928,6 @@ object Strings {
         val moreExitDesc: String get() = onboarding.moreExitDesc
         val wizardCareTitle: String get() = onboarding.wizardCareTitle
         val wizardCareSubtitle: String get() = onboarding.wizardCareSubtitle
-        val wizardCareSubtitleGearSuffix: String get() = onboarding.wizardCareSubtitleGearSuffix
         val wizardCareOn: String get() = onboarding.wizardCareOn
         val wizardCareOff: String get() = onboarding.wizardCareOff
         val wizardStartButton: String get() = onboarding.wizardStartButton
@@ -1521,12 +1525,14 @@ object Strings {
         val deathAnimStyleBreachLabel: String get() = deathAnimStyle.breach
         val deathAnimStyleFilmLabel: String get() = deathAnimStyle.film
         val deathAnimStyleAftermathLabel: String get() = deathAnimStyle.aftermath
+        val deathAnimStyleRandomLabel: String get() = deathAnimStyle.random
         val deathAnimStyleSimpleNote: String get() = deathAnimStyle.simpleNote
         val deathAnimStyleClassicNote: String get() = deathAnimStyle.classicNote
         val deathAnimStyleAdvancedNote: String get() = deathAnimStyle.advancedNote
         val deathAnimStyleBreachNote: String get() = deathAnimStyle.breachNote
         val deathAnimStyleFilmNote: String get() = deathAnimStyle.filmNote
         val deathAnimStyleAftermathNote: String get() = deathAnimStyle.aftermathNote
+        val deathAnimStyleRandomNote: String get() = deathAnimStyle.randomNote
         val followBulletTitle: String get() = misc.followBulletTitle
         val followBulletDesc: String get() = misc.followBulletDesc
         val hdExplosionTitle: String get() = misc.hdExplosionTitle
@@ -1540,6 +1546,8 @@ object Strings {
         val alarmEpisodeTallyDesc: String get() = misc.alarmEpisodeTallyDesc
         val alarmEpisodeTitleFormat: String get() = misc.alarmEpisodeTitleFormat
         val alarmEpisodeTitleNoDuration: String get() = misc.alarmEpisodeTitleNoDuration
+        val alarmEpisodeTitleMergedFormat: String get() = misc.alarmEpisodeTitleMergedFormat
+        val alarmEpisodeTitleMergedNoDuration: String get() = misc.alarmEpisodeTitleMergedNoDuration
         val alarmEpisodeBodyFormat: String get() = misc.alarmEpisodeBodyFormat
         val alarmEpisodeQuietText: String get() = misc.alarmEpisodeQuietText
 val iconSetTitle: String get() = misc.iconSetTitle
@@ -1736,15 +1744,51 @@ fun resolvedThreatsPhrase(count: Int, lang: AppLanguage): String {
     return String.format(form, count)
 }
 
+/** Where the gear icon goes in a wizard sentence that names the Settings screen. */
+const val GEAR_MARKER = "{gear}"
+
+/** The id under which that gear is registered as inline content. */
+const val GEAR_ID = "gear"
+
+/**
+ * Splits a sentence at its [GEAR_MARKER]: the text before it, and the text after. `null` when the
+ * sentence carries no marker, so a dropped marker degrades to plain text instead of a stray token.
+ *
+ * One entry per language for the whole sentence, rather than a head and a tail as two separate
+ * strings: splitting the translation put a layout boundary in the string table, which forced each
+ * language to co-translate two fragments whose word order and case endings differ. The marker keeps
+ * the sentence whole and lets each translator put the icon where its grammar wants it.
+ */
+fun splitAtGearMarker(text: String): Pair<String, String>? {
+    val i = text.indexOf(GEAR_MARKER)
+    if (i < 0) return null
+    return text.substring(0, i) to text.substring(i + GEAR_MARKER.length)
+}
+
 /**
  * The alarm summary's title: with a duration when the app can honestly state one, without when it
  * cannot (a process killed mid-alarm measures from its own wake — see `AlarmEpisodeTally.begin`).
  * One function for both post paths, so the dateless wording cannot drift between them, and pure so
  * all three languages are pinned by a test instead of by a reader.
+ *
+ * [alarmCount] is how many alarms the row covers. A row that merged several alarms says so and
+ * states their summed minutes — never the wall-clock span, which would count the quiet hours in
+ * between as if they were alarm. One unmeasured alarm among them poisons the total, so the row
+ * keeps the count and drops the minutes instead.
  */
-fun alarmEpisodeTitle(s: Strings.StringSet, city: String, durationMin: Int): String =
-    if (durationMin > 0) String.format(s.alarmEpisodeTitleFormat, city, durationMin)
-    else String.format(s.alarmEpisodeTitleNoDuration, city)
+fun alarmEpisodeTitle(s: Strings.StringSet, city: String, durationMin: Int, alarmCount: Int = 1): String = when {
+    alarmCount <= 1 && durationMin > 0 -> String.format(s.alarmEpisodeTitleFormat, city, durationMin)
+    alarmCount <= 1 -> String.format(s.alarmEpisodeTitleNoDuration, city)
+    durationMin > 0 -> String.format(s.alarmEpisodeTitleMergedFormat, city, durationMin, alarmCountPhrase(alarmCount, s.language))
+    else -> String.format(s.alarmEpisodeTitleMergedNoDuration, city, alarmCountPhrase(alarmCount, s.language))
+}
+
+/** "2 alarms" — the same plural machinery as every other count. */
+fun alarmCountPhrase(count: Int, lang: AppLanguage): String {
+    val s = Strings.get(lang)
+    val form = s.wordForms.alarmCount[pluralIndex(count, lang).coerceAtMost(s.wordForms.alarmCount.lastIndex)]
+    return String.format(form, count)
+}
 
 /** "3 threats confirmed" — the same plural machinery as the tally, for the sleep notice's count. */
 fun confirmedThreatsPhrase(count: Int, lang: AppLanguage): String {
@@ -1792,11 +1836,11 @@ fun resolvingThreatsPhrase(count: Int, lang: AppLanguage): String {
 fun noThreatsMessage(
     lang: AppLanguage,
     calmMessages: Boolean = true,
-    voice: MoraleVoice = MoraleVoice.RANDOM
+    persona: MoralePersona = MoralePersona.RANDOM
 ): String {
     val s = Strings.get(lang)
     if (!calmMessages) return s.status.noThreatsMessage
-    return moraleVoicePack(lang, resolveMoraleVoice(voice)).calm.random()
+    return moralePersonaPack(lang, resolveMoralePersona(persona)).calm.random()
 }
 
 fun preciseGpsAgePhrase(minutes: Long, lang: AppLanguage): String {

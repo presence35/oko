@@ -172,9 +172,9 @@ internal fun buildSearchDb(pinnedCity: City?): SettingsSearchDb {
         ),
         SettingsSection.FLOURISH to kw(
             "morale", "brave", "bravery", "spirit", "heart", "fun", "animation", "bullet", "death", "flourish", "shoot", "tally", "neutralized",
-            "calm", "icon", "icons", "icon set", "glory", "honor", "voice", "voices", "personality", "random", "babusia", "slang",
+            "calm", "icon", "icons", "icon set", "glory", "honor", "voice", "voices", "persona", "personas", "tone", "personality", "random", "babusia", "slang",
             "мораль", "хоробрість", "дух", "серце", "розваг", "анімація", "куля", "збиття", "загибель", "лічильник", "знешкоджен", "загроза",
-            "заспокійлив", "іконка", "іконки", "набір іконок", "слава", "голос", "бабуся", "сленг", "випадково"
+            "заспокійлив", "іконка", "іконки", "набір іконок", "слава", "голос", "персона", "тон", "бабуся", "сленг", "випадково"
         ),
         SettingsSection.SHELTERS to kw(
             "shelter", "shelters", "directory", "укриття", "сховище", "бомбосховище", "каталог"

@@ -136,7 +136,7 @@ class DeathFxController(
             impl.highQuality = lastHq
             // A shader compile or a frame bake must never land on the first blast, so the
             // controller pays for it the moment the style becomes current.
-            (impl as? ExplosionWarmer)?.warmUp()
+            (impl as? DeathEngine)?.warmUp()
         } }
 
     /** Flattened liveness of whichever impl is current — stable across style switches,

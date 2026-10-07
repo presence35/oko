@@ -22,6 +22,7 @@ conclusions twice:
 """
 
 import argparse
+import collections
 import ftplib
 import json
 import os
@@ -120,7 +121,13 @@ def power_summary(bundle):
 
 
 def samples(bundle):
-    return section(bundle, "power") or []
+    """Power rows, deduplicated: builds before the wall-clock guard could mint several rows
+    under one millisecond (the tick re-fired on every input change with a stale clock).
+    Last wins — it carries the freshest zones/cpu for that instant."""
+    seen = {}
+    for s in section(bundle, "power") or []:
+        seen[s.get("atMillis")] = s
+    return [seen[k] for k in sorted(seen)]
 
 
 def run_label(sample):
@@ -248,8 +255,15 @@ def cmd_show(args):
         f"peak {fmt(ps.get('cpuPctMax'), '{:.3f}')}% "
         f"({fmt(ps.get('cpuIntervals'), '{:.0f}')} intervals)"
     )
+    print(
+        f"deep sleep {fmt(ps.get('deepSleepPct'), '{:.0f}')}% of the span; "
+        f"our radio moved {fmt(ps.get('uidRxKbTotal'), '{:.0f}')} KB down / "
+        f"{fmt(ps.get('uidTxKbTotal'), '{:.0f}')} KB up"
+    )
+    nets = collections.Counter(s.get("transport") or "unknown" for s in samples(b))
+    print("transport mix:", ", ".join(f"{k}={v}" for k, v in sorted(nets.items())))
     for key in ("exitSummary", "exits", "decisions", "connections", "reconnects", "gps",
-                "threats", "alerts"):
+                "threats", "alerts", "wakeEvents"):
         block = section(b, key)
         if not block:
             continue
@@ -280,6 +294,9 @@ def cmd_compare(args):
         ("zonesActivePct", ("powerSummary", "zonesActivePct")),
         ("cpuPctMean", ("powerSummary", "cpuPctMean")),
         ("cpuPctMax", ("powerSummary", "cpuPctMax")),
+        ("deepSleepPct", ("powerSummary", "deepSleepPct")),
+        ("uidRxKbTotal", ("powerSummary", "uidRxKbTotal")),
+        ("uidTxKbTotal", ("powerSummary", "uidTxKbTotal")),
         ("exits.total", ("exitSummary", "total")),
         ("exits.byReason", ("exitSummary", "byReason")),
         ("exits.whileForeground", ("exitSummary", "whileForeground")),

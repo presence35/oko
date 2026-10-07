@@ -59,7 +59,7 @@ class UserPrefs(private val context: Context) {
     private val threatCardSizeKey = stringPreferencesKey("threat_card_size")
     private val threatIconSetKey = stringPreferencesKey("threat_icon_set")
     private val overlapModeKey = stringPreferencesKey("threat_overlap_mode")
-    private val moraleVoiceKey = stringPreferencesKey("morale_voice")
+    private val moralePersonaKey = stringPreferencesKey("morale_persona")
     private val showMapScaleKey = booleanPreferencesKey("show_map_scale")
     private val showMediumCitiesKey = booleanPreferencesKey("show_medium_cities")
     private val showSmallCitiesKey = booleanPreferencesKey("show_small_cities")
@@ -134,9 +134,9 @@ class UserPrefs(private val context: Context) {
         val overlap = this[overlapModeKey]?.let { stored ->
             OverlapMode.values().firstOrNull { it.name == stored }
         } ?: d.overlapMode
-        val moraleVoice = this[moraleVoiceKey]?.let { stored ->
-            MoraleVoice.values().firstOrNull { it.name == stored }
-        } ?: d.moraleVoice
+        val moralePersona = this[moralePersonaKey]?.let { stored ->
+            MoralePersona.values().firstOrNull { it.name == stored }
+        } ?: d.moralePersona
         val deathAnimationStyle = this[deathAnimationStyleKey]?.let { stored ->
             DeathAnimationStyle.values().firstOrNull { it.name == stored }
         } ?: d.deathAnimationStyle
@@ -189,7 +189,7 @@ class UserPrefs(private val context: Context) {
             threatCardSize = cardSize,
             threatIconSet = iconSet,
             overlapMode = overlap,
-            moraleVoice = moraleVoice,
+            moralePersona = moralePersona,
             showMapScale = this[showMapScaleKey] ?: d.showMapScale,
             showMediumCities = this[showMediumCitiesKey] ?: d.showMediumCities,
             showSmallCities = this[showSmallCitiesKey] ?: d.showSmallCities,
@@ -483,8 +483,8 @@ class UserPrefs(private val context: Context) {
         store.edit { it[overlapModeKey] = mode.name }
     }
 
-    suspend fun setMoraleVoice(voice: MoraleVoice) {
-        store.edit { it[moraleVoiceKey] = voice.name }
+    suspend fun setMoralePersona(persona: MoralePersona) {
+        store.edit { it[moralePersonaKey] = persona.name }
     }
 
     suspend fun setShowMapScale(show: Boolean) {

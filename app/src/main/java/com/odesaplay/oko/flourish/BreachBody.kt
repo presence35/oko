@@ -14,21 +14,29 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Elite style "Breach" — hard directional streaks. Deliberately not another fireball: there is
- * no soft ball here, just a white-hot core punched out of a ring of long shards thrown clear of
- * the impact, crossed by two thin shock rings that outrun everything else and clear fast.
+ * Breach — hard directional streaks. Deliberately not another fireball: no soft body, just a
+ * white-hot core punched through a ring of long slivers thrown clear of the impact, crossed by two
+ * thin shock rings that outrun everything else and clear early.
  *
- * The shader pass (API 33+) turns the streaks into hard-edged tapered slivers; below it the same
- * shapes are drawn as rotated bars, so a pre-33 phone still gets streaks and not the soft bloom
- * the other elites use.
+ * Its AGSL pass (API 33+) turns the streaks into hard-edged spokes; below that the same shapes are
+ * rotated sliver sprites, so a pre-33 phone still gets streaks and never falls back to a bloom.
  */
-class EliteBreachDeathOverlay : EliteDeathBase(), ExplosionWarmer {
+class BreachBody : ExplosionBody, ExplosionWarmer {
+
+    override val id: DeathAnimationStyle = DeathAnimationStyle.BREACH
 
     override val preview: ExplosionPreview = ExplosionPreview(
         hot = Color.WHITE,
         mid = Color.rgb(255, 214, 140),
         shape = ExplosionShape.STREAK,
         scale = 1.05f
+    )
+
+    override val baseRadius: Float = 52f
+
+    /** Streaks read as shrapnel, which suits the weapons that throw it. */
+    override val kinds: Set<EliteKind> = setOf(
+        EliteKind.BALLISTIC, EliteKind.CRUISE, EliteKind.FPV, EliteKind.SHAHED, EliteKind.KAB
     )
 
     private val barPaint = Paint().apply {
@@ -46,9 +54,8 @@ class EliteBreachDeathOverlay : EliteDeathBase(), ExplosionWarmer {
     }
 
     /**
-     * The shader pass, compiled on first use rather than in the constructor: constructing it
-     * eagerly would push a compile onto the map's first frame, which is exactly when the map can
-     * least afford it. [warmUp] lets the controller pay for it off the blast path.
+     * Compiled on first use, not at construction: a compile is expensive and the first blast is
+     * the worst possible moment for one. [warmUp] moves it off that path.
      */
     private val shader: android.graphics.RuntimeShader? by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -56,7 +63,6 @@ class EliteBreachDeathOverlay : EliteDeathBase(), ExplosionWarmer {
         } else null
     }
 
-    /** Compile the shader ahead of the first kill so no blast ever pays for it. */
     override fun warmUp() {
         shader
     }
@@ -64,9 +70,9 @@ class EliteBreachDeathOverlay : EliteDeathBase(), ExplosionWarmer {
     private var streaks: FloatArray? = null
     private val dst = RectF()
 
-    override fun drawExplosion(
+    override fun draw(
         canvas: Canvas,
-        d: EliteDeath,
+        death: EliteDeath,
         x: Float,
         y: Float,
         e: Float,
@@ -74,22 +80,24 @@ class EliteBreachDeathOverlay : EliteDeathBase(), ExplosionWarmer {
         density: Float,
         maxR: Float,
         elapsedMs: Float,
-        budget: ExplosionBudget
+        budget: ExplosionBudget,
+        hq: Boolean
     ) {
-        val coreR = maxR * (0.3f * (1f - e * 0.85f)).coerceAtLeast(0f)
+        val coreR = maxR * 0.3f * (1f - e * 0.85f)
+        // The streaks never reach further than the shock rings, so the quad is sized to the visible
+        // blast rather than to maxR — this is what keeps the shader pass off a near-fullscreen rect.
+        val shardR = maxR * 0.85f * radiusScale(budget)
         val shardCount = when (budget) {
-            ExplosionBudget.FULL -> if (highQuality) 14 else 8
+            ExplosionBudget.FULL -> if (hq) 14 else 8
             ExplosionBudget.SOLID -> 6
             ExplosionBudget.CHEAP -> 0
         }
-        // The streaks never reach further than the shock rings, so the quad is sized to the visible
-        // blast rather than to maxR — this is what keeps the shader pass off a near-fullscreen rect.
-        val shardR = maxR * 0.85f
 
-        if (budget == ExplosionBudget.FULL && shader != null) {
-            drawShaderStreaks(canvas, d, x, y, e, fade, shardR)
+        val sh = if (budget == ExplosionBudget.FULL) shader else null
+        if (sh != null) {
+            drawShaderStreaks(canvas, death, x, y, e, fade, shardR)
         } else {
-            drawBarStreaks(canvas, d, x, y, e, fade, density, shardR, shardCount)
+            drawBarStreaks(canvas, death, x, y, e, fade, density, shardR, shardCount)
         }
 
         // Two thin rings, deliberately fast and thin — the "clears fast" half of the read.
@@ -111,9 +119,15 @@ class EliteBreachDeathOverlay : EliteDeathBase(), ExplosionWarmer {
         }
     }
 
+    private fun radiusScale(budget: ExplosionBudget): Float = when (budget) {
+        ExplosionBudget.FULL -> 1f
+        ExplosionBudget.SOLID -> 0.9f
+        ExplosionBudget.CHEAP -> 0.7f
+    }
+
     private fun drawShaderStreaks(
         canvas: Canvas,
-        d: EliteDeath,
+        death: EliteDeath,
         x: Float,
         y: Float,
         e: Float,
@@ -121,11 +135,11 @@ class EliteBreachDeathOverlay : EliteDeathBase(), ExplosionWarmer {
         shardR: Float
     ) {
         val sh = shader ?: return
-        val emberColor = ember(d.kind)
+        val emberColor = ember(death.kind)
         sh.setFloatUniform("uCenter", x, y)
         sh.setFloatUniform("uExtent", shardR)
         sh.setFloatUniform("uE", e)
-        sh.setFloatUniform("uSeed", (d.seed and 0xFFFF) / 65535f * 8f)
+        sh.setFloatUniform("uSeed", (death.seed and 0xFFFF) / 65535f * 8f)
         sh.setFloatUniform(
             "uHot",
             Color.red(emberColor) / 255f,
@@ -141,7 +155,7 @@ class EliteBreachDeathOverlay : EliteDeathBase(), ExplosionWarmer {
 
     private fun drawBarStreaks(
         canvas: Canvas,
-        d: EliteDeath,
+        death: EliteDeath,
         x: Float,
         y: Float,
         e: Float,
@@ -151,8 +165,8 @@ class EliteBreachDeathOverlay : EliteDeathBase(), ExplosionWarmer {
         count: Int
     ) {
         if (count <= 0) return
-        val arr = streaks ?: buildStreaks(d).also { streaks = it }
-        val color = ember(d.kind)
+        val arr = streaks ?: buildStreaks(death).also { streaks = it }
+        val color = ember(death.kind)
         var drawn = 0
         var i = 0
         while (i < arr.size && drawn < count) {
@@ -207,9 +221,9 @@ class EliteBreachDeathOverlay : EliteDeathBase(), ExplosionWarmer {
 
     private var streakSpriteBmp: Bitmap? = null
 
-    private fun buildStreaks(d: EliteDeath): FloatArray {
+    private fun buildStreaks(death: EliteDeath): FloatArray {
         val arr = FloatArray(MAX_STREAKS * 4)
-        val rnd = Random(d.seed xor 0x51ED270B)
+        val rnd = Random(death.seed xor 0x51ED270B)
         for (i in arr.indices step 4) {
             arr[i] = rnd.nextFloat() * ELITE_TAU
             arr[i + 1] = 0.55f + rnd.nextFloat() * 0.75f

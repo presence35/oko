@@ -151,6 +151,7 @@ object LogPreview {
                 counted("logs.decisions", logs?.optJSONArray("decisions")),
                 counted("logs.connections", logs?.optJSONArray("connections")),
                 counted("logs.reconnects", logs?.optJSONArray("reconnects")),
+                counted("logs.wakeEvents", logs?.optJSONArray("wakeEvents")),
                 counted("logs.power", logs?.optJSONArray("power")),
                 counted("logs.powerSummary", logs?.optJSONObject("powerSummary"), "keys"),
                 counted("exits", bundle.optJSONArray("exits"))

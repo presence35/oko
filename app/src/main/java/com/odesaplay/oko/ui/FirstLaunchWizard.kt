@@ -49,6 +49,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -280,29 +281,7 @@ private fun WizardThreatGrid(
 ) {
     val s = Strings.get(lang)
     Column {
-        val gearId = "gear"
-        Text(
-            buildAnnotatedString {
-                append(s.wizardCareSubtitle)
-                append(' ')
-                appendInlineContent(gearId, "[gear]")
-                append(' ')
-                append(s.wizardCareSubtitleGearSuffix)
-            },
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            inlineContent = mapOf(
-                gearId to InlineTextContent(
-                    Placeholder(18.sp, 18.sp, PlaceholderVerticalAlign.TextCenter)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_settings_ua),
-                        contentDescription = s.settingsButton,
-                        tint = Color.Unspecified
-                    )
-                }
-            )
-        )
+        WizardGearText(s, s.wizardCareSubtitle, MaterialTheme.typography.bodyLarge)
         Spacer(Modifier.height(14.dp))
         val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
         val groups = fastAndSlowGroups(lang, typeCatalog)
@@ -392,9 +371,9 @@ private fun WizardIsNotBlock(s: Strings.StringSet) {
             Spacer(Modifier.height(14.dp))
             WizardSourcePost(s)
             Spacer(Modifier.height(16.dp))
-            WizardBullet(s.wizardIs1, green)
-            WizardBullet(s.wizardIs2, green)
-            WizardBullet(s.wizardIs3, green)
+            WizardBullet(s, s.wizardIs1, green)
+            WizardBullet(s, s.wizardIs2, green)
+            WizardBullet(s, s.wizardIs3, green)
         }
         Spacer(Modifier.height(12.dp))
         WizardCard(borderColor = red.copy(alpha = 0.3f)) {
@@ -578,12 +557,12 @@ private fun WizardAlphaBlock(s: Strings.StringSet, neptunDown: Boolean, degraded
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(Modifier.height(14.dp))
-            WizardBullet(s.wizardAlphaUse, _ukraineYellow)
+            WizardBullet(s, s.wizardAlphaUse, _ukraineYellow)
             // The reliability caveat sits with the ask, not in the manuals: this app is paranoid
             // on purpose, and the honest remedy (turn it down) is one page away.
-            WizardBullet(s.wizardAlphaReliability, _ukraineYellow)
+            WizardBullet(s, s.wizardAlphaReliability, _ukraineYellow)
             WizardBugBullet(s, pillColor(neptunDown, degraded), pillLabel(s, neptunDown, degraded))
-            WizardBullet(s.wizardAlphaAi, _ukraineYellow)
+            WizardBullet(s, s.wizardAlphaAi, _ukraineYellow)
             Spacer(Modifier.height(12.dp))
             Text(
                 s.wizardAlphaBattery,
@@ -643,8 +622,8 @@ private fun WizardBlockHeader(text: String, accent: Color) {
 
 /** "Claim — detail": the claim is bold, the detail muted. */
 @Composable
-private fun WizardBullet(text: String, accent: Color) {
-    WizardBulletRow(claimThenDetail(text), accent)
+private fun WizardBullet(s: Strings.StringSet, text: String, accent: Color) {
+    WizardBulletRow(claimThenDetail(s, text), accent, gearInlineContent(s))
 }
 
 /** The bug-report bullet. Its instruction ends with the REAL NEPTUN mark and the source's own
@@ -710,9 +689,49 @@ private fun WizardBulletRow(
     }
 }
 
-/** The bold claim and the muted rest of a "claim — detail" string. */
+/**
+ * The gear icon drawn at [GEAR_MARKER], as inline content for any wizard sentence that names the
+ * Settings screen. One definition, three call sites, so a mention of Settings looks the same wherever
+ * it appears — and one screen reader label for all of them.
+ */
 @Composable
-private fun claimThenDetail(text: String): AnnotatedString {
+private fun gearInlineContent(s: Strings.StringSet): Map<String, InlineTextContent> = mapOf(
+    GEAR_ID to InlineTextContent(
+        Placeholder(18.sp, 18.sp, PlaceholderVerticalAlign.TextCenter)
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_settings_ua),
+            contentDescription = s.settingsButton,
+            tint = Color.Unspecified
+        )
+    }
+)
+
+/**
+ * Appends [text] with the gear drawn at its [GEAR_MARKER]. A sentence with no marker appends as-is,
+ * so this is safe to route every string through.
+ */
+private fun AnnotatedString.Builder.appendWithGear(s: Strings.StringSet, text: String) {
+    val (before, after) = splitAtGearMarker(text) ?: return append(text)
+    append(before)
+    appendInlineContent(GEAR_ID, "[gear]")
+    append(after)
+}
+
+/** A plain wizard sentence, gear-aware. */
+@Composable
+private fun WizardGearText(s: Strings.StringSet, text: String, style: TextStyle) {
+    Text(
+        text = buildAnnotatedString { appendWithGear(s, text) },
+        style = style,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        inlineContent = gearInlineContent(s)
+    )
+}
+
+/** The bold claim and the muted rest of a "claim — detail" string, gear-aware. */
+@Composable
+private fun claimThenDetail(s: Strings.StringSet, text: String): AnnotatedString {
     val head = text.substringBefore(" — ")
     val tail = text.substringAfter(" — ", "")
     return buildAnnotatedString {
@@ -721,10 +740,11 @@ private fun claimThenDetail(text: String): AnnotatedString {
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-        ) { append(head) }
+        ) { appendWithGear(s, head) }
         if (tail.isNotEmpty()) {
             withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                append(" — $tail")
+                append(" — ")
+                appendWithGear(s, tail)
             }
         }
     }
@@ -1158,11 +1178,7 @@ private fun WizardMoraleToggle(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(Modifier.height(2.dp))
-            Text(
-                s.wizardMoraleDesc,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            WizardGearText(s, s.wizardMoraleDesc, MaterialTheme.typography.bodyMedium)
         }
         Switch(
             checked = morale,

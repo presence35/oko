@@ -3,6 +3,7 @@ package com.odesaplay.oko
 import java.time.Instant
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -99,6 +100,50 @@ class StringsFormatTest {
     }
 
     /**
+     * Every wizard sentence that names the Settings screen carries exactly one gear marker, so the
+     * icon survives a rewrite of the copy and a missing one fails here rather than silently dropping
+     * it. Split on the marker, not on a character a translator might legitimately type.
+     */
+    @Test
+    fun `every wizard sentence naming Settings carries one gear marker`() {
+        listOf(AppLanguage.EN, AppLanguage.UA, AppLanguage.RU).forEach { lang ->
+            val s = Strings.get(lang)
+            val sentences = listOf(s.wizardCareSubtitle, s.wizardMoraleDesc, s.wizardAlphaReliability)
+            sentences.forEach { text ->
+                assertEquals("$lang: exactly one marker in \"$text\"", 1, text.countMarker())
+                val (before, after) = splitAtGearMarker(text)!!
+                // The gear belongs to the screen's NAME, so it sits directly in front of it.
+                assertTrue("$lang: nothing lost before the gear, got \"$before\"", before.isNotBlank())
+                assertTrue("$lang: the screen's name must follow the gear, got \"$after\"", after.isNotBlank())
+                assertTrue(
+                    "$lang: the screen's name must be capitalized after the gear",
+                    after.first().isUpperCase()
+                )
+            }
+        }
+    }
+
+    private fun String.countMarker(): Int {
+        var n = 0
+        var i = indexOf(GEAR_MARKER)
+        while (i >= 0) {
+            n++
+            i = indexOf(GEAR_MARKER, i + GEAR_MARKER.length)
+        }
+        return n
+    }
+
+    /** The split is lossless: putting the two halves back together must rebuild the sentence. */
+    @Test
+    fun `the gear split is lossless`() {
+        val text = "Change either in {gear}Settings."
+        val (before, after) = splitAtGearMarker(text)!!
+        assertEquals("Change either in ", before)
+        assertEquals("Settings.", after)
+        assertNull("no marker, no split", splitAtGearMarker("Nothing to see."))
+    }
+
+    /**
      * The alarm summary states a duration only when it can honestly measure one, so every language
      * needs a dateless form of its own — it used to be a hardcoded English string, which UA and RU
      * users saw verbatim after any mid-alarm restart.
@@ -112,5 +157,23 @@ class StringsFormatTest {
         assertEquals("$city: підсумок тривоги", alarmEpisodeTitle(Strings.get(AppLanguage.UA), city, 0))
         assertEquals("$city: итоги тревоги за 27 мин", alarmEpisodeTitle(Strings.get(AppLanguage.RU), city, 27))
         assertEquals("$city: итоги тревоги", alarmEpisodeTitle(Strings.get(AppLanguage.RU), city, 0))
+    }
+
+    /**
+     * A row that merged several alarms says how many and states their summed minutes — and when one
+     * of them was never measured the minutes go away while the count stays, in every language.
+     */
+    @Test
+    fun `the merged alarm summary title counts alarms in every language`() {
+        val city = "Дніпро"
+        assertEquals("$city: 32min · 2 alarms", alarmEpisodeTitle(Strings.get(AppLanguage.EN), city, 32, 2))
+        assertEquals("$city: 2 alarms", alarmEpisodeTitle(Strings.get(AppLanguage.EN), city, 0, 2))
+        assertEquals("$city: 32 хв · 2 тривоги", alarmEpisodeTitle(Strings.get(AppLanguage.UA), city, 32, 2))
+        assertEquals("$city: 2 тривоги", alarmEpisodeTitle(Strings.get(AppLanguage.UA), city, 0, 2))
+        assertEquals("$city: 5 тривог", alarmEpisodeTitle(Strings.get(AppLanguage.UA), city, 0, 5))
+        assertEquals("$city: 32 мин · 2 тревоги", alarmEpisodeTitle(Strings.get(AppLanguage.RU), city, 32, 2))
+        assertEquals("$city: 5 тревог", alarmEpisodeTitle(Strings.get(AppLanguage.RU), city, 0, 5))
+        // A single alarm keeps yesterday's wording byte for byte.
+        assertEquals("$city: 27min alarm summary", alarmEpisodeTitle(Strings.get(AppLanguage.EN), city, 27, 1))
     }
 }

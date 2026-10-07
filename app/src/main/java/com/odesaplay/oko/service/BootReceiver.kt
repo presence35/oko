@@ -8,6 +8,8 @@ import kotlinx.coroutines.runBlocking
 import com.odesaplay.oko.engine.MonitorCoreImpl
 import com.odesaplay.oko.service.AlertWatchdog
 import com.odesaplay.oko.service.EmergencyResurrectionWorker
+import com.odesaplay.oko.WakeEventLog
+import com.odesaplay.oko.WakeKind
 
 /**
  * Boot and Package-Replacement Receiver.
@@ -20,6 +22,7 @@ class BootReceiver : BroadcastReceiver() {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                WakeEventLog.record(WakeKind.BOOT)
                 val appContext = context.applicationContext
                 AlertWatchdog.schedule(appContext)
                 EmergencyResurrectionWorker.schedule(appContext)
