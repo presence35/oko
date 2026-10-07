@@ -147,6 +147,35 @@ class AlertService : Service() {
          *  the tick that closes it must re-baseline instead of deciding with a stale clock.
          *  Comfortably above the 30s idle tick so ordinary jitter never trips it. */
         private const val SLEEP_GAP_REBASE_MS = 3L * 60_000
+        /**
+         * Observation time for one evaluation. `combine` re-fires on every input (threat/alert
+         * snapshot, location, prefs) while `nowFlow` advances only on the delay loop, which Doze
+         * suspends — so a snapshot evaluated out of a sleep carries a frozen tick clock. A 6min
+         * alarm closed on such a tick measured 3min (onset 22:32:36, all-clear evaluated at tick
+         * 22:36:01 although the snapshot arrived 22:38:42). The wall clock is the observation;
+         * maxOf keeps monotonic forward progress across a backward wall jump.
+         */
+        internal fun observationNow(tickNowMs: Long, wallMs: Long = System.currentTimeMillis()): Long =
+            maxOf(tickNowMs, wallMs)
+
+        /** How long a posted official onset keeps the shared alert slot against an outer-zone
+         *  rewrite. The siren that summons the user names the official area and its reason; the
+         *  slot must still show that when they look, not the zone row that fired seconds later. */
+        private const val OFFICIAL_SLOT_HOLD_MS = 60_000L
+
+        /**
+         * Whether a zone primary must wait: it is an outer-zone rewrite, the shown official
+         * onset is still a live episode, and its hold has not lapsed. Pure so the branches are
+         * unit-tested; the live fact it reads is computed by the caller. INNER always breaks
+         * through — an escalation to red is never held for copy.
+         */
+        internal fun officialSlotHeld(
+            primaryZone: ThreatZone?,
+            shownOfficialStillLive: Boolean,
+            onsetShownAtMs: Long,
+            nowMs: Long
+        ): Boolean = primaryZone != null && primaryZone != ThreatZone.INNER &&
+            shownOfficialStillLive && nowMs - onsetShownAtMs < OFFICIAL_SLOT_HOLD_MS
         private const val VIBRATION_STRONG = 4
         private const val VIBRATION_ZONE = 3
 
@@ -378,6 +407,11 @@ class AlertService : Service() {
     private val tally by lazy { NeutralizedTally(applicationContext, scope) }
     private val episodeTally by lazy { AlarmEpisodeTally(applicationContext, scope) }
     @Volatile private var episodeActive = false
+    /**
+     * Wall instant the currently-shown official onset was posted, or 0 when the slot holds no
+     * official onset. Arms [officialSlotHeld]. Internal for tests (expired-hold simulation).
+     */
+    @Volatile internal var lastOfficialOnsetShownMs = 0L
     @Volatile private var currentToken: String? = null
 
     /** One tick's inputs, assembled by the combine above. `internal` rather than private so a
@@ -833,7 +867,10 @@ val mappedThreats = registry.allThreats.map { list ->
                 liveFlow,
                 prefs.preferences
             ) { live, p ->
-                val (rawThreats, alerts, gps, now, alertsReady) = live
+                val (rawThreats, alerts, gps, tickNow, alertsReady) = live
+                // Observation time, never the tick clock: see [observationNow]. Every duration,
+                // staleness and TTL below measures against when this evaluation runs.
+                val now = observationNow(tickNow, System.currentTimeMillis())
                 val nightActive = isNightActive(NightConfig(p.nightEnabled, p.nightStartMin, p.nightEndMin), now)
                 val dayParams = ZoneParams(p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin)
                 val nightZones = p.nightZones
@@ -1569,14 +1606,23 @@ val mappedThreats = registry.allThreats.map { list ->
                     lastShownId = primary.identity
                     return
                 }
+                // Don't tear down a live official notification on a flicker tick:
+                // any official id stays up while the latched oblast is still raw-active —
+                // and only while the level we posted it at is still switched on.
+                val shownLevel = officialLevelOf(lastShownId)
+                val shownOfficialStillLive =
+                    shownLevel != null && latchedAlive && state.officialLevelEnabled(shownLevel)
+                // A fresh official onset holds the shared slot: the siren that just summoned
+                // the user named the official area and its reason, so an outer-zone onset
+                // seconds later must not swap it out from under them. Heard, not seen: the
+                // zone verdict still sounds and is audit-logged. lastShownId stays official,
+                // so the zone rewrite lands on its own ticks after the hold lapses.
+                val holdOfficialSlot = officialSlotHeld(
+                    primary?.zone, shownOfficialStillLive, lastOfficialOnsetShownMs,
+                    System.currentTimeMillis()
+                )
                 when {
                     primary == null -> {
-                        // Don't tear down a live official notification on a flicker tick:
-                        // any official id stays up while the latched oblast is still raw-active —
-                        // and only while the level we posted it at is still switched on.
-                        val shownLevel = officialLevelOf(lastShownId)
-                        val shownOfficialStillLive =
-                            shownLevel != null && latchedAlive && state.officialLevelEnabled(shownLevel)
                         if (!shownOfficialStillLive) {
                             cancelAlert()
                         }
@@ -1590,10 +1636,6 @@ val mappedThreats = registry.allThreats.map { list ->
                                 overrideSilence = (state.zoneSirenOverride ?: state.officialSirenOverride)
                             )
                         }
-                        postAlert(primary.zone, primary.level, primary.title, primary.body,
-                            state.zoneSirenOverride ?: state.officialSirenOverride,
-                            revealThreat = primary.revealThreat, vibrationLevel = primary.vibration,
-                            muted = muted, actions = actions)
                         if (primary.zone != null) {
                             primary.revealThreat?.let { t ->
                                 DebugLog.recordZoneFired(
@@ -1610,13 +1652,22 @@ val mappedThreats = registry.allThreats.map { list ->
                                 )
                             }
                         }
+                        if (holdOfficialSlot) return
+                        postAlert(primary.zone, primary.level, primary.title, primary.body,
+                            state.zoneSirenOverride ?: state.officialSirenOverride,
+                            revealThreat = primary.revealThreat, vibrationLevel = primary.vibration,
+                            muted = muted, actions = actions)
+                        lastOfficialOnsetShownMs =
+                            if (primary.zone == null) System.currentTimeMillis() else 0L
                     }
                     alertNotificationShowing() -> {
+                        if (holdOfficialSlot) return
                         postAlert(primary.zone, primary.level, primary.title, primary.body,
                             state.zoneSirenOverride ?: state.officialSirenOverride,
                             revealThreat = primary.revealThreat, silent = true,
                             vibrationLevel = primary.vibration,
                             muted = bellsMuted(), actions = actions)
+                        if (primary.zone != null) lastOfficialOnsetShownMs = 0L
                     }
                     else -> { /* dismissed, don't re-raise */ }
                 }
@@ -1815,6 +1866,7 @@ val mappedThreats = registry.allThreats.map { list ->
     }
 
     private fun cancelAlert() {
+        lastOfficialOnsetShownMs = 0L
         notificationManager.cancelNotification(NOTIF_ALERT)
     }
 

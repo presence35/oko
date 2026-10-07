@@ -6,6 +6,7 @@ import android.content.Context
 import com.odesaplay.oko.engine.AlertLevel
 import com.odesaplay.oko.engine.OblastAlert
 import com.odesaplay.oko.engine.ThreatEngine
+import com.odesaplay.oko.engine.ThreatZone
 import com.odesaplay.oko.engine.ZoneParams
 import com.odesaplay.oko.engine.canonicalOblastId
 import com.odesaplay.oko.service.MonitoringStatus
@@ -113,6 +114,12 @@ class AlertEpisodeClearTest {
 
     private fun alarmSummaryTitle(notification: Notification?): String? =
         notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()
+
+    private fun alert(): Notification? =
+        notificationManager().getNotification(AlertNotificationManager.NOTIF_ALERT)
+
+    private fun alertTitle(): String? =
+        alert()?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()
 
     /**
      * The shade row is replaced, not added to: every post reuses the one id, so awaiting "any
@@ -450,5 +457,45 @@ class AlertEpisodeClearTest {
             "$CITY: 7min alarm summary",
             awaitSummaryTitle("$CITY: 7min alarm summary")
         )
+    }
+
+    /**
+     * The siren that summons the user names the official area and its reason. An outer-zone
+     * onset seconds later still sounds (heard) but must not swap the row out (seen) while the
+     * hold lasts — the field case was 9 seconds — and the zone rewrite lands on its own once
+     * the hold lapses.
+     */
+    @Test
+    fun `a fresh official onset holds the slot against an outer-zone rewrite, then yields`() {
+        announce(1_000)
+        val officialTitle = alertTitle()
+        assertNotNull("official onset must be showing", officialTitle)
+        assertTrue(
+            "official row names the episode city, got: $officialTitle",
+            officialTitle!!.contains(CITY)
+        )
+
+        val raided = live().copy(
+            threats = mapOf("d1" to threat(id = "d1", title = "Shahed-136", locality = "Доброслав")),
+            zoneThreats = mapOf("d1" to ThreatZone.OUTER),
+            slowYellowArmed = true
+        )
+        tick(2_000, raided)
+        assertEquals(
+            "zone onset sounds but the official row holds through the hold",
+            officialTitle, alertTitle()
+        )
+        assertTrue(
+            "lastShownId stays official while held, got: ${service().lastShownIdForTest()}",
+            service().lastShownIdForTest()!!.startsWith("red|")
+        )
+
+        service().lastOfficialOnsetShownMs = 0L
+        tick(3_000, raided)
+        assertEquals(
+            "after the hold the pending zone rewrite lands",
+            "zone|d1|OUTER", service().lastShownIdForTest()
+        )
+        assertFalse("official row must be gone, got: ${alertTitle()}", alertTitle()!!.contains(CITY))
     }
 }

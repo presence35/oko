@@ -573,8 +573,7 @@ internal fun FallingDebrisDelayRow(
     offLabel: String,
     onCommit: (Int) -> Unit
 ) {
-    var local by remember { mutableStateOf((seconds / 60).toFloat()) }
-    LaunchedEffect(seconds) { local = (seconds / 60).toFloat() }
+    var local by remember(seconds) { mutableStateOf((seconds / 60).toFloat()) }
     val minutes = local.roundToInt().coerceIn(0, 10)
     Column(
         modifier = Modifier
@@ -603,20 +602,12 @@ internal fun FallingDebrisDelayRow(
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(
-                onClick = { local = 0f; onCommit(0) },
-                enabled = minutes != 0,
-                interactionSource = rememberHapticInteractionSource(),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
-            ) {
-                Text(offLabel)
-            }
             Slider(
                 value = local,
                 onValueChange = { local = it },
                 valueRange = 0f..10f,
                 steps = 9,
-                onValueChangeFinished = { onCommit(minutes * 60) },
+                onValueChangeFinished = { onCommit(local.roundToInt().coerceIn(0, 10) * 60) },
                 interactionSource = rememberHapticInteractionSource(),
                 modifier = Modifier.weight(1f)
             )

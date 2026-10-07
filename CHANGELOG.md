@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- A fresh official alert now holds the notification slot for a minute: an outer-zone onset right after it still sounds, but the official row with its reason stays put instead of being swapped out seconds after the siren; a red escalation still takes over at once 10-07_23:10:00
+- Falling debris advisory slider now commits the released thumb position and shows a single Off label, fixing the setting snapping back to off 10-07_23:45:00
+- Fixed the alarm summary under-counting minutes after Doze: an evaluation fired by a feed snapshot no longer measures against the frozen tick clock, so a 6-minute alarm closed out of a sleep reads 6 minutes, not 3 10-07_23:10:00
 - Explosions now move like explosions: shock rings follow the Sedov–Taylor blast curve, sparks and streaks fly drag ease-out with gravity sag, fireballs punch out fast and collapse slow 10-07_23:35:00
 - The neutralizing footer no longer shows a distance ("Neutralizing drones · 613 km" is just "Neutralizing drones") 10-07_23:30:00
 - Faster releaseDirect: parallel builds + build cache, release assemble no longer reruns the debug test suite (upload still gated on tests), shorter live-manifest retry 10-07_22:51:13

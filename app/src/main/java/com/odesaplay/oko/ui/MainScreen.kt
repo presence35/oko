@@ -2,7 +2,6 @@ package com.odesaplay.oko
 import com.odesaplay.oko.theme.AppPalette
 import com.odesaplay.oko.beta.FeedbackSheet
 import com.odesaplay.oko.beta.FeedbackPanel
-import com.odesaplay.oko.ui.MapLibreBridge
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.LatLng
 import kotlin.math.roundToInt
@@ -29,7 +28,6 @@ import android.net.Uri
 import android.os.Build
 import android.app.Activity
 import android.graphics.Bitmap
-import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
@@ -712,30 +710,28 @@ private fun MapScreen(
     var shelterSelectTick by remember { mutableStateOf(0) }
     var selectedShelter by remember { mutableStateOf<NearestShelter?>(null) }
     // Beta feedback: bridge ref for the GL snapshot, and the panel's single state.
-    var feedbackBridge by remember { mutableStateOf<MapLibreBridge?>(null) }
     var feedback by remember { mutableStateOf<FeedbackSheet>(FeedbackSheet.Closed) }
     var feedbackCapturing by remember { mutableStateOf(false) }
     val feedbackUpload by LogUpload.state.collectAsState()
     fun openFeedback() {
         if (feedback is FeedbackSheet.Open || feedbackCapturing) return
-        // Window PixelCopy, not the GL snapshot: our markers ride a Canvas overlay above the
-        // GL surface, so a GL-only shot misses them (and reads black). The FAB hides for the
-        // one frame the copy takes, then comes back with the sheet.
+        // Full-window PixelCopy, not a GL snapshot and not map-cropped: our markers ride a
+        // Canvas overlay above the GL surface (GL-only reads black), and the header/footer
+        // say which pill, banner and screen the tester was looking at. The FAB hides for
+        // the one copy frame, then comes back with the sheet.
         val activity = context as? Activity
-        val source = feedbackBridge?.mapView
-        if (activity == null || source == null || source.width <= 0 || source.height <= 0) {
+        val decor = activity?.window?.decorView
+        if (decor == null || decor.width <= 0 || decor.height <= 0) {
             feedback = FeedbackSheet.Open(shotLoading = false, includeShot = false)
             return
         }
         feedbackCapturing = true
-        source.post {
-            val loc = IntArray(2)
-            source.getLocationInWindow(loc)
-            val bmp = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        decor.post {
+            val bmp = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
             try {
                 PixelCopy.request(
                     activity.window,
-                    Rect(loc[0], loc[1], loc[0] + source.width, loc[1] + source.height),
+                    null,
                     bmp,
                     { result ->
                         feedbackCapturing = false
@@ -758,6 +754,15 @@ private fun MapScreen(
     fun closeFeedback() {
         feedback = FeedbackSheet.Closed
         LogUpload.dismiss()
+    }
+    // A sent report closes the sheet itself and says thanks — no separate Done screen
+    // to dismiss by hand.
+    LaunchedEffect(feedbackUpload) {
+        if (feedbackUpload is UploadState.Done && feedback is FeedbackSheet.Open) {
+            feedback = FeedbackSheet.Closed
+            LogUpload.dismiss()
+            showToast(s.feedbackSent)
+        }
     }
     // Measured overlay heights feeding the map's camera framing: the popup card covers the top
     // of the viewport, the zones sheet the bottom — the map fits/reveals inside the visible band.
@@ -1117,7 +1122,6 @@ private fun MapScreen(
                         onCancelRequestTick = cancelTick,
                         welcomeShootdown = welcomeShootdown,
                         onWelcomeFinished = onWelcomeFinished,
-                        onMapBridge = { feedbackBridge = it },
                         modifier = Modifier.fillMaxSize()
                     )
                     uiState.flyby?.let { show ->
