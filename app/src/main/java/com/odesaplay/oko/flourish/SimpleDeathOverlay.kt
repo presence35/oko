@@ -52,6 +52,15 @@ class SimpleDeathOverlay : DeathAnimation {
 
     override var highQuality: Boolean = true
 
+    /** Already the cheapest style there is — a show costs it nothing extra. */
+    override var economyMode: Boolean = false
+
+    override val preview: ExplosionPreview = ExplosionPreview(
+        hot = Color.WHITE,
+        mid = Color.rgb(255, 213, 0),
+        shape = ExplosionShape.RINGS
+    )
+
     private fun syncActive() {
         val nowActive = deaths.isNotEmpty()
         if (_active.value != nowActive) _active.value = nowActive

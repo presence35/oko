@@ -835,20 +835,18 @@ object Strings {
      */
     data class DeathAnimStyleStrings(
         val title: String,
-        val eliteTitle: String,
-        val eliteNote: String,
         val simple: String,
         val classic: String,
         val advanced: String,
-        val eliteShader: String,
-        val eliteBaked: String,
-        val eliteHybrid: String,
+        val breach: String,
+        val film: String,
+        val aftermath: String,
         val simpleNote: String,
         val classicNote: String,
         val advancedNote: String,
-        val eliteShaderNote: String,
-        val eliteBakedNote: String,
-        val eliteHybridNote: String
+        val breachNote: String,
+        val filmNote: String,
+        val aftermathNote: String
     )
 
     data class WordForms(
@@ -1512,20 +1510,18 @@ object Strings {
         val deathAnimationTitle: String get() = misc.deathAnimationTitle
         val deathAnimationDesc: String get() = misc.deathAnimationDesc
         val deathAnimStyleTitle: String get() = deathAnimStyle.title
-        val deathAnimStyleEliteTitle: String get() = deathAnimStyle.eliteTitle
-        val deathAnimStyleEliteNote: String get() = deathAnimStyle.eliteNote
         val deathAnimStyleSimpleLabel: String get() = deathAnimStyle.simple
         val deathAnimStyleClassicLabel: String get() = deathAnimStyle.classic
         val deathAnimStyleAdvancedLabel: String get() = deathAnimStyle.advanced
-        val deathAnimStyleEliteShaderLabel: String get() = deathAnimStyle.eliteShader
-        val deathAnimStyleEliteBakedLabel: String get() = deathAnimStyle.eliteBaked
-        val deathAnimStyleEliteHybridLabel: String get() = deathAnimStyle.eliteHybrid
+        val deathAnimStyleBreachLabel: String get() = deathAnimStyle.breach
+        val deathAnimStyleFilmLabel: String get() = deathAnimStyle.film
+        val deathAnimStyleAftermathLabel: String get() = deathAnimStyle.aftermath
         val deathAnimStyleSimpleNote: String get() = deathAnimStyle.simpleNote
         val deathAnimStyleClassicNote: String get() = deathAnimStyle.classicNote
         val deathAnimStyleAdvancedNote: String get() = deathAnimStyle.advancedNote
-        val deathAnimStyleEliteShaderNote: String get() = deathAnimStyle.eliteShaderNote
-        val deathAnimStyleEliteBakedNote: String get() = deathAnimStyle.eliteBakedNote
-        val deathAnimStyleEliteHybridNote: String get() = deathAnimStyle.eliteHybridNote
+        val deathAnimStyleBreachNote: String get() = deathAnimStyle.breachNote
+        val deathAnimStyleFilmNote: String get() = deathAnimStyle.filmNote
+        val deathAnimStyleAftermathNote: String get() = deathAnimStyle.aftermathNote
         val followBulletTitle: String get() = misc.followBulletTitle
         val followBulletDesc: String get() = misc.followBulletDesc
         val hdExplosionTitle: String get() = misc.hdExplosionTitle

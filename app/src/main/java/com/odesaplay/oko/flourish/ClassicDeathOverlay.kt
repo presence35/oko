@@ -87,6 +87,15 @@ class ClassicDeathOverlay : DeathAnimation {
 
     override var highQuality: Boolean = true
 
+    /** Frozen look: a show draws exactly what a single shot draws. */
+    override var economyMode: Boolean = false
+
+    override val preview: ExplosionPreview = ExplosionPreview(
+        hot = Color.WHITE,
+        mid = Color.rgb(255, 193, 7),
+        shape = ExplosionShape.BALL
+    )
+
     private fun syncActive() {
         val nowActive = deaths.isNotEmpty()
         if (_active.value != nowActive) _active.value = nowActive

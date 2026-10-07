@@ -30,10 +30,10 @@ enum class ThreatCardSize { SMALL, LARGE }
 
 enum class ThreatIconSet { PHOTO, ARMY, COMIC, RUSSIAN }
 
-/** Death-animation engine: cheap rings, the original look, or the fuller rebuild,
- *  plus three candidate elites (GPU shader, baked film, canvas-with-shader-upgrade) whose
- *  look is still being picked between. Each is a self-contained [DeathAnimation] plugin. */
-enum class DeathAnimationStyle { SIMPLE, CLASSIC, ADVANCED, ELITE_SHADER, ELITE_BAKED, ELITE_HYBRID }
+/** Death-animation engine: cheap rings, the original look, the fuller rebuild, plus three
+ *  elites named for what they actually do — hard streaks, pre-baked film, a lingering bloom.
+ *  Each is a self-contained [DeathAnimation] plugin. */
+enum class DeathAnimationStyle { SIMPLE, CLASSIC, ADVANCED, BREACH, FILM, AFTERMATH }
 
 /** How same-coordinate threats render on the map. */
 enum class OverlapMode { DEFAULT, COUNT }

@@ -28,6 +28,26 @@ internal const val ELITE_QUICK_EXPLOSION_LEN_MS = 800L
  */
 internal const val ELITE_MAX_DEATHS = 420
 
+/**
+ * How much of the explosion body a style is allowed to spend on a single blast this frame.
+ *
+ * This is the whole budget conversation in one number, so no style has to know why it is
+ * being held back: [EliteDeathBase] hands the same [budget] to every elite and expects the
+ * cheapest tier above [CHEAP] to still be recognisably that style.
+ */
+enum class ExplosionBudget {
+    /** Ring + core flash only. Always drawn, never skipped — the blast must still read. */
+    CHEAP,
+
+    /** Flat body: cached bitmap or gradient, a short ember tail. */
+    SOLID,
+
+    /** The style's full body: shader pass, debris, long tail. */
+    FULL;
+
+    val richerThanCheap: Boolean get() = this != CHEAP
+}
+
 /** Explosion personality per threat type — the elite styles read it, never the raw [ThreatType]. */
 enum class EliteKind { SHAHED, BALLISTIC, CRUISE, FPV, AVIATION, KAB, RECON, UNKNOWN;
 
@@ -68,6 +88,11 @@ class EliteDeath(
  * and the whole pre-explosion half of the lifecycle (pre-spawned icon, gliding threat, inbound
  * projectile from just off the screen edge). A concrete style supplies only [drawExplosion] —
  * the part that actually differs — so each elite file contains just its own look.
+ *
+ * It also owns the frame budget. Cost here is per-blast turbulence times concurrent blasts, so
+ * no phone escapes it: the base times its own explosion work, steps [budget] down when the
+ * rolling average overruns, and steps back up when there is headroom. The caller never decides
+ * how to degrade — it only says [economyMode] ("this is a show, not a single shot").
  */
 abstract class EliteDeathBase : DeathAnimation {
 
@@ -79,6 +104,9 @@ abstract class EliteDeathBase : DeathAnimation {
     override val isActive: Boolean get() = deaths.isNotEmpty()
 
     override var highQuality: Boolean = true
+
+    /** True during a replay show: hold back the full body so hundreds of blasts stay fluid. */
+    override var economyMode: Boolean = false
 
     private fun syncActive() {
         val nowActive = deaths.isNotEmpty()
@@ -150,10 +178,14 @@ abstract class EliteDeathBase : DeathAnimation {
 
     override fun clear() {
         deaths.clear()
+        budget = ExplosionBudget.FULL
         syncActive()
     }
 
     private var bulletSprite: BulletSprite? = null
+
+    /** What each blast may spend this frame. Recomputed once per draw, never per death. */
+    private var budget: ExplosionBudget = ExplosionBudget.FULL
 
     override fun draw(
         canvas: Canvas,
@@ -179,6 +211,16 @@ abstract class EliteDeathBase : DeathAnimation {
         }
         val bullet = bulletSprite ?: BulletSprite(resources).also { bulletSprite = it }
         val zoomScale = ((zoom - 9.0) / 4.0 * 2.0 + 1.0).coerceIn(1.0, 3.0).toFloat()
+        val frameBudget = frameBudget(deaths.size)
+        val startedNs = System.nanoTime()
+        // A replay show or a stampede gets the flat body everywhere; a single shot gets the rest.
+        var richLeft = if (economyMode) 0 else MAX_RICH_PER_FRAME
+        val richCeiling = when (frameBudget) {
+            ExplosionBudget.FULL -> MAX_RICH_PER_FRAME
+            ExplosionBudget.SOLID -> 1
+            ExplosionBudget.CHEAP -> 0
+        }
+        if (richLeft > richCeiling) richLeft = richCeiling
 
         for (d in deaths) {
             val rawElapsed = now - d.start
@@ -209,6 +251,11 @@ abstract class EliteDeathBase : DeathAnimation {
 
             if (t >= boomT && !d.dud) {
                 val e = ((t - boomT) / boomLenT).coerceIn(0f, 1f)
+                val spend = when {
+                    richLeft > 0 -> { richLeft--; ExplosionBudget.FULL }
+                    frameBudget.richerThanCheap -> ExplosionBudget.SOLID
+                    else -> ExplosionBudget.CHEAP
+                }
                 drawExplosion(
                     canvas = canvas,
                     d = d,
@@ -217,12 +264,13 @@ abstract class EliteDeathBase : DeathAnimation {
                     e = e,
                     fade = 1f - e,
                     density = density,
-                    maxR = 52f * density * zoomScale,
+                    maxR = maxRFor(spend, density, zoomScale),
                     elapsedMs = (t - boomT) * dur,
-                    hq = highQuality
+                    budget = spend
                 )
             }
         }
+        recordFrameCost(System.nanoTime() - startedNs)
     }
 
     /** The one thing a concrete elite style has to define. `e` runs 0..1 across the explosion. */
@@ -236,7 +284,7 @@ abstract class EliteDeathBase : DeathAnimation {
         density: Float,
         maxR: Float,
         elapsedMs: Float,
-        hq: Boolean
+        budget: ExplosionBudget
     )
 
     /** Per-death scratch cleanup on prune; styles holding recycled bitmaps override it. */
@@ -302,6 +350,18 @@ abstract class EliteDeathBase : DeathAnimation {
     }
 
     companion object {
+        /** How many blasts per frame may spend the full body before the rest drop a tier. */
+        const val MAX_RICH_PER_FRAME = 3
+
+        /** Frame cost above this (ns) counts as a miss — roughly half a 60fps budget. */
+        private const val COST_HIGH_NS = 9_000_000L
+
+        /** Comfortably under budget; sustained, this is the signal to climb back up. */
+        private const val COST_LOW_NS = 4_500_000L
+
+        /** Consecutive frames needed to move one tier, so a single slow frame can't demote. */
+        private const val STEP_FRAMES = 12
+
         fun hotCore(kind: EliteKind): Int = when (kind) {
             EliteKind.BALLISTIC -> Color.WHITE
             EliteKind.AVIATION -> Color.rgb(190, 225, 255)
@@ -323,6 +383,60 @@ abstract class EliteDeathBase : DeathAnimation {
         fun shockRadius(maxR: Float, e: Float, speed: Float = 1.35f): Float =
             maxR * (0.1f + speed * e)
     }
+
+    private var costAvgNs = COST_LOW_NS
+    private var hotFrames = 0
+    private var calmFrames = 0
+
+    /**
+     * The self-throttle. It times this style's own explosion work — not the whole frame, which
+     * includes tile rendering the style has no business judging — and moves one tier at a time
+     * after a sustained run, so a single slow frame can never demote a style mid-blast.
+     */
+    private fun frameBudget(concurrent: Int): ExplosionBudget {
+        // A replay show, or more live blasts than anyone can afford in full: a flat body is the
+        // right answer regardless of how fast the frame actually was.
+        if (economyMode || concurrent > MAX_RICH_PER_FRAME) return ExplosionBudget.SOLID
+        budget = when {
+            costAvgNs > COST_HIGH_NS -> {
+                calmFrames = 0
+                if (++hotFrames < STEP_FRAMES) budget
+                else {
+                    hotFrames = 0
+                    if (budget == ExplosionBudget.FULL) ExplosionBudget.SOLID else ExplosionBudget.CHEAP
+                }
+            }
+            costAvgNs < COST_LOW_NS -> {
+                hotFrames = 0
+                if (++calmFrames < STEP_FRAMES) budget
+                else {
+                    calmFrames = 0
+                    when (budget) {
+                        ExplosionBudget.CHEAP -> ExplosionBudget.SOLID
+                        else -> ExplosionBudget.FULL
+                    }
+                }
+            }
+            else -> {
+                hotFrames = 0
+                calmFrames = 0
+                budget
+            }
+        }
+        return budget
+    }
+
+    private fun recordFrameCost(costNs: Long) {
+        if (costNs <= 0L) return
+        costAvgNs = (costAvgNs * 3 + costNs) / 4
+    }
+
+    private fun maxRFor(budget: ExplosionBudget, density: Float, zoomScale: Float): Float =
+        when (budget) {
+            ExplosionBudget.FULL -> 52f * density * zoomScale
+            ExplosionBudget.SOLID -> 44f * density * zoomScale
+            ExplosionBudget.CHEAP -> 34f * density * zoomScale
+        }
 }
 
 internal const val ELITE_TAU = (2.0 * PI).toFloat()

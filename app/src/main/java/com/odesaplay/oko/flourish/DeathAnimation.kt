@@ -4,25 +4,68 @@ import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PointF
+import android.graphics.RadialGradient
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import com.odesaplay.oko.engine.LatLng
 import kotlinx.coroutines.flow.StateFlow
+
+/**
+ * The silhouette a style draws, reduced to what a static thumbnail can show. Settings renders
+ * this once per card, so a style declares its own look here instead of the UI hardcoding a
+ * phrasebook — a new style gets a recognisable preview for free.
+ */
+data class ExplosionPreview(
+    val hot: Int,
+    val mid: Int,
+    val shape: ExplosionShape,
+    /** Fraction of the thumbnail the blast fills. */
+    val scale: Float = 1f
+)
+
+/** Body plan of a style, which is what actually distinguishes one explosion from another. */
+enum class ExplosionShape {
+    /** Flash and expanding rings, no body. */
+    RINGS,
+
+    /** A single round ball. */
+    BALL,
+
+    /** A wide soft bloom that lingers. */
+    BLOOM,
+
+    /** Hard directional streaks thrown clear of the blast. */
+    STREAK,
+
+    /** A ball torn into chunks. */
+    SHARDS
+}
 
 /**
  * Swappable death-animation engine. The map view only ever talks to this interface
  * ([DeathFxController.overlay]), so styles come and go without touching UI code.
  * Implementations: [SimpleDeathOverlay] (cheap rings + sparks, no bitmaps),
  * [ClassicDeathOverlay] (the original look, frozen), [ThreatDeathOverlay] (fuller), and the
- * three elites [EliteShaderDeathOverlay] / [EliteBakedDeathOverlay] / [EliteHybridDeathOverlay],
+ * three elites [EliteBreachDeathOverlay] / [EliteFilmDeathOverlay] / [EliteAftermathDeathOverlay],
  * which share [EliteDeathBase] for everything but the explosion body itself.
  */
 interface DeathAnimation {
     val active: StateFlow<Boolean>
     val isActive: Boolean
     var highQuality: Boolean
+
+    /**
+     * Set by the flourish controller while a replay show is running, so a style holding hundreds
+     * of blasts can play a cheaper pass without the caller knowing how to degrade it.
+     */
+    var economyMode: Boolean
+
+    /** What this style looks like, for the settings card thumbnail. Defaults to a plain ball. */
+    val preview: ExplosionPreview get() = ExplosionPreview(Color.WHITE, Color.rgb(255, 193, 7), ExplosionShape.BALL)
 
     fun isActiveFor(id: String?): Boolean
     fun rebasePendingOrigins(newOrigin: () -> LatLng?)
@@ -55,14 +98,14 @@ fun DeathAnimationStyle.create(): DeathAnimation = when (this) {
     DeathAnimationStyle.SIMPLE -> SimpleDeathOverlay()
     DeathAnimationStyle.CLASSIC -> ClassicDeathOverlay()
     DeathAnimationStyle.ADVANCED -> ThreatDeathOverlay()
-    DeathAnimationStyle.ELITE_SHADER -> EliteShaderDeathOverlay()
-    DeathAnimationStyle.ELITE_BAKED -> EliteBakedDeathOverlay()
-    DeathAnimationStyle.ELITE_HYBRID -> EliteHybridDeathOverlay()
+    DeathAnimationStyle.BREACH -> EliteBreachDeathOverlay()
+    DeathAnimationStyle.FILM -> EliteFilmDeathOverlay()
+    DeathAnimationStyle.AFTERMATH -> EliteAftermathDeathOverlay()
 }
 
 /**
  * The one sanctioned bullet sprite: the old short shell, no trail. Shared by all
- * three styles so the projectile reads the same no matter the explosion picked.
+ * styles so the projectile reads the same no matter the explosion picked.
  */
 internal class BulletSprite(resources: Resources) {
     private val res = resources
@@ -84,5 +127,49 @@ internal class BulletSprite(resources: Resources) {
         dst.set(-hw, -hh, hw, hh)
         canvas.drawBitmap(bmp, null, dst, paint)
         canvas.restore()
+    }
+}
+
+/**
+ * A cached white-hot radial puff, shared by the elite styles. Each elite lays its own lobes and
+ * debris over this, which is why no elite pays for a per-frame `RadialGradient`.
+ */
+internal class ElitePuff(val sizeDp: Int) {
+    private var bitmap: Bitmap? = null
+    private val paint = Paint().apply {
+        isAntiAlias = true
+        isFilterBitmap = true
+    }
+    private val dst = RectF()
+
+    fun draw(canvas: Canvas, x: Float, y: Float, radius: Float, color: Int, alpha: Int) {
+        val bmp = bitmap ?: bake().also { bitmap = it }
+        paint.color = color
+        paint.alpha = alpha
+        dst.set(x - radius, y - radius, x + radius, y + radius)
+        canvas.drawBitmap(bmp, null, dst, paint)
+    }
+
+    private fun bake(): Bitmap {
+        val size = sizeDp * 3
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val half = size / 2f
+        Canvas(bmp).drawCircle(
+            half, half, half, Paint().apply {
+                isAntiAlias = true
+                shader = RadialGradient(
+                    half, half, half,
+                    intArrayOf(
+                        Color.argb(255, 255, 255, 255),
+                        Color.argb(215, 255, 255, 255),
+                        Color.argb(110, 255, 255, 255),
+                        Color.argb(0, 255, 255, 255)
+                    ),
+                    floatArrayOf(0f, 0.3f, 0.66f, 1f),
+                    Shader.TileMode.CLAMP
+                )
+            }
+        )
+        return bmp
     }
 }

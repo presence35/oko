@@ -117,6 +117,16 @@ class ThreatDeathOverlay : DeathAnimation {
 
     override var highQuality: Boolean = true
 
+    /** Shards and smoke are the expensive half: a show drops them rather than the flash. */
+    override var economyMode: Boolean = false
+
+    override val preview: ExplosionPreview = ExplosionPreview(
+        hot = Color.WHITE,
+        mid = Color.rgb(255, 160, 40),
+        shape = ExplosionShape.SHARDS,
+        scale = 1.05f
+    )
+
     private fun syncActive() {
         val nowActive = deaths.isNotEmpty()
         if (_active.value != nowActive) _active.value = nowActive
@@ -593,7 +603,8 @@ class ThreatDeathOverlay : DeathAnimation {
                 }
 
                 // 4. Icon shards — random direction, irregular UV chunks, drag + gravity
-                d.icon?.let { icon ->
+                // A show keeps the flash and drops the debris, which is where this style costs.
+                if (!economyMode) d.icon?.let { icon ->
                     if (d.shards == null) {
                         val inbound = d.origin?.let { o ->
                             val op = project(o.lat, o.lon)

@@ -177,6 +177,8 @@ class DeathFxController(
                 .collect { style ->
                     styleFlow.value = style
                     impls.values.forEach { it.clear() }
+                    // A fresh impl has never seen the show; re-apply the current mode to it.
+                    implFor(style).economyMode = isReplayActive
                 }
         }
     }
@@ -317,6 +319,7 @@ class DeathFxController(
         replayJob = null
         _replayProgress.value = null
         _strikeAnchor.value = null
+        overlay.economyMode = false
         forceShowAllCities.value = false
         cancelAutoCountdown()
         _autoStrikeActive.value = false
@@ -340,6 +343,9 @@ class DeathFxController(
         if (!moraleEnabled.value) return
         replayJob?.cancel()
         _replayProgress.value = null
+        // A show holds hundreds of blasts. The style is told only that this is a show and
+        // decides for itself what to give up — no caller-side style swapping.
+        overlay.economyMode = true
         replayJob = scope.launch { replay(records) }
     }
 
