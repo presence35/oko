@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.PI
 import kotlin.math.atan2
+import kotlin.math.pow
 import kotlin.math.sqrt
 
 /** Total length of a death: projectile flight plus explosion, on one clock for every style. */
@@ -455,4 +456,8 @@ fun ember(kind: EliteKind): Int = when (kind) {
 }
 
 /** Slow expansion of the shock ring as a fraction of the explosion's max radius. */
-fun shockRadius(maxR: Float, e: Float, speed: Float = 1.35f): Float = maxR * (0.1f + speed * e)
+/** Blast-wave radius: Sedov–Taylor `R ~ t^2/5` — violent early expansion that visibly outruns
+ *  the fireball, then yields. Same endpoint as the old linear track, starts at 0 instead of
+ *  popping to a nonzero ring on the first frame. */
+fun shockRadius(maxR: Float, e: Float, speed: Float = 1.35f): Float =
+    maxR * (0.1f + speed) * e.pow(0.4f)

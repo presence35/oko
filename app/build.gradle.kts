@@ -178,11 +178,11 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
 
-// Unit tests gate every build: a change that breaks them fails assembly — and therefore the
-// release tasks — instead of surfacing later. ~20s warm; Robolectric's first run downloads its
-// android-all jars once. Hooked onto assemble* rather than preBuild: preBuild is an ancestor of
-// the compile tasks, so a dependency there would be a cycle.
-tasks.matching { it.name == "assemble" || (it.name.startsWith("assemble") && !it.name.startsWith("assembleAndroidTest")) }
+// Unit tests gate debug builds and the release upload: release assembles stay lean so
+// a local assembleSideloadRelease doesn't pay for the debug test suite; uploadRelease
+// still depends on the tests explicitly. Hooked onto assemble* rather than preBuild:
+// preBuild is an ancestor of the compile tasks, so a dependency there would be a cycle.
+tasks.matching { it.name.startsWith("assemble") && it.name.contains("Debug") && !it.name.startsWith("assembleAndroidTest") }
     .configureEach {
         dependsOn("testSideloadDebugUnitTest")
     }
@@ -244,7 +244,7 @@ tasks.register<GradleBuild>("releasePlay") {
 tasks.register("uploadRelease") {
     group = "versioning"
     description = "Builds the beta-release APK (sideload flavor), generates version.json (version + sha256 read from the built APK, notes from CHANGELOG.md), uploads both, then verifies the live copy."
-    dependsOn("requireReleaseKeystore", "assembleSideloadRelease")
+    dependsOn("requireReleaseKeystore", "assembleSideloadRelease", "testSideloadDebugUnitTest")
     doLast {
         val uploadPropsFile = file("upload.properties")
         if (!uploadPropsFile.exists()) {
@@ -329,7 +329,7 @@ tasks.register("uploadRelease") {
                 live["sha256"]?.toString() == sha256 &&
                 (live["versionCode"] as? Number)?.toInt() == vc
             if (ok || attempt == 2) break
-            Thread.sleep(3_000)
+            Thread.sleep(1_000)
             if (attempt == 0) {
                 println("Live manifest does not match the build — re-uploading version.json")
                 runCatching { ftpUpload(ftpHost, remoteDir, user, pass, jsonFile, "version.json") }

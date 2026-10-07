@@ -1762,9 +1762,6 @@ fun sourcesWord(count: Int, lang: AppLanguage): String {
     return forms[pluralIndex(count, lang).coerceAtMost(forms.lastIndex)]
 }
 
-fun flourishDistanceSuffix(km: Int, lang: AppLanguage): String =
-    " · $km ${Strings.get(lang).kmUnit}"
-
 fun resolvedThreatsPhrase(count: Int, lang: AppLanguage): String {
     val s = Strings.get(lang)
     val form = s.wordForms.resolvedThreats[pluralIndex(count, lang).coerceAtMost(s.wordForms.resolvedThreats.lastIndex)]

@@ -13,6 +13,7 @@ import android.graphics.Shader
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -165,7 +166,8 @@ class FilmBody : ExplosionBody, ExplosionWarmer {
             val speed = 0.3f + rnd.nextFloat() * 1.3f
             val life = (1f - e * (0.6f + rnd.nextFloat() * 0.4f)).coerceIn(0f, 1f)
             if (life <= 0.03f) return@repeat
-            val dist = maxR * speed * (0.2f + 1.1f * e)
+            // Drag ease-out like the shards: fast launch, then the air wins.
+            val dist = maxR * speed * 1.3f * (1f - exp(-2.0f * e))
             emberPaint.color = Color.argb(
                 (255 * fade * life).toInt().coerceIn(0, 255),
                 Color.red(color),

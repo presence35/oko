@@ -28,6 +28,11 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.app.Activity
+import android.graphics.Bitmap
+import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
+import android.view.PixelCopy
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -709,20 +714,45 @@ private fun MapScreen(
     // Beta feedback: bridge ref for the GL snapshot, and the panel's single state.
     var feedbackBridge by remember { mutableStateOf<MapLibreBridge?>(null) }
     var feedback by remember { mutableStateOf<FeedbackSheet>(FeedbackSheet.Closed) }
+    var feedbackCapturing by remember { mutableStateOf(false) }
     val feedbackUpload by LogUpload.state.collectAsState()
     fun openFeedback() {
-        if (feedback is FeedbackSheet.Open) return
-        feedback = FeedbackSheet.Open(shotLoading = true)
-        val map = feedbackBridge?.map
-        if (map == null) {
+        if (feedback is FeedbackSheet.Open || feedbackCapturing) return
+        // Window PixelCopy, not the GL snapshot: our markers ride a Canvas overlay above the
+        // GL surface, so a GL-only shot misses them (and reads black). The FAB hides for the
+        // one frame the copy takes, then comes back with the sheet.
+        val activity = context as? Activity
+        val source = feedbackBridge?.mapView
+        if (activity == null || source == null || source.width <= 0 || source.height <= 0) {
             feedback = FeedbackSheet.Open(shotLoading = false, includeShot = false)
             return
         }
-        // GL snapshot holds map content only — the Compose FAB is never in the frame,
-        // so there is no hide-capture-restore flicker.
-        map.snapshot { bmp ->
-            val cur = feedback as? FeedbackSheet.Open ?: return@snapshot
-            feedback = cur.copy(shot = bmp, shotLoading = false, includeShot = true)
+        feedbackCapturing = true
+        source.post {
+            val loc = IntArray(2)
+            source.getLocationInWindow(loc)
+            val bmp = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+            try {
+                PixelCopy.request(
+                    activity.window,
+                    Rect(loc[0], loc[1], loc[0] + source.width, loc[1] + source.height),
+                    bmp,
+                    { result ->
+                        feedbackCapturing = false
+                        feedback = if (result == PixelCopy.SUCCESS) {
+                            FeedbackSheet.Open(shot = bmp, shotLoading = false, includeShot = true)
+                        } else {
+                            bmp.recycle()
+                            FeedbackSheet.Open(shotLoading = false, includeShot = false)
+                        }
+                    },
+                    Handler(Looper.getMainLooper())
+                )
+            } catch (e: Exception) {
+                bmp.recycle()
+                feedbackCapturing = false
+                feedback = FeedbackSheet.Open(shotLoading = false, includeShot = false)
+            }
         }
     }
     fun closeFeedback() {
@@ -1083,7 +1113,6 @@ private fun MapScreen(
                         onCountdownChange = { flourish.countdown = it },
                         onAutoStrikeActiveChange = { flourish.autoStrikeActive = it },
                         onStrikeTypeChange = { flourish.strikeType = it },
-                        onStrikeAnchorChange = { flourish.strikeAnchor = it },
                         onPendingStrikeCountChange = { flourish.pendingStrikeCount = it },
                         onCancelRequestTick = cancelTick,
                         welcomeShootdown = welcomeShootdown,
@@ -1099,7 +1128,7 @@ private fun MapScreen(
                         )
                     }
                     // Beta feedback: one small non-intrusive FAB, top-right of the map only.
-                    if (!flourishActive && feedback is FeedbackSheet.Closed) {
+                    if (!flourishActive && feedback is FeedbackSheet.Closed && !feedbackCapturing) {
                         val feedbackFabInteraction = remember { MutableInteractionSource() }
                         Box(
                             modifier = Modifier
@@ -1339,7 +1368,6 @@ private fun MapScreen(
             FlourishFooterHost(
                 flourish = flourish,
                 language = uiState.language,
-                focusLocation = uiState.focusLocation,
                 neutralizingVerb = s.flourishNeutralizingVerb,
                 neutralizingLabel = s.neutralizingLabel,
                 stopLabel = s.stopReplayLabel,
@@ -1515,7 +1543,6 @@ private fun MapScreen(
                                     st.includeLogs
                                 )
                             },
-                            onViewLogs = { closeFeedback(); onOpenLogs() },
                             onClose = { closeFeedback() }
                         )
                     }
@@ -1537,7 +1564,6 @@ class FlourishUiState {
     var countdown by mutableStateOf<Int?>(null)
     var autoStrikeActive by mutableStateOf(false)
     var strikeType by mutableStateOf<ThreatType?>(null)
-    var strikeAnchor by mutableStateOf<LatLng?>(null)
     var pendingStrikeCount by mutableStateOf(0)
     val active: Boolean
         get() = countdown != null || autoStrikeActive || deathActive || replayProgress != null
@@ -1549,7 +1575,6 @@ class FlourishUiState {
 private fun BoxScope.FlourishFooterHost(
     flourish: FlourishUiState,
     language: AppLanguage,
-    focusLocation: LatLng?,
     neutralizingVerb: String,
     neutralizingLabel: String,
     stopLabel: String,
@@ -1558,11 +1583,7 @@ private fun BoxScope.FlourishFooterHost(
     val message = if (flourish.autoStrikeActive || flourish.deathActive) {
         flourish.strikeType?.let { t ->
             val info = ThreatTypeCatalog.INFO.getValue(t)
-            val label = info.label(language)
-            val distKm: Double? = flourish.strikeAnchor?.let { a -> focusLocation?.let { f -> distanceFlat(f.lat, f.lon, a.lat, a.lon) / 1000.0 } }
-            val km: Int? = distKm?.roundToInt()
-            val suffix = km?.let { flourishDistanceSuffix(it, language) }.orEmpty()
-            "$neutralizingVerb $label$suffix"
+            "$neutralizingVerb ${info.label(language)}"
         } ?: neutralizingLabel
     } else null
     FlourishFooter(

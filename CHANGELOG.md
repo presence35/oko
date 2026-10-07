@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- Explosions now move like explosions: shock rings follow the Sedov–Taylor blast curve, sparks and streaks fly drag ease-out with gravity sag, fireballs punch out fast and collapse slow 10-07_23:35:00
+- The neutralizing footer no longer shows a distance ("Neutralizing drones · 613 km" is just "Neutralizing drones") 10-07_23:30:00
+- Faster releaseDirect: parallel builds + build cache, release assemble no longer reruns the debug test suite (upload still gated on tests), shorter live-manifest retry 10-07_22:51:13
+- The explosion style's note now sits right under the grid, above the Detailed toggle, instead of below it 10-07_23:10:00
+- Aftermath debris now flies as tapered slivers instead of tumbling squares, and its smoke column rises on real plume curves — born tiny, widening as it climbs — instead of fading into place 10-07_22:50:00
 - Map has a small beta feedback button (top-right): category, message, optional map screenshot and full logs, sent to the same log drop box 10-07_22:45:00
 - The icon pack picker is now one row of four drones with names underneath, instead of four swipeable strips — the full art is already on each type card 10-07_19:10:00
 - Logs now record deep-sleep share, our own radio bytes and network transport per sample, plus a wake-events block, so the next battery report answers itself 10-07_18:25:00

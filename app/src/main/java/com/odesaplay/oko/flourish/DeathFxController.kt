@@ -220,8 +220,6 @@ class DeathFxController(
     /** The threat type being targeted while an auto-countdown runs — null once it fires. */
     private val _strikeType = MutableStateFlow<ThreatType?>(null)
     val strikeType: StateFlow<ThreatType?> = _strikeType.asStateFlow()
-    private val _strikeAnchor = MutableStateFlow<LatLng?>(null)
-    val strikeAnchor: StateFlow<LatLng?> = _strikeAnchor.asStateFlow()
 
     /** Number of auto-strikes currently pending (countdown) or in flight — the count the
      *  countdown overlay shows next to the type label, so it reads N during a wave, not 0. */
@@ -319,7 +317,6 @@ class DeathFxController(
         replayJob?.cancel()
         replayJob = null
         _replayProgress.value = null
-        _strikeAnchor.value = null
         overlay.economyMode = false
         forceShowAllCities.value = false
         cancelAutoCountdown()
@@ -373,7 +370,6 @@ class DeathFxController(
         if (!followBulletEnabled.value && !isOnScreen(anchor.lat, anchor.lon)) return
         countdownJob?.cancel()
         pendingAutoStrike = onFire
-        _strikeAnchor.value = anchor
         _strikeType.value = type
         _pendingStrikeCount.update { it + 1 }
         countdownJob = scope.launch {
@@ -464,7 +460,6 @@ class DeathFxController(
         pendingAutoStrike = null
         _countdown.value = null
         _strikeType.value = null
-        _strikeAnchor.value = null
         _autoStrikeActive.value = false
     }
 
@@ -487,7 +482,6 @@ class DeathFxController(
         type: ThreatType = ThreatType.UNKNOWN
     ): Boolean {
         if (!moraleGate.isOn) return false
-        _strikeAnchor.value = geo
         overlay.spawn(id, geo, startGeo, randomEdgeOrigin(), icon, rotationDeg, alpha, type = type)
         if (id != null) _struck.update { it + id }
         return true

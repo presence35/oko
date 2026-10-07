@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -71,7 +72,6 @@ fun FeedbackPanel(
     onState: (FeedbackSheet.Open) -> Unit,
     upload: UploadState,
     onSend: () -> Unit,
-    onViewLogs: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -126,12 +126,14 @@ fun FeedbackPanel(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            ShotThumb(
-                shot = state.shot,
-                loading = state.shotLoading,
-                onZoom = { onState(state.copy(fullscreen = true)) }
-            )
-            Spacer(Modifier.width(12.dp))
+            if (state.includeShot) {
+                ShotThumb(
+                    shot = state.shot,
+                    loading = state.shotLoading,
+                    onZoom = { onState(state.copy(fullscreen = true)) }
+                )
+                Spacer(Modifier.width(12.dp))
+            }
             Text(text = s.feedbackShot, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.weight(1f))
             Switch(
@@ -144,7 +146,6 @@ fun FeedbackPanel(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onViewLogs)
                 .padding(vertical = 4.dp)
         ) {
             Icon(imageVector = Icons.Filled.Description, contentDescription = null)
@@ -160,7 +161,20 @@ fun FeedbackPanel(
         Spacer(Modifier.height(8.dp))
         when (upload) {
             is UploadState.Done -> Text(text = s.feedbackSent, style = MaterialTheme.typography.bodyMedium)
-            is UploadState.Failed -> Text(text = "${s.feedbackFailed}: ${upload.reason}", style = MaterialTheme.typography.bodyMedium)
+            is UploadState.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "${s.feedbackFailed}: ${upload.reason}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             else -> Unit
         }
         Button(

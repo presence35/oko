@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
@@ -103,7 +104,8 @@ class AdvancedBody : ExplosionBody {
         val kind = death.kind
         val scale = radiusScale(budget)
         val r = maxR * scale
-        val br = r * e
+        // Fireball swells fast and collapses slow — same punch-out curve as Film's bake.
+        val br = r * if (e < 0.22f) e / 0.22f else (1f - (e - 0.22f) / 0.78f).coerceIn(0f, 1f)
 
         // Impact punch (first ~8% of explosion).
         if (e < 0.08f) {
@@ -131,19 +133,20 @@ class AdvancedBody : ExplosionBody {
         val coreMul = if (kind == EliteKind.BALLISTIC) 0.28f else 0.22f
         canvas.drawCircle(x, y, br * coreMul, flashPaint)
 
-        // 3. Shockwave rings (faster outer wave + slower fire ring)
+        // 3. Shockwave rings (faster outer wave + slower fire ring) — Sedov–Taylor: violent
+        // early expansion, then yield. Same endpoints as the old linear tracks.
         ringPaint.strokeWidth = 2.4f * density
         val ringAlpha = if (kind == EliteKind.BALLISTIC) 255 else 220
         ringPaint.color = Color.argb((ringAlpha * fade).toInt(), 255, 213, 0)
-        canvas.drawCircle(x, y, r * (0.35f + 1.05f * e), ringPaint)
+        canvas.drawCircle(x, y, r * 1.4f * e.pow(0.4f), ringPaint)
 
         ringPaint.color = Color.argb((150 * fade).toInt(), 255, 120, 0)
-        canvas.drawCircle(x, y, r * (0.12f + 1.35f * e), ringPaint)
+        canvas.drawCircle(x, y, r * 1.47f * e.pow(0.4f), ringPaint)
 
         if (hq) {
             ringPaint.strokeWidth = 1.2f * density
             ringPaint.color = Color.argb((100 * fade).toInt(), 255, 255, 210)
-            canvas.drawCircle(x, y, r * (0.55f + 1.15f * e), ringPaint)
+            canvas.drawCircle(x, y, r * 1.7f * e.pow(0.4f), ringPaint)
         }
 
         if (budget == ExplosionBudget.CHEAP) return
@@ -189,7 +192,8 @@ class AdvancedBody : ExplosionBody {
             else -> Color.rgb(255, 193, 7)
         }
         for (sp in scratch.sparks) {
-            val dist = r * sp.speed * (0.35f + 0.9f * e)
+            // Drag-dominated like the shards above: fast launch, ease-out, gravity sag.
+            val dist = r * sp.speed * 1.25f * (1f - exp(-2.2f * e))
             val sx = x + cos(sp.ang) * dist
             val sy = y + sin(sp.ang) * dist - r * 0.08f * e * e
             val sparkLife = (1f - e * (0.7f + sp.phase * 0.3f)).coerceIn(0f, 1f)

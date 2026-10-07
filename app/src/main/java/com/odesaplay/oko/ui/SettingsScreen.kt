@@ -1022,21 +1022,9 @@ fun SettingsScreen(
                                 shuffleLabel = s.deathAnimStyleRandomLabel,
                                 detailed = highQualityExplosions
                             )
-                            Spacer(Modifier.height(4.dp))
-                            // Detail belongs to the style picker, not to a different section:
-                            // it is what decides how much of the chosen style actually draws.
-                            AlertToggleRow(
-                                title = s.hdExplosionTitle,
-                                description = s.hdExplosionDesc,
-                                checked = highQualityExplosions,
-                                onCheckedChange = onHighQualityExplosionsChange,
-                                emoji = "\uD83D\uDD25"
-                            )
-                        }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        // The selected style's note gets its own line rather than living inside a
-                        // card: six cards in a 3x2 grid have no room, and one sentence reads better.
-                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                            Spacer(Modifier.height(10.dp))
+                            // The selected style's note sits right under the grid it describes;
+                            // the detail toggle below it decides how much of that style draws.
                             Text(
                                 text = when (deathAnimationStyle) {
                                     DeathAnimationStyle.SIMPLE -> s.deathAnimStyleSimpleNote
@@ -1049,6 +1037,16 @@ fun SettingsScreen(
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            // Detail belongs to the style picker, not to a different section:
+                            // it is what decides how much of the chosen style actually draws.
+                            AlertToggleRow(
+                                title = s.hdExplosionTitle,
+                                description = s.hdExplosionDesc,
+                                checked = highQualityExplosions,
+                                onCheckedChange = onHighQualityExplosionsChange,
+                                emoji = "\uD83D\uDD25"
                             )
                         }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

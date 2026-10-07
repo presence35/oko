@@ -3,6 +3,7 @@ package com.odesaplay.oko
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.os.Build
@@ -47,6 +48,7 @@ class AftermathBody : ExplosionBody, ExplosionWarmer {
         xfermode = PorterDuffXfermode(PorterDuff.Mode.ADD)
     }
     private val smokePaint = Paint().apply { isAntiAlias = true }
+    private val debrisPath = Path()
 
     private val puff = ElitePuff(sizeDp = 128)
     private val corePuff = ElitePuff(sizeDp = 48)
@@ -172,18 +174,25 @@ class AftermathBody : ExplosionBody, ExplosionWarmer {
                 // Debris arcs: it keeps going out, then gravity takes it down.
                 val sx = x + cos(ang) * reach
                 val sy = y + sin(ang) * reach + maxR * 0.28f * e * e
-                val w = (2f + size * 3f) * density * life
-                val h = w * (0.3f + size * 0.4f)
+                // Tapered slivers, never squares: the old rect reached 0.88 aspect on big
+                // chunks, so the blast read as Lego. Length along travel, narrow across it.
+                val len = (2f + size * 3f) * density * life
+                val half = len * (0.10f + size * 0.08f)
                 debrisPaint.color = Color.argb(
                     (215 * fade * life).toInt().coerceIn(0, 255),
                     Color.red(color),
                     Color.green(color),
                     Color.blue(color)
                 )
+                debrisPath.reset()
+                debrisPath.moveTo(len, 0f)
+                debrisPath.lineTo(-len, half)
+                debrisPath.lineTo(-len, -half)
+                debrisPath.close()
                 canvas.save()
                 canvas.translate(sx, sy)
                 canvas.rotate(Math.toDegrees(ang.toDouble()).toFloat() + 180f * e)
-                canvas.drawRect(-w, -h, w, h, debrisPaint)
+                canvas.drawPath(debrisPath, debrisPaint)
                 canvas.restore()
                 drawn++
             }
@@ -195,6 +204,13 @@ class AftermathBody : ExplosionBody, ExplosionWarmer {
      * The smoke column: a puff bank that rises out of the impact, thickens as it climbs and fades
      * slowly at the very end. It must not exist from the first frame — a column that is there from
      * impact reads as fog lying over the map, not as aftermath.
+     *
+     * The motion follows the cheap version of Morton–Taylor–Turner (1956) entrainment that games
+     * use instead of fluid sim: each puff is born tiny at a staggered start, rises on an eased
+     * curve (buoyancy against drag — slow start, never a jump), widens with distance traveled
+     * (r = r0 + alpha·z, thermal cone), dilutes with volume, and drifts outward as it climbs
+     * (the vortex-ring mushroom roll). Positions stay pure functions of [e]: no sim state, no
+     * allocation, deterministic per seed.
      */
     private fun drawColumn(
         canvas: Canvas,
@@ -205,27 +221,41 @@ class AftermathBody : ExplosionBody, ExplosionWarmer {
         maxR: Float
     ) {
         if (e < COLUMN_START) return
-        // Ramp in over the first slice of the column so it fades up rather than popping on.
-        val intro = ((e - COLUMN_START) / COLUMN_FADE_IN).coerceIn(0f, 1f)
-        val arr = column ?: buildColumn(death).also { column = it }
-        val rise = maxR * 1.35f
+        val span = 1f - COLUMN_START
         // Holds its opacity across the tail instead of fading with the blast, so the column is
         // still there when the fireball is gone — that is what makes it aftermath and not smoke.
-        val alpha = (105 * intro * (1f - (e - COLUMN_START) * 0.42f)).toInt().coerceIn(0, 120)
-        if (alpha <= 2) return
-        smokePaint.color = Color.argb(alpha, 58, 55, 52)
+        val tail = 1f - (e - COLUMN_START) * 0.42f
+        if (tail <= 0.02f) return
+        smokePaint.color = Color.rgb(58, 55, 52)
+        val arr = column ?: buildColumn(death).also { column = it }
+        val rise = maxR * 1.35f
         var i = 0
         while (i < arr.size) {
             val ox = arr[i]
             val phase = arr[i + 1]
             val size = arr[i + 2]
-            val riseT = (intro + phase * 0.6f).coerceAtMost(1.6f)
-            val puffY = y - rise * riseT
-            val puffX = x + maxR * ox * (0.4f + riseT)
-            // Grows as it rises: a column that starts at full width reads as a balloon, one that
-            // keeps widening reads as smoke spreading.
-            val puffR = maxR * (0.22f + 0.62f * riseT) * size
-            if (puffR > 1f) canvas.drawCircle(puffX, puffY, puffR, smokePaint)
+            // Staggered birth across the column window: at any moment some puffs are unborn.
+            // A puff that fades into place mid-column at full size is what read as BOOM.
+            val tau = ((e - COLUMN_START) / span - phase * 0.55f) / (1f - phase * 0.55f)
+            if (tau > 0f) {
+                val t = tau.coerceAtMost(1f)
+                // Eased rise: zero initial velocity, steepening — buoyancy winning over drag.
+                val climb = t * t * (1.7f - 0.7f * t)
+                val puffY = y - rise * climb
+                // Mushroom roll: the ring pushes outer fluid sideways as it climbs.
+                val spread = 0.4f + climb + 0.3f * climb * climb
+                val puffX = x + maxR * ox * spread
+                // Born tiny, widening with distance risen — a column that starts at full width
+                // reads as a balloon, one that keeps widening reads as smoke spreading.
+                val puffR = maxR * (0.06f + 0.5f * climb) * size
+                // Dilutes with volume: opacity follows the radius it grew from.
+                val growth = (puffR / (maxR * 0.3f)).coerceIn(0f, 1f)
+                val alpha = (105 * growth * tail).toInt().coerceIn(0, 120)
+                if (alpha > 2 && puffR > 1f) {
+                    smokePaint.alpha = alpha
+                    canvas.drawCircle(puffX, puffY, puffR, smokePaint)
+                }
+            }
             i += 3
         }
     }
@@ -264,7 +294,6 @@ class AftermathBody : ExplosionBody, ExplosionWarmer {
          * before reaching full.
          */
         const val COLUMN_START = 0.55f
-        const val COLUMN_FADE_IN = 0.25f
     }
 }
 

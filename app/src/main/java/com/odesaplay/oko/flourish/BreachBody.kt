@@ -10,6 +10,7 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.os.Build
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -176,7 +177,8 @@ class BreachBody : ExplosionBody, ExplosionWarmer {
             val width = arr[i + 3]
             val life = (1f - e * (0.75f + len * 0.2f)).coerceIn(0f, 1f)
             if (life > 0.04f) {
-                val reach = shardR * (0.28f + 0.95f * e) * speed
+                // Streaks are light: drag ease-out, fast launch that the air eats.
+                val reach = shardR * 1.23f * (1f - exp(-2.5f * e)) * speed
                 // Long, thin, radial: this is the whole identity of the style.
                 val halfLen = reach * (0.35f + 0.75f * len)
                 val halfWidth = (1.1f + width * 1.9f) * density * life

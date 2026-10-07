@@ -10,6 +10,8 @@ import android.graphics.RectF
 import android.graphics.Shader
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.exp
+import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -72,7 +74,8 @@ class ClassicBody : ExplosionBody {
         val kind = death.kind
         val budgetScale = radiusScale(budget)
         val r = maxR * budgetScale
-        val br = r * e
+        // Fireball swells fast and collapses slow — same punch-out curve as Film's bake.
+        val br = r * if (e < 0.22f) e / 0.22f else (1f - (e - 0.22f) / 0.78f).coerceIn(0f, 1f)
 
         // 1. Glow
         val glow = explosionGlow(density)
@@ -91,19 +94,20 @@ class ClassicBody : ExplosionBody {
         val coreMul = if (kind == EliteKind.BALLISTIC) 0.28f else 0.22f
         canvas.drawCircle(x, y, br * coreMul, flashPaint)
 
-        // 3. Shock rings — intensity per type
+        // 3. Shock rings — intensity per type. Sedov–Taylor: violent early expansion,
+// then yield. Same endpoints as the old linear tracks.
         ringPaint.strokeWidth = 2.2f * density
         val ringAlpha = if (kind == EliteKind.BALLISTIC) 255 else 220
         ringPaint.color = Color.argb((ringAlpha * fade).toInt(), 255, 213, 0)
-        canvas.drawCircle(x, y, r * (0.4f + 0.95f * e), ringPaint)
+        canvas.drawCircle(x, y, r * 1.35f * e.pow(0.4f), ringPaint)
 
         ringPaint.color = Color.argb((160 * fade).toInt(), 255, 120, 0)
-        canvas.drawCircle(x, y, r * (0.15f + 1.25f * e), ringPaint)
+        canvas.drawCircle(x, y, r * 1.4f * e.pow(0.4f), ringPaint)
 
         if (hq && kind == EliteKind.BALLISTIC) {
             ringPaint.strokeWidth = 1.1f * density
             ringPaint.color = Color.argb((120 * fade).toInt(), 255, 255, 200)
-            canvas.drawCircle(x, y, r * (0.7f + 0.9f * e), ringPaint)
+            canvas.drawCircle(x, y, r * 1.6f * e.pow(0.4f), ringPaint)
         }
 
         if (budget == ExplosionBudget.CHEAP) return
@@ -146,14 +150,14 @@ class ClassicBody : ExplosionBody {
             (255 * fade).toInt(),
             Color.red(sparkColor), Color.green(sparkColor), Color.blue(sparkColor)
         )
-        val sparkDist = r * (0.55f + 0.7f * e)
+        val sparkDist = r * 1.25f * (1f - exp(-2.2f * e))
         val sparkR = (if (kind == EliteKind.FPV) 1.8f else 2.5f) * density * fade
         val actual = if (hq) sparkCount + 4 else sparkCount
         repeat(actual) { i ->
             val a = 2.0 * PI * i / actual + 0.3 + (i * 0.17)
             canvas.drawCircle(
                 x + cos(a).toFloat() * sparkDist,
-                y + sin(a).toFloat() * sparkDist,
+                y + sin(a).toFloat() * sparkDist - r * 0.08f * e * e,
                 sparkR,
                 sparkPaint
             )

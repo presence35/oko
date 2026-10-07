@@ -381,7 +381,6 @@ fun NeptunMapView(
     onCountdownChange: (Int?) -> Unit = {},
     onAutoStrikeActiveChange: (Boolean) -> Unit = {},
     onStrikeTypeChange: (ThreatType?) -> Unit = {},
-    onStrikeAnchorChange: (LatLng?) -> Unit = {},
     onPendingStrikeCountChange: (Int) -> Unit = {},
     onCancelRequestTick: Int = 0,
     welcomeShootdown: WelcomeShootdown? = null,
@@ -815,7 +814,6 @@ LaunchedEffect(selectedId) {
     LaunchedEffect(Unit) { deathFx.countdown.collect { c -> onCountdownChange(c) } }
     LaunchedEffect(Unit) { deathFx.autoStrikeActive.collect { active -> onAutoStrikeActiveChange(active) } }
     LaunchedEffect(Unit) { deathFx.strikeType.collect { type -> onStrikeTypeChange(type) } }
-    LaunchedEffect(Unit) { deathFx.strikeAnchor.collect { anchor -> onStrikeAnchorChange(anchor) } }
     LaunchedEffect(Unit) { deathFx.pendingStrikeCount.collect { n -> onPendingStrikeCountChange(n) } }
 
     LaunchedEffect(onCancelRequestTick) {
