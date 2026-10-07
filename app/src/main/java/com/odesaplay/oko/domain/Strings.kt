@@ -767,6 +767,21 @@ object Strings {
         val sendLogsBusy: String
     )
 
+    /** Beta feedback sheet. Own holder for the same JVM slot-ceiling reason as [LogExportStrings]. */
+    data class FeedbackStrings(
+        val title: String,
+        val anon: String,
+        val hint: String,
+        val bug: String,
+        val improvement: String,
+        val question: String,
+        val shot: String,
+        val logs: String,
+        val send: String,
+        val sent: String,
+        val failed: String
+    )
+
     /**
      * Copy for the Debug tab — the payload the tester is about to send. Its own holder for the same
      * reason as [LogExportStrings] and [ActionLog]: `Misc` sits on the JVM argument-slot ceiling.
@@ -882,6 +897,7 @@ object Strings {
         val wordForms: WordForms,
         val logsExport: LogExportStrings,
         val logsPreview: LogPreviewStrings,
+        val feedback: FeedbackStrings,
         val actionLog: ActionLog,
         val calmMessages: List<String>,
         val deathAnimStyle: DeathAnimStyleStrings,
@@ -1414,6 +1430,17 @@ object Strings {
         val logsSendLogsOk: String get() = logsExport.sendLogsOk
         val logsSendLogsFail: String get() = logsExport.sendLogsFail
         val logsSendLogsBusy: String get() = logsExport.sendLogsBusy
+        val feedbackTitle: String get() = feedback.title
+        val feedbackAnon: String get() = feedback.anon
+        val feedbackHint: String get() = feedback.hint
+        val feedbackBug: String get() = feedback.bug
+        val feedbackImprovement: String get() = feedback.improvement
+        val feedbackQuestion: String get() = feedback.question
+        val feedbackShot: String get() = feedback.shot
+        val feedbackLogs: String get() = feedback.logs
+        val feedbackSend: String get() = feedback.send
+        val feedbackSent: String get() = feedback.sent
+        val feedbackFailed: String get() = feedback.failed
         val logsFilterDebug: String get() = logsPreview.tab
         val logsPreviewWhy: String get() = logsPreview.why
         val logsPreviewWillSendAs: String get() = logsPreview.willSendAs

@@ -1,5 +1,8 @@
 package com.odesaplay.oko
 import com.odesaplay.oko.theme.AppPalette
+import com.odesaplay.oko.beta.FeedbackSheet
+import com.odesaplay.oko.beta.FeedbackPanel
+import com.odesaplay.oko.ui.MapLibreBridge
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.LatLng
 import kotlin.math.roundToInt
@@ -65,6 +68,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
@@ -702,6 +706,29 @@ private fun MapScreen(
     var fitZonesTick by remember { mutableStateOf(0) }
     var shelterSelectTick by remember { mutableStateOf(0) }
     var selectedShelter by remember { mutableStateOf<NearestShelter?>(null) }
+    // Beta feedback: bridge ref for the GL snapshot, and the panel's single state.
+    var feedbackBridge by remember { mutableStateOf<MapLibreBridge?>(null) }
+    var feedback by remember { mutableStateOf<FeedbackSheet>(FeedbackSheet.Closed) }
+    val feedbackUpload by LogUpload.state.collectAsState()
+    fun openFeedback() {
+        if (feedback is FeedbackSheet.Open) return
+        feedback = FeedbackSheet.Open(shotLoading = true)
+        val map = feedbackBridge?.map
+        if (map == null) {
+            feedback = FeedbackSheet.Open(shotLoading = false, includeShot = false)
+            return
+        }
+        // GL snapshot holds map content only — the Compose FAB is never in the frame,
+        // so there is no hide-capture-restore flicker.
+        map.snapshot { bmp ->
+            val cur = feedback as? FeedbackSheet.Open ?: return@snapshot
+            feedback = cur.copy(shot = bmp, shotLoading = false, includeShot = true)
+        }
+    }
+    fun closeFeedback() {
+        feedback = FeedbackSheet.Closed
+        LogUpload.dismiss()
+    }
     // Measured overlay heights feeding the map's camera framing: the popup card covers the top
     // of the viewport, the zones sheet the bottom — the map fits/reveals inside the visible band.
     val popupCoverPxState = remember { mutableIntStateOf(0) }
@@ -1061,6 +1088,7 @@ private fun MapScreen(
                         onCancelRequestTick = cancelTick,
                         welcomeShootdown = welcomeShootdown,
                         onWelcomeFinished = onWelcomeFinished,
+                        onMapBridge = { feedbackBridge = it },
                         modifier = Modifier.fillMaxSize()
                     )
                     uiState.flyby?.let { show ->
@@ -1069,6 +1097,32 @@ private fun MapScreen(
                             iconSet = uiState.iconSet,
                             onFinished = onFlybyFinished
                         )
+                    }
+                    // Beta feedback: one small non-intrusive FAB, top-right of the map only.
+                    if (!flourishActive && feedback is FeedbackSheet.Closed) {
+                        val feedbackFabInteraction = remember { MutableInteractionSource() }
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 12.dp, end = 12.dp)
+                                .size(40.dp)
+                                .background(Color.Black.copy(alpha = 0.55f), CircleShape)
+                                .pressTick(feedbackFabInteraction)
+                                .clickable(
+                                    interactionSource = feedbackFabInteraction,
+                                    indication = ripple(bounded = false),
+                                    onClick = { openFeedback() }
+                                )
+                                .semantics { semanticsContentDescription = s.feedbackTitle },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.BugReport,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                     // Basemap attribution, as specified by the OpenFreeMap TileJSON we load.
                     // Stacked under the scale bar so the pair matches the floating buttons' height.
@@ -1412,6 +1466,57 @@ private fun MapScreen(
                             onFastYellowArmedChange = onFastYellowArmedChange,
                             onOpenThreatSettings = openThreatSettings,
                             modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+                    }
+                }
+            }
+            // Beta feedback panel: scrim + bottom card over the live map, same slide as the
+            // zones sheet. The logs row jumps to the Debug tab, where LogPreview shows the
+            // exact payload keys — no second preview to drift.
+            val feedbackOpen = feedback as? FeedbackSheet.Open
+            if (feedbackOpen != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { closeFeedback() }
+                        )
+                )
+            }
+            AnimatedVisibility(
+                visible = feedbackOpen != null,
+                enter = if (animsOff) EnterTransition.None
+                else slideInVertically(tween(200)) { it } + fadeIn(tween(100)),
+                exit = if (animsOff) ExitTransition.None
+                else slideOutVertically(tween(250)) { it } + fadeOut(tween(200)),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                feedbackOpen?.let { st ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(AppPalette.Card),
+                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                        border = BorderStroke(1.5.dp, Color(AppPalette.Border))
+                    ) {
+                        FeedbackPanel(
+                            s = s,
+                            state = st,
+                            onState = { feedback = it },
+                            upload = feedbackUpload,
+                            onSend = {
+                                LogUpload.uploadFeedback(
+                                    context,
+                                    st.category,
+                                    st.message,
+                                    st.shot.takeIf { st.includeShot },
+                                    st.includeLogs
+                                )
+                            },
+                            onViewLogs = { closeFeedback(); onOpenLogs() },
+                            onClose = { closeFeedback() }
                         )
                     }
                 }

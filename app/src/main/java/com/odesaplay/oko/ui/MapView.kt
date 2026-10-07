@@ -386,6 +386,7 @@ fun NeptunMapView(
     onCancelRequestTick: Int = 0,
     welcomeShootdown: WelcomeShootdown? = null,
     onWelcomeFinished: () -> Unit = {},
+    onMapBridge: (MapLibreBridge?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
@@ -962,6 +963,7 @@ LaunchedEffect(selectedId) {
             onCameraChange = {},
             onBridgeReady = { bridge ->
                 bridgeState.value = bridge
+                onMapBridge(bridge)
                 bridge.onDrawOverlay = { canvas ->
                     val projLambda: (Double, Double) -> PointF? = { lat, lon ->
                         bridge.project(lat, lon)

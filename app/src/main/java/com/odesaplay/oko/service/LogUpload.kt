@@ -1,6 +1,8 @@
 package com.odesaplay.oko
 
 import android.content.Context
+import com.odesaplay.oko.beta.FeedbackCategory
+import com.odesaplay.oko.beta.FeedbackPayload
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -69,14 +71,54 @@ object LogUpload {
                 // The bundle comes from LogSnapshot, never from here: the Debug tab shows the same
                 // object, so "what the tester read" and "what this POST carries" cannot diverge.
                 val snapshot = LogSnapshot.ensure(app)
-                val body = snapshot.body.toRequestBody(JSON_MEDIA)
                 _state.value = UploadState.Sending(snapshot.bytes.toLong())
-                val request = Request.Builder()
-                    .url(ENDPOINT)
-                    .header("X-Log-Name", snapshot.fileName)
-                    .post(body)
-                    .build()
-                client.newCall(request).execute().use { response ->
+                post(snapshot.body, snapshot.fileName)
+            } catch (e: Exception) {
+                _state.value = UploadState.Failed(e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
+    /**
+     * Beta feedback: the same drop box and the same state machine — the bundle gains only a
+     * `feedback` block (and a `shot` when the tester leaves the screenshot on). A fresh bundle
+     * is built rather than reusing [LogSnapshot]'s, so a stale preview can never mislabel a
+     * report sent minutes later.
+     */
+    fun uploadFeedback(
+        context: Context,
+        category: FeedbackCategory,
+        message: String,
+        shot: android.graphics.Bitmap?,
+        includeLogs: Boolean
+    ) {
+        if (_state.value is UploadState.Building || _state.value is UploadState.Sending) return
+        val app = context.applicationContext
+        scope.launch {
+            try {
+                _state.value = UploadState.Building
+                val encoded = shot?.let { runCatching { FeedbackPayload.encode(it) }.getOrNull() }
+                val bundle = LogBundle.build(app, UserPrefs(app))
+                val withFeedback = FeedbackPayload.attach(bundle, category, message, encoded, includeLogs)
+                val body = withFeedback.toString()
+                val fileName = withFeedback.optString("fileName", LogBundle.fileName(app))
+                _state.value = UploadState.Sending(body.toByteArray(Charsets.UTF_8).size.toLong())
+                post(body, fileName)
+            } catch (e: Exception) {
+                _state.value = UploadState.Failed(e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
+    /** Shared POST: the contract check below is the only proof anything arrived. */
+    private fun post(body: String, fileName: String) {
+        try {
+            val request = Request.Builder()
+                .url(ENDPOINT)
+                .header("X-Log-Name", fileName)
+                .post(body.toRequestBody(JSON_MEDIA))
+                .build()
+            client.newCall(request).execute().use { response ->
                     val text = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
                         _state.value = if (response.code == 429) {
@@ -109,10 +151,9 @@ object LogUpload {
                         return@use
                     }
                     _state.value = UploadState.Done(name)
-                }
-            } catch (e: Exception) {
-                _state.value = UploadState.Failed(e.message ?: e.javaClass.simpleName)
             }
+        } catch (e: Exception) {
+            _state.value = UploadState.Failed(e.message ?: e.javaClass.simpleName)
         }
     }
 

@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Map has a small beta feedback button (top-right): category, message, optional map screenshot and full logs, sent to the same log drop box 10-07_22:45:00
 - The icon pack picker is now one row of four drones with names underneath, instead of four swipeable strips — the full art is already on each type card 10-07_19:10:00
 - Logs now record deep-sleep share, our own radio bytes and network transport per sample, plus a wake-events block, so the next battery report answers itself 10-07_18:25:00
 - Fixed duplicate power-timeline rows: the tick re-fired on every input change with a stale clock, inflating every sample count 10-07_18:25:00
