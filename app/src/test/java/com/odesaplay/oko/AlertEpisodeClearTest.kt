@@ -101,6 +101,9 @@ class AlertEpisodeClearTest {
         return null
     }
 
+    private fun alarmSummaryTitle(notification: Notification?): String? =
+        notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()
+
     /** (deadline, closed) — the two facts only the TTL and the debris ticks read. */
     private fun allClearLifecycle() = service().allClearLifecycleForTest()
 
@@ -124,7 +127,8 @@ class AlertEpisodeClearTest {
         alerts: List<OblastAlert> = emptyList(),
         debrisSec: Int = 0,
         autoDismiss: Boolean = true,
-        focusToken: String? = token
+        focusToken: String? = token,
+        alertsReady: Boolean = true
     ) = AlertService.MonitorState(
         focusOblastAlertActive = level == AlertLevel.RED,
         focusOblastYellowAlertActive = level == AlertLevel.YELLOW,
@@ -156,7 +160,7 @@ class AlertEpisodeClearTest {
         autoDismissAllClear = autoDismiss,
         threats = emptyMap(),
         alerts = alerts,
-        alertsReady = true,
+        alertsReady = alertsReady,
         criticalOfflineOverride = false,
         criticalOfflineBypassSilent = false,
         fastVibrationLevel = 3,
@@ -291,6 +295,69 @@ class AlertEpisodeClearTest {
         assertNotNull(
             "and the morale summary for that same episode must be posted",
             awaitAlarmSummary()
+        )
+    }
+
+    /**
+     * A focus move is not an ending. The old region's episode is dropped by design — the latch goes
+     * with it — but the window must not conclude anything from a region we just left, or the alarm
+     * is summarised mid-raid for a user who is standing in the middle of it. That is where the
+     * "27-minute raid reported as 1 min" came from: a reopen here, then the real clear measuring
+     * only the tail.
+     *
+     * Both ticks are asserted, because a *hold* would look identical on the first one: the window
+     * would survive the focus move and the ready clear below would then post the very summary this
+     * refuses to post.
+     */
+    @Test
+    fun `a focus move mid-alarm posts no summary and leaves no window behind`() {
+        announce(1_000)
+        tick(3_000, monitor(focusToken = "інша-область"))
+        assertNull(
+            "leaving the region is not the alarm ending, so nothing may be summarised",
+            awaitAlarmSummary()
+        )
+
+        tick(6_000, monitor(focusToken = "інша-область"))
+        assertNull(
+            "an abandoned window must not be posted later by the real clear either",
+            alarmSummary()
+        )
+    }
+
+    /**
+     * An unready feed proves nothing either way, so it cannot end an alarm. The window survives the
+     * unready tick and still measures the whole thing — the same refusal to conclude that
+     * `LatchedEpisode.resolve` makes before it will fire an all-clear.
+     */
+    @Test
+    fun `an unready feed does not close the window`() {
+        announce(1_000)
+        tick(2_000, monitor(alertsReady = false))
+        assertNull("a feed that has not reported is not an ending", alarmSummary())
+
+        tick(1_000 + 27 * MIN, monitor())
+        assertEquals(
+            "$CITY: 27min alarm summary",
+            alarmSummaryTitle(awaitAlarmSummary())
+        )
+    }
+
+    /**
+     * A duration is a measurement, not an arithmetic convenience. A process killed mid-alarm and
+     * resurrected never watched this episode begin, so it must state none rather than measure from
+     * its own wake — the honest answer for the case that produced "1 min" for a 27-minute raid.
+     */
+    @Test
+    fun `a resurrected process states no duration for an alarm it did not see begin`() {
+        restartWithLatchedEpisode("RED|$token|t0|$CITY|$CITY|0")
+
+        tick(1_000 + 26 * MIN, live())
+        tick(1_000 + 27 * MIN, monitor())
+
+        assertEquals(
+            "$CITY: alarm summary",
+            alarmSummaryTitle(awaitAlarmSummary())
         )
     }
 }

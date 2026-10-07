@@ -36,6 +36,7 @@ object AppSources {
         // real pipeline, so it must never ship in a release build (Play flavor included).
         if (BuildConfig.DEBUG) registry.register(TestSource(), scope)
         _registry = registry
+        moraleGate.bind(UserPrefs(context).preferences, scope)
     }
 
     @Volatile

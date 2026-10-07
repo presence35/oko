@@ -527,6 +527,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
         alarmEpisodeTallyTitle = "Alarm summary",
         alarmEpisodeTallyDesc = "What got resolved while your alarm was on.",
         alarmEpisodeTitleFormat = "%1\$s: %2\$dmin alarm summary",
+        alarmEpisodeTitleNoDuration = "%1\$s: alarm summary",
         alarmEpisodeBodyFormat = "%1\$s. Tap to see.",
         alarmEpisodeQuietText = "All quiet — nothing neutralized during this alarm.",
         moraleNote = "Morale features are decoration, not detection. \u201cNeutralized\u201d only means a threat left the feed — intercepted, crashed, or radar lost. We can\u2019t know which, so we honor our defenders, never celebrate harm. These never affect alerts or zones, and during an active air-raid alert they step aside entirely. Always trust official sirens.",

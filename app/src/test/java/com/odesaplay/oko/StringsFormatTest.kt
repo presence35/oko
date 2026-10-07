@@ -97,4 +97,20 @@ class StringsFormatTest {
         assertEquals("Устранение 5 угроз", resolvingThreatsPhrase(5, AppLanguage.RU))
         assertEquals("Точный GPS: 1 мин назад", preciseGpsAgePhrase(1, AppLanguage.RU))
     }
+
+    /**
+     * The alarm summary states a duration only when it can honestly measure one, so every language
+     * needs a dateless form of its own — it used to be a hardcoded English string, which UA and RU
+     * users saw verbatim after any mid-alarm restart.
+     */
+    @Test
+    fun `the alarm summary title drops the duration in every language`() {
+        val city = "Дніпро"
+        assertEquals("$city: 27min alarm summary", alarmEpisodeTitle(Strings.get(AppLanguage.EN), city, 27))
+        assertEquals("$city: alarm summary", alarmEpisodeTitle(Strings.get(AppLanguage.EN), city, 0))
+        assertEquals("$city: підсумок тривоги за 27 хв", alarmEpisodeTitle(Strings.get(AppLanguage.UA), city, 27))
+        assertEquals("$city: підсумок тривоги", alarmEpisodeTitle(Strings.get(AppLanguage.UA), city, 0))
+        assertEquals("$city: итоги тревоги за 27 мин", alarmEpisodeTitle(Strings.get(AppLanguage.RU), city, 27))
+        assertEquals("$city: итоги тревоги", alarmEpisodeTitle(Strings.get(AppLanguage.RU), city, 0))
+    }
 }

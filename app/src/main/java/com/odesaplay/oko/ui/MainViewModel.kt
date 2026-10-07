@@ -41,6 +41,7 @@ import com.odesaplay.oko.engine.canonicalOblastId
 import com.odesaplay.oko.engine.ThreatZone
 import com.odesaplay.oko.AlertService
 import com.odesaplay.oko.DebugLog
+import com.odesaplay.oko.moraleGate
 import com.odesaplay.oko.DebugLogKind
 import com.odesaplay.oko.DebugLogReason
 import com.odesaplay.oko.DigestWindow
@@ -517,6 +518,10 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         AppSources.init(getApplication())
         LocationTracker.start(getApplication())
         loadShelters()
+        // The master is a kill-switch: flipping it off must also tear down whatever playful
+        // overlay is on screen right now. AviationFlyby itself is a pure gate, so nothing else
+        // would stop a MiG already in its pass — without this it flew to completion.
+        moraleGate.ejectWhenOff(viewModelScope) { flybyFlow.value = null }
         // Auto-check for updates at most once per day; pops only when no alert is active.
         // Play flavor has no self-update, so the whole check path is compiled out.
         if (BuildConfig.SELF_UPDATE) autoCheckForUpdates(allowPopup = true)
@@ -1905,7 +1910,11 @@ fun setAlertsArmed(armed: Boolean) {
         if (aviation && id != null && threat != null) {
             val s = uiState.value
             val show = AviationFlyby.tapShow(
-                moraleEnabled = s.moraleMasterEnabled,
+                // The master comes from the shared gate, not s.moraleMasterEnabled: uiState is a
+                // WhileSubscribed snapshot that can hold the value it had when the UI last
+                // subscribed, so a notification tap after a master-off flip could read a stale
+                // `true` and fly a jet the user just switched off. moraleGate is always live.
+                moraleEnabled = moraleGate.isOn,
                 flybyEnabled = s.flybyAnimationEnabled,
                 tick = flybyTick + 1,
                 threatId = id,

@@ -33,20 +33,14 @@ class AlarmEpisodeTally(
     private val perTypeCounts = mutableMapOf<ThreatType, Int>()
     private var episodeCity: String? = null
     private var episodeStartMs: Long = 0L
+    /** Whether this process watched this episode begin — the only basis for stating a duration. */
+    private var episodeFromOnset: Boolean = false
 
-    private val moraleEnabled = MutableStateFlow(false)
+    // Master "Morale" gate is the shared [moraleGate]; the episode sub-toggle stays local.
     private val episodeEnabled = MutableStateFlow(false)
 
     init {
-        scope.launch {
-            UserPrefs(context).preferences
-                .map { it.moraleMasterEnabled }
-                .distinctUntilChanged()
-                .collect { enabled ->
-                    moraleEnabled.value = enabled
-                    if (!enabled) reset()
-                }
-        }
+        moraleGate.ejectWhenOff(scope) { reset() }
         scope.launch {
             UserPrefs(context).preferences
                 .map { it.alarmEpisodeTallyEnabled }
@@ -76,14 +70,21 @@ class AlarmEpisodeTally(
         val memory: List<ResolvedRecord>
     )
 
-    /** A new alarm window opened on the focus: drop the previous window, keep the dedup ring. */
-    fun begin(city: String, startMs: Long = System.currentTimeMillis()) {
+    /**
+     * A new alarm window opened on the focus: drop the previous window, keep the dedup ring.
+     *
+     * [fromOnset] says this process watched the episode begin, and defaults to false: a caller
+     * that cannot prove it gets the dateless summary rather than a duration measured from whenever
+     * it happened to start running.
+     */
+    fun begin(city: String, startMs: Long = System.currentTimeMillis(), fromOnset: Boolean = false) {
         synchronized(tallyLock) {
             episodeCount = 0
             perTypeCounts.clear()
             episodeMemory.clear()
             episodeCity = city
             episodeStartMs = startMs
+            episodeFromOnset = fromOnset
         }
         // The previous episode's summary is deliberately left posted: its tap replays the
         // show from the episode that just ended, so "what happened before" stays available
@@ -92,7 +93,7 @@ class AlarmEpisodeTally(
 
     /** Buffer a resolution into the open window. Never notifies — [finish] owns that. */
     fun onResolved(removed: ThreatRemoved) {
-        if (!moraleEnabled.value || !episodeEnabled.value) return
+        if (!moraleGate.isOn || !episodeEnabled.value) return
         synchronized(tallyLock) {
             if (seenRemovalIds.contains(removed.id)) return
             seenRemovalIds.addLast(removed.id)
@@ -105,20 +106,17 @@ class AlarmEpisodeTally(
 
     /** The alarm window closed: post the one summary for it, replacing any previous window. */
     fun finish(currentCity: String, lang: AppLanguage, officialAlertsEnabled: Boolean, nowMs: Long = System.currentTimeMillis()) {
-        if (!moraleEnabled.value || !episodeEnabled.value) {
-            synchronized(tallyLock) {
-                episodeCount = 0
-                perTypeCounts.clear()
-                episodeMemory.clear()
-                episodeCity = null
-                episodeStartMs = 0L
-            }
+        if (!moraleGate.isOn || !episodeEnabled.value) {
+            clearWindow()
             return
         }
         val (snapshot, city, durationMin) = synchronized(tallyLock) {
             val c = episodeCity ?: currentCity
-            val start = episodeStartMs
-            val dur = if (start > 0L) ((nowMs - start) / 60_000L).toInt().coerceAtLeast(1) else 0
+            // A duration is a measurement, not an arithmetic convenience: an episode this process
+            // never watched begin has no honest start, so it states none and takes the dateless
+            // title — the rule the all-clear already applies to a restored latch
+            // (`RestoredResolution.EXPIRE_SILENTLY`).
+            val dur = if (episodeFromOnset) ((nowMs - episodeStartMs) / 60_000L).toInt().coerceAtLeast(1) else 0
             Triple(EpisodeSnapshot(episodeCount, perTypeCounts.toMap(), episodeMemory.toList()), c, dur)
         }
         if (snapshot.count == 0) {
@@ -129,17 +127,29 @@ class AlarmEpisodeTally(
         postSummary(snapshot, city, lang, durationMin)
     }
 
+    /**
+     * The window stopped being ours to judge: our focus left the region, so the latch that could
+     * have ended it was dropped with it. Not an ending — nothing is posted, and a summary already
+     * in the shade is someone else's history and survives.
+     */
+    fun abandon() = clearWindow()
+
     fun reset() {
-        synchronized(tallyLock) {
-            episodeCount = 0
-            perTypeCounts.clear()
-            episodeMemory.clear()
-            episodeCity = null
-            episodeStartMs = 0L
-        }
+        clearWindow()
         try {
             NotificationManagerCompat.from(context).cancel(NOTIF_ALARM_EPISODE)
         } catch (_: SecurityException) {}
+    }
+
+    /** Empties the window and drops its identity. Leaves the posted notification alone: [reset]
+     *  and [abandon] differ only in whether that survives. */
+    private fun clearWindow() = synchronized(tallyLock) {
+        episodeCount = 0
+        perTypeCounts.clear()
+        episodeMemory.clear()
+        episodeCity = null
+        episodeStartMs = 0L
+        episodeFromOnset = false
     }
 
     /** Synchronous read of the window's buffered records for the official all-clear tap,
@@ -160,7 +170,7 @@ class AlarmEpisodeTally(
                     val label = info?.label(lang) ?: type.name
                     "$label $count"
                 }
-            val title = if (durationMin > 0) String.format(s.alarmEpisodeTitleFormat, city, durationMin) else String.format("%1\$s: alarm summary", city)
+            val title = alarmEpisodeTitle(s, city, durationMin)
             val builder = AlertNotificationManager(context).buildNotification(NOTIF_ALARM_EPISODE, AlertNotificationManager.CHANNEL_ALARM_EPISODE)
                 .setSmallIcon(R.drawable.ic_trident)
                 .setContentTitle(title)
@@ -177,7 +187,7 @@ class AlarmEpisodeTally(
     private fun postQuiet(city: String, lang: AppLanguage, durationMin: Int) {
         scope.launch {
             val s = Strings.get(lang)
-            val title = if (durationMin > 0) String.format(s.alarmEpisodeTitleFormat, city, durationMin) else String.format("%1\$s: alarm summary", city)
+            val title = alarmEpisodeTitle(s, city, durationMin)
             val builder = AlertNotificationManager(context).buildNotification(NOTIF_ALARM_EPISODE, AlertNotificationManager.CHANNEL_ALARM_EPISODE)
                 .setSmallIcon(R.drawable.ic_trident)
                 .setContentTitle(title)

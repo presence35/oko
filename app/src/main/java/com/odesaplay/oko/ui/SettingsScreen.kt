@@ -403,7 +403,13 @@ fun SettingsScreen(
             SettingsSection.SHELTERS -> s.sheltersSubtitle(sheltersEnabled)
             SettingsSection.THREATS -> s.threatsSubtitle(hiddenTypes.size, silencedTypes.size)
             SettingsSection.SYSTEM -> s.systemSubtitle(threatCardSize, iconSet)
-            SettingsSection.FLOURISH -> s.moraleSubtitle(deathAnimationEnabled, neutralizedTallyEnabled)
+            // The master is a kill-switch: while it is off every sub-toggle below is inert, so the summary
+            // must not claim explosions or the counter are live. Fold it in rather than reading the
+            // raw sub-prefs, which survive the flip and re-arm on flip-back.
+            SettingsSection.FLOURISH -> s.moraleSubtitle(
+                animation = moraleMasterEnabled && deathAnimationEnabled,
+                tally = moraleMasterEnabled && neutralizedTallyEnabled
+            )
             SettingsSection.MORE -> s.moreSubtitleLabel
             SettingsSection.RELIABILITY -> s.reliabilitySubtitle(
                 alwaysSound = sirenOverride,

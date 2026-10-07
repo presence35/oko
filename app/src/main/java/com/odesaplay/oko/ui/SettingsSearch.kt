@@ -131,8 +131,7 @@ internal val searchAnchors: List<SearchAnchor> = listOf(
         "надёжн", "фоне", "критич", "оффлайн", "перезагрузк", "перезапуск"),
     anchor("guide", SettingsSection.MORE, "guide", "tutorial", "how to", "путівник", "інструкція"),
     anchor("update", SettingsSection.MORE, "update", "version", "download", "оновлення", "версія"),
-    anchor("exit", SettingsSection.MORE, "exit", "quit", "stop", "monitoring", "вихід", "вийти", "зупинити"),
-    anchor("morale", SettingsSection.FLOURISH, "morale", "fun", "animation", "effects", "мораль", "розваг", "анімація")
+    anchor("exit", SettingsSection.MORE, "exit", "quit", "stop", "monitoring", "вихід", "вийти", "зупинити")
 )
 
 /** The block a query names, or null when it only resolves to a section. */

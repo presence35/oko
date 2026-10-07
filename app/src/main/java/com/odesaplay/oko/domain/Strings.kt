@@ -538,6 +538,7 @@ object Strings {
         val alarmEpisodeTallyTitle: String,
         val alarmEpisodeTallyDesc: String,
         val alarmEpisodeTitleFormat: String,
+        val alarmEpisodeTitleNoDuration: String,
         val alarmEpisodeBodyFormat: String,
         val alarmEpisodeQuietText: String,
         val moraleNote: String,
@@ -1538,6 +1539,7 @@ object Strings {
         val alarmEpisodeTallyTitle: String get() = misc.alarmEpisodeTallyTitle
         val alarmEpisodeTallyDesc: String get() = misc.alarmEpisodeTallyDesc
         val alarmEpisodeTitleFormat: String get() = misc.alarmEpisodeTitleFormat
+        val alarmEpisodeTitleNoDuration: String get() = misc.alarmEpisodeTitleNoDuration
         val alarmEpisodeBodyFormat: String get() = misc.alarmEpisodeBodyFormat
         val alarmEpisodeQuietText: String get() = misc.alarmEpisodeQuietText
 val iconSetTitle: String get() = misc.iconSetTitle
@@ -1733,6 +1735,16 @@ fun resolvedThreatsPhrase(count: Int, lang: AppLanguage): String {
     val form = s.wordForms.resolvedThreats[pluralIndex(count, lang).coerceAtMost(s.wordForms.resolvedThreats.lastIndex)]
     return String.format(form, count)
 }
+
+/**
+ * The alarm summary's title: with a duration when the app can honestly state one, without when it
+ * cannot (a process killed mid-alarm measures from its own wake — see `AlarmEpisodeTally.begin`).
+ * One function for both post paths, so the dateless wording cannot drift between them, and pure so
+ * all three languages are pinned by a test instead of by a reader.
+ */
+fun alarmEpisodeTitle(s: Strings.StringSet, city: String, durationMin: Int): String =
+    if (durationMin > 0) String.format(s.alarmEpisodeTitleFormat, city, durationMin)
+    else String.format(s.alarmEpisodeTitleNoDuration, city)
 
 /** "3 threats confirmed" — the same plural machinery as the tally, for the sleep notice's count. */
 fun confirmedThreatsPhrase(count: Int, lang: AppLanguage): String {

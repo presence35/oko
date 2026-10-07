@@ -1002,12 +1002,16 @@ val mappedThreats = registry.allThreats.map { list ->
         retireAllClearIfExpired(now)
         if (debrisBuffer.isRunning) debrisBuffer.shrinkTo(state.fallingDebrisDelaySec.coerceIn(0, 600))
 
+        // Whether THIS tick's focus change took the episode away from us. Read by the morale window
+        // below, which must not conclude anything from a region we just left.
+        var focusFlipped = false
         // Focus moved (pinned <-> GPS, or a new pinned city): the latched official episode
         // belongs to the old region, so it must not keep announcing/clearing for it. Drop it
         // silently; the new focus can start a fresh episode on the next tick.
         val prevFocusToken = lastFocusTokenSeen
         if (state.focusToken != null) lastFocusTokenSeen = state.focusToken
         if (prevFocusToken != null && state.focusToken != null && state.focusToken != prevFocusToken) {
+            focusFlipped = true
             if (lastAnnouncedFrontier != null) {
                 clearOfficialAnnounced()
                 lastAnnouncedFrontier = null
@@ -1319,8 +1323,11 @@ val mappedThreats = registry.allThreats.map { list ->
 
         /** Reconcile official-episode side-effects for ANY level: wakeLock, DebugLog ON
          *  (always — the log sees every official episode even when its notifs are off
-         *  or a zone alert wins the tick), persistence, all-clear. */
-        fun reconcileEpisode(primary: Primary?, state: MonitorState, all: Map<String, NormalizedThreat>) {
+         *  or a zone alert wins the tick), persistence, all-clear.
+         *
+         *  Returns the one fact only this call can know: did it open a new official episode THIS
+         *  tick? The morale window cannot recompute it — the frontier is written back below. */
+        fun reconcileEpisode(primary: Primary?, state: MonitorState, all: Map<String, NormalizedThreat>): Boolean {
             val frontier = announcedFrontier(state)
             val raw = rawFrontier(state)
             val mutedNow = bellsMuted()
@@ -1445,7 +1452,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     // Resurrected latch never observed live in this lifetime: the episode
                     // ended while we were dead. Drop it without notification, chime or log.
                     dropOfficialEpisode()
-                    return@reconcileEpisode
+                    return false
                 }
                 if (alertable.isEmpty()) cancelAlert()
                 val reposted = notificationManager.isAllClearNotificationActive()
@@ -1523,6 +1530,8 @@ val mappedThreats = registry.allThreats.map { list ->
                     now = System.currentTimeMillis()
                 )
             }
+
+            return sounding
         }
 
         /** Reconcile NOTIF_ALERT post/cancel based on primary vs lastShownId. */
@@ -1608,21 +1617,41 @@ val mappedThreats = registry.allThreats.map { list ->
         // Invoke the reconcile pipeline. Verdicts (plugin-owned) already decided
         // sound/silent/suppress above; below only executes. Official paths untouched.
         val primary = buildPrimary(state, all)
-        reconcileEpisode(primary, state, all)
+        val officialOnset = reconcileEpisode(primary, state, all)
         // cold start re-post suppression: never (see OFFICIAL_ALERT vs all-clear below).
         reconcileNotif(primary, state)
         // Morale-only episode window: region-latched, same gate as the all-clear.
         // An unconfirmed (never observed live) window closes silently — no summary
         // for an episode this lifetime never owned.
+        //
+        // It ends on exactly one fact — the feed saying clear — and refuses to conclude anything
+        // from any other reason for "no longer active": a focus move drops the old region's latch
+        // at the top of this tick, and a feed that has not reported yet proves nothing either way.
+        // Posting on one of those and re-opening the window a tick later is how a 27-minute raid
+        // was summarised as "1 min".
         val alarmNowActive = effLevel != AlertLevel.NONE
         if (alarmNowActive && !episodeActive) {
             episodeActive = true
-            episodeTally.begin(effCity, now)
+            episodeTally.begin(effCity, now, fromOnset = officialOnset)
         } else if (!alarmNowActive && episodeActive) {
-            episodeActive = false
-            if (episodeWasConfirmedLive) {
-                episodeTally.finish(state.focusBannerCity, state.lang, state.officialAlertsEnabled, now)
-                lastEpisodeReplay = episodeTally.snapshot()
+            when {
+                // Our focus left the region. Not an ending — drop the window, keep any posted row.
+                // Checked before the readiness arm: a focus move is our own fact and needs no feed,
+                // so an unready tick must not mask it.
+                focusFlipped -> {
+                    episodeActive = false
+                    episodeTally.abandon()
+                }
+                // No snapshot heard yet: the same refusal to conclude that `LatchedEpisode.resolve`
+                // makes, kept here for the case where no latch is left to fall back on.
+                !state.alertsReady -> Unit
+                else -> {
+                    episodeActive = false
+                    if (episodeWasConfirmedLive) {
+                        episodeTally.finish(state.focusBannerCity, state.lang, state.officialAlertsEnabled, now)
+                        lastEpisodeReplay = episodeTally.snapshot()
+                    }
+                }
             }
         }
 

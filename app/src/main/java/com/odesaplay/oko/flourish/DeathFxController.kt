@@ -145,21 +145,13 @@ class DeathFxController(
     private val deathActive: StateFlow<Boolean> =
         styleFlow.flatMapLatest { implFor(it).active }.stateIn(scope, SharingStarted.Eagerly, false)
 
-    /** Master "Morale" gate: live mirror of the master pref. All flourish entry points
-     *  no-op while it's off, and flipping it off ejects anything in flight ([clear]). */
-    private val moraleEnabled = MutableStateFlow(false)
+    // Master "Morale" gate: the shared [moraleGate] is the source of truth for every flourish
+    // engine. All entry points no-op while it's off, and flipping it off ejects anything in
+    // flight — this controller's reaction is [clear].
     private val followBulletEnabled = MutableStateFlow(true)
 
     init {
-        scope.launch {
-            UserPrefs(context).preferences
-                .map { it.moraleMasterEnabled }
-                .distinctUntilChanged()
-                .collect { enabled ->
-                    moraleEnabled.value = enabled
-                    if (!enabled) clear()
-                }
-        }
+        moraleGate.ejectWhenOff(scope) { clear() }
         scope.launch {
             UserPrefs(context).preferences
                 .map { it.followBullet }
@@ -209,6 +201,10 @@ class DeathFxController(
     private var savedHomeZoom: Double = 0.0
     // The running tally-tap replay, so a red alert can cancel it mid-show (clear()).
     private var replayJob: Job? = null
+    // Monotonic id of the newest startReplay: a finishing/cancelled run only clears economy mode
+    // if it is still the current one, so a replaced show never turns the flag off under its
+    // successor.
+    private var replayRun = 0
 
     /** Countdown before an auto-strike fires: 3 → 2 → 1, then the pending strike executes. */
     private val _countdown = MutableStateFlow<Int?>(null)
@@ -345,13 +341,25 @@ class DeathFxController(
 
     /** Launch the tally-tap replay on the controller's scope, replacing any show in flight. */
     fun startReplay(records: List<FlourishRecord>) {
-        if (!moraleEnabled.value) return
+        if (!moraleGate.isOn) return
         replayJob?.cancel()
         _replayProgress.value = null
         // A show holds hundreds of blasts. The style is told only that this is a show and
         // decides for itself what to give up — no caller-side style swapping.
         overlay.economyMode = true
-        replayJob = scope.launch { replay(records) }
+        // The show owns economy mode only while it runs: clear() is not guaranteed on every exit
+        // (the natural end and the two early returns in replay() all skip it), so the job drops
+        // the flag itself. The run token keeps a *cancelled* predecessor's teardown from clearing
+        // the flag of the show that replaced it — cancel() completes asynchronously, so its
+        // handler can otherwise land after the new show set the flag true.
+        val run = ++replayRun
+        replayJob = scope.launch {
+            try {
+                replay(records)
+            } finally {
+                if (replayRun == run) overlay.economyMode = false
+            }
+        }
     }
 
     /**
@@ -361,7 +369,7 @@ class DeathFxController(
      * If follow-bullet is off and the anchor is off-screen, the strike is skipped entirely.
      */
     fun startAutoCountdown(anchor: LatLng, type: ThreatType?, onFire: () -> Unit) {
-        if (!moraleEnabled.value) return
+        if (!moraleGate.isOn) return
         if (!followBulletEnabled.value && !isOnScreen(anchor.lat, anchor.lon)) return
         countdownJob?.cancel()
         pendingAutoStrike = onFire
@@ -389,34 +397,6 @@ class DeathFxController(
                 _autoStrikeActive.value = false
             } finally {
                 // A replaced/cancelled countdown never fired — drop its pending count too.
-                _pendingStrikeCount.update { (it - 1).coerceAtLeast(0) }
-            }
-        }
-    }
-
-    @Deprecated("Use anchor overload")
-    fun startAutoCountdown(type: ThreatType?, onFire: () -> Unit) {
-        if (!moraleEnabled.value) return
-        countdownJob?.cancel()
-        pendingAutoStrike = onFire
-        _strikeType.value = type
-        _pendingStrikeCount.update { it + 1 }
-        countdownJob = scope.launch {
-            try {
-                for (n in 3 downTo 1) {
-                    if (overlay.isActive) deathActive.first { !it }
-                    _countdown.value = n
-                    delay(1000L)
-                }
-                if (overlay.isActive) deathActive.first { !it }
-                _countdown.value = null
-                _strikeType.value = null
-                _autoStrikeActive.value = true
-                pendingAutoStrike?.invoke()
-                pendingAutoStrike = null
-                deathActive.first { !it }
-                _autoStrikeActive.value = false
-            } finally {
                 _pendingStrikeCount.update { (it - 1).coerceAtLeast(0) }
             }
         }
@@ -506,37 +486,23 @@ class DeathFxController(
         alpha: Float = 1f,
         type: ThreatType = ThreatType.UNKNOWN
     ): Boolean {
-        if (!moraleEnabled.value) return false
+        if (!moraleGate.isOn) return false
         _strikeAnchor.value = geo
         overlay.spawn(id, geo, startGeo, randomEdgeOrigin(), icon, rotationDeg, alpha, type = type)
         if (id != null) _struck.update { it + id }
         return true
     }
 
-    fun strike(
-        id: String? = null,
-        lat: Double,
-        lon: Double,
-        startLat: Double = lat,
-        startLon: Double = lon,
-        icon: Drawable? = null,
-        rotationDeg: Float = 0f,
-        alpha: Float = 1f,
-        type: ThreatType = ThreatType.UNKNOWN
-    ): Boolean = strike(id, LatLng(lat, lon), LatLng(startLat, startLon), icon, rotationDeg, alpha, type)
-
     /** Follow-up projectile for an already-destroyed threat: no icon, never explodes. Returns
      *  true only when a dud actually launched (master gate + a valid edge origin).
      *  Skipped when follow-bullet is off and the target is off-screen. */
     fun strikeDud(id: String?, geo: LatLng): Boolean {
-        if (!moraleEnabled.value) return false
+        if (!moraleGate.isOn) return false
         if (!followBulletEnabled.value && !isOnScreen(geo.lat, geo.lon)) return false
         val origin = randomEdgeOrigin() ?: return false
         overlay.spawnDud(id, geo, origin)
         return true
     }
-
-    fun strikeDud(id: String?, lat: Double, lon: Double): Boolean = strikeDud(id, LatLng(lat, lon))
 
     /** A random point exactly on the viewport edge (0px), converted to geo and clamped to
      *  Ukraine — the bullet always glides in from the screen edge, and can never originate in
@@ -561,8 +527,6 @@ class DeathFxController(
     }
 
     fun followStrike(target: LatLng) = followStrike(target, followBulletEnabled.value)
-
-    fun followStrike(lat: Double, lon: Double) = followStrike(LatLng(lat, lon))
 
     /** Follow-the-bullet: with the setting on, the camera glides onto the strike, then pans
      *  back to where the user was once the explosion has finished. It never scrolls to the
@@ -591,14 +555,11 @@ class DeathFxController(
         }
     }
 
-    fun followStrike(lat: Double, lon: Double, followBullet: Boolean) =
-        followStrike(LatLng(lat, lon), followBullet)
-
     /** Fun haptics: a short crisp "shot" as the bullet fires, then a longer pulse when it
      *  detonates. USAGE_ALARM keeps both audible as vibration even when the system "touch
      *  feedback" haptics are off. */
     fun strikeHaptics() {
-        if (!moraleEnabled.value) return
+        if (!moraleGate.isOn) return
         val vibrator = vibrator ?: return
         val job = scope.launch {
             vibrator.vibrateAlarm(40L)
@@ -615,10 +576,10 @@ class DeathFxController(
      * fire its bullets [FLOURISH_STAGGER_MS] apart, and move to the next group — the camera
      * finally returns to where the user was after the LAST group explodes. Pure flourish — a
      * red alert ejects it (see [clear], which also cancels this show mid-flight). Launched via
-     * [startReplay]; the caller gates on visibility/alert/lifecycle before invoking.
+     * [startReplay], the only caller, which gates on the master — so no morale check here. The
+     * caller also gates on visibility/alert/lifecycle before invoking.
      */
     suspend fun replay(records: List<FlourishRecord>) {
-        if (!moraleEnabled.value) return
         val b = bridge() ?: return
         if (records.isEmpty()) return
         // Snapshot — see followStrike; getMapCenter() hands back a live mutable point.

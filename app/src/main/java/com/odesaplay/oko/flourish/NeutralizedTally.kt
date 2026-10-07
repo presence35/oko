@@ -6,12 +6,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import com.odesaplay.oko.source.ThreatRemoved
 import com.odesaplay.oko.DebugLog
@@ -72,20 +67,11 @@ class NeutralizedTally(
     private var neutralizedCount = 0
     private val perTypeCounts = mutableMapOf<ThreatType, Int>()
 
-    /** Master "Morale" gate: live mirror of the master pref. [onResolved] no-ops while it's
-     *  off, and flipping it off resets the running tally so nothing fun survives. */
-    private val moraleEnabled = MutableStateFlow(false)
-
     init {
-        scope.launch {
-            UserPrefs(context).preferences
-                .map { it.moraleMasterEnabled }
-                .distinctUntilChanged()
-                .collect { enabled ->
-                    moraleEnabled.value = enabled
-                    if (!enabled) reset()
-                }
-        }
+        // Master "Morale" gate: [moraleGate] is shared with the other flourish engines. [onResolved]
+        // no-ops while it's off, and flipping it off resets the running tally so nothing fun
+        // survives.
+        moraleGate.ejectWhenOff(scope) { reset() }
     }
 
     // Running memory of resolved threats (position + type) so tapping the tally notification can
@@ -112,7 +98,7 @@ class NeutralizedTally(
     /** A server-driven resolution just arrived: count it into the tally and remember it for the
      *  replay.  */
     fun onResolved(removed: ThreatRemoved, lang: AppLanguage) {
-        if (!moraleEnabled.value) return
+        if (!moraleGate.isOn) return
         val snapshot = synchronized(tallyLock) {
             if (seenRemovalIds.contains(removed.id)) return
             seenRemovalIds.addLast(removed.id)
