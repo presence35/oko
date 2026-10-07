@@ -914,7 +914,10 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             batteryOnboardShown = prefs.batteryOnboardShown,
             serviceResurrected = prefs.serviceResurrected,
             threatCardSize = prefs.cardSize,
-            iconSet = prefs.iconSet,
+            // Photo is the app's default look and needs no unlock. The other packs are part of
+            // what the Morale master switches on, so with it off the map falls back to Photo
+            // rather than leaving a flourish pack on screen that nothing animates.
+            iconSet = if (prefs.moraleMasterEnabled) prefs.iconSet else ThreatIconSet.PHOTO,
             overlapMode = prefs.overlapMode,
             showMapScale = prefs.showMapScale,
             showMediumCities = prefs.showMediumCities,

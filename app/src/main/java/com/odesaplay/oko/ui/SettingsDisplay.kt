@@ -300,38 +300,26 @@ internal fun IconSetSelector(
     lang: AppLanguage,
     selected: ThreatIconSet,
     onChange: (ThreatIconSet) -> Unit,
-    slot: Dp = IconTileSlot
+    slot: Dp = IconTileSlot,
+    /** Which packs to offer. Photo always qualifies; the rest are flourish and master-gated. */
+    packs: List<ThreatIconSet> = ThreatIconSet.values().toList()
 ) {
     val s = Strings.get(lang)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        IconSetTile(
-            set = ThreatIconSet.PHOTO,
-            label = s.iconSetPhotoLabel,
-            selected = selected == ThreatIconSet.PHOTO,
-            onClick = { onChange(ThreatIconSet.PHOTO) },
-            slot = slot
-        )
-        IconSetTile(
-            set = ThreatIconSet.ARMY,
-            label = s.iconSetArmyLabel,
-            selected = selected == ThreatIconSet.ARMY,
-            onClick = { onChange(ThreatIconSet.ARMY) },
-            slot = slot
-        )
-        IconSetTile(
-            set = ThreatIconSet.COMIC,
-            label = s.iconSetComicLabel,
-            selected = selected == ThreatIconSet.COMIC,
-            onClick = { onChange(ThreatIconSet.COMIC) },
-            slot = slot
-        )
-        IconSetTile(
-            set = ThreatIconSet.RUSSIAN,
-            label = s.iconSetRussianLabel,
-            selected = selected == ThreatIconSet.RUSSIAN,
-            onClick = { onChange(ThreatIconSet.RUSSIAN) },
-            slot = slot
-        )
+        packs.forEach { set ->
+            IconSetTile(
+                set = set,
+                label = when (set) {
+                    ThreatIconSet.PHOTO -> s.iconSetPhotoLabel
+                    ThreatIconSet.ARMY -> s.iconSetArmyLabel
+                    ThreatIconSet.COMIC -> s.iconSetComicLabel
+                    ThreatIconSet.RUSSIAN -> s.iconSetRussianLabel
+                },
+                selected = selected == set,
+                onClick = { onChange(set) },
+                slot = slot
+            )
+        }
     }
 }
 

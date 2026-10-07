@@ -992,56 +992,68 @@ fun SettingsScreen(
                     )
             }
             SettingsSection.THREATS -> SectionDetailBody(stateSummary = sectionSummary(section)) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).explainerFlash(flashId == "deathAnimStyle")) {
-                        Text(s.deathAnimStyleTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(10.dp))
-                        DeathAnimStyleGrid(
-                            selected = deathAnimationStyle,
-                            labelOf = { style ->
-                                when (style) {
-                                    DeathAnimationStyle.SIMPLE -> s.deathAnimStyleSimpleLabel
-                                    DeathAnimationStyle.CLASSIC -> s.deathAnimStyleClassicLabel
-                                    DeathAnimationStyle.ADVANCED -> s.deathAnimStyleAdvancedLabel
-                                    DeathAnimationStyle.BREACH -> s.deathAnimStyleBreachLabel
-                                    DeathAnimationStyle.FILM -> s.deathAnimStyleFilmLabel
-                                    DeathAnimationStyle.AFTERMATH -> s.deathAnimStyleAftermathLabel
-                                }
-                            },
-                            // Ranks how heavy each style is on the phone: particles, shards,
-                            // smoke — so the choice is legible before you try it.
-                            intensityOf = { style ->
-                                when (style) {
-                                    DeathAnimationStyle.SIMPLE -> 1
-                                    DeathAnimationStyle.CLASSIC -> 2
-                                    DeathAnimationStyle.FILM -> 2
-                                    else -> 3
-                                }
-                            },
-                            onChange = onDeathAnimationStyleChange
-                        )
+                    // The Morale master gates the whole flourish half of this page: with it off
+                    // nothing animates, so the style picker would be a control for nothing. It
+                    // stays visible-but-inert rather than hidden so the page never reads as broken.
+                    if (moraleMasterEnabled) {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).explainerFlash(flashId == "deathAnimStyle")) {
+                            Text(s.deathAnimStyleTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(10.dp))
+                            DeathAnimStyleGrid(
+                                selected = deathAnimationStyle,
+                                labelOf = { style ->
+                                    when (style) {
+                                        DeathAnimationStyle.SIMPLE -> s.deathAnimStyleSimpleLabel
+                                        DeathAnimationStyle.CLASSIC -> s.deathAnimStyleClassicLabel
+                                        DeathAnimationStyle.ADVANCED -> s.deathAnimStyleAdvancedLabel
+                                        DeathAnimationStyle.BREACH -> s.deathAnimStyleBreachLabel
+                                        DeathAnimationStyle.FILM -> s.deathAnimStyleFilmLabel
+                                        DeathAnimationStyle.AFTERMATH -> s.deathAnimStyleAftermathLabel
+                                    }
+                                },
+                                onChange = onDeathAnimationStyleChange
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            // Detail belongs to the style picker, not to a different section:
+                            // it is what decides how much of the chosen style actually draws.
+                            AlertToggleRow(
+                                title = s.hdExplosionTitle,
+                                description = s.hdExplosionDesc,
+                                checked = highQualityExplosions,
+                                onCheckedChange = onHighQualityExplosionsChange,
+                                emoji = "\uD83D\uDD25"
+                            )
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        // The selected style's note gets its own line rather than living inside a
+                        // card: six cards in a 3x2 grid have no room, and one sentence reads better.
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                            Text(
+                                text = when (deathAnimationStyle) {
+                                    DeathAnimationStyle.SIMPLE -> s.deathAnimStyleSimpleNote
+                                    DeathAnimationStyle.CLASSIC -> s.deathAnimStyleClassicNote
+                                    DeathAnimationStyle.ADVANCED -> s.deathAnimStyleAdvancedNote
+                                    DeathAnimationStyle.BREACH -> s.deathAnimStyleBreachNote
+                                    DeathAnimationStyle.FILM -> s.deathAnimStyleFilmNote
+                                    DeathAnimationStyle.AFTERMATH -> s.deathAnimStyleAftermathNote
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    // The selected style's note gets its own line rather than living inside a card:
-                    // six cards in a 3x2 grid have no room, and one sentence reads better here.
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                        Text(
-                            text = when (deathAnimationStyle) {
-                                DeathAnimationStyle.SIMPLE -> s.deathAnimStyleSimpleNote
-                                DeathAnimationStyle.CLASSIC -> s.deathAnimStyleClassicNote
-                                DeathAnimationStyle.ADVANCED -> s.deathAnimStyleAdvancedNote
-                                DeathAnimationStyle.BREACH -> s.deathAnimStyleBreachNote
-                                DeathAnimationStyle.FILM -> s.deathAnimStyleFilmNote
-                                DeathAnimationStyle.AFTERMATH -> s.deathAnimStyleAftermathNote
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).explainerFlash(flashId == "iconSet")) {
                         Text(s.iconSetTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(10.dp))
-                        IconSetSelector(lang = lang, selected = iconSet, onChange = onIconSetChange)
+                        // Photo is the default look and always available; the flourish packs are
+                        // part of what the master unlocks, so they only appear once it is on.
+                        IconSetSelector(
+                            lang = lang,
+                            selected = iconSet,
+                            onChange = onIconSetChange,
+                            packs = if (moraleMasterEnabled) ThreatIconSet.values().toList() else listOf(ThreatIconSet.PHOTO)
+                        )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     val typeCatalog by AppSources.registry.typeCatalog.collectAsState()
@@ -1226,7 +1238,6 @@ fun SettingsScreen(
                             flybyAnimationEnabled = flybyAnimationEnabled,
                             deathAnimationEnabled = deathAnimationEnabled,
                             followBullet = followBullet,
-                            highQualityExplosions = highQualityExplosions,
                             neutralizedTallyEnabled = neutralizedTallyEnabled,
                             neutralizedTallyAllUkraine = neutralizedTallyAllUkraine,
                             alarmEpisodeTallyEnabled = alarmEpisodeTallyEnabled,
@@ -1234,7 +1245,6 @@ fun SettingsScreen(
                             onFlybyAnimationChange = onFlybyAnimationChange,
                             onDeathAnimationChange = onDeathAnimationChange,
                             onFollowBulletChange = onFollowBulletChange,
-                            onHighQualityExplosionsChange = onHighQualityExplosionsChange,
                             onNeutralizedTallyChange = onNeutralizedTallyChange,
                             onNeutralizedTallyAllUkraineChange = onNeutralizedTallyAllUkraineChange,
                             onAlarmEpisodeTallyChange = onAlarmEpisodeTallyChange

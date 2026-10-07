@@ -163,6 +163,8 @@ object Strings {
         val threatsLabel: String,
         val threatMapLabel: String,
         val threatAlertLabel: String,
+        val unknownCatName: String,
+        val unknownCatQuote: String,
         val fastGroupLabel: String,
         val slowGroupLabel: String,
         val fastGroupIconDesc: String,
@@ -1032,6 +1034,8 @@ object Strings {
         val threatsLabel: String get() = settings.threatsLabel
         val threatMapLabel: String get() = settings.threatMapLabel
         val threatAlertLabel: String get() = settings.threatAlertLabel
+        val unknownCatName: String get() = settings.unknownCatName
+        val unknownCatQuote: String get() = settings.unknownCatQuote
         val fastGroupLabel: String get() = settings.fastGroupLabel
         val slowGroupLabel: String get() = settings.slowGroupLabel
         val fastGroupIconDesc: String get() = settings.fastGroupIconDesc

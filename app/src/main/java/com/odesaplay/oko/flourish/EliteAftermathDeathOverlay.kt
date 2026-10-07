@@ -19,7 +19,7 @@ import kotlin.random.Random
  * replaces the lobes. Either way the read is the same: soft, wide, and the longest tail of the
  * three.
  */
-class EliteAftermathDeathOverlay : EliteDeathBase() {
+class EliteAftermathDeathOverlay : EliteDeathBase(), ExplosionWarmer {
 
     override val preview: ExplosionPreview = ExplosionPreview(
         hot = Color.rgb(255, 236, 190),
@@ -42,10 +42,20 @@ class EliteAftermathDeathOverlay : EliteDeathBase() {
     private val puff = ElitePuff(sizeDp = 128)
     private val corePuff = ElitePuff(sizeDp = 48)
 
-    private val shader: android.graphics.RuntimeShader? =
+    /**
+     * Compiled on first use, not in the constructor — see [EliteBreachDeathOverlay.shader] for
+     * why. [warmUp] moves the cost off the blast path entirely.
+     */
+    private val shader: android.graphics.RuntimeShader? by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             runCatching { android.graphics.RuntimeShader(AFTERMATH_AGSL) }.getOrNull()
         } else null
+    }
+
+    /** Compile the shader ahead of the first kill so no blast ever pays for it. */
+    override fun warmUp() {
+        shader
+    }
 
     private var debris: FloatArray? = null
     private var column: FloatArray? = null
@@ -84,10 +94,12 @@ class EliteAftermathDeathOverlay : EliteDeathBase() {
         budget: ExplosionBudget
     ) {
         val mid = ember(d.kind)
-        val bloomR = maxR * (0.55f + 0.45f * (1f - e)) * budgetScale(budget)
+        // Sized to the bloom itself, not to maxR: the puff plus its shader quad is the single
+        // most expensive thing an elite draws, and it never needs to cover the whole radius.
+        val bloomR = maxR * (0.5f + 0.4f * (1f - e)) * budgetScale(budget)
 
-        if (budget == ExplosionBudget.FULL && shader != null) {
-            val sh = shader
+        val sh = if (budget == ExplosionBudget.FULL) shader else null
+        if (sh != null) {
             val hot = hotCore(d.kind)
             sh.setFloatUniform("uCenter", x, y)
             sh.setFloatUniform("uExtent", bloomR)
@@ -168,7 +180,11 @@ class EliteAftermathDeathOverlay : EliteDeathBase() {
         }
     }
 
-    /** A column of smoke climbing out of the impact and hanging — the longest-lived part. */
+    /**
+     * The smoke column: a puff bank that rises out of the impact, thickens as it climbs and
+     * fades slowly at the very end. It must not exist from the first frame — a column that is
+     * there from impact reads as fog lying over the map, not as aftermath.
+     */
     private fun drawColumn(
         canvas: Canvas,
         d: EliteDeath,
@@ -179,19 +195,27 @@ class EliteAftermathDeathOverlay : EliteDeathBase() {
         density: Float,
         maxR: Float
     ) {
+        if (e < COLUMN_START) return
+        // Ramp in over the first slice of the column so it fades up rather than popping on.
+        val intro = ((e - COLUMN_START) / COLUMN_FADE_IN).coerceIn(0f, 1f)
         val arr = column ?: buildColumn(d).also { column = it }
         val rise = maxR * 1.35f
-        val alpha = (90 * fade * (1f - e * 0.55f)).toInt().coerceIn(0, 110)
+        // Holds its opacity across the tail instead of fading with the blast, so the column is
+        // still there when the fireball is gone — that is what makes it aftermath and not smoke.
+        val alpha = (105 * intro * (1f - (e - COLUMN_START) * 0.42f)).toInt().coerceIn(0, 120)
+        if (alpha <= 2) return
         smokePaint.color = Color.argb(alpha, 58, 55, 52)
         var i = 0
         while (i < arr.size) {
             val ox = arr[i]
             val phase = arr[i + 1]
             val size = arr[i + 2]
-            val riseT = (e * 1.6f + phase).coerceAtMost(1.6f)
+            val riseT = (intro + phase * 0.6f).coerceAtMost(1.6f)
             val puffY = y - rise * riseT
             val puffX = x + maxR * ox * (0.4f + riseT)
-            val puffR = maxR * (0.18f + 0.4f * riseT) * size
+            // Grows as it rises: a column that starts at full width reads as a balloon, one that
+            // keeps widening reads as smoke spreading.
+            val puffR = maxR * (0.22f + 0.62f * riseT) * size
             if (puffR > 1f) canvas.drawCircle(puffX, puffY, puffR, smokePaint)
             i += 3
         }
@@ -229,6 +253,15 @@ class EliteAftermathDeathOverlay : EliteDeathBase() {
     private companion object {
         const val MAX_DEBRIS = 8
         const val MAX_COLUMN = 7
+
+        /**
+         * The smoke column must not exist from the first frame — a column that is there from
+         * impact reads as fog lying over the map, not as aftermath. It only starts once the
+         * fireball has properly collapsed into the bloom, then fades up over [COLUMN_FADE_IN]
+         * before reaching full.
+         */
+        const val COLUMN_START = 0.55f
+        const val COLUMN_FADE_IN = 0.25f
     }
 }
 
@@ -256,15 +289,10 @@ float vnoise(float2 p) {
     return mix(mix(a, b, u.x), mix(c, dd, u.x), u.y);
 }
 
+// Two octaves, not four: this body is a soft bloom, so the third and fourth octave only cost
+// per-pixel ALU on the one style whose read is "smooth" anyway.
 float fbm(float2 p) {
-    float v = 0.0;
-    float a = 0.5;
-    for (int i = 0; i < 3; i++) {
-        v += a * vnoise(p);
-        p *= 2.11;
-        a *= 0.5;
-    }
-    return v;
+    return 0.65 * vnoise(p) + 0.35 * vnoise(p * 2.11);
 }
 
 half4 main(in float2 fragCoord) {

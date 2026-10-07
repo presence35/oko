@@ -132,7 +132,12 @@ class DeathFxController(
     private var lastHq = true
 
     private fun implFor(style: DeathAnimationStyle): DeathAnimation =
-        impls.getOrPut(style) { style.create().also { it.highQuality = lastHq } }
+        impls.getOrPut(style) { style.create().also { impl ->
+            impl.highQuality = lastHq
+            // A shader compile or a frame bake must never land on the first blast, so the
+            // controller pays for it the moment the style becomes current.
+            (impl as? ExplosionWarmer)?.warmUp()
+        } }
 
     /** Flattened liveness of whichever impl is current — stable across style switches,
      *  unlike `overlay.active` which belongs to one instance. */

@@ -1,8 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- Settings > Threats: the Unknown cat is now a poster - its name is lettered on the crate and a quote sits in a speech bubble, both in the selected language 10-07_13:05:00
 - Monitoring no longer sleeps through a Doze night: an exact alarm the OS actually honours wakes the app every 15 minutes (instead of WorkManager's hours-long deferral), so a phone that used to go blind for up to 45 minutes at a time now reconnects its feed on a fixed cadence 10-07_11:57:48
-- Three new explosion styles (Elite A/B/C) in Settings → Threats: a GPU fireball, a baked film strip, and a canvas look that upgrades to GPU on Android 13+ — try them and keep the best 10-07_0:20:00
+- Three new explosion styles in Settings → Threats, each with a static preview thumbnail: Breach (hard streaks that clear fast), Film (pre-baked, the lightest), Aftermath (wide bloom, falling debris, hanging smoke) 10-07_1:05:00
+- Explosion styles now scale themselves down instead of stuttering: at most three blasts in a row get the full effect, a slow phone steps the rest down automatically, and a tally replay plays the cheap pass throughout 10-07_1:05:00
+- The baked "Film" explosion no longer re-tints its frames every frame, which was the biggest cost in it, and Aftermath's smoke now rises well after the fireball and thickens as it climbs 10-07_2:20:00
+- "Detailed explosion effects" moved next to the explosion-style picker, where it actually applies 10-07_2:20:00
+- Turning Morale off now really means off: the map falls back to the plain photo icons and nothing animates, instead of leaving a flourish icon pack on screen that plays nothing 10-07_2:20:00
 - Logs now carry per-sample process CPU time, so a battery report can be attributed to the app or to the screen without guessing 10-06_19:40:00
 - The asleep notice's "unrestricted background" button opens the manufacturer's own battery/autostart screen when the device has one, instead of always the generic dialog 10-06_19:40:00
 - The alert notification's first button is now "Mute &lt;type&gt;" — silence one threat kind (e.g. drones) for good, undo it in Settings → Threats; region-only red and yellow alerts keep "OK" 10-06_22:20:00

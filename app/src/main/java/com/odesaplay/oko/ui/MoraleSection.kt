@@ -135,11 +135,9 @@ internal fun DeathStyleCard(
     style: DeathAnimationStyle,
     label: String,
     selected: Boolean,
-    intensity: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val accent = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     val preview = remember(style) { style.create().preview }
     Surface(
         shape = RoundedCornerShape(14.dp),
@@ -170,19 +168,6 @@ internal fun DeathStyleCard(
             }
             Spacer(Modifier.height(7.dp))
             Text(label, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center, maxLines = 1)
-            if (intensity > 0) {
-                Spacer(Modifier.height(5.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    repeat(3) { i ->
-                        Box(
-                            modifier = Modifier
-                                .size(5.dp)
-                                .clip(CircleShape)
-                                .background(if (i < intensity) accent else accent.copy(alpha = 0.22f))
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -195,7 +180,6 @@ internal fun DeathStyleCard(
 internal fun DeathAnimStyleGrid(
     selected: DeathAnimationStyle,
     labelOf: (DeathAnimationStyle) -> String,
-    intensityOf: (DeathAnimationStyle) -> Int,
     onChange: (DeathAnimationStyle) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -218,7 +202,6 @@ internal fun DeathAnimStyleGrid(
                         style = style,
                         label = labelOf(style),
                         selected = selected == style,
-                        intensity = intensityOf(style),
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         onClick = { onChange(style) }
                     )
@@ -300,7 +283,6 @@ internal fun MoraleToggles(
     flybyAnimationEnabled: Boolean,
     deathAnimationEnabled: Boolean,
     followBullet: Boolean,
-    highQualityExplosions: Boolean,
     neutralizedTallyEnabled: Boolean,
     neutralizedTallyAllUkraine: Boolean,
     alarmEpisodeTallyEnabled: Boolean,
@@ -308,7 +290,6 @@ internal fun MoraleToggles(
     onFlybyAnimationChange: (Boolean) -> Unit,
     onDeathAnimationChange: (Boolean) -> Unit,
     onFollowBulletChange: (Boolean) -> Unit,
-    onHighQualityExplosionsChange: (Boolean) -> Unit,
     onNeutralizedTallyChange: (Boolean) -> Unit,
     onNeutralizedTallyAllUkraineChange: (Boolean) -> Unit,
     onAlarmEpisodeTallyChange: (Boolean) -> Unit,
@@ -385,14 +366,6 @@ internal fun MoraleToggles(
                     onCheckedChange = onFollowBulletChange,
                     icon = painterResource(R.drawable.bullet),
                     iconTint = null
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                AlertToggleRow(
-                    title = s.hdExplosionTitle,
-                    description = pack.hdExplosionDesc,
-                    checked = highQualityExplosions,
-                    onCheckedChange = onHighQualityExplosionsChange,
-                    emoji = "\uD83D\uDD25"
                 )
             }
         }

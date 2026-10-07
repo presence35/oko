@@ -2,6 +2,8 @@ package com.odesaplay.oko
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -12,14 +14,19 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.odesaplay.oko.IconCatalog
 import com.odesaplay.oko.ThreatTypeCatalog
 import com.odesaplay.oko.ThreatType
@@ -115,22 +122,22 @@ internal fun ThreatTypeRow(
             Spacer(Modifier.height(12.dp))
             // The pack art is the point of this page: a 2.5x icon is the only way a user can
             // actually tell the Shahed apart from the FPV at a glance, so it keeps its own
-            // full-width band under the title.
-            Box(
-                modifier = Modifier.fillMaxWidth().height(180.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(
-                        if (type == ThreatType.UNKNOWN) R.drawable.ic_unknown_cat
-                        else IconCatalog.res(type, iconSet)
-                    ),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(if (type == ThreatType.UNKNOWN) Modifier.scale(1.15f) else Modifier)
-                )
+            // full-width band under the title. Unknown is the exception: its cat is a poster,
+            // so it gets the lettering treatment instead of a plain band.
+            if (type == ThreatType.UNKNOWN) {
+                UnknownCatPoster(s)
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(180.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(IconCatalog.res(type, iconSet)),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
             // Facts stay persona-proof in `details`; `joke` is the single flavour slot a
             // persona may adjust, rendered separately so the two never blend. Neither is
@@ -152,6 +159,93 @@ internal fun ThreatTypeRow(
                 )
             }
         }
+    }
+}
+
+/** Overlay geometry, measured against `ic_unknown_cat.webp` (717x662) and kept as fractions of
+ *  the art. The poster box locks the art's aspect ratio, so the numbers hold at any width and
+ *  neither overlay needs a measured size. */
+private const val CAT_ART_ASPECT = 717f / 662f
+private const val CRATE_TEXT_CENTER_X = 0.563f
+private const val CRATE_TEXT_CENTER_Y = 0.766f
+private const val CRATE_TEXT_WIDTH = 0.390f
+private const val CRATE_TEXT_TILT = 5f
+private const val BUBBLE_LEFT = 0.655f
+private const val BUBBLE_TOP = 0.200f
+private const val BUBBLE_WIDTH = 0.335f
+
+/** The crate lettering mirrors the original art: the first word on its own line, the rest under
+ *  it, so UA/EN/RU all break the same way instead of relying on where the text happens to wrap. */
+private fun crateLabel(name: String): String =
+    name.uppercase().split(' ', limit = 2).joinToString("\n")
+
+/**
+ * The Unknown sticker as a poster: the cat's name lettered on the crate and a quote in a bubble
+ * by its head. Both texts are overlays read from [Strings], not baked into the art, so UA/EN/RU
+ * each get real text. The crate lettering is near-black on wood like the original art; the
+ * bubble is a flat dark plate that wraps its own quote, so a longer translation grows the plate
+ * instead of spilling out of it.
+ */
+@Composable
+private fun UnknownCatPoster(s: Strings.StringSet) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth().aspectRatio(CAT_ART_ASPECT),
+        contentAlignment = Alignment.Center
+    ) {
+        val w = maxWidth
+        val h = maxHeight
+        Image(
+            painter = painterResource(R.drawable.ic_unknown_cat),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize()
+        )
+        val bubbleShape = RoundedCornerShape(14.dp)
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .offset(x = w * BUBBLE_LEFT, y = h * BUBBLE_TOP)
+                .width(w * BUBBLE_WIDTH)
+                .drawBehind {
+                    val tail = Path().apply {
+                        moveTo(size.width * 0.30f, size.height)
+                        lineTo(size.width * 0.72f, size.height)
+                        lineTo(-16.dp.toPx(), size.height - 4.dp.toPx())
+                        close()
+                    }
+                    drawPath(tail, Color(AppPalette.Surface))
+                    drawPath(tail, Color(AppPalette.Border), style = Stroke(1.5.dp.toPx()))
+                }
+                .background(Color(AppPalette.Surface), bubbleShape)
+                .border(1.5.dp, Color(AppPalette.Border), bubbleShape)
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = s.unknownCatQuote,
+                style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
+                color = Color(AppPalette.TextPrimary)
+            )
+        }
+        Text(
+            text = crateLabel(s.unknownCatName),
+            style = MaterialTheme.typography.titleSmall.copy(
+                fontSize = 12.sp,
+                lineHeight = 13.sp,
+                color = Color(0xFF1B1206),
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center
+            ),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(
+                    x = w * (CRATE_TEXT_CENTER_X - 0.5f),
+                    y = h * (CRATE_TEXT_CENTER_Y - 0.5f)
+                )
+                .width(w * CRATE_TEXT_WIDTH)
+                .rotate(CRATE_TEXT_TILT)
+        )
     }
 }
 

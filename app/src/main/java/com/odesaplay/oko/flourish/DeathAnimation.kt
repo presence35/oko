@@ -46,12 +46,22 @@ enum class ExplosionShape {
 }
 
 /**
+ * Optional companion to [DeathAnimation]: a style that has one-time setup (a shader compile, a
+ * baked sheet) exposes it so the controller can pay that cost before the first blast instead of
+ * during it. Styles with nothing to prepare simply don't implement it.
+ */
+interface ExplosionWarmer {
+    fun warmUp()
+}
+
+/**
  * Swappable death-animation engine. The map view only ever talks to this interface
  * ([DeathFxController.overlay]), so styles come and go without touching UI code.
  * Implementations: [SimpleDeathOverlay] (cheap rings + sparks, no bitmaps),
  * [ClassicDeathOverlay] (the original look, frozen), [ThreatDeathOverlay] (fuller), and the
  * three elites [EliteBreachDeathOverlay] / [EliteFilmDeathOverlay] / [EliteAftermathDeathOverlay],
- * which share [EliteDeathBase] for everything but the explosion body itself.
+ * which share [EliteDeathBase] for everything but the explosion body itself. A style with
+ * one-time setup implements [ExplosionWarmer] so that cost is paid before the first blast.
  */
 interface DeathAnimation {
     val active: StateFlow<Boolean>

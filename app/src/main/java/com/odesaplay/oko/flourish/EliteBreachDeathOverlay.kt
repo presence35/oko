@@ -22,7 +22,7 @@ import kotlin.random.Random
  * shapes are drawn as rotated bars, so a pre-33 phone still gets streaks and not the soft bloom
  * the other elites use.
  */
-class EliteBreachDeathOverlay : EliteDeathBase() {
+class EliteBreachDeathOverlay : EliteDeathBase(), ExplosionWarmer {
 
     override val preview: ExplosionPreview = ExplosionPreview(
         hot = Color.WHITE,
@@ -45,10 +45,21 @@ class EliteBreachDeathOverlay : EliteDeathBase() {
         xfermode = PorterDuffXfermode(PorterDuff.Mode.ADD)
     }
 
-    private val shader: android.graphics.RuntimeShader? =
+    /**
+     * The shader pass, compiled on first use rather than in the constructor: constructing it
+     * eagerly would push a compile onto the map's first frame, which is exactly when the map can
+     * least afford it. [warmUp] lets the controller pay for it off the blast path.
+     */
+    private val shader: android.graphics.RuntimeShader? by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             runCatching { android.graphics.RuntimeShader(BREACH_AGSL) }.getOrNull()
         } else null
+    }
+
+    /** Compile the shader ahead of the first kill so no blast ever pays for it. */
+    override fun warmUp() {
+        shader
+    }
 
     private var streaks: FloatArray? = null
     private val dst = RectF()
@@ -71,10 +82,12 @@ class EliteBreachDeathOverlay : EliteDeathBase() {
             ExplosionBudget.SOLID -> 6
             ExplosionBudget.CHEAP -> 0
         }
-        val shardR = maxR * 1.35f
+        // The streaks never reach further than the shock rings, so the quad is sized to the visible
+        // blast rather than to maxR — this is what keeps the shader pass off a near-fullscreen rect.
+        val shardR = maxR * 0.85f
 
         if (budget == ExplosionBudget.FULL && shader != null) {
-            drawShaderStreaks(canvas, d, x, y, e, fade, shardR, coreR)
+            drawShaderStreaks(canvas, d, x, y, e, fade, shardR)
         } else {
             drawBarStreaks(canvas, d, x, y, e, fade, density, shardR, shardCount)
         }
@@ -105,8 +118,7 @@ class EliteBreachDeathOverlay : EliteDeathBase() {
         y: Float,
         e: Float,
         fade: Float,
-        shardR: Float,
-        coreR: Float
+        shardR: Float
     ) {
         val sh = shader ?: return
         val emberColor = ember(d.kind)

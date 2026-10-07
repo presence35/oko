@@ -26,17 +26,34 @@ private const val ELITE_SHEET_COLS = 4
 private const val ELITE_FRAME_DP = 96
 
 /**
- * Elite style "Film" — the pre-baked one. The explosion body is a 16-frame sheet baked once per
- * density on a background thread and played back with a single `drawBitmap` per death.
- *
- * One sheet, not one per threat type: the bake is neutral white-hot and each kind is tinted at
- * draw time with a cached colour filter. That is the difference between a first kill costing one
- * bake and costing eight — which is what made the earlier version stutter on first contact.
- *
- * It is also the cheapest tier by design, so it is what a replay show or a throttled frame falls
- * back to without the caller swapping styles.
+ * The threat kinds that get their own sheet, baked on demand. The rest share [ELITE_SHARED_KIND]'s
+ * warm sheet rather than each costing their own — Film is the cheapest style on purpose, and a
+ * full type list would make a first kill pay for eight bakes, which is exactly the stutter this
+ * design exists to remove.
  */
-class EliteFilmDeathOverlay : EliteDeathBase() {
+private val ELITE_DISTINCT_KINDS = listOf(EliteKind.BALLISTIC, EliteKind.AVIATION)
+
+/** Everything not in [ELITE_DISTINCT_KINDS] shares one sheet, since they share one colour anyway. */
+private val ELITE_SHARED_KIND = EliteKind.SHAHED
+
+private val EliteBakeExecutor = Executors.newSingleThreadExecutor { r ->
+    Thread(r, "elite-film-bake").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }
+}
+
+/**
+ * Elite style "Film" — the pre-baked one and the cheapest tier by design.
+ *
+ * The explosion body is a 16-frame 4x4 sheet played back with a single `drawBitmap` per death.
+ * The important property is that **nothing about a frame is computed per draw**: the sheet is
+ * baked per kind once, off the main thread, and tinted at bake time. An earlier version applied a
+ * [android.graphics.PorterDuffColorFilter] per frame to fake per-type colour, which forced the
+ * filtered bitmap to be re-sampled on every frame for every concurrent death — it looked free and
+ * was the single biggest cost in the style.
+ *
+ * Colour is baked, not filtered. Three sheets can exist at once (ballistic / aviation / shared),
+ * which is bounded and small; anything past that shares the shared sheet.
+ */
+class EliteFilmDeathOverlay : EliteDeathBase(), ExplosionWarmer {
 
     override val preview: ExplosionPreview = ExplosionPreview(
         hot = Color.WHITE,
@@ -45,16 +62,15 @@ class EliteFilmDeathOverlay : EliteDeathBase() {
         scale = 1f
     )
 
-    @Volatile
-    private var sheet: Bitmap? = null
+    /** Kind -> baked sheet. Written by the bake thread, read on the draw thread. */
+    private val sheets = HashMap<EliteKind, Bitmap>(4)
+
+    /** Kinds with a bake in flight, so a stampede queues one bake and not one per death. */
+    private val baking = HashSet<EliteKind>()
 
     @Volatile
     private var bakedDensity = 0f
 
-    /** One bake in flight at a time; the first kill of the session waits on it, not on a queue. */
-    private val bakeKick = AtomicBoolean(false)
-
-    private val tints = HashMap<EliteKind, android.graphics.ColorFilter>(EliteKind.entries.size)
     private val framePaint = Paint().apply {
         isAntiAlias = true
         isFilterBitmap = true
@@ -66,6 +82,14 @@ class EliteFilmDeathOverlay : EliteDeathBase() {
     }
     private val scratch = Rect()
     private val dst = RectF()
+
+    /**
+     * Bake every sheet this session will likely need. Called when the style becomes current, so
+     * the first kill of the session draws a finished sheet instead of waiting on a bake.
+     */
+    override fun warmUp() {
+        for (kind in kindsNeedingASheet()) sheetFor(kind, bakedDensity)
+    }
 
     override fun drawExplosion(
         canvas: Canvas,
@@ -79,43 +103,40 @@ class EliteFilmDeathOverlay : EliteDeathBase() {
         elapsedMs: Float,
         budget: ExplosionBudget
     ) {
-        val frames = when (budget) {
-            ExplosionBudget.FULL -> ELITE_FRAMES
-            ExplosionBudget.SOLID -> ELITE_FRAMES / 2
-            ExplosionBudget.CHEAP -> 6
-        }
-        val bmp = sheetFor(density)
+        val bmp = sheetFor(sheetKind(d.kind), density)
         if (bmp == null) {
-            // The bake is still running: an additive ring carries the blast so the first
-            // kill of the session is never a blank frame.
+            // Still baking: an additive ring carries the blast, so the first kill of a type is
+            // never a blank frame.
             framePaint.color = Color.argb((170 * fade).toInt().coerceIn(0, 255), 255, 196, 96)
             canvas.drawCircle(x, y, shockRadius(maxR, e, 1.1f).coerceAtLeast(1f), framePaint)
             return
         }
 
+        val frames = when (budget) {
+            ExplosionBudget.FULL -> ELITE_FRAMES
+            ExplosionBudget.SOLID -> ELITE_FRAMES / 2
+            ExplosionBudget.CHEAP -> 6
+        }
         val idx = (e * frames).toInt().coerceIn(0, frames - 1)
         val fs = bmp.width / ELITE_SHEET_COLS
         val col = idx % ELITE_SHEET_COLS
         val row = idx / ELITE_SHEET_COLS
         scratch.set(col * fs, row * fs, col * fs + fs, row * fs + fs)
-        framePaint.colorFilter = tint(d.kind)
         framePaint.alpha = (255 * fade).toInt().coerceIn(0, 255)
         val r = maxR * 1.2f
         dst.set(x - r, y - r, x + r, y + r)
         canvas.drawBitmap(bmp, scratch, dst, framePaint)
-        framePaint.colorFilter = null
 
         if (budget == ExplosionBudget.FULL) {
             drawEmbers(canvas, d, x, y, e, fade, density, maxR)
         }
     }
 
-    private fun tint(kind: EliteKind): android.graphics.ColorFilter =
-        tints.getOrPut(kind) {
-            val c = ember(kind)
-            // MULTIPLY keeps the sheet's white-hot core white and tints only its colour.
-            android.graphics.PorterDuffColorFilter(c, PorterDuff.Mode.MULTIPLY)
-        }
+    /** Kinds that own a sheet; everything else renders as the shared warm one. */
+    private fun sheetKind(kind: EliteKind): EliteKind =
+        if (kind in ELITE_DISTINCT_KINDS) kind else ELITE_SHARED_KIND
+
+    private fun kindsNeedingASheet(): List<EliteKind> = ELITE_DISTINCT_KINDS + ELITE_SHARED_KIND
 
     private fun drawEmbers(
         canvas: Canvas,
@@ -151,47 +172,48 @@ class EliteFilmDeathOverlay : EliteDeathBase() {
         }
     }
 
-    /** The baked sheet, kicking off the bake on first use. One bake for the whole session. */
-    private fun sheetFor(density: Float): Bitmap? {
+    /** The baked sheet for [kind], scheduling its bake on first use. */
+    private fun sheetFor(kind: EliteKind, density: Float): Bitmap? {
         if (bakedDensity != density) {
-            sheet?.recycle()
-            sheet = null
+            synchronized(sheets) {
+                sheets.values.forEach { it.recycle() }
+                sheets.clear()
+                baking.clear()
+            }
             bakedDensity = density
         }
-        sheet?.let { return it }
-        if (bakeKick.compareAndSet(false, true)) {
-            val size = (ELITE_FRAME_DP * density).toInt().coerceIn(48, 320)
-            EliteBakeExecutor.execute {
-                val baked = bakeSheet(size)
-                if (bakedDensity == density) sheet = baked
-                bakeKick.set(false)
+        synchronized(sheets) {
+            sheets[kind]?.let { return it }
+            if (baking.add(kind)) {
+                val size = (ELITE_FRAME_DP * density).toInt().coerceIn(48, 320)
+                val mid = ember(kind)
+                val hot = hotCore(kind)
+                EliteBakeExecutor.execute {
+                    val baked = bakeSheet(size, mid, hot)
+                    synchronized(sheets) {
+                        baking.remove(kind)
+                        // A density change recycled the slots while this ran; the bake is stale.
+                        if (bakedDensity == density && baked != null) sheets[kind] = baked
+                    }
+                }
             }
         }
         return null
     }
-
-    override fun clear() {
-        super.clear()
-        // The sheet is a session-lifetime cache, not per-death state: a replay show pays for it once.
-    }
-
-    private companion object {
-        val EliteBakeExecutor = Executors.newSingleThreadExecutor { r ->
-            Thread(r, "elite-film-bake").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }
-        }
-    }
 }
 
-/** One neutral sheet for every threat type: white-hot core, warm mid, grey smoke skirt. */
-private fun bakeSheet(frame: Int): Bitmap? = runCatching {
+/**
+ * One sheet, tinted at bake time with this kind's palette. Colour baked in rather than filtered per
+ * frame is the whole point: see [EliteFilmDeathOverlay].
+ */
+private fun bakeSheet(frame: Int, mid: Int, hot: Int): Bitmap? = runCatching {
     val rows = ELITE_FRAMES / ELITE_SHEET_COLS
     val sheet = Bitmap.createBitmap(frame * ELITE_SHEET_COLS, frame * rows, Bitmap.Config.ARGB_8888)
     val c = Canvas(sheet)
     val paint = Paint().apply { isAntiAlias = true }
     val add = PorterDuffXfermode(PorterDuff.Mode.ADD)
     val half = frame / 2f
-    val core = intArrayOf(255, 255, 246)
-    val mid = intArrayOf(255, 190, 96)
+    val smoke = intArrayOf(48, 46, 44)
 
     for (f in 0 until ELITE_FRAMES) {
         val t = f / (ELITE_FRAMES - 1f)
@@ -212,9 +234,9 @@ private fun bakeSheet(frame: Int): Bitmap? = runCatching {
             paint.shader = RadialGradient(
                 cx + ox, cy + oy, lobeR,
                 intArrayOf(
-                    Color.argb(alpha, core[0], core[1], core[2]),
-                    Color.argb((alpha * 0.55f).toInt(), mid[0], mid[1], mid[2]),
-                    Color.argb(0, mid[0], mid[1], mid[2])
+                    Color.argb(alpha, Color.red(hot), Color.green(hot), Color.blue(hot)),
+                    Color.argb((alpha * 0.55f).toInt(), Color.red(mid), Color.green(mid), Color.blue(mid)),
+                    Color.argb(0, Color.red(mid), Color.green(mid), Color.blue(mid))
                 ),
                 floatArrayOf(0f, 0.5f, 1f),
                 Shader.TileMode.CLAMP
@@ -237,7 +259,7 @@ private fun bakeSheet(frame: Int): Bitmap? = runCatching {
         // Smoke skirt on the back half only, rising as the fireball dies.
         if (t > 0.3f) {
             val st = (t - 0.3f) / 0.7f
-            paint.color = Color.argb((70 * (1f - st)).toInt().coerceIn(0, 90), 48, 46, 44)
+            paint.color = Color.argb((70 * (1f - st)).toInt().coerceIn(0, 90), smoke[0], smoke[1], smoke[2])
             repeat(5) { p ->
                 val a = p * (ELITE_TAU / 5f) + 0.7f
                 c.drawCircle(
@@ -251,4 +273,3 @@ private fun bakeSheet(frame: Int): Bitmap? = runCatching {
     }
     sheet
 }.getOrNull()
-
