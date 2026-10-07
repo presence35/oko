@@ -235,3 +235,12 @@ onCreate restore; `clearPersistedServiceState()` isolates the shared DataStore).
   widened to clear prefs too. The test calls `UserPrefs.clearAll()` itself, so the coupling lives
   in whatever the other class wrote. Prefs isolation belongs to whoever owns that store's tests:
   do not widen the service-level fixture to cover `user_prefs`.
+
+## Shake-to-shoot feedback (TL;DR)
+
+Shake the phone to shoot a screenshot + open feedback: accelerometer trigger (debounced,
+only while map is foreground), captures map bitmap, opens bottom-sheet with the shot
+attached, 1 rating + 1 free-text field, auto-attached version/city. Alternative to the
+hovering top-right feedback button — same sheet, different trigger. Needs a Settings
+opt-out (shake off by default?) and a manual button fallback since shake is
+undiscoverable. Transport TBD: in-app sheet POST vs external link (Telegram/Form).

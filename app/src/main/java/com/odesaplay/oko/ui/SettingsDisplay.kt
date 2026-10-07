@@ -8,11 +8,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.ripple
@@ -41,7 +39,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.odesaplay.oko.IconCatalog
 import com.odesaplay.oko.engine.LatLng
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.SpeedSource
@@ -258,11 +255,8 @@ internal fun CardSizeTile(
     }
 }
 
-/** Icon-slot size inside an icon-set tile. */
-internal val IconTileSlot = 60.dp
-
-/** Gap between icon slots in a tile's swipeable row. */
-internal val IconTileSpacing = 10.dp
+/** Icon size inside an icon-set tile (the Shahed is the pack's face). */
+internal val IconTileSlot = 72.dp
 
 /** One chip of the overlapping-threats mode selector. */
 @Composable
@@ -293,8 +287,9 @@ internal fun OverlapModeChip(
     }
 }
 
-/** Icon-style picker: four stacked full-width rows (one per real set — Photo,
- *  Army, Comic, Russian). Each row is a horizontally swipeable strip of enlarged icons. */
+/** Icon-style picker: one row of packs (Photo, Army, Comic, Russian), each tile showing
+ *  only its Shahed — the full pack art already sits on every type card below, so the strip of
+ *  sevens was redundant. Names sit under the drones. */
 @Composable
 internal fun IconSetSelector(
     lang: AppLanguage,
@@ -305,7 +300,7 @@ internal fun IconSetSelector(
     packs: List<ThreatIconSet> = ThreatIconSet.values().toList()
 ) {
     val s = Strings.get(lang)
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         packs.forEach { set ->
             IconSetTile(
                 set = set,
@@ -317,7 +312,8 @@ internal fun IconSetSelector(
                 },
                 selected = selected == set,
                 onClick = { onChange(set) },
-                slot = slot
+                slot = slot,
+                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -341,7 +337,6 @@ internal fun IconSetTile(
     )
     Card(
         modifier = modifier
-            .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .pressTick(interactionSource)
             .clickable(
@@ -357,43 +352,26 @@ internal fun IconSetTile(
             else MaterialTheme.colorScheme.outlineVariant
         )
     ) {
-        val types = IconCatalog.photoTypes()
-        val naturalWidth = (slot + IconTileSpacing) * types.size + IconTileSpacing
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
+        Column(
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                modifier = Modifier
-                    .horizontalScroll(rememberScrollState())
-                    .width(naturalWidth)
-                    .padding(horizontal = IconTileSpacing, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(IconTileSpacing)
-            ) {
-                types.forEach { type ->
-                    Box(modifier = Modifier.size(slot), contentAlignment = Alignment.Center) {
-                        ThreatIcon(
-                            type = type,
-                            set = set,
-                            size = slot,
-                            contentDescription = label
-                        )
-                    }
-                }
-            }
+            ThreatIcon(
+                type = ThreatType.SHAHED,
+                set = set,
+                size = slot,
+                contentDescription = label
+            )
+            Spacer(Modifier.height(8.dp))
             Text(
                 label,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                color = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
