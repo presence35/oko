@@ -68,4 +68,39 @@ class UpdateManagerTest {
         assertFalse(UpdateManager.signersMatch(signers, null))
         assertFalse(UpdateManager.signersMatch(emptySet(), emptySet()))
     }
+
+    @Test
+    fun `installable refuses an older archive in every mode`() {
+        // The forced path still never installs a downgrade: the installer would reject it, and the
+        // version in that rejection is the only thing that names the desync out loud.
+        assertFalse(UpdateManager.installable(790, 791, allowSameVersion = false))
+        assertFalse(UpdateManager.installable(790, 791, allowSameVersion = true))
+        assertFalse(UpdateManager.installable(1, 790, allowSameVersion = true))
+    }
+
+    @Test
+    fun `installable admits a newer archive and, when forced, a rebuild of the same one`() {
+        assertTrue(UpdateManager.installable(792, 791, allowSameVersion = false))
+        // Same version: refused by the tap path, a repair by the forced one.
+        assertFalse(UpdateManager.installable(791, 791, allowSameVersion = false))
+        assertTrue(UpdateManager.installable(791, 791, allowSameVersion = true))
+    }
+
+    @Test
+    fun `cacheBusted keeps the trusted origin and defeats a cached copy`() {
+        val url = "https://odesaplay.com.ua/other_apps/oko/app-release.apk"
+        val busted = UpdateManager.cacheBusted(url, 1_700_000_000_000L)
+
+        assertTrue(busted.startsWith("$url?_="))
+        assertTrue(UpdateManager.isTrustedApkUrl(busted))
+        // Same origin, different URL: the origin still serves the same file, but nothing cached
+        // under the old key can answer it.
+        assertFalse(busted == url)
+    }
+
+    @Test
+    fun `cacheBusted appends to an existing query`() {
+        val url = "https://odesaplay.com.ua/other_apps/oko/app-release.apk?v=2"
+        assertTrue(UpdateManager.cacheBusted(url, 42L).startsWith("$url&_=42"))
+    }
 }

@@ -5,9 +5,11 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -345,6 +347,7 @@ internal fun SearchChipsRow(
  *  like a root row so a page of actions reads as the same kind of list as the root list — the
  *  alternative, a stack of full-width buttons, gave no room for a line of explanation and made
  *  two same-icon buttons indistinguishable. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun SettingsActionRow(
     icon: Painter,
@@ -356,7 +359,8 @@ internal fun SettingsActionRow(
     titleTint: Color = MaterialTheme.colorScheme.onSurface,
     enabled: Boolean = true,
     trailingProgress: Boolean = false,
-    flash: Boolean = false
+    flash: Boolean = false,
+    onLongClick: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -370,11 +374,12 @@ internal fun SettingsActionRow(
                 )
             )
             .pressTick(interactionSource)
-            .clickable(
+            .combinedClickable(
                 interactionSource = interactionSource,
                 indication = ripple(bounded = true),
                 enabled = enabled,
-                onClick = onClick
+                onClick = onClick,
+                onLongClick = onLongClick
             )
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically

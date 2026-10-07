@@ -315,6 +315,12 @@ tasks.register("uploadRelease") {
         // Prove the server serves what we just built. Without this, a bad upload only shows up
         // as an app that silently refuses to install, forever. FTP→HTTPS propagation can lag,
         // so retry before calling it broken.
+        //
+        // A mismatch is re-uploaded, not just reported. The manifest is the file every client
+        // reads to decide whether it is up to date, and a failed manifest upload leaves the server
+        // holding a newer APK behind an older manifest — every tester sees "up to date" and stays
+        // on the old build until the *next* release repairs it. Re-sending the file we already
+        // have locally costs one upload and closes that window instead of leaving it open.
         val liveUrl = "https://$host/${publicDir}version.json"
         var live: Map<*, *>? = null
         for (attempt in 0 until 3) {
@@ -324,6 +330,11 @@ tasks.register("uploadRelease") {
                 (live["versionCode"] as? Number)?.toInt() == vc
             if (ok || attempt == 2) break
             Thread.sleep(3_000)
+            if (attempt == 0) {
+                println("Live manifest does not match the build — re-uploading version.json")
+                runCatching { ftpUpload(ftpHost, remoteDir, user, pass, jsonFile, "version.json") }
+                    .onFailure { println("Re-upload failed: ${it.message}") }
+            }
         }
         val liveSha = live?.get("sha256")?.toString()
         val liveVc = (live?.get("versionCode") as? Number)?.toInt()

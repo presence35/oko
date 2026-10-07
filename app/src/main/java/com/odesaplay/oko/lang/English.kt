@@ -864,12 +864,20 @@ internal val English: Strings.StringSet = Strings.StringSet(
     ),
     deathAnimStyle = Strings.DeathAnimStyleStrings(
         title = "Explosion style",
+        eliteTitle = "Elite",
+        eliteNote = "Three candidates for the final look — try them all and keep the one that reads best.",
         simple = "Simple",
         classic = "Classic",
         advanced = "Advanced",
+        eliteShader = "Elite A",
+        eliteBaked = "Elite B",
+        eliteHybrid = "Elite C",
         simpleNote = "Flash and rings",
         classicNote = "Fireball and shards",
         advancedNote = "Shatters into sparks",
+        eliteShaderNote = "GPU fireball",
+        eliteBakedNote = "Baked film",
+        eliteHybridNote = "Canvas + GPU",
     ),
 )
 

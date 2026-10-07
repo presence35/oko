@@ -2027,12 +2027,46 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun downloadUpdate() {
         val current = updateStateFlow.value as? UpdateState.Available ?: return
+        downloadTo(current.info, force = false)
+    }
+
+    /**
+     * Long press on the update row: trust the APK over the manifest. The ordinary check compares
+     * against version.json, and when the manifest is the stale side of a half-finished release,
+     * that comparison is the only thing between the tester and the build they are missing.
+     * Goes straight to the download — the progress dialog opens on press and MainScreen hands
+     * the finished archive to the installer. Seeds no cached "latest version": that is a manifest
+     * claim, which is exactly what this path is refusing to believe.
+     */
+    fun forceDownloadUpdate() {
+        if (!BuildConfig.SELF_UPDATE) return
+        if (isChecking) return
+        val current = updateStateFlow.value
+        if (current is UpdateState.Downloading || current is UpdateState.Downloaded) return
+        isChecking = true
+        viewModelScope.launch {
+            val info = try {
+                updateManager.latest()
+            } catch (e: Exception) {
+                isChecking = false
+                val s = Strings.get(prefs.preferences.first().language)
+                val message = e.message?.let { ": $it" }.orEmpty()
+                showToast(s.updateCheckFailed + message, cardVisible = false)
+                return@launch
+            }
+            isChecking = false
+            updateStateFlow.value = UpdateState.Downloading(info, 0f)
+            downloadTo(info, force = true)
+        }
+    }
+
+    private fun downloadTo(info: UpdateInfo, force: Boolean) {
         viewModelScope.launch {
             try {
-                val file = updateManager.download(current.info) { progress ->
-                    updateStateFlow.value = UpdateState.Downloading(current.info, progress)
+                val file = updateManager.download(info, force) { progress ->
+                    updateStateFlow.value = UpdateState.Downloading(info, progress)
                 }
-                updateStateFlow.value = UpdateState.Downloaded(current.info, file)
+                updateStateFlow.value = UpdateState.Downloaded(info, file)
             } catch (e: Exception) {
                 updateStateFlow.value = UpdateState.Failed(e.message)
             }

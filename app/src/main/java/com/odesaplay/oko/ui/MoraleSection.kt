@@ -6,8 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -32,6 +34,34 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+/**
+ * One row of explosion-style cards. Kept as a helper so the three legacy styles and the three
+ * elite candidates lay out identically (equal-height chips even when a caption wraps) without
+ * repeating the row scaffolding. [chips] supplies the label / caption / intensity-rank triple.
+ */
+@Composable
+internal fun DeathAnimStyleRow(
+    selected: DeathAnimationStyle,
+    onChange: (DeathAnimationStyle) -> Unit,
+    chips: () -> List<Pair<DeathAnimationStyle, Triple<String, String, Int>>>
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        chips().forEach { (style, spec) ->
+            SelectorChip(
+                label = spec.first,
+                caption = spec.second,
+                intensity = spec.third,
+                selected = selected == style,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                onClick = { onChange(style) }
+            )
+        }
+    }
+}
 
 /** Single-select chip with the standard selector styling (same as OverlapModeChip). [caption] and
  *  [intensity] turn the plain label into a small self-explaining card: a caption says what the

@@ -14,6 +14,10 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Doze-legal wakeup (see AlertWakeup). Denied by default on Android 12+, granted on the
+         special app access screen; the SM-A505FN (API 30) never needs it, and the fallback is an
+         inexact allow-while-idle alarm rather than a dead device. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
         android:allowBackup="false"
@@ -45,6 +49,10 @@
 
         <receiver
             android:name=".NeutralizedDismissReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".service.AlertWakeupReceiver"
             android:exported="false" />
 
         <receiver

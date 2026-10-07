@@ -156,6 +156,7 @@ fun SettingsScreen(
     policyWhatIfFlow: StateFlow<Map<ZonePolicy, Int>>,
     onExit: () -> Unit,
     onCheckUpdate: () -> Unit,
+    onForceUpdate: () -> Unit = {},
     onOpenGuide: () -> Unit,
     onRelaunchSetup: () -> Unit,
     onResetTips: () -> Unit = {}
@@ -1000,36 +1001,38 @@ fun SettingsScreen(
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).explainerFlash(flashId == "deathAnimStyle")) {
                         Text(s.deathAnimStyleTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(10.dp))
-                        // IntrinsicSize.Min + fillMaxHeight keeps the three cards the same height even when one caption
-                        // wraps to two lines; without it each chip sizes to its own text.
-                        Row(
-                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            DeathAnimationStyle.values().forEach { style ->
-                                SelectorChip(
-                                    label = when (style) {
-                                        DeathAnimationStyle.SIMPLE -> s.deathAnimStyleSimpleLabel
-                                        DeathAnimationStyle.CLASSIC -> s.deathAnimStyleClassicLabel
-                                        DeathAnimationStyle.ADVANCED -> s.deathAnimStyleAdvancedLabel
-                                    },
-                                    caption = when (style) {
-                                        DeathAnimationStyle.SIMPLE -> s.deathAnimStyleSimpleNote
-                                        DeathAnimationStyle.CLASSIC -> s.deathAnimStyleClassicNote
-                                        DeathAnimationStyle.ADVANCED -> s.deathAnimStyleAdvancedNote
-                                    },
-                                    // Ranks how heavy each style is on the phone: particles, shards,
-                                    // smoke — so the choice is legible before you try it.
-                                    intensity = when (style) {
-                                        DeathAnimationStyle.SIMPLE -> 1
-                                        DeathAnimationStyle.CLASSIC -> 2
-                                        DeathAnimationStyle.ADVANCED -> 3
-                                    },
-                                    selected = deathAnimationStyle == style,
-                                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                                    onClick = { onDeathAnimationStyleChange(style) }
+                        // IntrinsicSize.Min + fillMaxHeight keeps the cards in a row the same height even when one
+                        // caption wraps to two lines; without it each chip sizes to its own text.
+                        DeathAnimStyleRow(deathAnimationStyle, onDeathAnimationStyleChange) {
+                            listOf(
+                                DeathAnimationStyle.SIMPLE to Triple(
+                                    s.deathAnimStyleSimpleLabel, s.deathAnimStyleSimpleNote, 1
+                                ),
+                                DeathAnimationStyle.CLASSIC to Triple(
+                                    s.deathAnimStyleClassicLabel, s.deathAnimStyleClassicNote, 2
+                                ),
+                                DeathAnimationStyle.ADVANCED to Triple(
+                                    s.deathAnimStyleAdvancedLabel, s.deathAnimStyleAdvancedNote, 3
                                 )
-                            }
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Text(s.deathAnimStyleEliteTitle, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(4.dp))
+                        Text(s.deathAnimStyleEliteNote, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f))
+                        Spacer(Modifier.height(10.dp))
+                        DeathAnimStyleRow(deathAnimationStyle, onDeathAnimationStyleChange) {
+                            listOf(
+                                DeathAnimationStyle.ELITE_SHADER to Triple(
+                                    s.deathAnimStyleEliteShaderLabel, s.deathAnimStyleEliteShaderNote, 3
+                                ),
+                                DeathAnimationStyle.ELITE_BAKED to Triple(
+                                    s.deathAnimStyleEliteBakedLabel, s.deathAnimStyleEliteBakedNote, 2
+                                ),
+                                DeathAnimationStyle.ELITE_HYBRID to Triple(
+                                    s.deathAnimStyleEliteHybridLabel, s.deathAnimStyleEliteHybridNote, 3
+                                )
+                            )
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1284,6 +1287,7 @@ fun SettingsScreen(
                         else s.updateButton,
                         subtitle = s.moreUpdateDesc,
                         onClick = onCheckUpdate,
+                        onLongClick = onForceUpdate,
                         enabled = !isChecking,
                         trailingProgress = isChecking,
                         flash = flashId == "update"

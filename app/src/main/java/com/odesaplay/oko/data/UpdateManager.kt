@@ -82,6 +82,26 @@ class UpdateManager(private val context: Context) {
             expected.trim().equals(computed.trim(), ignoreCase = true)
 
         /**
+         * Whether an archive may be handed to the installer over the installed build. An older
+         * archive never can — the installer would refuse it — and [allowSameVersion] widens the
+         * rule for the forced path to a rebuild of what is already installed, which repairs a
+         * corrupted install. That is the whole of what force adds on top of the archive checks.
+         */
+        internal fun installable(archiveCode: Long, installedCode: Long, allowSameVersion: Boolean): Boolean =
+            archiveCode > installedCode || (archiveCode == installedCode && allowSameVersion)
+
+        /**
+         * Defeats an intermediary that is still serving a cached copy — one of the ways a manifest
+         * falls behind the APK it points at. The origin ignores the unknown parameter; a caching
+         * proxy cannot match the previous URL. Host, scheme and path are untouched, so
+         * [isTrustedApkUrl] still holds for the result.
+         */
+        internal fun cacheBusted(url: String, stamp: Long): String {
+            val sep = if (url.contains('?')) "&" else "?"
+            return "$url${sep}_=$stamp"
+        }
+
+        /**
          * The archive must carry the same signing key as the installed app. `null` means the
          * archive's signers could not be read at all, which is just as disqualifying.
          */
@@ -94,42 +114,49 @@ class UpdateManager(private val context: Context) {
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    /** Fetches version.json and returns Available only when the server has a newer build. */
-    suspend fun check(): UpdateState = withContext(Dispatchers.IO) {
-        try {
-            val request = Request.Builder().url(UPDATE_BASE_URL + "version.json").build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    return@withContext UpdateState.Failed("HTTP ${response.code}")
-                }
-                val json = JSONObject(response.body?.string().orEmpty())
-                val notes = json.optJSONObject("notes")
-                val sha256Val = json.optString("sha256").takeIf { it.isNotBlank() }
-                val apkUrl = json.getString("apkUrl")
-                if (!isTrustedApkUrl(apkUrl)) {
-                    return@withContext UpdateState.Failed("version.json points at an untrusted download URL")
-                }
-                val latest = UpdateInfo(
-                    versionCode = json.getInt("versionCode"),
-                    versionName = json.optString("versionName"),
-                    apkUrl = apkUrl,
-                    notesEn = notes?.optString("en").orEmpty(),
-                    notesUa = notes?.optString("ua").orEmpty(),
-                    notesRu = notes?.optString("ru").orEmpty(),
-                    sha256 = sha256Val
-                )
-                if (latest.versionCode > BuildConfig.VERSION_CODE ||
-                    (latest.versionCode == BuildConfig.VERSION_CODE &&
-                        versionNameGreater(latest.versionName, BuildConfig.VERSION_NAME))
-                ) {
-                    UpdateState.Available(latest)
-                } else {
-                    UpdateState.UpToDate
-                }
+    /**
+     * Reads version.json and returns what the server publishes, newer or not. Throws when the
+     * manifest is unreadable — the caller decides whether that is a failed check or a refusal.
+     *
+     * Always cache-busted. The client keeps no HTTP cache, so a stale manifest can only come from
+     * an intermediary; on a mobile network that is not hypothetical, and reading one makes the app
+     * report "up to date" while the server has moved. One query parameter is cheap insurance, and
+     * the origin ignores it. (It only helps against a proxy that keys on the query string — one
+     * that ignores query strings entirely would still serve the cached copy.)
+     */
+    suspend fun latest(): UpdateInfo = withContext(Dispatchers.IO) {
+        val target = cacheBusted(UPDATE_BASE_URL + "version.json", System.currentTimeMillis())
+        val request = Request.Builder().url(target).build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            val json = JSONObject(response.body?.string().orEmpty())
+            val notes = json.optJSONObject("notes")
+            val sha256Val = json.optString("sha256").takeIf { it.isNotBlank() }
+            val apkUrl = json.getString("apkUrl")
+            if (!isTrustedApkUrl(apkUrl)) {
+                throw IOException("version.json points at an untrusted download URL")
             }
-        } catch (e: Exception) {
-            UpdateState.Failed(e.message)
+            UpdateInfo(
+                versionCode = json.getInt("versionCode"),
+                versionName = json.optString("versionName"),
+                apkUrl = apkUrl,
+                notesEn = notes?.optString("en").orEmpty(),
+                notesUa = notes?.optString("ua").orEmpty(),
+                notesRu = notes?.optString("ru").orEmpty(),
+                sha256 = sha256Val
+            )
         }
+    }
+
+    /** Fetches version.json and returns Available only when the server has a newer build. */
+    suspend fun check(): UpdateState = try {
+        val latest = latest()
+        val newer = latest.versionCode > BuildConfig.VERSION_CODE ||
+            (latest.versionCode == BuildConfig.VERSION_CODE &&
+                versionNameGreater(latest.versionName, BuildConfig.VERSION_NAME))
+        if (newer) UpdateState.Available(latest) else UpdateState.UpToDate
+    } catch (e: Exception) {
+        UpdateState.Failed(e.message)
     }
 
     /** Fetches the shelter list copy from the update server; null on failure. */
@@ -144,9 +171,19 @@ class UpdateManager(private val context: Context) {
         }
     }
 
-    /** Streams the APK into cacheDir/updates/, reporting 0..1 progress, and validates the result. */
-    suspend fun download(info: UpdateInfo, onProgress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url(info.apkUrl).build()
+    /**
+     * Streams the APK into cacheDir/updates/, reporting 0..1 progress, and validates the result.
+     *
+     * [force] is the escape hatch for a manifest that has fallen behind the APK it points at — the
+     * two are separate uploads and a half-finished release, or a proxy serving a stale copy, leaves
+     * them disagreeing. It drops only the two claims the manifest makes about itself: whether the
+     * build is newer, and whether the bytes are the ones it published. Every gate that is read off
+     * the archive itself — origin, package name, signing key, and now "not older than what is
+     * installed" — stays exactly as strict.
+     */
+    suspend fun download(info: UpdateInfo, force: Boolean = false, onProgress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
+        val url = if (force) cacheBusted(info.apkUrl, System.currentTimeMillis()) else info.apkUrl
+        val request = Request.Builder().url(url).build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
             val body = response.body ?: throw IOException("Empty response body")
@@ -186,12 +223,17 @@ class UpdateManager(private val context: Context) {
             if (expected == null) {
                 Log.w(TAG, "version.json carries no sha256 — skipping the checksum check")
             } else if (!sha256Matches(expected, calculateSha256(target))) {
-                target.delete()
-                throw IOException("APK checksum mismatch — the download does not match version.json")
+                if (!force) {
+                    target.delete()
+                    throw IOException("APK checksum mismatch — the download does not match version.json")
+                }
+                // Precisely the desync the forced path exists for: the manifest still describes the
+                // previous APK. The signer check in the pre-flight below is the one that matters.
+                Log.w(TAG, "Forced download: sha256 does not match version.json — continuing on the archive checks alone")
             }
 
             try {
-                verifyArchive(target)
+                verifyArchive(target, allowSameVersion = force)
             } catch (e: Exception) {
                 target.delete()
                 throw e
@@ -206,9 +248,13 @@ class UpdateManager(private val context: Context) {
      * reads the APK rather than version.json, so a tampered manifest cannot talk its way past
      * it. The installer enforces signatures anyway — this only turns a scary system error into
      * a clear refusal.
+     *
+     * [allowSameVersion] admits a rebuild of the installed versionCode, which repairs a corrupted
+     * install. A forced download still never installs anything *older*: the installer would refuse
+     * it, and the version number in the refusal is the diagnostic that names the desync.
      */
     @Suppress("DEPRECATION")
-    private fun verifyArchive(file: File) {
+    private fun verifyArchive(file: File, allowSameVersion: Boolean) {
         val pm = context.packageManager
         val flags = PackageManager.GET_SIGNING_CERTIFICATES
         val archive = pm.getPackageArchiveInfo(file.absolutePath, flags)
@@ -221,7 +267,8 @@ class UpdateManager(private val context: Context) {
         } else {
             archive.versionCode.toLong()
         }
-        if (archiveCode <= BuildConfig.VERSION_CODE.toLong()) {
+        val installed = BuildConfig.VERSION_CODE.toLong()
+        if (!installable(archiveCode, installed, allowSameVersion)) {
             throw IOException("APK version $archiveCode is not newer than the installed ${BuildConfig.VERSION_CODE}")
         }
         // Signing info needs API 28; below that the installer is the only gate.

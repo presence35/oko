@@ -15,7 +15,9 @@ import kotlinx.coroutines.flow.StateFlow
  * Swappable death-animation engine. The map view only ever talks to this interface
  * ([DeathFxController.overlay]), so styles come and go without touching UI code.
  * Implementations: [SimpleDeathOverlay] (cheap rings + sparks, no bitmaps),
- * [ClassicDeathOverlay] (the original look, frozen) and [ThreatDeathOverlay] (fuller).
+ * [ClassicDeathOverlay] (the original look, frozen), [ThreatDeathOverlay] (fuller), and the
+ * three elites [EliteShaderDeathOverlay] / [EliteBakedDeathOverlay] / [EliteHybridDeathOverlay],
+ * which share [EliteDeathBase] for everything but the explosion body itself.
  */
 interface DeathAnimation {
     val active: StateFlow<Boolean>
@@ -53,6 +55,9 @@ fun DeathAnimationStyle.create(): DeathAnimation = when (this) {
     DeathAnimationStyle.SIMPLE -> SimpleDeathOverlay()
     DeathAnimationStyle.CLASSIC -> ClassicDeathOverlay()
     DeathAnimationStyle.ADVANCED -> ThreatDeathOverlay()
+    DeathAnimationStyle.ELITE_SHADER -> EliteShaderDeathOverlay()
+    DeathAnimationStyle.ELITE_BAKED -> EliteBakedDeathOverlay()
+    DeathAnimationStyle.ELITE_HYBRID -> EliteHybridDeathOverlay()
 }
 
 /**

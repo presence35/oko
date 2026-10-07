@@ -1,12 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+- Monitoring no longer sleeps through a Doze night: an exact alarm the OS actually honours wakes the app every 15 minutes (instead of WorkManager's hours-long deferral), so a phone that used to go blind for up to 45 minutes at a time now reconnects its feed on a fixed cadence 10-07_11:57:48
+- Three new explosion styles (Elite A/B/C) in Settings → Threats: a GPU fireball, a baked film strip, and a canvas look that upgrades to GPU on Android 13+ — try them and keep the best 10-07_0:20:00
 - Logs now carry per-sample process CPU time, so a battery report can be attributed to the app or to the screen without guessing 10-06_19:40:00
 - The asleep notice's "unrestricted background" button opens the manufacturer's own battery/autostart screen when the device has one, instead of always the generic dialog 10-06_19:40:00
 - The alert notification's first button is now "Mute &lt;type&gt;" — silence one threat kind (e.g. drones) for good, undo it in Settings → Threats; region-only red and yellow alerts keep "OK" 10-06_22:20:00
 - The first-run wizard's channel post now shows the Telegram logo and name next to NEPTUN 10-06_22:20:00
 - The five Morale voices now read as real Russian instead of English text under a Russian name 10-06_21:53:12
 - Fixed the "alarm summary" notification never arriving: the summary and the all-clear are decided on the same tick, and the all-clear's teardown cleared the fact the summary gated on — so the show was only reachable by tapping the all-clear 10-06_22:48:03
+- Long-press Update in Settings to force the download: when the manifest and the APK on the server disagree, it trusts the APK (and lets you reinstall the same version to repair a broken install) 10-07_11:45:00
+- "Up to date" no longer trusts a cached copy of the server's version list, and a release whose manifest upload failed now repairs itself instead of leaving every tester on the old build until the next one 10-07_12:05:00
 - The ready-made setups in Settings → Reliability are now always visible instead of hidden behind a tap 10-06_22:48:03
 - The four setups are one word each — Aware, Normal, Quiet, Watching — and Normal is marked as the one you already have 10-06_22:48:03
 - The ready-made setups no longer resize your zone circles: those are your own reach, not a persona's, and a tap that silently moved them was a change nobody asked for 10-06_22:48:03

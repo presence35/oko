@@ -82,6 +82,7 @@ import com.odesaplay.oko.NeutralizedTally
 import com.odesaplay.oko.engine.ThreatEngine
 import com.odesaplay.oko.service.ServiceState
 import com.odesaplay.oko.service.MonitoringStatus
+import com.odesaplay.oko.service.AlertWakeup
 import com.odesaplay.oko.service.RaidMuteState
 import com.odesaplay.oko.service.AudioAlarmDispatcher
 import com.odesaplay.oko.service.FallingDebrisBuffer
@@ -535,6 +536,9 @@ class AlertService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         MonitoringStatus.setRunning(true)
+        // Every start (cold launch, boot, resurrection by worker or alarm) re-arms the Doze-legal
+        // wakeup, so no path can leave a device with no next wakeup.
+        AlertWakeup.schedule(this)
         // Action-log copy is language-neutral on purpose: an audit row outlives the session and
         // is re-read after a language change, so a localized label would go stale in place.
         val s0 = Strings.get(AppLanguage.EN)

@@ -455,6 +455,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onThreatIconZoomChange = remember { { viewModel.setThreatIconZoom(it) } },
                                 onExit = onExit,
                 onCheckUpdate = remember { { viewModel.checkForUpdates() } },
+                onForceUpdate = remember { { viewModel.forceDownloadUpdate() } },
                 onRelaunchSetup = remember {
                     {
                         viewModel.relaunchSetup()
