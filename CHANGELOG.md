@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- The alarm summary no longer goes missing: two gates that mirror a saved setting started at "off" and waited for their background reader, and the report asked the service whether the alarm had been live — a fact the all-clear wipes on the same tick. Each gate now starts at its shipped default, and the window remembers for itself that it saw the alarm live 10-13_19:59:22
 
 ## [0.6.824]
 - The resolved tally is now posted as its own (childless) notification summary, so it no longer gets swept into the platform's app bundle together with the always-on monitoring row — "1 Drone resolved" sits on its own instead of welded under the trident 10-13_19:05:00

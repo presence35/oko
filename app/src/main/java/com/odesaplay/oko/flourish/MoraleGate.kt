@@ -21,7 +21,10 @@ import kotlinx.coroutines.launch
  * disagree about whether the master is on.
  */
 class MoraleGate {
-    private val _on = MutableStateFlow(false)
+    // Seeded with the shipped default rather than `false`: the master is on out of the box, and a
+    // gate that starts "off" until its DataStore collector delivers would briefly lie to every
+    // engine that gates on it — including engines that tear down when they read "off".
+    private val _on = MutableStateFlow(UserPreferences.DEFAULT.moraleMasterEnabled)
     val on: StateFlow<Boolean> = _on.asStateFlow()
 
     /** Current master state. Entry points guard with this; see the class doc for the off-policy. */

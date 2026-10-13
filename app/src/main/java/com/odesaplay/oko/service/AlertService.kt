@@ -1721,11 +1721,11 @@ val mappedThreats = registry.allThreats.map { list ->
             }
         }
 
-        // Sampled BEFORE the reconcile pipeline: an all-clear post tears the episode down
-        // (dropOfficialEpisode), which clears the "observed live" latch fact. The morale window
-        // closes on this same tick and gates on that fact, so reading it after the pipeline would
-        // always be false — which is how the alarm summary silently stopped posting.
-        val episodeWasConfirmedLive = latchedConfirmedLive
+        // Is the focus observing a live official alert right now? That is the evidence the morale
+        // window needs, read straight off the live frontier. The latched confirmation is the wrong
+        // proxy: it only becomes true on a tick *after* the announce, so a report's fate depended on
+        // which of two ticks did the announcing.
+        val episodeLiveNow = liveScopedFrontier != null && liveScopedFrontier.level != AlertLevel.NONE
         // Invoke the reconcile pipeline. Verdicts (plugin-owned) already decided
         // sound/silent/suppress above; below only executes. Official paths untouched.
         val primary = buildPrimary(state, all)
@@ -1744,8 +1744,14 @@ val mappedThreats = registry.allThreats.map { list ->
         val alarmNowActive = effLevel != AlertLevel.NONE
         if (alarmNowActive && !episodeActive) {
             episodeActive = true
-            episodeTally.begin(effCity, now, fromOnset = officialOnset)
-        } else if (!alarmNowActive && episodeActive) {
+            // Stamp the window with the evidence available now, and let it keep it: the close must
+            // not have to re-prove liveness after the pipeline has already torn the episode down.
+            episodeTally.begin(effCity, now, fromOnset = officialOnset, live = episodeLiveNow)
+        } else if (alarmNowActive) {
+            // A window opened from a restored latch becomes reportable the moment the live frontier
+            // shows this alarm while it is open.
+            if (episodeLiveNow) episodeTally.markLive()
+        } else if (episodeActive) {
             when {
                 // Our focus left the region. Not an ending — drop the window, keep any posted row.
                 // Checked before the readiness arm: a focus move is our own fact and needs no feed,
@@ -1759,10 +1765,10 @@ val mappedThreats = registry.allThreats.map { list ->
                 !state.alertsReady -> Unit
                 else -> {
                     episodeActive = false
-                    if (episodeWasConfirmedLive) {
-                        episodeTally.finish(state.focusBannerCity, state.lang, state.officialAlertsEnabled, now)
-                        lastEpisodeReplay = episodeTally.snapshot()
-                    }
+                    // One owner decides whether the window has anything to report — the window
+                    // itself — instead of a service latch sampled across the teardown pipeline.
+                    episodeTally.finish(state.focusBannerCity, state.lang, state.officialAlertsEnabled, now)
+                    lastEpisodeReplay = episodeTally.snapshot()
                 }
             }
         }

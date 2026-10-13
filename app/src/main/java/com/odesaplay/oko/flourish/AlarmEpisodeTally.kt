@@ -87,9 +87,19 @@ class AlarmEpisodeTally(
     private var episodeStartMs: Long = 0L
     /** Whether this process watched this episode begin — the only basis for stating a duration. */
     private var episodeFromOnset: Boolean = false
+    /**
+     * Whether the focus ever showed this alarm live while the window was open. Recorded when the
+     * evidence appears, not re-derived at close: the all-clear path tears the episode down mid-tick,
+     * so a latch sampled at close had already been cleared. The window remembers; nothing external
+     * can take it away.
+     */
+    private var episodeConfirmedLive: Boolean = false
 
-    // Master "Morale" gate is the shared [moraleGate]; the episode sub-toggle stays local.
-    private val episodeEnabled = MutableStateFlow(false)
+    // Master "Morale" gate is the shared [moraleGate]; the episode sub-toggle stays local. Seeded
+    // with the shipped default, not `false`: a gate that starts "off" and waits for its DataStore
+    // collector to say otherwise reports the wrong answer for as long as that collector takes to
+    // run, which is how a window closing early dropped its summary entirely.
+    private val episodeEnabled = MutableStateFlow(UserPreferences.DEFAULT.alarmEpisodeTallyEnabled)
 
     init {
         moraleGate.ejectWhenOff(scope) { reset() }
@@ -150,7 +160,7 @@ class AlarmEpisodeTally(
      * cannot prove it gets the dateless summary rather than a duration measured from whenever it
      * happened to start running.
      */
-    fun begin(city: String, startMs: Long = System.currentTimeMillis(), fromOnset: Boolean = false) {
+    fun begin(city: String, startMs: Long = System.currentTimeMillis(), fromOnset: Boolean = false, live: Boolean = false) {
         synchronized(tallyLock) {
             episodeCount = 0
             perTypeCounts.clear()
@@ -158,9 +168,17 @@ class AlarmEpisodeTally(
             episodeCity = city
             episodeStartMs = startMs
             episodeFromOnset = fromOnset
+            episodeConfirmedLive = live
         }
         // The posted row is left alone on purpose: it is the night's accumulated report, and the
         // alarm that just opened will merge into it on finish rather than replace it.
+    }
+
+    /** The focus showed the open window's alarm live. Recorded once; the window keeps it. */
+    fun markLive() {
+        synchronized(tallyLock) {
+            if (episodeCity != null) episodeConfirmedLive = true
+        }
     }
 
     /** Buffer a resolution into the open window. Never notifies — [finish] owns that. */
@@ -183,6 +201,13 @@ class AlarmEpisodeTally(
             return
         }
         val row = synchronized(tallyLock) {
+            // An alarm the focus never showed live is not ours to report: it closes silently and any
+            // posted row stands. The window's own record decides, so a tick that tears the official
+            // episode down can no longer take the summary with it.
+            if (!episodeConfirmedLive) {
+                clearWindow()
+                return
+            }
             val c = episodeCity ?: currentCity
             // A duration is a measurement, not an arithmetic convenience: an episode this process
             // never watched begin has no honest start, so it states none and takes the dateless
@@ -231,6 +256,7 @@ class AlarmEpisodeTally(
         episodeCity = null
         episodeStartMs = 0L
         episodeFromOnset = false
+        episodeConfirmedLive = false
     }
 
     /** Synchronous read of the window's buffered records for the official all-clear tap,
