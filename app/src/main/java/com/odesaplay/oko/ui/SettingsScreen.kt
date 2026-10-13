@@ -73,6 +73,7 @@ fun SettingsScreen(
     updateFlow: StateFlow<UpdateState>,
     latestVersionFlow: StateFlow<String?>,
     nightActive: Boolean,
+    sheltersLoadFailed: Boolean = false,
     route: SettingsRoute,
     onRouteChange: (SettingsRoute) -> Unit,
     activeExplainer: Explainer?,
@@ -375,9 +376,10 @@ fun SettingsScreen(
             SettingsSection.SHELTERS -> s.shelterSectionTitle
             SettingsSection.THREATS -> s.threatsLabel
             // A speaker stranded in a language they cannot read scans the root list for Latin
-            // letters; the row carries the English word "Language" so the way back is findable.
+            // letters; the row leads with the English word "Language" so the way back is findable
+            // before the current-language title the eye has to parse.
             SettingsSection.SYSTEM -> if (lang == AppLanguage.EN) s.systemSectionTitle
-                else "${s.systemSectionTitle} · ${Strings.get(AppLanguage.EN).languageLabel}"
+                else "${Strings.get(AppLanguage.EN).languageLabel} · ${s.systemSectionTitle}"
             SettingsSection.FLOURISH -> s.moraleSectionTitle
             SettingsSection.MORE -> s.moreSectionTitle
             SettingsSection.RELIABILITY -> s.reliabilitySectionTitle
@@ -403,7 +405,11 @@ fun SettingsScreen(
                 nightUseCustomZones,
                 state.nightSleepActive
             )
-            SettingsSection.SHELTERS -> s.sheltersSubtitle(sheltersEnabled)
+            SettingsSection.SHELTERS -> if (sheltersLoadFailed) {
+                s.shelterLoadFailed
+            } else {
+                s.sheltersSubtitle(sheltersEnabled)
+            }
             SettingsSection.THREATS -> s.threatsSubtitle(hiddenTypes.size, silencedTypes.size)
             SettingsSection.SYSTEM -> s.systemSubtitle(threatCardSize, iconSet)
             // The master is a kill-switch: while it is off every sub-toggle below is inert, so the summary

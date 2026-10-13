@@ -1,7 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- The shelter list now falls back to the last good copy cached on disk, so a failed fetch (roaming, no data) no longer leaves you with no shelters 10-13_21:53:05
+- A shelter load that still fails shows a real error with a Retry button (and a dimmed map button) instead of "no shelters nearby" 10-13_21:53:05
+- The selected shelter pin is filled in its colour with a white halo, and tapping a shelter gives haptic feedback 10-13_21:53:05
 - The threat-card skull gauge now reads fast threats (cruise, ballistic, KAB, aviation) by ETA instead of comparing their ETA thresholds against kilometres — a missile 50 km out no longer shows a skull of 0 10-13_21:24:29
+- Shelter mode unlocks street-level zoom again, so a pinned city with a threat overhead can pinch past the 500m floor to separate shelters from the drone 10-13_21:15:34
+- Settings scans better for a non-English reader: the Display row now leads with "Language", and the picker heading puts the English word first 10-13_21:36:51
+
+## [0.6.825]
 - The alarm summary no longer goes missing: two gates that mirror a saved setting started at "off" and waited for their background reader, and the report asked the service whether the alarm had been live — a fact the all-clear wipes on the same tick. Each gate now starts at its shipped default, and the window remembers for itself that it saw the alarm live 10-13_19:59:22
 
 ## [0.6.824]

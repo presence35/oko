@@ -561,6 +561,9 @@ object Strings {
         val shelterScreenTitle: String,
         val shelterOpenInMaps: String,
         val shelterEmpty: String,
+        val shelterLoadFailed: String,
+        val shelterRetry: String,
+        val shelterLoading: String,
         val shelterDistanceM: String,
         val shelterDistanceKm: String,
         val shelterWalkMinutes: String,
@@ -1600,6 +1603,9 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val shelterScreenTitle: String get() = misc.shelterScreenTitle
         val shelterOpenInMaps: String get() = misc.shelterOpenInMaps
         val shelterEmpty: String get() = misc.shelterEmpty
+        val shelterLoadFailed: String get() = misc.shelterLoadFailed
+        val shelterRetry: String get() = misc.shelterRetry
+        val shelterLoading: String get() = misc.shelterLoading
         val shelterDistanceM: String get() = misc.shelterDistanceM
         val shelterDistanceKm: String get() = misc.shelterDistanceKm
         val shelterWalkMinutes: String get() = misc.shelterWalkMinutes

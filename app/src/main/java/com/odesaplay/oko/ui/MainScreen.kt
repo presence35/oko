@@ -380,6 +380,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 updateFlow = viewModel.updateFlow,
                 latestVersionFlow = viewModel.latestVersionState,
                 nightActive = uiState.nightActive,
+                sheltersLoadFailed = uiState.shelterLoad is ShelterLoad.Failed,
                 route = if (settingsDetailIndex < 0) SettingsRoute.Root
                     else SettingsRoute.Detail(SettingsSection.entries[settingsDetailIndex]),
                 onRouteChange = { r ->
@@ -508,11 +509,12 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
             ShelterScreen(
                 lang = uiState.language,
                 focus = uiState.focusLocation,
-                index = uiState.shelterIndex,
+                load = uiState.shelterLoad,
                 withKids = uiState.sheltersWithKids,
                 onWithKidsChange = { viewModel.setSheltersWithKidsEnabled(it) },
                 sheltersEnabled = uiState.sheltersEnabled,
                 onSheltersEnabledChange = { viewModel.setSheltersEnabled(it) },
+                onRetry = { viewModel.retryShelters() },
                 onBack = { screen = if (sheltersFromSettings) Screen.SETTINGS else Screen.MAP }
             )
         }
@@ -1214,11 +1216,17 @@ private fun MapScreen(
                     }
                     if (!flourishActive) {
                         val shelterFocus = uiState.focusLocation
-                        val shelterIndex = uiState.shelterIndex
+                        val shelterLoad = uiState.shelterLoad
                         val landscape = LocalConfiguration.current.orientation ==
                             Configuration.ORIENTATION_LANDSCAPE
-                        val sheltersVisible = uiState.sheltersEnabled && shelterIndex != null &&
-                            shelterFocus != null && shelterIndex.withinRegion(shelterFocus.lat, shelterFocus.lon)
+                        // Visible when loaded inside the data extent, or on a failed load so the
+                        // dimmed button still offers the retry path into the shelter screen.
+                        val sheltersFailed = shelterLoad is ShelterLoad.Failed
+                        val sheltersVisible = uiState.sheltersEnabled && shelterFocus != null && when (shelterLoad) {
+                            is ShelterLoad.Ready -> shelterLoad.index.withinRegion(shelterFocus.lat, shelterFocus.lon)
+                            ShelterLoad.Failed -> true
+                            ShelterLoad.Loading -> false
+                        }
                         val zoneOnTap: (ThreatZone) -> Unit = { zone ->
                             onShowNearbySheltersChange(false)
                             selectedShelter = null
@@ -1238,6 +1246,7 @@ private fun MapScreen(
                                         alertActive = uiState.focusOblastAlertActive,
                                         active = showNearbyShelters,
                                         contentDescription = s.shelterButtonLabel,
+                                        failed = sheltersFailed,
                                         onClick = onToggleShelters,
                                         onLongClick = onOpenShelters
                                     )
@@ -1290,6 +1299,7 @@ private fun MapScreen(
                                                 alertActive = uiState.focusOblastAlertActive,
                                                 active = showNearbyShelters,
                                                 contentDescription = s.shelterButtonLabel,
+                                                failed = sheltersFailed,
                                                 onClick = onToggleShelters,
                                                 onLongClick = onOpenShelters
                                             )
@@ -1924,17 +1934,20 @@ internal fun ShelterCircle(
     contentDescription: String,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    failed: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val fg = when {
         alertActive -> Color.White
+        failed -> MaterialTheme.colorScheme.error
         active -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val border = when {
         alertActive -> null
+        failed -> BorderStroke(1.dp, MaterialTheme.colorScheme.error)
         active -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
         else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     }
@@ -1942,7 +1955,7 @@ internal fun ShelterCircle(
     val baseModifier = modifier
         .size(48.dp)
         .clip(CircleShape)
-        .background(bg.copy(alpha = if (isPressed) 0.8f else 1f))
+        .background(bg.copy(alpha = if (isPressed) 0.8f else if (failed) 0.40f else 1f))
         .semantics { semanticsContentDescription = contentDescription }
         .pressTick(interactionSource)
         .combinedClickable(

@@ -58,6 +58,9 @@ import com.odesaplay.oko.service.ServiceState
 import com.odesaplay.oko.service.MonitoringStatus
 import com.odesaplay.oko.service.RaidMuteState
 import com.odesaplay.oko.ShelterIndex
+import com.odesaplay.oko.ShelterLoad
+import com.odesaplay.oko.ShelterCache
+import com.odesaplay.oko.source.SourceState
 import com.odesaplay.oko.BuildConfig
 import com.odesaplay.oko.UpdateManager
 import kotlin.math.roundToInt
@@ -196,7 +199,7 @@ data class UiState(
     val periodicGps: Boolean = false,
     val calmMessagesEnabled: Boolean = true,
     val hapticsEnabled: Boolean = true,
-    val shelterIndex: ShelterIndex? = null,        // shelters — null while loading/unavailable
+    val shelterLoad: ShelterLoad = ShelterLoad.Loading, // shelters — load lifecycle (never renders failure as "none")
     val mapVisible: Boolean = true,          // the map screen is the visible screen (not settings/shelters/guide)
     val shelterOverlayUp: Boolean = false,   // the shelter overlay is showing (suppresses flourish)
     val alertActive: Boolean = false,        // any threat or official alert live right now
@@ -208,6 +211,9 @@ data class UiState(
      *  and yellow are both OFF, so the row can never read enabled with nothing selected. */
     val officialAlertsEnabled: Boolean
         get() = officialRedAlertsEnabled || officialYellowAlertsEnabled
+
+    /** The usable index when loaded, null while [ShelterLoad.Loading] or [ShelterLoad.Failed]. */
+    val shelterIndex: ShelterIndex? get() = (shelterLoad as? ShelterLoad.Ready)?.index
 
     val redCities: Set<String> get() = cityAlerts.filterValues { it == AlertLevel.RED }.keys
 }
@@ -490,7 +496,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
      *  AlertService still consumes the raw merged feed directly (mirror rule). */
     @OptIn(FlowPreview::class)
     private val liveFeed = combine(threatsFlow, alertsFlow) { threats, alerts -> threats to alerts }.sample(120)
-    private val shelterIndexFlow = MutableStateFlow<ShelterIndex?>(null)
+    private val shelterLoadFlow = MutableStateFlow<ShelterLoad>(ShelterLoad.Loading)
     /** Whether the map screen is the visible screen — the neutralizing animation and death
      *  flourish only run while it is, so no stale half-consumed animations play on return. */
     private val mapVisibleFlow = MutableStateFlow(true)
@@ -519,6 +525,15 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         AppSources.init(getApplication())
         LocationTracker.start(getApplication())
         loadShelters()
+        // The shelter list is a plain HTTP fetch, not the threat socket — a regain of source
+        // connectivity is the one cheap signal that the network is back, so retry a failed load.
+        viewModelScope.launch {
+            registry.connectionState.collect { st ->
+                if (st == SourceState.CONNECTED && shelterLoadFlow.value is ShelterLoad.Failed) {
+                    fetchShelters()
+                }
+            }
+        }
         // The master is a kill-switch: flipping it off must also tear down whatever playful
         // overlay is on screen right now. AviationFlyby itself is a pure gate, so nothing else
         // would stop a MiG already in its pass — without this it flew to completion.
@@ -771,7 +786,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         liveSnapshot,
         prefs.preferences,
         updateUiFlow,
-        shelterIndexFlow,
+        shelterLoadFlow,
         flybyFlow,
         MonitoringStatus.running,
         registry.degraded,
@@ -783,7 +798,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val rawPrefs = values[2] as UserPreferences
         val prefs = rawPrefs.toPrefsSnapshot()
         val updateUi = values[3] as UpdateUi
-        val shelterIndex = values[4] as ShelterIndex?
+        val shelterLoad = values[4] as ShelterLoad
         val flyby = values[5] as AviationFlybyShow?
         val monitoringRunning = values[6] as Boolean
         val raidMute = values[9] as RaidMute
@@ -952,7 +967,7 @@ showBorders = prefs.showBorders,
             periodicGps = prefs.periodicGps,
             calmMessagesEnabled = moraleGate.isOn && prefs.calmMessagesEnabled,
             hapticsEnabled = resolveHaptics(prefs.hapticsEnabled),
-            shelterIndex = shelterIndex,
+            shelterLoad = shelterLoad,
             shelterOverlayUp = live.shelterModeActive,
             notificationsDisabledBySystem = notificationsDisabledBySystem,
             raidMute = raidMute,
@@ -1563,9 +1578,34 @@ fun setAlertsArmed(armed: Boolean) {
 
     private fun loadShelters() {
         viewModelScope.launch {
-            val json = UpdateManager(app).fetchSheltersJson()
-            json?.let { ShelterIndex.fromJson(it) }?.let { shelterIndexFlow.value = it }
+            // Serve the last-good copy first, so a cold start on a bad network still has shelters.
+            val cached = ShelterCache.read(app)
+            cached?.let { ShelterIndex.fromJson(it) }?.let {
+                shelterLoadFlow.value = ShelterLoad.Ready(it)
+            }
+            fetchShelters()
         }
+    }
+
+    /** Fetches the live shelter list; a failure keeps a cached index, otherwise surfaces Failed. */
+    private fun fetchShelters() {
+        viewModelScope.launch {
+            val json = UpdateManager(app).fetchSheltersJson()
+            val index = json?.let { ShelterIndex.fromJson(it) }
+            if (json != null && index != null) {
+                ShelterCache.write(app, json)
+                shelterLoadFlow.value = ShelterLoad.Ready(index)
+            } else if (shelterLoadFlow.value !is ShelterLoad.Ready) {
+                shelterLoadFlow.value = ShelterLoad.Failed
+            }
+        }
+    }
+
+    /** User-triggered retry from the shelter screen / the dimmed map button. */
+    fun retryShelters() {
+        if (shelterLoadFlow.value is ShelterLoad.Loading) return
+        shelterLoadFlow.value = ShelterLoad.Loading
+        fetchShelters()
     }
 
     /** Tracks which screen is visible so map-only work (neutralizing animation, death

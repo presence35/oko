@@ -69,9 +69,10 @@ import kotlin.math.sqrt
 private const val DEFAULT_CENTER_LAT = ODESA_LAT
 private const val DEFAULT_CENTER_LON = ODESA_LON
 
-/** Max zoom — ~5 km threat-map viewport; shelters no longer unlock deeper street-level zoom. */
+/** Max zoom — ~5 km threat-map viewport outside shelter mode. */
 private const val NORMAL_MAX_ZOOM = 14.5
-private const val SHELTER_MAX_ZOOM = 14.5
+/** Deep zoom, unlocked only while the shelter overlay is up (street-level shelter detail). */
+private const val SHELTER_MAX_ZOOM = 16.0
 
 /** Ukraine bounding limits. */
 private const val UA_MIN_LAT = UA_TIGHT_MIN_LAT
@@ -304,7 +305,6 @@ private fun shelterMarkerBitmap(
         ShelterType.BASIC -> AppPalette.SafeGreen.toInt()
         ShelterType.BUNKER -> AppPalette.GpsBlue.toInt()
     }
-    val markerColor = if (isSelected) Color.WHITE else typeColor
     val strokeW = 2.6f * density
     val totalW = (40f * density).toInt().coerceAtLeast(1)
     val totalH = (36f * density).toInt().coerceAtLeast(1)
@@ -331,8 +331,25 @@ private fun shelterMarkerBitmap(
         strokeWidth = strokeW
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
-        this.color = markerColor
+        this.color = typeColor
     })
+    if (isSelected) {
+        // Solid fill plus a white halo, so the chosen shelter reads instantly against the
+        // hollow pins around it (the map won't zoom closer to separate coincident ones).
+        canvas.drawPath(chevron, Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.STROKE
+            strokeWidth = strokeW * 1.7f
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            this.color = Color.WHITE
+        })
+        canvas.drawPath(chevron, Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.FILL
+            this.color = typeColor
+        })
+    }
 
     shelterBitmapCache[key] = bmp
     return bmp
@@ -445,6 +462,7 @@ fun NeptunMapView(
     val showThreatIdsOnMapState by rememberUpdatedState(uiState.showThreatIdsOnMap)
     val hapticsOnState by rememberUpdatedState(LocalHapticsEnabled.current)
     val liveUiState by rememberUpdatedState(uiState)
+    val selectedShelterState by rememberUpdatedState(selectedShelter)
     val onWelcomeFinishedState by rememberUpdatedState(onWelcomeFinished)
 
     val threatOutcomes = remember { mutableStateMapOf<String, BehaviorOutcome>() }
@@ -944,6 +962,12 @@ LaunchedEffect(selectedId) {
         bridgeState.value?.invalidateOverlay()
     }
 
+    // Selecting a shelter changes only the pin's paint, not the camera, so the native overlay
+    // must be repainted explicitly (the tick exists precisely for this).
+    LaunchedEffect(shelterSelectTick) {
+        bridgeState.value?.invalidateOverlay()
+    }
+
     val chipPaint = remember {
         Paint().apply {
             isAntiAlias = true
@@ -984,7 +1008,7 @@ LaunchedEffect(selectedId) {
                     if (showNearbySheltersState && shelterSnapshot.value.isNotEmpty()) {
                         for (item in shelterSnapshot.value) {
                             val pt = bridge.project(item.shelter.lat, item.shelter.lon) ?: continue
-                            val isSelected = selectedShelter?.shelter?.id == item.shelter.id
+                            val isSelected = selectedShelterState?.shelter?.id == item.shelter.id
                             val bmp = shelterMarkerBitmap(context, item.shelter.type, isSelected)
                             canvas.drawBitmap(bmp, pt.x - bmp.width / 2f, pt.y - bmp.height.toFloat(), null)
                         }
@@ -1152,6 +1176,7 @@ LaunchedEffect(selectedId) {
                             }
                         }
                         if (bestShelter != null) {
+                            if (hapticsOnState) hapticTick(context)
                             onShelterTapped(bestShelter)
                             handled = true
                         }

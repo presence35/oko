@@ -68,6 +68,21 @@ data class NearestShelter(
 }
 
 /**
+ * Load lifecycle of the shelter index. Three explicit states so a failed fetch can never be
+ * rendered as the ordinary "no shelters nearby" message.
+ */
+sealed interface ShelterLoad {
+    /** First fetch in flight and nothing cached yet. */
+    data object Loading : ShelterLoad
+
+    /** A usable index — from the on-disk cache or the freshly fetched copy. */
+    data class Ready(val index: ShelterIndex) : ShelterLoad
+
+    /** No index at all and the fetch failed; nothing to fall back on. */
+    data object Failed : ShelterLoad
+}
+
+/**
  * In-memory spatial index of shelters, parsed from the compact
  * [id, "lat,lon", icon, name, flag] JSON array. Immutable once built, so it is
  * safe to share across the UI. Rows with empty or out-of-bounds coordinates are dropped.

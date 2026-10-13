@@ -57,11 +57,12 @@ import kotlinx.coroutines.delay
 fun ShelterScreen(
     lang: AppLanguage,
     focus: LatLng?,
-    index: ShelterIndex?,
+    load: ShelterLoad,
     withKids: Boolean,
     onWithKidsChange: (Boolean) -> Unit,
     sheltersEnabled: Boolean,
     onSheltersEnabledChange: (Boolean) -> Unit,
+    onRetry: () -> Unit,
     onBack: () -> Unit
 ) {
     val s = Strings.get(lang)
@@ -123,6 +124,7 @@ fun ShelterScreen(
             )
         }
     }
+    val index = (load as? ShelterLoad.Ready)?.index
     val near = if (focus != null && index != null) index.nearest(focus.lat, focus.lon, 30) else emptyList()
     Scaffold(
         topBar = {
@@ -163,8 +165,18 @@ fun ShelterScreen(
                     }
                 )
             }
-            if (near.isEmpty()) {
-                item {
+            when {
+                load is ShelterLoad.Failed -> item {
+                    ShelterLoadError(
+                        message = s.shelterLoadFailed,
+                        retryLabel = s.shelterRetry,
+                        onRetry = onRetry
+                    )
+                }
+                load is ShelterLoad.Loading -> item {
+                    ShelterLoadSpinner(label = s.shelterLoading)
+                }
+                near.isEmpty() -> item {
                     Text(
                         s.shelterEmpty,
                         style = MaterialTheme.typography.bodyLarge,
@@ -175,8 +187,7 @@ fun ShelterScreen(
                             .padding(vertical = 48.dp, horizontal = 24.dp)
                     )
                 }
-            } else {
-                items(near) { row ->
+                else -> items(near) { row ->
                     val point = row.shelter
                     val uri = "geo:${point.lat},${point.lon}?q=${point.lat},${point.lon}"
                     ShelterCard(
@@ -191,6 +202,57 @@ fun ShelterScreen(
                 }
             }
         }
+    }
+}
+
+/** The failed-to-load state: a clear reason and a retry, never "no shelters nearby". */
+@Composable
+private fun ShelterLoadError(message: String, retryLabel: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 48.dp, horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Default.Refresh,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(32.dp)
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = onRetry,
+            interactionSource = rememberHapticInteractionSource()
+        ) {
+            Text(retryLabel)
+        }
+    }
+}
+
+/** First fetch in flight with nothing cached yet. */
+@Composable
+private fun ShelterLoadSpinner(label: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 48.dp, horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(28.dp))
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

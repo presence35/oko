@@ -93,6 +93,9 @@ internal fun LanguageSelector(
     val heading = remember(selected) {
         AppLanguage.values()
             .filter { it != selected }
+            // English leads when it is on offer: a Latin word is the beacon for a stranded
+            // reader, so it comes before the Cyrillic spellings.
+            .sortedBy { it != AppLanguage.EN }
             .joinToString(" · ") { Strings.get(it).languageLabel }
     }
     Column {
