@@ -377,6 +377,7 @@ Treat these as a contract. If you change one, update **every** place that relies
   zones or official-alert scope is asserted for an unknown position. While following GPS with no
   fix at all, the UI and the ongoing notification show a persistent "No GPS fix" warning.
 - **One episode authority.** The offline/degraded episode (its monotonic `degradedSince` and every derived milestone) is owned by `SourceRegistry` alone. Transport (`ResilientConnectionSupervisor` + `ConnectionState`) publishes raw connection-state changes only — never its own episode timestamps or milestone flow. There is exactly one place that computes "how long have we been degraded".
+- **One action owner.** Offline escalations escalate; they carry no action buttons. Retry/Ignore live on the ongoing monitor row alone (`buildMonitorNotification`), so a tap can only have come from the row it repaints — the milestone and critical one-shots (`postOfflineNotification`/`postCriticalOfflineNotification`) are action-free. Two rows each holding a Retry gave one outage two owners and two tap targets, and the shared intent could not say which was pressed.
 - **Single evaluation logic.** `MainViewModel` (UI) and `AlertService` (notifications) each
   construct their own `ThreatEngine(registry.typeCatalog.value)` and call `engine.evaluate(...)`
   directly — no reimplemented zone/tier/prediction/alert logic in either consumer. Every other

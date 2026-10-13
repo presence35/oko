@@ -75,8 +75,8 @@ class AlertServiceTest {
     @Test
     fun `ignore-retry action cancels the offline notifications`() {
         val mgr = AlertNotificationManager(service())
-        mgr.postOfflineNotification("t", "b", "retry")
-        mgr.postCriticalOfflineNotification("t", "b", "retry")
+        mgr.postOfflineNotification("t", "b")
+        mgr.postCriticalOfflineNotification("t", "b")
         val nm = Shadows.shadowOf(notificationManager())
         assertNotNull(nm.getNotification(AlertNotificationManager.NOTIF_MILESTONE))
         assertNotNull(nm.getNotification(AlertNotificationManager.NOTIF_OFFLINE_CRITICAL))

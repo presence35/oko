@@ -159,8 +159,8 @@ class AlertNotificationManagerTest {
     @Test
     fun `offline and critical-offline post on their channels`() {
         val mgr = AlertNotificationManager(context)
-        mgr.postOfflineNotification("t", "b", "retry")
-        mgr.postCriticalOfflineNotification("t", "b", "retry")
+        mgr.postOfflineNotification("t", "b")
+        mgr.postCriticalOfflineNotification("t", "b")
 
         assertEquals(
             AlertNotificationManager.CHANNEL_OFFLINE,
@@ -170,6 +170,20 @@ class AlertNotificationManagerTest {
             AlertNotificationManager.CHANNEL_OFFLINE_CRITICAL,
             notification(AlertNotificationManager.NOTIF_OFFLINE_CRITICAL).channelId
         )
+    }
+
+    /** The single-action-owner rule: the escalations escalate, the ongoing row is where the user
+     *  acts. A Retry button on a one-shot would give one outage two owners and two tap targets, and
+     *  the tap could not say which row it came from. */
+    @Test
+    fun `offline escalations carry no actions, the monitor row owns them`() {
+        val mgr = AlertNotificationManager(context)
+        mgr.postOfflineNotification("t", "b")
+        mgr.postCriticalOfflineNotification("t", "b")
+
+        assertTrue(notification(AlertNotificationManager.NOTIF_MILESTONE).actions.isNullOrEmpty())
+        assertTrue(notification(AlertNotificationManager.NOTIF_OFFLINE_CRITICAL).actions.isNullOrEmpty())
+        assertTrue(mgr.buildMonitorNotification("t", "b", "retry").actions?.isNotEmpty() == true)
     }
 
     /**
@@ -185,7 +199,6 @@ class AlertNotificationManagerTest {
      * thing that actually keeps this row visible. It keeps a single id, so a night of Doze windows
      * rewrites one row instead of stacking thirty.
      */
-    @Test
     @Test
     fun `sleep notice reuses one id on the loud channel, ungrouped`() = runTest {
         val mgr = AlertNotificationManager(context)

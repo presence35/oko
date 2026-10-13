@@ -431,33 +431,33 @@ const val NOTIF_MONITORING_PAUSED = 9
         )
     }
 
-    fun postOfflineNotification(title: String, text: String, retryLabel: String, ignoreLabel: String? = null) {
+    /**
+     * Offline escalation, one-shot. Deliberately action-free — the Retry/Ignore buttons live on
+     * the ongoing monitor row alone. Three offline rows each carrying their own Retry meant one
+     * fact with three action owners: the tap could not say which row it came from, the three
+     * PendingIntents aliased, and feedback landed on a row the user had not touched.
+     */
+    fun postOfflineNotification(title: String, text: String) {
         val notif = buildNotification(NOTIF_MILESTONE, CHANNEL_OFFLINE)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .addAction(R.drawable.ic_trident, retryLabel, retryPendingIntent())
             .setContentIntent(openAppIntent())
-        if (ignoreLabel != null) {
-            notif.addAction(R.drawable.ic_trident, ignoreLabel, ignoreRetryPendingIntent())
-        }
         safeNotify(NOTIF_MILESTONE, notif.build())
     }
 
-    fun postCriticalOfflineNotification(title: String, text: String, retryLabel: String, ignoreLabel: String? = null) {
+    /** One-shot critical escalation. Action-free for the same reason as [postOfflineNotification]:
+     *  it escalates, the ongoing monitor row is where the user acts. */
+    fun postCriticalOfflineNotification(title: String, text: String) {
         val notif = buildNotification(NOTIF_OFFLINE_CRITICAL, CHANNEL_OFFLINE_CRITICAL)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .addAction(R.drawable.ic_trident, retryLabel, retryPendingIntent())
             .setContentIntent(openAppIntent())
-        if (ignoreLabel != null) {
-            notif.addAction(R.drawable.ic_trident, ignoreLabel, ignoreRetryPendingIntent())
-        }
         safeNotify(NOTIF_OFFLINE_CRITICAL, notif.build())
     }
 

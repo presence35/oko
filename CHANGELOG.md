@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Offline escalations no longer carry their own Retry/Keep-muted buttons — only the ongoing row does, so a tap can't land on a different row than the one you pressed (and tapping Retry dismisses the stale escalation rows) 10-13_18:02:07
 - The monitoring trident is now always a standalone row you can glance at for the alert level: its notification carries no group key (a named group with no summary gets folded into the platform's app-level bundle anyway) and its channel moved off Silent importance — still silent, just no longer buried behind the resolved tally 10-13_17:20:00
 - The resolved tally and the air-raid summary no longer share one notification group — an unmapped id now fails loudly instead of quietly inheriting a bundle 10-13_17:20:00
 - An outage's connection log now survives its own milestone checks instead of being wiped at the start of every episode (the symptom was an offline banner above an empty log), and "Ignore for 30 min" is unaffected either way 10-13_15:40:00

@@ -632,6 +632,10 @@ class AlertService : Service() {
                     AppSources.registry.retryNow()
                 }
                 logAction(DebugLogReason.USER_RETRY, s0.actionLog.retryConnection)
+                // The user has acted: the one-shot escalations for this episode are noise now, and
+                // the only Retry button left in the shade is the ongoing row they pressed.
+                notificationManager.cancelNotification(NOTIF_MILESTONE)
+                notificationManager.cancelNotification(NOTIF_OFFLINE_CRITICAL)
                 showRetryAcknowledged(Strings.get(lastChannelLang ?: AppLanguage.EN))
             }
             ACTION_IGNORE_RETRY -> {
@@ -1205,9 +1209,7 @@ val mappedThreats = registry.allThreats.map { list ->
             notificationManager.postCriticalOfflineNotification(
                 if (criticalThresholdMin == CRITICAL_OFFLINE_ALARM_MIN) s.offlineCriticalAlarmTitle
                 else s.offlineCriticalTitle,
-                String.format(s.offlineCriticalFormat, criticalThresholdMin),
-                s.offlineRetryAction,
-                s.offlineIgnoreAction
+                String.format(s.offlineCriticalFormat, criticalThresholdMin)
             )
         }
         // Episode over (registry nulled the stamp on recovery — transient Connecting never
@@ -1870,8 +1872,7 @@ val mappedThreats = registry.allThreats.map { list ->
         when (milestone) {
             ConnectionMilestone.M5_CRITICAL -> Unit // critical is owned by the per-tick block
             else -> notificationManager.postOfflineNotification(
-                s.offlineStatusTitle, offlineLiveBody(s, ageMin), s.offlineRetryAction,
-                s.offlineIgnoreAction
+                s.offlineStatusTitle, offlineLiveBody(s, ageMin)
             )
         }
     }
@@ -1881,11 +1882,13 @@ val mappedThreats = registry.allThreats.map { list ->
     }
 
     /**
-     * Immediate feedback for a shade Retry tap. The tap runs retryNow(), but the monitor row is
-     * only painted by the next [handleState] tick — and that tick's content is identical (same
-     * offline minutes, same retry label), so its dedup drops the post and the tap looked inert.
-     * Swap the body for an explicit "reconnecting" line, keep the headline and both action
-     * buttons, and clear the memo so the next real tick is free to repaint over this.
+     * Immediate feedback for a shade Retry tap. This is the only Retry button the shade has —
+     * the offline escalations carry no actions (see [AlertNotificationManager.postOfflineNotification])
+     * — so the row it repaints is always the row the user pressed. The tap runs retryNow(), but the
+     * monitor row is only painted by the next [handleState] tick, and that tick's content is
+     * identical (same offline minutes, same retry label), so its dedup drops the post and the tap
+     * looked inert. Swap the body for an explicit "reconnecting" line, keep the headline and both
+     * action buttons, and clear the memo so the next real tick is free to repaint over this.
      */
     private fun showRetryAcknowledged(s: Strings.StringSet) {
         val title = lastMonitorTitle ?: s.offlineStatusTitle

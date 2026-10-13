@@ -63,10 +63,13 @@ evaluation contract. Read `ARCHITECTURE.md` for module map and data-flow context
 
 Only after a meaningful code change, verify before declaring the task done:
 
-- `.\gradlew.bat :app:assembleDebug`
+- `.\gradlew.bat :app:assembleSideloadDebug` — the compile gate, ~1 min (configuration cache on).
+  `assembleDebug` builds both flavors and costs double for nothing here.
 - `.\gradlew.bat :app:testSideloadDebugUnitTest` — when touching engine logic
-  (`ThreatEngine`/`NormalizedThreat`/`ThreatProps`/`SpeedCache`). The bare task name
-  `testDebugUnitTest` is ambiguous across the `play`/`sideload` flavors and fails.
+  (`ThreatEngine`/`NormalizedThreat`/`ThreatProps`/`SpeedCache`). Add `--tests "*AlertNotificationManagerTest*"`
+  style filters while iterating; the bare task name `testDebugUnitTest` is ambiguous across the
+  `play`/`sideload` flavors and fails. The full suite runs automatically before any release —
+  don't pay for it per change.
 
 Fix any failures before finishing.
 

@@ -178,14 +178,11 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
 
-// Unit tests gate debug builds and the release upload: release assembles stay lean so
-// a local assembleSideloadRelease doesn't pay for the debug test suite; uploadRelease
-// still depends on the tests explicitly. Hooked onto assemble* rather than preBuild:
-// preBuild is an ancestor of the compile tasks, so a dependency there would be a cycle.
-tasks.matching { it.name.startsWith("assemble") && it.name.contains("Debug") && !it.name.startsWith("assembleAndroidTest") }
-    .configureEach {
-        dependsOn("testSideloadDebugUnitTest")
-    }
+// Nothing shipped without tests: uploadRelease depends on the suite directly (below), so a
+// debug assemble has no reason to run it either — the gate that used to sit here made every
+// compile check cost the whole 903-test Robolectric suite. A debug assemble is the per-session
+// compile gate; tests are run explicitly (targeted with --tests while iterating) and
+// unconditionally before a release.
 
 tasks.register("bumpVersion") {
     group = "versioning"
