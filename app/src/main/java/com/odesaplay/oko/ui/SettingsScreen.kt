@@ -918,6 +918,7 @@ fun SettingsScreen(
                         title = s.fallingDebrisDelayTitle,
                         description = s.fallingDebrisDelayDesc,
                         offLabel = s.fallingDebrisOffLabel,
+                        minUnit = s.minUnit,
                         onCommit = onFallingDebrisDelayChange
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

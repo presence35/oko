@@ -7,6 +7,8 @@
 - The threat-card skull gauge now reads fast threats (cruise, ballistic, KAB, aviation) by ETA instead of comparing their ETA thresholds against kilometres — a missile 50 km out no longer shows a skull of 0 10-13_21:24:29
 - Shelter mode unlocks street-level zoom again, so a pinned city with a threat overhead can pinch past the 500m floor to separate shelters from the drone 10-13_21:15:34
 - Settings scans better for a non-English reader: the Display row now leads with "Language", and the picker heading puts the English word first 10-13_21:36:51
+- The falling-debris slider value now uses the localised minute unit ("10 хв" / "10 мин") instead of always "min" 10-13_22:04:11
+- The "Overlapping threats" Display setting (Default / Count) now takes effect immediately instead of only after a restart 10-13_23:13:30
 
 ## [0.6.825]
 - The alarm summary no longer goes missing: two gates that mirror a saved setting started at "off" and waited for their background reader, and the report asked the service whether the alarm had been live — a fact the all-clear wipes on the same tick. Each gate now starts at its shipped default, and the window remembers for itself that it saw the alarm live 10-13_19:59:22

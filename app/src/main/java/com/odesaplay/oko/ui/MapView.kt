@@ -455,6 +455,7 @@ fun NeptunMapView(
     val slowYellowKmState by rememberUpdatedState(uiState.activeZoneParams.slowYellowKm)
     val zoneParamsState by rememberUpdatedState(uiState.activeZoneParams)
     val threatIconZoomState by rememberUpdatedState(uiState.threatIconZoom)
+    val overlapModeState by rememberUpdatedState(uiState.overlapMode)
     val selectedId by selectedThreatId.collectAsState()
     val selectedThreatIdState by rememberUpdatedState(selectedId)
     val focusLocationState by rememberUpdatedState(uiState.focusLocation)
@@ -902,7 +903,7 @@ LaunchedEffect(selectedId) {
             val placements = deOverlapThreats(
                 outcomesList,
                 { lat, lon -> bridge.project(lat, lon) },
-                uiState.overlapMode,
+                overlapModeState,
                 stepPx,
                 bridge.width,
                 bridge.height

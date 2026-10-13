@@ -571,6 +571,7 @@ internal fun FallingDebrisDelayRow(
     title: String,
     description: String,
     offLabel: String,
+    minUnit: String,
     onCommit: (Int) -> Unit
 ) {
     var local by remember(seconds) { mutableStateOf((seconds / 60).toFloat()) }
@@ -613,7 +614,7 @@ internal fun FallingDebrisDelayRow(
             )
             Spacer(Modifier.width(12.dp))
             Text(
-                if (minutes == 0) offLabel else "$minutes min",
+                if (minutes == 0) offLabel else "$minutes $minUnit",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary
