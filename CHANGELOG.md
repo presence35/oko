@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- Tapping Retry on the offline notification now visibly shows "Reconnecting…" on the row instead of doing nothing until the next tick 10-13_16:55:11
+- A course line that only restates the threat type and the place ("Balistychna threat — Kyiv, Kyivska oblast") no longer repeats the location already shown in the header 10-13_16:49:41
 - Switching off a zone's bell now hides its threats from the footer strip, header tint and widget too, not just the sound — a disarmed yellow ring no longer shows a missile icon (red-range threats demote to yellow while the yellow bell is on) 10-13_16:34:12
 - Pausing Oko from Android now really stops it: the service is stopped and the wakeup alarm cancelled at the gesture, nothing can resurrect it while paused, and the monitor stops itself on its next tick even if the system never delivered the pause notice — no more "Oko" sitting in Active apps after you paused it 10-13_16:26:00
 - Un-pausing Oko brings monitoring back on its own (wakeup chain, watchdog and service), under the same "restart after reboot" setting as every other automatic start 10-13_16:26:00

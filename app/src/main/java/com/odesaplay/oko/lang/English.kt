@@ -315,6 +315,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
         offlineBodyFormat = "Offline — connection to NEPTUN lost. Tap to retry.",
         offlineOfficialSirensLine = "Rely on official sirens.",
         offlineRetryAction = "Retry",
+        offlineReconnectAck = "Reconnecting…",
         offlineChannelName = "Offline monitoring",
         offlineChannelDesc = "Alerts when the connection to the threat server is lost.",
         offlineMilestone3Min = "Offline — retrying in background.",

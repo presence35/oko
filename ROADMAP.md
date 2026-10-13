@@ -158,6 +158,28 @@ directory, and a 90-day prune. Still worth revisiting if the tester group grows:
 assume clients can't rotate addresses, and the endpoint is publicly reachable on the same host
 that serves the APK.
 
+## Bypass DNS blocking on filtered networks (not started)
+
+Some networks refuse to resolve the feed's name while the host itself is fine — reported on a
+Moldova Airbnb Wi-Fi (2026-10-13), where `neptun.in.ua` fails in Chrome and the app alike and only
+mobile data works. The app already *detects* it (`OfflineCause.DnsFailure` minted from
+`UnknownHostException`, rendered as "Server unreachable / DNS blocked — switch network") but cannot
+bypass it, and that state's own KDoc says retrying is pointless.
+
+Fix: a `ResilientDns : okhttp3.Dns` wired into the feed client
+(`ResilientConnectionSupervisor:92`, add `.dns(ResilientDns())`). The system resolver stays
+authoritative and is tried first; only on `UnknownHostException` do we re-query over DoH at an IP
+literal — `https://1.1.1.1/dns-query` / `https://8.8.8.8/dns-query` (their certs carry the IP as a
+SAN), so the fallback itself needs no name resolution, the exact deadlock it exists to break. Query
+`?name=<host>&type=A` with `accept: application/dns-json`, parse `Answer[type==1]`, order results
+IPv4-first (a black-holed IPv6 route plus `retryOnConnectionFailure(false)` and a 10s connect means
+one bad AAAA eats the whole attempt). A healthy network pays nothing.
+
+Caveat: only helps when the block is DNS-level. If the router filters the Cloudflare IPs themselves,
+DoH-by-IP fails too — unconfirmable on that network now. Unit-testable with a fake system `Dns` and
+no network: system-refuses → DoH answers → addresses returned; IPv4-first ordering; both resolvers
+refuse → `UnknownHostException`.
+
 ## We need to track if neptun.in.ua changes their API hash
 neptun.in.ua/sdk/build-manifest.json
 

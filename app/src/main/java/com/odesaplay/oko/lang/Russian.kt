@@ -314,6 +314,7 @@ internal val Russian: Strings.StringSet = Strings.StringSet(
         offlineBodyFormat = "Не в сети — связь с NEPTUN потеряна. Нажмите для повтора.",
         offlineOfficialSirensLine = "Ориентируйтесь на официальные сирены.",
         offlineRetryAction = "Повторить",
+        offlineReconnectAck = "Переподключение…",
         offlineChannelName = "Мониторинг оффлайн",
         offlineChannelDesc = "Оповещения при потере соединения с сервером угроз.",
         offlineMilestone3Min = "Не в сети — повторные попытки в фоновом режиме.",

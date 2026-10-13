@@ -324,6 +324,7 @@ object Strings {
         val offlineBodyFormat: String,
         val offlineOfficialSirensLine: String,
         val offlineRetryAction: String,
+        val offlineReconnectAck: String,
         val offlineChannelName: String,
         val offlineChannelDesc: String,
         val offlineMilestone3Min: String,
@@ -1317,6 +1318,7 @@ object Strings {
         val offlineBodyFormat: String get() = threat.offlineBodyFormat
         val offlineOfficialSirensLine: String get() = threat.offlineOfficialSirensLine
         val offlineRetryAction: String get() = threat.offlineRetryAction
+        val offlineReconnectAck: String get() = threat.offlineReconnectAck
         val offlineChannelName: String get() = threat.offlineChannelName
         val offlineChannelDesc: String get() = threat.offlineChannelDesc
         val offlineMilestone3Min: String get() = threat.offlineMilestone3Min

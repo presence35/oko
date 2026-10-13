@@ -641,9 +641,10 @@ private fun sharesRoot(a: String, b: String): Boolean {
 /**
  * True when the course line carries nothing beyond the type label and the place names already
  * shown in the header. Type-agnostic: it never consults the threat type, only the strings the
- * card already renders (both language forms of the label) plus the catalog's own label
- * vocabulary. Matching is by word root, so the same name written with a different inflection or
- * in the other script still collapses — "Розвідувальний" vs "Розвідка", "Rozviduvalnyi" vs the
+ * card already renders (both language forms of the label) plus the catalog's own label vocabulary
+ * and NEPTUN's bare frame noun ([COURSE_FRAME_NAMES]), which names neither type nor place.
+ * Matching is by word root, so the same name written with a different inflection or in the other
+ * script still collapses — "Розвідувальний" vs "Розвідка", "Rozviduvalnyi" vs the
  * romanized "Розвідка". Both operands must already be rendered in the card's language.
  */
 internal fun repeatsShownInfo(course: String, typeLabel: String, labelEn: String, shownRegion: String): Boolean {
@@ -659,7 +660,7 @@ internal fun repeatsShownInfo(course: String, typeLabel: String, labelEn: String
         val p = norm(phrase)
         if (p.isNotBlank()) rest = rest.replace(" $p ", " ")
     }
-    val vocab = (listOf(typeLabel, labelEn) + COURSE_TYPE_NAMES + shownRegion.split('·', ','))
+    val vocab = (listOf(typeLabel, labelEn) + COURSE_TYPE_NAMES + COURSE_FRAME_NAMES + shownRegion.split('·', ','))
         .flatMap { norm(it).split(' ') }
         .filter { it.isNotBlank() }
     return rest.split(' ').none { token -> token.isNotBlank() && vocab.none { sharesRoot(token, it) } }

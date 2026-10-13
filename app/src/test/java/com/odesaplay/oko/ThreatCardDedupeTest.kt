@@ -199,4 +199,34 @@ class ThreatCardDedupeTest {
             )
         )
     }
+
+    @Test
+    fun frameNounRestatingTypeAndPlaceIsHidden() {
+        assertTrue(
+            repeatsShownInfo(
+                "Balistychna threat — Kyiv, Kyivska oblast",
+                typeLabel = "Ballistic",
+                labelEn = "Ballistic",
+                shownRegion = "Kyiv · Kyivska oblast"
+            )
+        )
+        assertTrue(
+            repeatsShownInfo(
+                "Балістична загроза — Київ, Київська область",
+                typeLabel = "Балістика",
+                labelEn = "Ballistic",
+                shownRegion = "Київ · Київська область"
+            )
+        )
+    }
+
+    @Test
+    fun frameNounDoesNotSwallowARealCourse() {
+        assertFalse(
+            repeatsShownInfo(
+                "Ballistic threat from the east",
+                "Ballistic", "Ballistic", "Kyiv · Kyivska oblast"
+            )
+        )
+    }
 }

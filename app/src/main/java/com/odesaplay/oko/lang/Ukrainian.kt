@@ -314,6 +314,7 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         offlineBodyFormat = "Офлайн — з'єднання з NEPTUN втрачено. Натисни, щоб повторити.",
         offlineOfficialSirensLine = "Покладайся на офіційні сирени.",
         offlineRetryAction = "Повторити",
+        offlineReconnectAck = "Перепідключення…",
         offlineChannelName = "Офлайн-моніторинг",
         offlineChannelDesc = "Повідомлення, коли з'єднання із сервером тривог втрачено.",
         offlineMilestone3Min = "Офлайн — повторюємо у фоні.",

@@ -632,6 +632,7 @@ class AlertService : Service() {
                     AppSources.registry.retryNow()
                 }
                 logAction(DebugLogReason.USER_RETRY, s0.actionLog.retryConnection)
+                showRetryAcknowledged(Strings.get(lastChannelLang ?: AppLanguage.EN))
             }
             ACTION_IGNORE_RETRY -> {
                 notifMuteUntilMs = System.currentTimeMillis() + IGNORE_RETRY_MUTE_MS
@@ -1877,6 +1878,33 @@ val mappedThreats = registry.allThreats.map { list ->
 
     private fun offlineLiveBody(s: Strings.StringSet, minutes: Int): String {
         return String.format(s.offlineLiveFormat, minutes)
+    }
+
+    /**
+     * Immediate feedback for a shade Retry tap. The tap runs retryNow(), but the monitor row is
+     * only painted by the next [handleState] tick — and that tick's content is identical (same
+     * offline minutes, same retry label), so its dedup drops the post and the tap looked inert.
+     * Swap the body for an explicit "reconnecting" line, keep the headline and both action
+     * buttons, and clear the memo so the next real tick is free to repaint over this.
+     */
+    private fun showRetryAcknowledged(s: Strings.StringSet) {
+        val title = lastMonitorTitle ?: s.offlineStatusTitle
+        lastMonitorTitle = null
+        lastMonitorText = null
+        lastMonitorRetry = null
+        lastMonitorProgressMax = null
+        lastMonitorProgressNow = null
+        lastMonitorIgnore = null
+        lastMonitorAlertLevel = AlertLevel.NONE
+        notificationManager.safeNotify(
+            NOTIF_MONITOR,
+            notificationManager.buildMonitorNotification(
+                title = title,
+                text = s.offlineReconnectAck,
+                retryLabel = s.offlineRetryAction,
+                ignoreLabel = if (System.currentTimeMillis() >= notifMuteUntilMs) s.offlineIgnoreAction else null
+            )
+        )
     }
 
     private suspend fun postAlert(

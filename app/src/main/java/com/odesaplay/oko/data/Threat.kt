@@ -454,6 +454,14 @@ val COURSE_TYPE_NAMES: Set<String> = mutableSetOf<String>().apply {
 }
 
 /**
+ * NEPTUN's bare noun for "a threat" — the card's own premise, naming neither type nor place
+ * ("Балістична загроза — Київ" renders as "Ballistic threat — Kyiv"). Folded into the same dedupe
+ * vocabulary so a course line that only restates type + region collapses; kept out of
+ * [COURSE_TYPE_NAMES] because it is not a type. Inflections resolve on the shared-root rule.
+ */
+val COURSE_FRAME_NAMES: Set<String> = setOf("загроза", "threat")
+
+/**
  * Plural forms of every catalog label, for counting contexts ("15 Drones resolved"). EN has one
  * form; UA/RU carry the two Slavic plural spellings (2–4 and 5+), indexed like
  * `wordForms.resolvedThreats`. A type missing here falls back to its singular label, so a new
