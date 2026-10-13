@@ -187,27 +187,26 @@ dependencies {
 tasks.register("bumpVersion") {
     group = "versioning"
     description = "Increments versionCode and derives versionName as major.minor.versionCode. Optional: -PnewVersion=X.Y.Z overrides the name."
+    // Everything the action needs is resolved now, at configuration time: the configuration cache
+    // forbids touching `project` (or anything else from the build script) at execution time, and
+    // reading the property here is what makes the task cacheable instead of a cache-poisoner.
+    val propsFile = versionPropsFile
+    val versionOverride = providers.gradleProperty("newVersion").orNull?.takeIf { it.isNotBlank() }
     doLast {
         val props = Properties()
-        if (versionPropsFile.exists()) versionPropsFile.inputStream().use { props.load(it) }
+        if (propsFile.exists()) propsFile.inputStream().use { props.load(it) }
         val currentCode = (props.getProperty("versionCode") ?: "0").toIntOrNull() ?: 0
         val currentName = props.getProperty("versionName") ?: ""
-        val requested = project.findProperty("newVersion")?.toString()?.takeIf { it.isNotBlank() }
         val newCode = currentCode + 1
-        val newName = requested ?: deriveVersionName(currentName, newCode)
+        val parts = currentName.split('.')
+        val newName = versionOverride
+            ?: "${parts.getOrNull(0) ?: "0"}.${parts.getOrNull(1) ?: "6"}.$newCode"
         props.setProperty("versionCode", newCode.toString())
         props.setProperty("versionName", newName)
-        versionPropsFile.outputStream().use { props.store(it, "Bumped via gradlew bumpVersion") }
+        propsFile.outputStream().use { props.store(it, "Bumped via gradlew bumpVersion") }
         println("versionCode: $currentCode -> $newCode")
         println("versionName: ${currentName.ifEmpty { "(unset)" }} -> $newName")
     }
-}
-
-private fun deriveVersionName(current: String, newCode: Int): String {
-    val parts = current.split('.')
-    val major = parts.getOrNull(0) ?: "0"
-    val minor = parts.getOrNull(1) ?: "6"
-    return "$major.$minor.$newCode"
 }
 
 /** Publishing is always our own signature. The unsigned path exists only for a distributor
@@ -215,27 +214,41 @@ private fun deriveVersionName(current: String, newCode: Int): String {
 tasks.register("requireReleaseKeystore") {
     group = "versioning"
     description = "Fails unless app/keystore.properties is present. Guards every publishing path against the unsigned source-build mode."
+    // Resolved at configuration time: reading a script property inside the action would capture
+    // the build script and break the configuration cache, the same way `bumpVersion` did.
+    val keystorePresent = hasReleaseKeystore
     doLast {
-        if (!hasReleaseKeystore) throw GradleException(
+        if (!keystorePresent) throw GradleException(
             "app/keystore.properties is required to publish. -PallowUnsignedRelease is only for a distributor building and signing from source."
         )
     }
 }
 
-tasks.register<GradleBuild>("releaseDirect") {
+/**
+ * The wrapper as argv, so a release runs in a fresh Gradle process on any OS. The fresh process is
+ * required — the version bump has to be on disk before configuration stamps it into the APK — and a
+ * nested [GradleBuild] root build cannot provide it under the configuration cache ("Included builds
+ * are not yet available"). The cache is off for that one-shot run: a single unique task graph has
+ * nothing to reuse, and the publish path should not depend on nested cache behaviour.
+ */
+private fun gradleWrapperArgv(): List<String> =
+    if (System.getProperty("os.name").lowercase().contains("win")) listOf("cmd", "/c", "gradlew.bat")
+    else listOf("sh", "./gradlew")
+
+tasks.register<Exec>("releaseDirect") {
     group = "release"
     description = "Bumps the version, then builds the sideload (direct/beta) APK and uploads it + version.json to the FTP server, in a fresh Gradle run so both carry the new version."
     dependsOn("bumpVersion")
-    dir = rootProject.projectDir
-    tasks = listOf(":app:uploadRelease")
+    workingDir = rootProject.projectDir
+    commandLine(gradleWrapperArgv() + listOf(":app:uploadRelease", "--no-configuration-cache"))
 }
 
-tasks.register<GradleBuild>("releasePlay") {
+tasks.register<Exec>("releasePlay") {
     group = "release"
     description = "Bumps the version, then builds the Google Play App Bundle (play flavor — no self-update). Does not upload."
     dependsOn("bumpVersion", "requireReleaseKeystore")
-    dir = rootProject.projectDir
-    tasks = listOf(":app:bundlePlayRelease")
+    workingDir = rootProject.projectDir
+    commandLine(gradleWrapperArgv() + listOf(":app:bundlePlayRelease", "--no-configuration-cache"))
 }
 
 tasks.register("uploadRelease") {
@@ -371,7 +384,12 @@ private fun ftpUpload(ftpHost: String, remoteDir: String, user: String, pass: St
     fun esc(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
     val config = "user = \"${esc(user)}:${esc(pass)}\"\n"
     val proc = ProcessBuilder(
-        "curl", "-sS", "--ssl-reqd", "--ftp-create-dirs", "--config", "-",
+        "curl", "-sS", "--ssl-reqd", "--ftp-create-dirs",
+        // A 25 MB body over FTPS can drop mid-transfer, and curl calls that a transient error
+        // (exit 56). Retry the whole transfer rather than failing a release on one dropped socket;
+        // --retry-all-errors lifts curl's own "is this transient" judgement so 56 is covered too.
+        "--retry", "5", "--retry-delay", "2", "--retry-all-errors",
+        "--config", "-",
         "-T", local.absolutePath, path
     ).redirectErrorStream(true).start()
     proc.outputStream.use { it.write(config.toByteArray(Charsets.UTF_8)) }

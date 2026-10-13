@@ -24,32 +24,34 @@ class AlertNotificationManagerTest {
     private fun notification(id: Int): Notification =
         Shadows.shadowOf(notificationManager()).getNotification(id)!!
 
-    /** `null` = posted ungrouped. The monitoring family is the point of the test: a named group
-     *  with no summary gets folded into the platform's app-level bundle anyway, so the trident's
-     *  standalone row depends on there being no key at all. */
+    /** One id, one posting role. The monitoring family is ungrouped (no key at all), the tally
+     *  is the group itself — a summary is the only shape the platform's app-level bundle cannot
+     *  collect — and everything else is a child. */
     @Test
-    fun `groupFor maps each id to exactly one group`() {
-        assertEquals(null, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_MONITOR))
-        assertEquals(null, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_MONITORING_PAUSED))
-        assertEquals(null, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_SLEEP))
-        assertEquals(AlertNotificationManager.GROUP_ALERT, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_ALERT))
-        assertEquals(AlertNotificationManager.GROUP_ALERT, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_ALLCLEAR))
-        assertEquals(AlertNotificationManager.GROUP_OFFLINE, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_MILESTONE))
-        assertEquals(AlertNotificationManager.GROUP_OFFLINE, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_OFFLINE_CRITICAL))
-        assertEquals(AlertNotificationManager.GROUP_UPDATE, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_UPDATE))
-        assertEquals(AlertNotificationManager.GROUP_TALLY, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_NEUTRALIZED))
-        assertEquals(AlertNotificationManager.GROUP_EPISODE, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_ALARM_EPISODE))
+    fun `postingFor maps each id to exactly one role`() {
+        val a = AlertNotificationManager
+        assertEquals(AlertNotificationManager.Posting.Standalone, a.postingFor(a.NOTIF_MONITOR))
+        assertEquals(AlertNotificationManager.Posting.Standalone, a.postingFor(a.NOTIF_MONITORING_PAUSED))
+        assertEquals(AlertNotificationManager.Posting.Standalone, a.postingFor(a.NOTIF_SLEEP))
+        assertEquals(AlertNotificationManager.Posting.Child(a.GROUP_ALERT), a.postingFor(a.NOTIF_ALERT))
+        assertEquals(AlertNotificationManager.Posting.Child(a.GROUP_ALERT), a.postingFor(a.NOTIF_ALLCLEAR))
+        assertEquals(AlertNotificationManager.Posting.Child(a.GROUP_OFFLINE), a.postingFor(a.NOTIF_MILESTONE))
+        assertEquals(AlertNotificationManager.Posting.Child(a.GROUP_OFFLINE), a.postingFor(a.NOTIF_OFFLINE_CRITICAL))
+        assertEquals(AlertNotificationManager.Posting.Child(a.GROUP_UPDATE), a.postingFor(a.NOTIF_UPDATE))
+        assertEquals(AlertNotificationManager.Posting.Summary(a.GROUP_TALLY), a.postingFor(a.NOTIF_NEUTRALIZED))
+        assertEquals(AlertNotificationManager.Posting.Child(a.GROUP_EPISODE), a.postingFor(a.NOTIF_ALARM_EPISODE))
     }
 
     /** An unmapped id used to inherit the tally's group through a catch-all `else`, so a new
      *  notification silently rode into a bundle nobody chose. It must fail loudly instead. */
     @Test(expected = IllegalStateException::class)
-    fun `groupFor rejects an unmapped id`() {
-        AlertNotificationManager.groupFor(4242)
+    fun `postingFor rejects an unmapped id`() {
+        AlertNotificationManager.postingFor(4242)
     }
 
-    /** The trident's row must arrive with no group key — this, not a group of its own, is what
-     *  keeps it out of any Oko bundle. */
+    /** The trident's row must arrive with no group key: nothing the app names can claim it. It is
+     *  not proof of standing alone — a summary-less row can still be swept into the platform's
+     *  app bundle — which is why the tally is a summary instead. */
     @Test
     fun `monitor notification is posted ungrouped`() {
         val mgr = AlertNotificationManager(context)
@@ -93,6 +95,24 @@ class AlertNotificationManagerTest {
         ).build()
 
         assertEquals(AlertNotificationManager.GROUP_ALERT, n.group)
+    }
+
+    /**
+     * The tally's fix, pinned. As a summary-less child of `oko_tally` it rode the platform's
+     * app-level bundle, and the always-on trident row was in that same bundle — the "1 Drone
+     * resolved" row appeared welded to the monitor. The key was never what separated it: the
+     * summary flag is, because a group summary is never collected as a bundle child.
+     */
+    @Test
+    fun `the tally is posted as its own group summary`() {
+        val mgr = AlertNotificationManager(context)
+        val n = mgr.buildNotification(
+            AlertNotificationManager.NOTIF_NEUTRALIZED,
+            NeutralizedTally.CHANNEL_NEUTRALIZED
+        ).build()
+
+        assertEquals(AlertNotificationManager.GROUP_TALLY, n.group)
+        assertTrue((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0)
     }
 
     @Test
@@ -194,10 +214,10 @@ class AlertNotificationManagerTest {
      * than sitting mute in the shade.
      *
      * The GROUP is about bundling and stays unset, with the rest of the monitoring family
-     * (`NOTIF_MONITOR`, `NOTIF_MONITORING_PAUSED`): a group the app never gives a summary is
-     * folded back into the app-level bundle by the platform, so leaving the key off is the only
-     * thing that actually keeps this row visible. It keeps a single id, so a night of Doze windows
-     * rewrites one row instead of stacking thirty.
+     * (`NOTIF_MONITOR`, `NOTIF_MONITORING_PAUSED`): the only role the platform's app bundle
+     * cannot collect is a summary, and this row has no children to summarise, so its key stays
+     * off. It keeps a single id, so a night of Doze windows rewrites one row instead of stacking
+     * thirty.
      */
     @Test
     fun `sleep notice reuses one id on the loud channel, ungrouped`() = runTest {

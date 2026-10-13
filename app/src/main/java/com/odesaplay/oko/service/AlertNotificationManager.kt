@@ -48,6 +48,31 @@ data class AlertActions(
  */
 class AlertNotificationManager(private val context: Context) {
 
+    /** How a notification id is posted in the shade: the one place an id gets this, so a
+     *  producer can never invent a role and two ids can never share one by accident.
+     *
+     *  A group key alone separates nothing. The app posts no group summary anywhere, and
+     *  Android folds a summary-less group into its app-level auto-bundle
+     *  (`GroupHelper.isGroupChildWithoutSummary` → `addToUngroupedAndMaybeAggregate`) — the
+     *  same bundle this app's ungrouped rows land in. So a summary-less child and an
+     *  ungrouped row still meet inside one bundle, which is how the resolved tally
+     *  ("1 Drone resolved") came to share a bundle with the always-on trident.
+     *
+     *  [Summary] is therefore the only role the platform cannot collect: a group summary is
+     *  never a bundle child, so a childless one renders as a standalone row whatever the
+     *  OEM's bundling heuristics do. [Standalone] is the weaker claim — no key at all, so no
+     *  explicit group can claim it — and is what the monitoring family gets.
+     *
+     *  An unmapped id throws rather than inheriting some group's bundle. */
+    sealed interface Posting {
+        /** A plain row: no group key. */
+        data object Standalone : Posting
+        /** A child of [key]'s group. */
+        data class Child(val key: String) : Posting
+        /** The group itself: immune to the platform's app-level bundle. */
+        data class Summary(val key: String) : Posting
+    }
+
     companion object {
         private val NotifRed = AppPalette.AlertRed.toInt()
         private val NotifYellow = AppPalette.AlertYellow.toInt()
@@ -100,26 +125,15 @@ const val NOTIF_MONITORING_PAUSED = 9
         const val GROUP_EPISODE = "oko_episode"
         const val GROUP_UPDATE = "oko_update"
 
-        /** The one place a notification id maps to its group: a producer can never invent a
-         *  group, and two ids can never share one by accident.
-         *
-         *  `null` means posted ungrouped, and the monitoring family ([NOTIF_MONITOR],
-         *  [NOTIF_MONITORING_PAUSED], [NOTIF_SLEEP]) is the one that maps to `null`. A named
-         *  group the app never gives a summary is folded back into the platform's app-level
-         *  auto-bundle (`GroupHelper.isGroupChildWithoutSummary` → `addToUngroupedAndMaybeAggregate`),
-         *  so naming a group buys nothing there; an ungrouped row is never collected as a bundle
-         *  child (`maybeUngroupOnAppGrouped`). Leaving the key off is what actually keeps the
-         *  always-on trident — the glanceable claim that Oko is running and at what alert level —
-         *  standalone, instead of one tap behind a bundle. An unmapped id throws rather than
-         *  inheriting some group's bundle. */
-        fun groupFor(id: Int): String? = when (id) {
-            NOTIF_MONITOR, NOTIF_MONITORING_PAUSED, NOTIF_SLEEP -> null
-            NOTIF_ALERT, NOTIF_ALLCLEAR -> GROUP_ALERT
-            NOTIF_MILESTONE, NOTIF_OFFLINE_CRITICAL -> GROUP_OFFLINE
-            NOTIF_UPDATE -> GROUP_UPDATE
-            NOTIF_NEUTRALIZED -> GROUP_TALLY
-            NOTIF_ALARM_EPISODE -> GROUP_EPISODE
-            else -> error("no notification group mapped for id $id")
+        /** See [Posting]: ids map to a posting role here, never to a bare group key. */
+        fun postingFor(id: Int): Posting = when (id) {
+            NOTIF_MONITOR, NOTIF_MONITORING_PAUSED, NOTIF_SLEEP -> Posting.Standalone
+            NOTIF_ALERT, NOTIF_ALLCLEAR -> Posting.Child(GROUP_ALERT)
+            NOTIF_MILESTONE, NOTIF_OFFLINE_CRITICAL -> Posting.Child(GROUP_OFFLINE)
+            NOTIF_UPDATE -> Posting.Child(GROUP_UPDATE)
+            NOTIF_NEUTRALIZED -> Posting.Summary(GROUP_TALLY)
+            NOTIF_ALARM_EPISODE -> Posting.Child(GROUP_EPISODE)
+            else -> error("no notification posting role mapped for id $id")
         }
 
         fun areNotificationsEnabled(context: Context): Boolean {
@@ -488,12 +502,17 @@ const val NOTIF_MONITORING_PAUSED = 9
         }
     }
 
-    /** Build a notification belonging to [id]'s group, or ungrouped when [groupFor] says so.
-     *  The single entrance for grouped notifications: callers pass the notification id and
-     *  never a group key. */
+    /** Build a notification in the role [postingFor] assigns its id. The single entrance for
+     *  grouped notifications: callers pass the notification id and never a group key. */
     fun buildNotification(id: Int, channelId: String): NotificationCompat.Builder {
         val b = NotificationCompat.Builder(context, channelId)
-        return groupFor(id)?.let(b::setGroup) ?: b
+        return when (val posting = postingFor(id)) {
+            is Posting.Standalone -> b
+            is Posting.Child -> b.setGroup(posting.key)
+            // A summary is the group itself, so it needs its key — and it is never swept into
+            // the platform's app bundle the way a summary-less child is.
+            is Posting.Summary -> b.setGroup(posting.key).setGroupSummary(true)
+        }
     }
 
     /**

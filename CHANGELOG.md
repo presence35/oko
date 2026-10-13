@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.6.824]
+- The resolved tally is now posted as its own (childless) notification summary, so it no longer gets swept into the platform's app bundle together with the always-on monitoring row — "1 Drone resolved" sits on its own instead of welded under the trident 10-13_19:05:00
+- Fixed the release path under the configuration cache: `bumpVersion`/`releasePlay` no longer capture the build script at execution time, and the FTPS upload retries a dropped transfer instead of failing the whole release
+
+## [0.6.823]
 - Offline escalations no longer carry their own Retry/Keep-muted buttons — only the ongoing row does, so a tap can't land on a different row than the one you pressed (and tapping Retry dismisses the stale escalation rows) 10-13_18:02:07
 - The monitoring trident is now always a standalone row you can glance at for the alert level: its notification carries no group key (a named group with no summary gets folded into the platform's app-level bundle anyway) and its channel moved off Silent importance — still silent, just no longer buried behind the resolved tally 10-13_17:20:00
 - The resolved tally and the air-raid summary no longer share one notification group — an unmapped id now fails loudly instead of quietly inheriting a bundle 10-13_17:20:00

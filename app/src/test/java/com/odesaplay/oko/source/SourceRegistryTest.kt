@@ -3,6 +3,7 @@ package com.odesaplay.oko.source
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,20 +72,29 @@ class SourceRegistryTest {
 
     private lateinit var realNowProvider: () -> Long
 
+    /** The one scope every registration in a test runs in (see [testScope] and [tearDown]). */
+    private lateinit var scope: CoroutineScope
+
     @Before
     fun setUp() {
         // JVM has no SystemClock.elapsedRealtime; give the registry a JVM-safe monotonic source.
         // The real provider is restored in tearDown so no later suite inherits this clock.
         realNowProvider = Monotonic.nowProvider
         Monotonic.nowProvider = { System.nanoTime() }
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     }
 
     @After
     fun tearDown() {
+        // register() starts six collectors in the scope it is handed; only unregister() stops them.
+        // A test that registers and walks away used to leave them running for the rest of the JVM,
+        // and whatever one of them threw later was blamed on the next test to open a TestScope
+        // (a Compose rule is one) — which is how an unrelated picker test went red.
+        scope.cancel()
         Monotonic.nowProvider = realNowProvider
     }
 
-    private fun testScope() = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    private fun testScope(): CoroutineScope = scope
 
     private fun threat(id: String, type: String = "shahed") = NormalizedThreat(
         id = id, type = type, title = "", region = null, district = null, locality = null,
