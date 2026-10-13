@@ -91,7 +91,10 @@ internal fun ThreatTypeRow(
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        // Measured last inside this row, so the badges keep their room and the
+                        // name ellipsizes first instead of crushing the pills into a column.
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     typicalSpeed?.let {
                         Spacer(Modifier.width(6.dp))
@@ -340,7 +343,8 @@ private fun UnknownCatPoster(s: Strings.StringSet) {
     }
 }
 
-/** A compact tinted capsule, e.g. the speed badge or the per-row Fast/Slow tag. */
+/** A compact tinted capsule, e.g. the speed badge or the per-row Fast/Slow tag. Kept to one line:
+ *  at large system text sizes a wrapping capsule collapsed to a single vertical column of letters. */
 @Composable
 private fun Pill(text: String, tint: Color) {
     Surface(shape = RoundedCornerShape(50), color = tint.copy(alpha = 0.16f)) {
@@ -349,7 +353,9 @@ private fun Pill(text: String, tint: Color) {
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
             color = tint,
             fontWeight = FontWeight.Medium,
-            style = MaterialTheme.typography.labelSmall
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

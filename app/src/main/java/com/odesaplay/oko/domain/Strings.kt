@@ -254,6 +254,7 @@ object Strings {
         val serviceOfflineBanner: String,
         val sirenOverrideWarning: String,
         val bootRestartPaused: String,
+        val monitoringRestartBlocked: String,
         val sleepNoticeTitle: String,
         val sleepNoticeOffFormat: String,
         val sleepNoticeOffSummaryFormat: String,
@@ -340,6 +341,8 @@ object Strings {
         val offlineCriticalBypassSilentDesc: String,
         val offlineIgnoreAction: String,
         val offlineLiveFormat: String,
+        val offlineDnsTitle: String,
+        val offlineDnsBody: String,
         val alertChannelName: String,
         val alertChannelDesc: String,
         val outerAlertChannelName: String,
@@ -490,6 +493,7 @@ object Strings {
         val connEventLost: String,
         val connEventRetry: String,
         val connEventNoNetwork: String,
+        val connEventDnsBlocked: String,
         val connEventDegraded: String,
         val connEventMin3: String,
         val connEventMin5: String,
@@ -1222,6 +1226,7 @@ object Strings {
         val serviceOfflineBanner: String get() = status.serviceOfflineBanner
         val sirenOverrideWarning: String get() = status.sirenOverrideWarning
         val bootRestartPaused: String get() = status.bootRestartPaused
+        val monitoringRestartBlocked: String get() = status.monitoringRestartBlocked
         val connDegraded: String get() = status.connDegraded
         val connDegradedBody: String get() = status.connDegradedBody
         val connActiveLabel: String get() = status.connActiveLabel
@@ -1329,6 +1334,8 @@ object Strings {
         val offlineCriticalBypassSilentDesc: String get() = threat.offlineCriticalBypassSilentDesc
         val offlineIgnoreAction: String get() = threat.offlineIgnoreAction
         val offlineLiveFormat: String get() = threat.offlineLiveFormat
+        val offlineDnsTitle: String get() = threat.offlineDnsTitle
+        val offlineDnsBody: String get() = threat.offlineDnsBody
         val alertChannelName: String get() = threat.alertChannelName
         val alertChannelDesc: String get() = threat.alertChannelDesc
         val outerAlertChannelName: String get() = threat.outerAlertChannelName
@@ -1509,6 +1516,7 @@ object Strings {
         val connEventLost: String get() = misc.connEventLost
         val connEventRetry: String get() = misc.connEventRetry
         val connEventNoNetwork: String get() = misc.connEventNoNetwork
+        val connEventDnsBlocked: String get() = misc.connEventDnsBlocked
         val connEventDegraded: String get() = misc.connEventDegraded
         val connEventMin3: String get() = misc.connEventMin3
         val connEventMin5: String get() = misc.connEventMin5

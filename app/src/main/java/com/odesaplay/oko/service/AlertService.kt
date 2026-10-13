@@ -37,6 +37,7 @@ import com.odesaplay.oko.resolveFocus
 import com.odesaplay.oko.connection.ConnectionMilestone
 import com.odesaplay.oko.connection.ConnEventKind
 import com.odesaplay.oko.connection.Monotonic
+import com.odesaplay.oko.engine.armedTier
 import com.odesaplay.oko.engine.isFastType
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.LatLng
@@ -82,6 +83,7 @@ import com.odesaplay.oko.NeutralizedTally
 import com.odesaplay.oko.engine.ThreatEngine
 import com.odesaplay.oko.service.ServiceState
 import com.odesaplay.oko.service.MonitoringStatus
+import com.odesaplay.oko.service.SuspendState
 import com.odesaplay.oko.service.AlertWakeup
 import com.odesaplay.oko.service.RaidMuteState
 import com.odesaplay.oko.service.AudioAlarmDispatcher
@@ -179,6 +181,12 @@ class AlertService : Service() {
         private const val VIBRATION_STRONG = 4
         private const val VIBRATION_ZONE = 3
 
+        /**
+         * Start the monitor because the *user* acted — a cold launch, a settings change, the
+         * "SERVICE OFFLINE" banner. Deliberately not gated: an explicit gesture always wins.
+         * Anything that starts monitoring on its own (alarm, worker, boot, un-pause) must go
+         * through [startResilient] instead, which is where the one policy lives.
+         */
         fun start(context: Context) {
             MonitoringStatus.setRunning(true)
             try {
@@ -196,14 +204,38 @@ class AlertService : Service() {
          * foreground service from the background, so a failure is expected there: swallow it
          * (never crash the worker) and post a tap-to-resume prompt instead. Returns whether the
          * service actually started.
+         *
+         * The single gate every automatic path answers to, because this is the one place they all
+         * funnel through. Silence, never a tap-to-resume prompt, for the paused case: the user
+         * chose that state. See [mayStartMonitor] for the rule itself.
          */
-        fun startResilient(context: Context): Boolean = try {
-            start(context)
-            true
-        } catch (_: Exception) {
-            AlertNotificationManager(context.applicationContext).postMonitoringPaused()
-            false
+        fun startResilient(context: Context, fromUnpause: Boolean = false): Boolean {
+            if (!mayStartMonitor(SuspendState.isSuspended(context), fromUnpause)) return false
+            return try {
+                start(context)
+                true
+            } catch (_: Exception) {
+                AlertNotificationManager(context.applicationContext).postRestartBlocked()
+                false
+            }
         }
+
+        /**
+         * The one policy every automatic start answers to — pure, with the live facts passed in,
+         * so both branches are tested rather than reasoned about.
+         *
+         * A suspended package cannot alert at all: the OS hides its notifications, stops its
+         * activities and blocks its audio, so resurrecting it would leave a running service that
+         * cannot do its job. That makes pause universal, where the user's auto-restart pref is not
+         * (BootReceiver deliberately restarts *over* a live alert).
+         *
+         * [fromUnpause] is true only for `ACTION_MY_PACKAGE_UNSUSPENDED`, which *is* the authority
+         * that the pause is over — so it may not be second-guessed by a read of state the OS could
+         * still be committing. Silence on that path would leave the user believing monitoring came
+         * back when it did not.
+         */
+        internal fun mayStartMonitor(suspended: Boolean, fromUnpause: Boolean): Boolean =
+            fromUnpause || !suspended
 
         fun stop(context: Context) {
             context.stopService(Intent(context, AlertService::class.java))
@@ -692,7 +724,7 @@ class AlertService : Service() {
         }
         // Even the base type was refused — surface the dead state like startResilient intends.
         MonitoringStatus.setRunning(false)
-        AlertNotificationManager(applicationContext).postMonitoringPaused()
+        AlertNotificationManager(applicationContext).postRestartBlocked()
         stopSelf()
     }
 
@@ -816,6 +848,15 @@ class AlertService : Service() {
                 while (true) {
                     val fast = screenFlow.value.on
                     delay(if (fast) MONITOR_TICK_MS else MONITOR_TICK_IDLE_MS)
+                    // Suspension stops our activities, hides our notifications and blocks our
+                    // audio — but by design it does NOT stop a foreground service, which is exactly
+                    // how a paused Oko kept monitoring from "Active apps". SuspendReceiver ends it
+                    // at the gesture; this is the backstop for a broadcast that never arrived, and
+                    // it is the reason a paused monitor cannot survive on an OEM that swallows it.
+                    if (SuspendState.isSuspended(applicationContext)) {
+                        stopSelf()
+                        return@launch
+                    }
                     val tick = System.currentTimeMillis()
                     val gap = tick - previous
                     previous = tick
@@ -872,7 +913,10 @@ val mappedThreats = registry.allThreats.map { list ->
                 // staleness and TTL below measures against when this evaluation runs.
                 val now = observationNow(tickNow, System.currentTimeMillis())
                 val nightActive = isNightActive(NightConfig(p.nightEnabled, p.nightStartMin, p.nightEndMin), now)
-                val dayParams = ZoneParams(p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin)
+                val dayParams = ZoneParams(
+                    p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin,
+                    p.slowRedArmed, p.slowYellowArmed, p.fastRedArmed, p.fastYellowArmed
+                )
                 val nightZones = p.nightZones
                 val params = effectiveZoneParams(dayParams, nightZones, p.nightUseCustomZones, nightActive)
                 // Armed bells are per group×tier, stored for day and night, resolved per tick
@@ -1111,14 +1155,18 @@ val mappedThreats = registry.allThreats.map { list ->
             state.focusOblastYellowAlertActive -> AlertLevel.YELLOW
             else -> AlertLevel.NONE
         }
+        // The cause owns its own words, so the row cannot claim a plain outage while the transport
+        // knows something stronger (a name that will not resolve) — and cannot say the opposite.
+        val offlineCause = registry.offlineCause.value
         val monitorTitle = when {
-            isOfflineNow -> s.offlineStatusTitle
+            isOfflineNow -> offlineCause?.notifTitle(s) ?: s.offlineStatusTitle
             state.focusPinned -> String.format(s.notifMonitoringCityFormat, state.focusBannerCity)
             else -> s.notifOngoingTitle
         }
 
         val monitorText = when {
-            isOfflineNow -> offlineLiveBody(s, offlineMinutes)
+            isOfflineNow -> offlineCause?.notifBody(s, offlineMinutes)
+                ?: offlineLiveBody(s, offlineMinutes)
             // A stale position is NOT a GPS-access problem, and saying so was the bug: the phone
             // may simply be still. Only a denied permission or a disabled provider earns that
             // wording; anything else says what we can actually vouch for.
@@ -1198,12 +1246,7 @@ val mappedThreats = registry.allThreats.map { list ->
 
         fun alertTier(id: String, spatial: ThreatZone): ThreatZone? {
             val fast = all[id]?.let { isFastType(it.type.toThreatType(), typeCatalog) } ?: false
-            val red = if (fast) state.fastRedArmed else state.slowRedArmed
-            val yellow = if (fast) state.fastYellowArmed else state.slowYellowArmed
-            return when (spatial) {
-                ThreatZone.INNER -> if (red) ThreatZone.INNER else if (yellow) ThreatZone.OUTER else null
-                ThreatZone.OUTER -> if (yellow) ThreatZone.OUTER else null
-            }
+            return armedTier(spatial, fast, state.params)
         }
 
         val alertable = state.zoneThreats.entries

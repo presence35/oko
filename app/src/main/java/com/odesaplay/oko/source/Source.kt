@@ -2,10 +2,12 @@ package com.odesaplay.oko.source
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import com.odesaplay.oko.ThreatType
+import com.odesaplay.oko.connection.OfflineCause
 import com.odesaplay.oko.connection.ConnEvent
 import com.odesaplay.oko.connection.ConnEventKind
 import com.odesaplay.oko.connection.ConnRetryState
@@ -103,6 +105,12 @@ interface Source {
     fun retryNow() {}
     /** The app came to the foreground — retry if offline. */
     fun onAppForeground() {}
+    /**
+     * Why this source is down, or null while healthy. Typed rather than a boolean so a consumer
+     * can never be handed "offline" without also knowing whether a retry can help. Null for
+     * sources with no transport of their own.
+     */
+    val offlineCause: StateFlow<OfflineCause?> get() = MutableStateFlow(null)
     /** Optional branding link shown in the Logs header (null = hide). */
     val siteUrl: String? get() = null
 }

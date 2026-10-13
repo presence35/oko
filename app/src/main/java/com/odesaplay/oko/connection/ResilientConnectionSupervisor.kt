@@ -123,6 +123,9 @@ class ResilientConnectionSupervisor(
     /** Last monotonic stamp of reconnect progress (schedule/connect/trigger); drives the
      *  stuck-offline watchdog. */
     private val lastReconnectProgressMono = AtomicLong(0L)
+    /** Host the feed resolves to, named in a DNS failure so the log says which name, not just "DNS". */
+    private val endpointHost: String =
+        runCatching { java.net.URI(endpointUrl).host }.getOrNull().orEmpty()
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -171,7 +174,7 @@ class ResilientConnectionSupervisor(
                     recordEvent(ConnEventKind.FALLBACK_RESTORED, detail = "Network validated")
                     if (isRunning.get() && isDownForReconnect()) {
                         reconnectAttempts.set(0)
-                        triggerReconnect("Network restored")
+                        triggerReconnect()
                     }
                 }
             } else {
@@ -183,7 +186,7 @@ class ResilientConnectionSupervisor(
         override fun onLost(network: Network) {
             // A lost secondary interface (e.g. Wi-Fi while LTE is up) must not tear the socket
             // down; only the last validated network going away is a real outage.
-            if (validatedNetworks.remove(network)) handleNetworkLost("Network lost")
+            if (validatedNetworks.remove(network)) handleNetworkLost(OfflineCause.NetworkLost(null))
         }
     }
 
@@ -211,13 +214,13 @@ class ResilientConnectionSupervisor(
         lastReconnectProgressMono.set(Monotonic.now())
 
         if (valid) {
-            triggerReconnect("Initial start")
+            triggerReconnect()
         } else {
             val now = System.currentTimeMillis()
             updateConnectionState(ConnectionState.Offline(
                 since = now,
                 reconnectStartMillis = now,
-                reason = "No validated internet"
+                cause = OfflineCause.NoNetwork
             ))
             recordEvent(ConnEventKind.NO_NETWORK)
         }
@@ -230,16 +233,16 @@ class ResilientConnectionSupervisor(
         } catch (_: Exception) {}
         watchdogJob?.cancel()
         connectJob?.cancel()
-        closeCurrentSocket("Supervisor stopped")
+        closeCurrentSocket()
         updateConnectionState(ConnectionState.Disconnected)
     }
 
-    private fun handleNetworkLost(reason: String) {
+    private fun handleNetworkLost(cause: OfflineCause) {
         val wasDown = _connectionState.value is ConnectionState.Offline ||
                 _connectionState.value is ConnectionState.Connecting
         validatedNetworks.clear()
         isNetworkValidated.set(false)
-        closeCurrentSocket(reason)
+        closeCurrentSocket()
         connectJob?.cancel()
         // No job is scheduled from here, so any posted countdown is phantom — clear it.
         _retryState.value = null
@@ -248,7 +251,7 @@ class ResilientConnectionSupervisor(
         updateConnectionState(ConnectionState.Offline(
             since = prev.offlineSinceOrNull ?: now,
             reconnectStartMillis = now,
-            reason = reason
+            cause = cause
         ))
         if (!wasDown) recordEvent(ConnEventKind.NO_NETWORK)
     }
@@ -279,8 +282,8 @@ class ResilientConnectionSupervisor(
                         SilenceWatchdogAction.TEAR_DOWN -> {
                             Log.w(TAG, "Byte Silence Watchdog expired ($silenceDuration ms) - forcing socket restart")
                             recordEvent(ConnEventKind.CONNECTION_LOST, detail = "${SILENCE_TIMEOUT_MS / 1000}s silence timeout")
-                            closeCurrentSocket("Silence timeout")
-                            scheduleReconnectWithBackoff("silence watchdog")
+                            closeCurrentSocket()
+                            scheduleReconnectWithBackoff(OfflineCause.SilenceTimeout)
                         }
                         SilenceWatchdogAction.DEGRADE -> {
                             val gen = connectionGeneration.get()
@@ -316,8 +319,26 @@ class ResilientConnectionSupervisor(
         if (connectJob?.isActive == true) return
         if (nowMono - lastReconnectProgressMono.get() >= STUCK_OFFLINE_MS) {
             recordEvent(ConnEventKind.RETRY_SCHEDULED, detail = "Stuck watchdog")
-            triggerReconnect("Stuck offline watchdog")
+            triggerReconnect()
         }
+    }
+
+    /** Read the OS's verdict on the active network into our cache; returns whether it is validated.
+     *  The cache gates every reconnect path and the OS never re-emits a callback for a link it
+     *  already considers valid — so a freeze or an overnight pause can leave it stale-false over a
+     *  perfectly good link. Anything the user can invoke (foreground, manual retry) re-reads here
+     *  rather than trusting it. Never clears the flag: a null read is "unknown", not "offline". */
+    private fun refreshNetworkValidation(): Boolean {
+        val caps = runCatching {
+            connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+        }.getOrNull() ?: return false
+        transport = transportOf(caps)
+        val valid = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        if (!valid) return false
+        connectivityManager.activeNetwork?.let { validatedNetworks.add(it) }
+        isNetworkValidated.set(true)
+        return true
     }
 
     /** Proactive validation recheck while down. The OS doesn't always emit a callback when
@@ -326,21 +347,13 @@ class ResilientConnectionSupervisor(
      *  restore path the moment they validate. One cheap binder call per tick — no sockets,
      *  no attempts, no log spam while still down. */
     private fun pollNetworkValidation() {
-        val caps = runCatching {
-            connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-        }.getOrNull() ?: return
-        transport = transportOf(caps)
-        val valid = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-        if (!valid) return
-        val active = connectivityManager.activeNetwork
-        if (active != null) validatedNetworks.add(active)
-        if (isNetworkValidated.compareAndSet(false, true)) {
-            recordEvent(ConnEventKind.FALLBACK_RESTORED, detail = "Network validated (poll)")
-            if (isRunning.get() && isDownForReconnect()) {
-                reconnectAttempts.set(0)
-                triggerReconnect("Network restored (poll)")
-            }
+        val wasValid = isNetworkValidated.get()
+        if (!refreshNetworkValidation()) return
+        if (wasValid) return
+        recordEvent(ConnEventKind.FALLBACK_RESTORED, detail = "Network validated (poll)")
+        if (isRunning.get() && isDownForReconnect()) {
+            reconnectAttempts.set(0)
+            triggerReconnect()
         }
     }
 
@@ -349,7 +362,9 @@ class ResilientConnectionSupervisor(
         return cs is ConnectionState.Offline || cs is ConnectionState.Disconnected
     }
 
-    fun triggerReconnect(@Suppress("UNUSED_PARAMETER") reason: String) {
+    /** Connect now, ignoring the backoff. No reason parameter: every caller used to pass a label
+     *  that nothing read, and a free-text note is exactly what a typed [OfflineCause] replaced. */
+    fun triggerReconnect() {
         if (!isRunning.get()) return
         lastReconnectProgressMono.set(Monotonic.now())
         connectJob?.cancel()
@@ -358,11 +373,14 @@ class ResilientConnectionSupervisor(
         }
     }
 
-    private fun scheduleReconnectWithBackoff(reason: String) {
+    /** Backoff-scheduled reconnect. [cause] is the WHY of the current episode and rides onto the
+     *  state it publishes, so the notification, the log line and the retry countdown can never
+     *  describe three different outages. */
+    private fun scheduleReconnectWithBackoff(cause: OfflineCause) {
         // Schedule the timer regardless of validation; the socket is only created when the
         // network is validated at fire time, so a genuinely dead network never spins.
         if (!isNetworkValidated.get()) {
-            handleNetworkLost("No network available for reconnect")
+            handleNetworkLost(OfflineCause.NoNetwork)
             return
         }
 
@@ -381,7 +399,7 @@ class ResilientConnectionSupervisor(
             updateConnectionState(ConnectionState.Offline(
                 since = prev.offlineSinceOrNull ?: now,
                 reconnectStartMillis = now,
-                reason = reason,
+                cause = cause,
                 attempt = attempt
             ))
 
@@ -393,7 +411,7 @@ class ResilientConnectionSupervisor(
     }
 
     private fun executeConnect() {
-        closeCurrentSocket("Starting fresh connection")
+        closeCurrentSocket()
         lastReconnectProgressMono.set(Monotonic.now())
         val gen = connectionGeneration.incrementAndGet()
         updateConnectionState(ConnectionState.Connecting(
@@ -443,8 +461,9 @@ class ResilientConnectionSupervisor(
                 if (connectionGeneration.get() != gen) return
                 if (disconnectHandledGen.getAndSet(gen) == gen) return
                 activeWebSocket = null
+                val cause = OfflineCause.from(t, endpointHost)
                 recordEvent(ConnEventKind.CONNECTION_LOST, detail = t.message)
-                scheduleReconnectWithBackoff("Socket failure: ${t.message}")
+                scheduleReconnectWithBackoff(cause)
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -458,7 +477,7 @@ class ResilientConnectionSupervisor(
                 // No validated gate: the backoff path itself no-ops into handleNetworkLost
                 // when the network is down, so a validation flap can never strand us.
                 if (isRunning.get()) {
-                    scheduleReconnectWithBackoff("Socket closed ($code)")
+                    scheduleReconnectWithBackoff(OfflineCause.SocketFailure("closed ($code)"))
                 }
             }
         })
@@ -468,7 +487,7 @@ class ResilientConnectionSupervisor(
      *  in-flight failure can never race a fresh connect into a stranded Offline. The current
      *  generation's disconnect is claimed here, so the socket's own onFailure/onClosed can
      *  never double-schedule behind an intentional close. */
-    private fun closeCurrentSocket(@Suppress("UNUSED_PARAMETER") reason: String) {
+    private fun closeCurrentSocket() {
         try {
             disconnectHandledGen.set(connectionGeneration.get())
             activeWebSocket?.cancel()
@@ -480,15 +499,23 @@ class ResilientConnectionSupervisor(
     fun retryNow() {
         reconnectAttempts.set(0)
         _retryState.value = null
+        // A manual retry must not inherit a stale gate: after an overnight pause the OS may have
+        // validated the link without our callback observing it, and a socket built while the flag
+        // reads false fails straight back to Offline — the "retry does nothing" report. The refresh
+        // is skipped while stopped (nothing to reconnect), but the audit row is still recorded.
+        if (isRunning.get()) refreshNetworkValidation()
         recordEvent(ConnEventKind.RETRY_MANUAL)
-        triggerReconnect("User manual retry")
+        triggerReconnect()
     }
 
     fun onForeground() {
-        if (!isRunning.get() || !isNetworkValidated.get()) return
+        if (!isRunning.get()) return
+        // Same stale-gate hazard: returning to the app is exactly when the user expects it to come
+        // back, and the OS re-emits nothing for a link it already considers valid.
+        refreshNetworkValidation()
         val cs = _connectionState.value
         if (cs.isOffline || cs is ConnectionState.Connecting) {
-            triggerReconnect("App foregrounded")
+            triggerReconnect()
         }
     }
 

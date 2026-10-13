@@ -14,7 +14,7 @@ interface MonitorCore {
 
     fun onBaselineSyncRequired()
     fun onStreamFrameReceived()
-    fun onNetworkDisconnected(reason: String)
+    fun onNetworkDisconnected()
     fun onNetworkReconnected()
 
     fun updateThreats(threats: List<NormalizedThreat>)

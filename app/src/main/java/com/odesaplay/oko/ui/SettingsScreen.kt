@@ -374,7 +374,10 @@ fun SettingsScreen(
             SettingsSection.NIGHT -> s.nightModeLabel
             SettingsSection.SHELTERS -> s.shelterSectionTitle
             SettingsSection.THREATS -> s.threatsLabel
-            SettingsSection.SYSTEM -> s.systemSectionTitle
+            // A speaker stranded in a language they cannot read scans the root list for Latin
+            // letters; the row carries the English word "Language" so the way back is findable.
+            SettingsSection.SYSTEM -> if (lang == AppLanguage.EN) s.systemSectionTitle
+                else "${s.systemSectionTitle} · ${Strings.get(AppLanguage.EN).languageLabel}"
             SettingsSection.FLOURISH -> s.moraleSectionTitle
             SettingsSection.MORE -> s.moreSectionTitle
             SettingsSection.RELIABILITY -> s.reliabilitySectionTitle

@@ -33,6 +33,10 @@ class ThreatTest {
             assertNotNull("Catalog missing entry for $type", info)
             assertTrue("Display name empty for $type", info!!.labelUa.isNotBlank())
             assertTrue("Display name EN empty for $type", info.labelEn.isNotBlank())
+            // RU must be real copy now, not the old silent EN fallback.
+            assertTrue("Display name RU empty for $type", info.labelRu.isNotBlank())
+            assertTrue("Description RU empty for $type", info.descriptionRu.isNotBlank())
+            assertTrue("Details RU empty for $type", info.detailsRu.isNotBlank())
         }
     }
 
@@ -56,7 +60,7 @@ class ThreatTest {
         assertEquals("Drone", info.labelEn)
         assertEquals("БпЛА", info.label(AppLanguage.UA))
         assertEquals("Drone", info.label(AppLanguage.EN))
-        assertEquals("Drone", info.label(AppLanguage.RU))
+        assertEquals("БпЛА", info.label(AppLanguage.RU))
     }
 
     // ─────────────────────────────────────────────────────────────

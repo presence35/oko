@@ -55,6 +55,19 @@
             android:name=".service.AlertWakeupReceiver"
             android:exported="false" />
 
+        <!-- The OS pause gesture (see SuspendReceiver): suspension stops our activities and hides
+             our notifications but leaves a foreground service running, so ending it is ours to do.
+             A protected system broadcast, delivered to manifest receivers; API 28+, so on older
+             devices (where a package cannot be suspended) it simply never fires. -->
+        <receiver
+            android:name=".service.SuspendReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_SUSPENDED" />
+                <action android:name="android.intent.action.MY_PACKAGE_UNSUSPENDED" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name=".ThreatWidgetReceiver"
             android:exported="true"

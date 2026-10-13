@@ -11,7 +11,7 @@ behavior here, update the implementation in the same change.
 | Official alerts | `List<OblastAlert>` | Regional alert feed (source-agnostic alert currency, `engine/OblastAlert.kt`) |
 | Alert focus | `focusToken: String?`, `focusCityUa: String?`, `cityScope: Boolean` | Which canonical oblast id / city the official-alert gate scopes to |
 | Focus state | `LatLng`, `FocusCity?`, `hasGps: Boolean` | Where to center evaluation |
-| Zone params | `ZoneParams` (day/night variants) | User thresholds + armed bells |
+| Zone params | `ZoneParams` (day/night variants) | User thresholds + armed bells. A ring's bell gates that ring's *alert surfaces* (strip, header, widget, sound) via `armedTier`; the map marker is never gated |
 | Type gates | `hiddenTypes: Set<String>`, `silencedTypes: Set<String>` | Per-source filtering |
 | Night config | `NightConfig` | Window + overrides |
 | Language | `AppLanguage` | UA/EN/RU for reason text |
@@ -21,7 +21,7 @@ behavior here, update the implementation in the same change.
 
 | Output | Type | Description |
 |---|---|---|
-| Zone groups | `threatsInner`, `threatsOuter`, `activeZone`, `zoneThreats` | Tier classification |
+| Zone groups | `threatsInner`, `threatsOuter`, `activeZone` (bell-gated alert tiers), `zoneThreats` (raw spatial tier) | Tier classification |
 | Map threats | `List<NormalizedThreat>` (raw fixes) | Display-ready, ghosts excluded. Prediction is applied downstream: consumers glide via `predictPosition` on their own tick (MapView's 1s marker loop, popup proximity) |
 | Red cities | `Set<String>` | Cities under official alert (region-precise; scope-independent, labels light nationwide) |
 | Official alert | `focusOblastAlertActive: Boolean`, `focusOblastYellowAlertActive: Boolean`, `officialReason: String?`, `reasonThreatId: String?` | Siren/latch state (red) + yellow flag + attribution, owned by the engine |
@@ -247,7 +247,8 @@ Returns `StagedEvaluation(eval, inboundIds)`: the staged ids are published so th
 reads THIS verdict instead of running its own `isInbound` (a second, ungated evaluation that
 could disagree with the tier the service rang on). Rewrites zoneThreats, threatsInner/Outer and
 activeZone; no-op when nothing is inbound. Only tracks the engine already placed in a zone are
-staged, so a far out-of-range track never gets a synthetic alarm. The engine itself stays a pure
+staged, so a far out-of-range track never gets a synthetic alarm. The staged tier passes the
+same `armedTier` bell gate as the engine's own lists, so a disarmed ring stages nothing. The engine itself stays a pure
 reporter of source data.
 
 The staged tier is the ALARM tier and nothing else: the card's distance/ETA pills come from
@@ -398,7 +399,7 @@ Thread-safe. Owned by engine. Not a global singleton.
 7. **Zone distance uses predicted position for all types.** Both fast and slow threats tier
    based on the dead-reckoned (predicted) position, so the zone label always matches the map
    icon position — whatever the active plugin's prediction model shows is what the user sees.
-8. **`alwaysInnerWithinReach` types always ring INNER within reach.** MiG-31K takeoff = country-wide warning; the flag comes from `ThreatProps` (aviation sets it), so no type name is hardcoded in the engine. Only opt-out is the type's bell toggle.
+8. **`alwaysInnerWithinReach` types always ring INNER within reach.** MiG-31K takeoff = country-wide warning; the flag comes from `ThreatProps` (aviation sets it), so no type name is hardcoded in the engine. Opt-outs: the type's bell toggle, or the red ring's bell (demoting it to yellow while the yellow bell is on).
 9. **Advisory/areaOnly never tier.** These are informational only.
 10. **Dark-only theme.** No light theme. Theme is a plugin interface; only dark ships.
 11. **Zero UI regressions.** Existing Compose UI, map markers, cards, settings must

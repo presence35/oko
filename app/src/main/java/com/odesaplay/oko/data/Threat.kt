@@ -39,18 +39,28 @@ data class ThreatTypeInfo(
     val descriptionEn: String,
     val detailsUa: String,
     val detailsEn: String,
+    /** Russian copy. Blank falls back to English — the same escape hatch `UpdateManager` uses. */
+    val labelRu: String = "",
+    val descriptionRu: String = "",
+    val detailsRu: String = "",
     val shortLabelUa: String? = null,
     val shortLabelEn: String? = null,
+    val shortLabelRu: String? = null,
+    val jokeRu: String = "",
     val jokeUa: String = "",
     val jokeEn: String = ""
 ) {
     /** Display strings per language — the only sanctioned read path (see [AppLanguage.pick]). */
-    fun label(lang: AppLanguage): String = lang.pick(labelUa, labelEn, labelEn)
-    fun description(lang: AppLanguage): String = lang.pick(descriptionUa, descriptionEn, descriptionEn)
-    fun details(lang: AppLanguage): String = lang.pick(detailsUa, detailsEn, detailsEn)
-    fun joke(lang: AppLanguage): String = lang.pick(jokeUa, jokeEn, jokeEn)
+    fun label(lang: AppLanguage): String = lang.pick(labelUa, labelEn, labelRu.ifBlank { labelEn })
+    fun description(lang: AppLanguage): String =
+        lang.pick(descriptionUa, descriptionEn, descriptionRu.ifBlank { descriptionEn })
+    fun details(lang: AppLanguage): String =
+        lang.pick(detailsUa, detailsEn, detailsRu.ifBlank { detailsEn })
+    fun joke(lang: AppLanguage): String = lang.pick(jokeUa, jokeEn, jokeRu.ifBlank { jokeEn })
     fun shortLabel(lang: AppLanguage): String = lang.pick(
-        shortLabelUa ?: labelUa, shortLabelEn ?: labelEn, shortLabelEn ?: labelEn
+        shortLabelUa ?: labelUa,
+        shortLabelEn ?: labelEn,
+        (shortLabelRu ?: labelRu).ifBlank { shortLabelEn ?: labelEn }
     )
 }
 
@@ -62,7 +72,10 @@ object ThreatTypeCatalog {
             descriptionUa = "Ударні безпілотники, зокрема «Шахеди».",
             descriptionEn = "Strike drones, including \"Shahed\"-type.",
             detailsUa = "Shahed-136 (Герань-2) — дрон-камікадзе. Великі хвилі, найчастіше вночі, низько (50–200 м) на ~180 км/год, БЧ ~40 кг, дальність до ~1000 км, години барражування. Через малу швидкість зазвичай є 10–30 хв. Звук нагадує мопед/газонокосарку. Сприймай будь-яку БпЛА-тривогу серйозно — дрон може відокремитися від хвилі будь-де.",
-            detailsEn = "Shahed-136 / Geran-2 is a one-way attack drone. Large waves, often at night, flying low (50–200 m) at ~180 km/h, ~40 kg warhead, range up to ~1,000 km, hours of loiter. Because it's slow, you usually get 10–30 min of warning. It sounds like a moped/lawnmower. Treat any Drone alert as real — one can drop out of the wave at any point."
+            detailsEn = "Shahed-136 / Geran-2 is a one-way attack drone. Large waves, often at night, flying low (50–200 m) at ~180 km/h, ~40 kg warhead, range up to ~1,000 km, hours of loiter. Because it's slow, you usually get 10–30 min of warning. It sounds like a moped/lawnmower. Treat any Drone alert as real — one can drop out of the wave at any point.",
+            labelRu = "БпЛА",
+            descriptionRu = "Ударные беспилотники, в том числе «Шахеды».",
+            detailsRu = "Shahed-136 (Герань-2) — дрон-камикадзе. Большие волны, чаще всего ночью, низко (50–200 м) на ~180 км/ч, БЧ ~40 кг, дальность до ~1000 км, часы барражирования. Из-за малой скорости обычно есть 10–30 мин. Звук напоминает мопед/газонокосилку. Воспринимай любую тревогу по БпЛА серьёзно — дрон может отделиться от волны где угодно."
         ),
         ThreatType.FPV_LOITERING to ThreatTypeInfo(
             labelUa = "FPV-дрон",
@@ -70,7 +83,10 @@ object ThreatTypeCatalog {
             descriptionUa = "FPV та баражувальні боєприпаси (Ланцет, Молнія) — короткої дальності, біля лінії фронту.",
             descriptionEn = "FPV and loitering munitions (Lancet, Molniya) — short range, near the front line.",
             detailsUa = "Баражувальні боєприпаси малої дальності (Ланцет-3, Молнія) та FPV-камікадзе з БЧ 1–5 кг, ~100–120 км/год, дальність 10–40 км — кілька хвилин польоту. Загроза для техніки, артилерії, піхоти на передовій. Далеко від фронту це зазвичай не пряма загроза цивільним — індикатор активності, а не дальній удар.",
-            detailsEn = "Short-range loitering munitions (Lancet-3, Molniya) and FPV kamikazes with a 1–5 kg warhead, ~100–120 km/h, 10–40 km range — minutes of flight. They threaten vehicles, artillery, troops at the front. Far behind the front line this is usually not a direct danger to civilians — treat it as a frontline indicator, not a long-range strike."
+            detailsEn = "Short-range loitering munitions (Lancet-3, Molniya) and FPV kamikazes with a 1–5 kg warhead, ~100–120 km/h, 10–40 km range — minutes of flight. They threaten vehicles, artillery, troops at the front. Far behind the front line this is usually not a direct danger to civilians — treat it as a frontline indicator, not a long-range strike.",
+            labelRu = "FPV-дрон",
+            descriptionRu = "FPV и барражирующие боеприпасы (Ланцет, Молния) — малой дальности, у линии фронта.",
+            detailsRu = "Барражирующие боеприпасы малой дальности (Ланцет-3, Молния) и FPV-камикадзе с БЧ 1–5 кг, ~100–120 км/ч, дальность 10–40 км — несколько минут полёта. Угроза для техники, артиллерии, пехоты на передовой. Далеко от фронта это обычно не прямая угроза гражданским — индикатор активности, а не дальний удар."
         ),
         ThreatType.CRUISE_MISSILE to ThreatTypeInfo(
             labelUa = "Крилата ракета",
@@ -80,7 +96,11 @@ object ThreatTypeCatalog {
             descriptionUa = "Крилаті ракети повітряного, морського та наземного базування.",
             descriptionEn = "Air-, sea-, and ground-launched cruise missiles.",
             detailsUa = "Калібр, Х-101/555, Іскандер-К — основа дальніх ударів. Летять низько (часто <100 м), огинаючи рельєф, ~850 км/год. Дальність 1000–2500+ км, БЧ 400–500 кг. Час польоту 30–90 хв — зазвичай є справжнє попередження. У залпі бувають порожні імітатори. Координати можуть бути приблизними — дій за офіційною сиреною.",
-            detailsEn = "Kalibr, Kh-101/555, Iskander-K — the backbone of long-range strikes. They fly low (often <100 m), terrain-hugging to hide from radar, at ~850 km/h. Range 1,000–2,500+ km, warhead 400–500 kg. Flight time 30–90 min, so real warning is usual. Salvoes can include empty decoys. Positions can be approximate — always follow the official siren."
+            detailsEn = "Kalibr, Kh-101/555, Iskander-K — the backbone of long-range strikes. They fly low (often <100 m), terrain-hugging to hide from radar, at ~850 km/h. Range 1,000–2,500+ km, warhead 400–500 kg. Flight time 30–90 min, so real warning is usual. Salvoes can include empty decoys. Positions can be approximate — always follow the official siren.",
+            labelRu = "Крылатая ракета",
+            shortLabelRu = "Крылатая",
+            descriptionRu = "Крылатые ракеты воздушного, морского и наземного базирования.",
+            detailsRu = "Калибр, Х-101/555, Искандер-К — основа дальних ударов. Летят низко (часто <100 м), огибая рельеф, ~850 км/ч. Дальность 1000–2500+ км, БЧ 400–500 кг. Время полёта 30–90 мин — обычно есть настоящее предупреждение. В залпе бывают пустые имитаторы. Координаты могут быть приблизительными — действуй по официальной сирене."
         ),
         ThreatType.BALLISTIC to ThreatTypeInfo(
             labelUa = "Балістика",
@@ -88,7 +108,10 @@ object ThreatTypeCatalog {
             descriptionUa = "Балістичні ракети з коротким часом підльоту — найвищий пріоритет.",
             descriptionEn = "Ballistic missiles with short flight time — highest priority.",
             detailsUa = "Іскандер-М, KN-23 — 3–6 Махів. Від пуску до прильоту 2–6 хв — часу лишити будівлю немає, лише укритися. Важка БЧ; перехоплення на кінцевій ділянці вкрай складне. Показана координата — екстраполяція від пуску, може бути неточною. Почув балістичну тривогу — негайно в укриття, не чекай підтвердження.",
-            detailsEn = "Iskander-M and KN-23 reach 3–6 Mach. Launch-to-impact: 2–6 min — time only to shelter, not to leave a building. Heavy warheads; terminal interception very hard. The shown position is usually extrapolated from launch/splash and can be far off. On a ballistic alert, take cover immediately — don't wait to confirm."
+            detailsEn = "Iskander-M and KN-23 reach 3–6 Mach. Launch-to-impact: 2–6 min — time only to shelter, not to leave a building. Heavy warheads; terminal interception very hard. The shown position is usually extrapolated from launch/splash and can be far off. On a ballistic alert, take cover immediately — don't wait to confirm.",
+            labelRu = "Баллистика",
+            descriptionRu = "Баллистические ракеты с коротким временем подлёта — наивысший приоритет.",
+            detailsRu = "Искандер-М, KN-23 — 3–6 Махов. От пуска до прилёта 2–6 мин — времени покинуть здание нет, только укрыться. Тяжёлая БЧ; перехват на конечном участке крайне сложен. Показанная координата — экстраполяция от пуска, может быть неточной. Услышал баллистическую тревогу — немедленно в укрытие, не жди подтверждения."
         ),
         ThreatType.KAB to ThreatTypeInfo(
             labelUa = "КАБ",
@@ -98,7 +121,11 @@ object ThreatTypeCatalog {
             descriptionUa = "Керовані авіабомби, що застосовуються поблизу лінії фронту.",
             descriptionEn = "Guided aerial bombs, used near the front line.",
             detailsUa = "Керовані плануючі бомби (ФАБ-250…1500 + УМПК) скидають за десятки км і планують на 40–70 км, здебільшого по фронту. БЧ — сотні кг, тому влучання руйнівні. ~900 км/год, але в глибокий тил не дістають. Тривога КАБ важлива для прифронтових/прикордонних регіонів.",
-            detailsEn = "Guided glide bombs (FAB-250…1500 + UMPK) are dropped from dozens of km away and glide 40–70 km, mostly at the frontline. Warhead hundreds of kg — that's why impacts are so destructive. ~900 km/h, but they can't reach deep rear areas. KAB alerts matter mainly for border/frontline regions."
+            detailsEn = "Guided glide bombs (FAB-250…1500 + UMPK) are dropped from dozens of km away and glide 40–70 km, mostly at the frontline. Warhead hundreds of kg — that's why impacts are so destructive. ~900 km/h, but they can't reach deep rear areas. KAB alerts matter mainly for border/frontline regions.",
+            labelRu = "КАБ",
+            shortLabelRu = "КАБ",
+            descriptionRu = "Управляемые авиабомбы, применяемые вблизи линии фронта.",
+            detailsRu = "Управляемые планирующие бомбы (ФАБ-250…1500 + УМПК) сбрасывают за десятки км, и планируют они на 40–70 км, в основном по фронту. БЧ — сотни кг, поэтому попадания разрушительны. ~900 км/ч, но в глубокий тыл не достают. Тревога КАБ важна для прифронтовых и приграничных регионов."
         ),
         ThreatType.AVIATION to ThreatTypeInfo(
             labelUa = "МіГ-31К",
@@ -106,7 +133,10 @@ object ThreatTypeCatalog {
             descriptionUa = "Зліт носіїв «Кинджал» — загроза для всієї території країни.",
             descriptionEn = "Takeoff of \"Kinzhal\" carrier aircraft — threat to the entire country.",
             detailsUa = "МіГ-31К/І несе гіперзвуковий Кинджал, тож тривога про зліт — на всю країну: запуск можливий майже з будь-якої точки, до будь-якого міста долітає за хвилини. Літак летить високо й швидко; небезпека — ракета після пуску. Стався до зльоту МіГ-31К серйозно навіть без пуску — це надійний ранній сигнал.",
-            detailsEn = "MiG-31K/І launches the Kinzhal hypersonic missile, so its takeoff alert covers the whole country — it can be fired from almost anywhere and reach any city in minutes. The plane flies high and fast; the danger is the missile after launch. Treat a MiG-31K takeoff alert seriously even before any launch — it's a reliable early signal."
+            detailsEn = "MiG-31K/І launches the Kinzhal hypersonic missile, so its takeoff alert covers the whole country — it can be fired from almost anywhere and reach any city in minutes. The plane flies high and fast; the danger is the missile after launch. Treat a MiG-31K takeoff alert seriously even before any launch — it's a reliable early signal.",
+            labelRu = "МиГ-31К",
+            descriptionRu = "Взлёт носителей «Кинжал» — угроза для всей территории страны.",
+            detailsRu = "МиГ-31К/И несёт гиперзвуковой Кинжал, поэтому тревога о взлёте — на всю страну: запуск возможен почти из любой точки, до любого города долетает за минуты. Самолёт летит высоко и быстро; опасность — ракета после пуска. Относись ко взлёту МиГ-31К серьёзно даже без пуска — это надёжный ранний сигнал."
         ),
         ThreatType.RECON to ThreatTypeInfo(
             labelUa = "Розвідка",
@@ -116,7 +146,11 @@ object ThreatTypeCatalog {
             descriptionUa = "Розвідувальна активність, що передує ударам.",
             descriptionEn = "Reconnaissance activity that precedes strikes.",
             detailsUa = "Малі спостережні дрони (Орлан-10/30, ZALA, Supercam): 100–1500 м (Орлан — до ~5000 м), 90–150 км/год, кілька годин у повітрі. БЧ не несуть — розвідка та коригування артилерії. Їхня поява часто передує ударам — це попередження. Для цивільних у глибокому тилу: ознака активності, а не пряма загроза.",
-            detailsEn = "Small observation drones (Orlan-10/30, ZALA, Supercam): 100–1,500 m (Orlan up to ~5,000 m), 90–150 km/h, hours aloft. No warhead — they spot and correct artillery. Their presence often precedes strikes, so a recon alert is a heads-up. For civilians deep behind the front: a warning sign, not a direct danger."
+            detailsEn = "Small observation drones (Orlan-10/30, ZALA, Supercam): 100–1,500 m (Orlan up to ~5,000 m), 90–150 km/h, hours aloft. No warhead — they spot and correct artillery. Their presence often precedes strikes, so a recon alert is a heads-up. For civilians deep behind the front: a warning sign, not a direct danger.",
+            labelRu = "Разведка",
+            shortLabelRu = "Разведка",
+            descriptionRu = "Разведывательная активность, предшествующая ударам.",
+            detailsRu = "Малые наблюдательные дроны (Орлан-10/30, ZALA, Supercam): 100–1500 м (Орлан — до ~5000 м), 90–150 км/ч, несколько часов в воздухе. БЧ не несут — разведка и корректировка артиллерии. Их появление часто предшествует ударам — это предупреждение. Для гражданских в глубоком тылу: признак активности, а не прямая угроза."
         ),
         ThreatType.UNKNOWN to ThreatTypeInfo(
             labelUa = "Невідомий",
@@ -125,6 +159,10 @@ object ThreatTypeCatalog {
             descriptionEn = "Signals whose type is still being confirmed by sources.",
             detailsUa = "Джерела бачать об'єкт, але тип ще не підтверджено — це може бути БпЛА, ракета чи імітатор. Показані швидкість і дальність — орієнтовні. Не вважай, що «це просто так»: стався до сигналу як до реального, поки він не розв'язався, і керуйся офіційними сигналами.",
             detailsEn = "Sources see an object but haven't confirmed the type — it could be a drone, missile or decoy. Speed/range shown are guesses. Don't assume \"probably nothing\": treat it as a real alert until it resolves, and stay with official signals.",
+            labelRu = "Неизвестный",
+            descriptionRu = "Сигналы, тип которых ещё уточняется источниками.",
+            detailsRu = "Источники видят объект, но тип ещё не подтверждён — это может быть БпЛА, ракета или имитатор. Показанные скорость и дальность — ориентировочные. Не считай, что «это просто так»: относись к сигналу как к реальному, пока он не разрешился, и руководствуйся официальными сигналами.",
+            jokeRu = "Объект Шрёдингера: и дрон, и ракета — пока кто-то не скажет иначе.",
             jokeUa = "Об'єкт Шредінгера: і дрон, і ракета — поки хтось не скаже інакше.",
             jokeEn = "Schrödinger's object: both a drone and a missile until someone says otherwise."
         )

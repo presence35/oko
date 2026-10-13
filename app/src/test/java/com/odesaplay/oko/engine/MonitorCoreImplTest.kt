@@ -59,7 +59,7 @@ class MonitorCoreImplTest {
         core.updateThreats(listOf(threat(id = "t1")))
         core.updateAlerts(listOf(redAlert()))
 
-        core.onNetworkDisconnected("socket closed")
+        core.onNetworkDisconnected()
 
         assertEquals(1, core.threats.value.size)
         assertEquals(1, core.alerts.value.size)
@@ -68,7 +68,7 @@ class MonitorCoreImplTest {
 
     @Test
     fun `reconnect stays stale until the first authoritative frame`() {
-        core.onNetworkDisconnected("x")
+        core.onNetworkDisconnected()
         core.onNetworkReconnected()
         assertTrue(core.isInformationStale.value)
 
@@ -86,7 +86,7 @@ class MonitorCoreImplTest {
 
     @Test
     fun `updateThreats replaces the whole set and clears stale`() {
-        core.onNetworkDisconnected("x")
+        core.onNetworkDisconnected()
 
         core.updateThreats(listOf(threat(id = "t1"), threat(id = "t2")))
 

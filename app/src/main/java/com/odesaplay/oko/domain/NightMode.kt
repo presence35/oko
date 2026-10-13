@@ -55,7 +55,10 @@ fun effectiveZoneParams(
     useNightZones: Boolean,
     nightActive: Boolean
 ): ZoneParams = if (nightActive && useNightZones) {
-    ZoneParams(night.slowRedKm, night.slowYellowKm, night.fastRedMin, night.fastYellowMin)
+    ZoneParams(
+        night.slowRedKm, night.slowYellowKm, night.fastRedMin, night.fastYellowMin,
+        night.slowRedArmed, night.slowYellowArmed, night.fastRedArmed, night.fastYellowArmed
+    )
 } else {
     day
 }

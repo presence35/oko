@@ -86,7 +86,10 @@ object WidgetUpdater {
                         lang = p.language,
                         iconSet = if (p.moraleMasterEnabled) p.threatIconSet else ThreatIconSet.DEFAULT,
                         mapEnabled = p.mapVisibleTypes,
-                        dayParams = ZoneParams(p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin),
+                        dayParams = ZoneParams(
+                            p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin,
+                            p.slowRedArmed, p.slowYellowArmed, p.fastRedArmed, p.fastYellowArmed
+                        ),
                         nightZones = p.nightZones,
                         nightWindow = NightConfig(p.nightEnabled, p.nightStartMin, p.nightEndMin),
                         useNightZones = p.nightUseCustomZones

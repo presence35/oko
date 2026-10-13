@@ -59,7 +59,7 @@ class MonitorCoreImpl(
         _lastUpdateEpochMs.value = System.currentTimeMillis()
     }
 
-    override fun onNetworkDisconnected(reason: String) {
+    override fun onNetworkDisconnected() {
         // Critical Invariant: Disconnected != All Clear!
         // We do NOT clear alerts or threats. We mark information as stale.
         _isInformationStale.value = true

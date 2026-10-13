@@ -33,7 +33,7 @@ class NeutralizedTally(
         const val SOURCE_EPISODE = "episode"
         const val SOURCE_ALLCLEAR = "allclear"
         const val CHANNEL_NEUTRALIZED = "neutralized"
-        private const val NOTIF_NEUTRALIZED = 6
+        private const val NOTIF_NEUTRALIZED = AlertNotificationManager.NOTIF_NEUTRALIZED
 
         /**
          * Shared tap target for every flourish notification (running tally, episode summary,

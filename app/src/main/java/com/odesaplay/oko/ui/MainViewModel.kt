@@ -806,7 +806,10 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             prefs.night.zones.fastRedArmed, prefs.night.zones.fastYellowArmed
         )
         val effectiveParams = effectiveZoneParams(
-            ZoneParams(live.slowRedKm, live.slowYellowKm, live.fastRedMin, live.fastYellowMin),
+            ZoneParams(
+                live.slowRedKm, live.slowYellowKm, live.fastRedMin, live.fastYellowMin,
+                prefs.slowRedArmed, prefs.slowYellowArmed, prefs.fastRedArmed, prefs.fastYellowArmed
+            ),
             nightZones, prefs.night.window.useCustomZones, nightActive
         )
         val activeArmed = effectiveArmed(
@@ -1180,7 +1183,7 @@ showBorders = prefs.showBorders,
             .filter { it.type.toThreatType() in mapEnabledTypes }
         val silencedTypeStrings = (ThreatType.values().toSet() - alertedTypes).map { it.toEngineString() }.toSet()
         val engineFocus = focusLocation?.let { LatLng(it.lat, it.lon) }
-        val engineParams = ZoneParams(params.slowRedKm, params.slowYellowKm, params.fastRedMin, params.fastYellowMin)
+        val engineParams = params
         val staged = stageInbound(
             engine.evaluate(
                 threats = threatList,

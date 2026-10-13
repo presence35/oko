@@ -8,6 +8,7 @@ import kotlinx.coroutines.runBlocking
 import com.odesaplay.oko.engine.MonitorCoreImpl
 import com.odesaplay.oko.service.AlertWatchdog
 import com.odesaplay.oko.service.EmergencyResurrectionWorker
+import com.odesaplay.oko.service.SuspendState
 import com.odesaplay.oko.WakeEventLog
 import com.odesaplay.oko.WakeKind
 
@@ -24,6 +25,11 @@ class BootReceiver : BroadcastReceiver() {
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
                 WakeEventLog.record(WakeKind.BOOT)
                 val appContext = context.applicationContext
+                // A paused app has nothing to resume and no visible place to say so — the OS hides
+                // its notifications — so a "paused after reboot" row queued here would only surface
+                // later, as a stale claim, when the user un-pauses. Un-pausing re-schedules what
+                // this skips.
+                if (SuspendState.isSuspended(appContext)) return
                 AlertWatchdog.schedule(appContext)
                 EmergencyResurrectionWorker.schedule(appContext)
 

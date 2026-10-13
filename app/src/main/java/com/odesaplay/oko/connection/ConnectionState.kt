@@ -1,7 +1,73 @@
 package com.odesaplay.oko.connection
 
 import com.odesaplay.oko.Strings
+import java.net.UnknownHostException
 import java.time.Instant
+
+/**
+ * Why the feed is down — the typed currency every consumer reads.
+ *
+ * This replaces a free-text `reason` that nothing ever read (its only consumer discarded the
+ * argument) plus a boolean bolted beside it to mean one of the cases. A cause that the state
+ * carries means the notification copy, the log line and the retry-ability of the outage are all
+ * derived from ONE place, so they cannot drift into contradicting each other — the report that
+ * motivated it was a "tap Retry, nothing happens" dead end shown for an outage no retry can fix.
+ */
+sealed interface OfflineCause {
+
+    /** No usable internet at all — the socket never had a link to try. */
+    data object NoNetwork : OfflineCause
+
+    /** The link is fine but the resolver will not answer for this host. Unfixable by retrying. */
+    data class DnsFailure(val host: String) : OfflineCause
+
+    /** The host was resolved and refused us (or hung up): retrying is the whole point. */
+    data class SocketFailure(val message: String?) : OfflineCause
+
+    /** The socket was open but went quiet past the hard watchdog. */
+    data object SilenceTimeout : OfflineCause
+
+    /** A validated network went away under us. */
+    data class NetworkLost(val detail: String?) : OfflineCause
+
+    /** Classifies a failed connect. The throwable arrives nested (OkHttp wraps, the platform wraps
+     *  again), so the walk over the chain is the behaviour that matters, not the direct case. */
+    companion object {
+        fun from(t: Throwable?, host: String): OfflineCause =
+            if (t.hasCause<UnknownHostException>()) DnsFailure(host)
+            else SocketFailure(t?.message)
+    }
+
+    /** One place a cause becomes words for the reconnect log. */
+    fun label(s: Strings.StringSet): String = when (this) {
+        NoNetwork, is NetworkLost -> s.connEventNoNetwork
+        is DnsFailure -> s.connEventDnsBlocked
+        is SocketFailure, SilenceTimeout -> s.connEventLost
+    }
+
+    /** Notification headline. Kept separate from [label] on purpose: the log explains the outage to
+     *  someone debugging it, the headline has to fit a collapsed shade row. */
+    fun notifTitle(s: Strings.StringSet): String = when (this) {
+        is DnsFailure -> s.offlineDnsTitle
+        else -> s.offlineStatusTitle
+    }
+
+    /** Notification body. Short by design — anything longer is truncated in a collapsed row. */
+    fun notifBody(s: Strings.StringSet, minutes: Int): String = when (this) {
+        is DnsFailure -> s.offlineDnsBody
+        else -> String.format(s.offlineLiveFormat, minutes)
+    }
+}
+
+private inline fun <reified T : Throwable> Throwable?.hasCause(): Boolean {
+    var cur = this
+    var guard = 0
+    while (cur != null && guard++ < 8) {
+        if (cur is T) return true
+        cur = cur.cause
+    }
+    return false
+}
 
 /** Live reconnect state for the current offline episode — transient, never persisted. */
 data class ConnRetryState(
@@ -102,13 +168,15 @@ sealed interface ConnectionState {
      *
      * @property since Epoch millis when this offline episode began.
      * @property reconnectStartMillis Wall-clock stamp of the down edge (plain, no flap stitching).
-     * @property reason Human-readable or error message describing the drop.
+     * @property cause Why the feed is down, typed — the single source for the notification copy,
+     *   the reconnect-log line and whether a retry can help. Never a free-text reason: nothing
+     *   downstream could act on one.
      * @property attempt Current retry count in the active backoff sequence.
      */
     data class Offline(
         val since: Long,
         val reconnectStartMillis: Long,
-        val reason: String? = null,
+        val cause: OfflineCause = OfflineCause.NoNetwork,
         val attempt: Int = 0
     ) : ConnectionState
 }
@@ -122,6 +190,10 @@ val ConnectionState.isDegraded: Boolean
 
 val ConnectionState.isOffline: Boolean
     get() = this is ConnectionState.Offline || this is ConnectionState.Disconnected
+
+/** The typed cause while offline, null otherwise. The one accessor consumers need. */
+val ConnectionState.offlineCauseOrNull: OfflineCause?
+    get() = (this as? ConnectionState.Offline)?.cause
 
 val ConnectionState.offlineSinceOrNull: Long?
     get() = when (this) {

@@ -215,7 +215,6 @@ internal fun DeathAnimStyleGrid(
     onChange: (DeathAnimationStyle) -> Unit,
     /** Shuffle lives outside the grid: it is a mode over the six, not a seventh style. */
     shuffleLabel: String? = null,
-    onShuffleChange: ((Boolean) -> Unit)? = null,
     /** The HQ toggle's state: off draws every card's cheap body. */
     detailed: Boolean = true,
     modifier: Modifier = Modifier
@@ -246,7 +245,7 @@ internal fun DeathAnimStyleGrid(
                 }
             }
         }
-        if (shuffleLabel != null && onShuffleChange != null) {
+        if (shuffleLabel != null) {
             Spacer(Modifier.height(10.dp))
             AlertToggleRow(
                 title = shuffleLabel,

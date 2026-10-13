@@ -179,7 +179,7 @@ class ResilientConnectionSupervisorTest {
         Shadows.shadowOf(cm).getNetworkCallbacks().forEach { it.onLost(net) }
 
         val offline = awaitState { it is ConnectionState.Offline }
-        assertTrue((offline as ConnectionState.Offline).reason != null)
+        assertEquals(OfflineCause.NetworkLost(null), (offline as ConnectionState.Offline).cause)
         assertTrue(sup.connEvents.value.any { it.kind == ConnEventKind.NO_NETWORK })
     }
 

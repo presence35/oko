@@ -35,6 +35,30 @@ class AlertNotificationManagerTest {
         assertEquals(AlertNotificationManager.GROUP_OFFLINE, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_OFFLINE_CRITICAL))
         assertEquals(AlertNotificationManager.GROUP_UPDATE, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_UPDATE))
         assertEquals(AlertNotificationManager.GROUP_TALLY, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_ALARM_EPISODE))
+        assertEquals(AlertNotificationManager.GROUP_TALLY, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_NEUTRALIZED))
+    }
+
+    /**
+     * Two features sharing one id silently overwrite each other in the shade: the tally and the
+     * critical-offline notice both sat on 6, so a reconnect that cancelled the offline row also
+     * wiped the tally. One id, one owner — pinned here so it can never regress.
+     */
+    @Test
+    fun `every notification id is unique`() {
+        val ids = listOf(
+            AlertNotificationManager.NOTIF_MONITOR,
+            AlertNotificationManager.NOTIF_ALERT,
+            AlertNotificationManager.NOTIF_ALLCLEAR,
+            AlertNotificationManager.NOTIF_NEUTRALIZED,
+            AlertNotificationManager.NOTIF_MILESTONE,
+            AlertNotificationManager.NOTIF_OFFLINE_CRITICAL,
+            AlertNotificationManager.NOTIF_UPDATE,
+            AlertNotificationManager.NOTIF_ALARM_EPISODE,
+            AlertNotificationManager.NOTIF_MONITORING_PAUSED,
+            AlertNotificationManager.NOTIF_SLEEP
+        )
+
+        assertEquals(ids.size, ids.toSet().size)
     }
 
     @Test

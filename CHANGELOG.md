@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+- Switching off a zone's bell now hides its threats from the footer strip, header tint and widget too, not just the sound — a disarmed yellow ring no longer shows a missile icon (red-range threats demote to yellow while the yellow bell is on) 10-13_16:34:12
+- Pausing Oko from Android now really stops it: the service is stopped and the wakeup alarm cancelled at the gesture, nothing can resurrect it while paused, and the monitor stops itself on its next tick even if the system never delivered the pause notice — no more "Oko" sitting in Active apps after you paused it 10-13_16:26:00
+- Un-pausing Oko brings monitoring back on its own (wakeup chain, watchdog and service), under the same "restart after reboot" setting as every other automatic start 10-13_16:26:00
+- Threat facts (names, one-line summaries, full details) are now in Russian instead of silently falling back to English, matching the Fast/Slow pills 10-13_15:41:46
+- The per-threat Fast/Slow and speed pills stay on one line at large system text sizes, instead of collapsing into a single vertical column of letters 10-13_15:41:46
+- The Display row now appends the English word "Language" when the UI is in another language, so a speaker stranded in a script they can't read can still find the way back 10-13_15:29:32
+- The neutralized tally no longer vanishes right after posting: it shared notification id 6 with the critical-offline notice, so a brief reconnect (which cancels the offline row) wiped the tally too 10-13_16:10:00
+- The "Random explosion" shuffle toggle now actually shows up under the style grid — it was wired but never rendered 10-13_15:21:59
+- A new "Server unreachable" state appears when the network is fine but the server's name won't resolve, instead of a dead "Offline — tap to retry" that no retry could ever fix (the log says so too, and points at DNS/network rather than the app) 10-13_14:35:00
+- The "monitoring paused" prompt no longer re-alerts every few minutes: a refused background restart updates the row silently instead of buzzing again, and it no longer claims a reboot that never happened 10-13_14:05:00
+- Coming back to the app, or tapping Retry, now re-reads the network instead of trusting a cached "offline" verdict — no more being stuck offline until you toggle Wi-Fi/mobile data to force it 10-13_14:05:00
 - A fresh official alert now holds the notification slot for a minute: an outer-zone onset right after it still sounds, but the official row with its reason stays put instead of being swapped out seconds after the siren; a red escalation still takes over at once 10-07_23:10:00
 - Falling debris advisory slider now commits the released thumb position and shows a single Off label, fixing the setting snapping back to off 10-07_23:45:00
 - Fixed the alarm summary under-counting minutes after Doze: an evaluation fired by a feed snapshot no longer measures against the frozen tick clock, so a 6-minute alarm closed out of a sleep reads 6 minutes, not 3 10-07_23:10:00

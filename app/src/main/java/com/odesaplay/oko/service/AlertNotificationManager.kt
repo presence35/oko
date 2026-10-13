@@ -80,6 +80,7 @@ class AlertNotificationManager(private val context: Context) {
         const val NOTIF_MONITOR = 1
         const val NOTIF_ALERT = 2
         const val NOTIF_ALLCLEAR = 3
+        const val NOTIF_NEUTRALIZED = 4
         const val NOTIF_MILESTONE = 5
         const val NOTIF_OFFLINE_CRITICAL = 6
         const val NOTIF_UPDATE = 7
@@ -115,6 +116,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             NOTIF_ALERT, NOTIF_ALLCLEAR -> GROUP_ALERT
             NOTIF_MILESTONE, NOTIF_OFFLINE_CRITICAL -> GROUP_OFFLINE
             NOTIF_UPDATE -> GROUP_UPDATE
+            NOTIF_NEUTRALIZED -> GROUP_TALLY
             else -> GROUP_TALLY
         }
 
@@ -486,13 +488,26 @@ const val NOTIF_MONITORING_PAUSED = 9
      * Background monitoring could not be restarted (Android 12+ blocks starting a foreground
      * service from the background). Surface a tap-to-resume prompt: the tap brings the app to
      * the foreground, where [AlertService.start] is legal.
+     *
+     * Two callers, two truths: [postMonitoringPaused] is the reboot case (auto-restart is off),
+     * [postRestartBlocked] is a resurrection path the OS refused. The old single copy claimed a
+     * reboot that never happened. `setOnlyAlertOnce` is load-bearing: three 15-minute paths fire
+     * this, and without it every re-post re-alerts — the "notification every few minutes" report.
      */
     fun postMonitoringPaused() {
-        val s = Strings.get(AppLanguage.EN)
+        postPaused(Strings.get(AppLanguage.EN).bootRestartPaused)
+    }
+
+    fun postRestartBlocked() {
+        postPaused(Strings.get(AppLanguage.EN).monitoringRestartBlocked)
+    }
+
+    private fun postPaused(title: String) {
         val notif = buildNotification(NOTIF_MONITORING_PAUSED, CHANNEL_MONITOR)
             .setSmallIcon(R.drawable.ic_trident)
-            .setContentTitle(s.bootRestartPaused)
+            .setContentTitle(title)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setContentIntent(openAppIntent())
             .setAutoCancel(true)
             .build()

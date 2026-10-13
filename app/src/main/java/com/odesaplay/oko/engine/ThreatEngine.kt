@@ -145,10 +145,13 @@ class ThreatEngine(
                 threatScores.add(
                     scoreThreat(t, props, distKm, eta, redVal, yellowVal, now)
                 )
+                // Spatial tier stays on the map (the sound path re-applies the bells itself),
+                // but a disarmed ring publishes nothing to the strip/header/widget lists.
                 zoneThreatsMap[t.id] = tier
-                when (tier) {
+                when (armedTier(tier, props.isFast, params)) {
                     ThreatZone.INNER -> inInner.add(t)
                     ThreatZone.OUTER -> inOuter.add(t)
+                    null -> Unit
                 }
             }
         }
@@ -580,5 +583,26 @@ data class ZoneParams(
     val slowRedKm: Int,
     val slowYellowKm: Int,
     val fastRedMin: Int,
-    val fastYellowMin: Int
+    val fastYellowMin: Int,
+    val slowRedArmed: Boolean = true,
+    val slowYellowArmed: Boolean = true,
+    val fastRedArmed: Boolean = true,
+    val fastYellowArmed: Boolean = true
 )
+
+/**
+ * The alerting tier for a spatial zone tier once the bells are applied (group × red/yellow).
+ * Each ring gates itself, and since red sits inside yellow a red-range threat under a disarmed
+ * red but an armed yellow is DEMOTED to yellow rather than dropped. A ring that is off removes
+ * its threats from every alert surface (footer icon, header tint, widget, sound) while the map
+ * marker stays. One function shared by the engine's own lists and the service's sound path.
+ */
+fun armedTier(spatial: ThreatZone?, isFast: Boolean, params: ZoneParams): ThreatZone? {
+    val red = if (isFast) params.fastRedArmed else params.slowRedArmed
+    val yellow = if (isFast) params.fastYellowArmed else params.slowYellowArmed
+    return when (spatial) {
+        ThreatZone.INNER -> if (red) ThreatZone.INNER else if (yellow) ThreatZone.OUTER else null
+        ThreatZone.OUTER -> if (yellow) ThreatZone.OUTER else null
+        null -> null
+    }
+}

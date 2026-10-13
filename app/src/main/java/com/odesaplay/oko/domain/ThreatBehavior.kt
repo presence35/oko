@@ -7,6 +7,7 @@ import com.odesaplay.oko.engine.ThreatEvaluationResult
 import com.odesaplay.oko.engine.ThreatProps
 import com.odesaplay.oko.engine.ThreatZone
 import com.odesaplay.oko.engine.ZoneParams
+import com.odesaplay.oko.engine.armedTier
 import com.odesaplay.oko.engine.bearingFlat
 import com.odesaplay.oko.engine.destinationPoint
 import com.odesaplay.oko.engine.distanceHaversine
@@ -100,8 +101,9 @@ fun stageInbound(
 
     val tiers = LinkedHashMap(eval.zoneThreats)
     inbound.forEach { tiers[it.id] = stagedTier(propsFor(it.type).isFast) }
-    val inner = threats.filter { tiers[it.id] == ThreatZone.INNER }
-    val outer = threats.filter { tiers[it.id] == ThreatZone.OUTER }
+    // The staged tier is an alarm tier, so it passes the same bell gate as the engine's lists.
+    val inner = threats.filter { armedTier(tiers[it.id], propsFor(it.type).isFast, params) == ThreatZone.INNER }
+    val outer = threats.filter { armedTier(tiers[it.id], propsFor(it.type).isFast, params) == ThreatZone.OUTER }
     return StagedEvaluation(
         eval = eval.copy(
             zoneThreats = tiers,

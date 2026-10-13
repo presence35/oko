@@ -497,7 +497,7 @@ class NeptunDecoderTest {
 
         override fun onBaselineSyncRequired() {}
         override fun onStreamFrameReceived() {}
-        override fun onNetworkDisconnected(reason: String) {}
+        override fun onNetworkDisconnected() {}
         override fun onNetworkReconnected() {}
         override fun updateThreats(threats: List<NormalizedThreat>) { this.threats.value = threats }
         override fun upsertThreat(threat: NormalizedThreat) {

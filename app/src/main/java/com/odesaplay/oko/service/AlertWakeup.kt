@@ -73,6 +73,16 @@ object AlertWakeup {
         Intent(context, AlertWakeupReceiver::class.java),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
+
+    /**
+     * Ends the chain. Called when the package is paused: a paused app has no monitoring left for a
+     * wakeup to thaw, and an alarm left armed would only serve to start a process that must not
+     * run. Un-pausing re-arms it.
+     */
+    fun cancel(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        alarmManager.cancel(pendingIntent(context))
+    }
 }
 
 /**

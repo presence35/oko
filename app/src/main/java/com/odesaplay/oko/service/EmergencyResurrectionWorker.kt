@@ -46,6 +46,11 @@ class EmergencyResurrectionWorker(
     override suspend fun doWork(): Result {
         WakeEventLog.record(WakeKind.WORKER)
         if (MonitoringStatus.running.value) return Result.success()
+        // Before the pref, and before the side effect below: a paused package cannot alert at all,
+        // so there is no kill to report and no resurrection to attempt — `startResilient` would
+        // refuse anyway, but the battery-exemption evidence flagged here would be a claim about a
+        // resurrection that never happened.
+        if (SuspendState.isSuspended(applicationContext)) return Result.success()
         val prefs = UserPrefs(applicationContext)
         // Same policy as AlertWatchdog: with auto-restart switched off, resurrecting from the
         // background would also post a resume prompt every 15 minutes no one asked for.

@@ -435,6 +435,74 @@ class ThreatEngineTest {
     }
 
     @Test
+    fun `evaluate - disarmed slow red bell demotes the red-range threat to yellow`() {
+        val threat = makeThreat(lat = userLat + 0.05, lon = userLng, speedKmh = 180.0)
+        val result = engine.evaluate(
+            threats = listOf(threat),
+            focus = LatLng(userLat, userLng),
+            params = params.copy(slowRedArmed = false),
+            hiddenTypes = emptySet(),
+            silencedTypes = emptySet(),
+            now = System.currentTimeMillis()
+        )
+        // Red is off, yellow is still on: demoted to yellow, never dropped.
+        assertTrue(result.threatsInner.isEmpty())
+        assertEquals(1, result.threatsOuter.size)
+        assertEquals(ThreatZone.OUTER, result.activeZone)
+        // Still a map threat: the bell silences the alert surfaces, not the marker.
+        assertEquals(1, result.mapThreats.size)
+        // The spatial tier survives for the sound path to gate itself.
+        assertEquals(ThreatZone.INNER, result.zoneThreats[threat.id])
+    }
+
+    @Test
+    fun `evaluate - disarmed slow yellow bell drops the yellow-range threat`() {
+        val threat = makeThreat(lat = userLat + 0.20, lon = userLng, speedKmh = 180.0)
+        val result = engine.evaluate(
+            threats = listOf(threat),
+            focus = LatLng(userLat, userLng),
+            params = params.copy(slowYellowArmed = false),
+            hiddenTypes = emptySet(),
+            silencedTypes = emptySet(),
+            now = System.currentTimeMillis()
+        )
+        assertTrue(result.threatsOuter.isEmpty())
+        assertNull(result.activeZone)
+    }
+
+    @Test
+    fun `evaluate - both slow bells off drop the threat entirely`() {
+        val threat = makeThreat(lat = userLat + 0.05, lon = userLng, speedKmh = 180.0)
+        val result = engine.evaluate(
+            threats = listOf(threat),
+            focus = LatLng(userLat, userLng),
+            params = params.copy(slowRedArmed = false, slowYellowArmed = false),
+            hiddenTypes = emptySet(),
+            silencedTypes = emptySet(),
+            now = System.currentTimeMillis()
+        )
+        assertTrue(result.threatsInner.isEmpty())
+        assertTrue(result.threatsOuter.isEmpty())
+        assertNull(result.activeZone)
+    }
+
+    @Test
+    fun `evaluate - disarmed fast yellow bell drops a fast OUTER threat`() {
+        // 1.48 deg ≈ 165 km at 3300 km/h ≈ 3 min → OUTER (fastRedMin=2, fastYellowMin=5).
+        val threat = makeThreat(type = "ballistic", lat = userLat + 1.48, lon = userLng, speedKmh = 3300.0)
+        fun eval(params: ZoneParams) = engine.evaluate(
+            threats = listOf(threat),
+            focus = LatLng(userLat, userLng),
+            params = params,
+            hiddenTypes = emptySet(),
+            silencedTypes = emptySet(),
+            now = System.currentTimeMillis()
+        )
+        assertEquals(1, eval(params).threatsOuter.size)
+        assertTrue(eval(params.copy(fastYellowArmed = false)).threatsOuter.isEmpty())
+    }
+
+    @Test
     fun `evaluate - resolved threat excluded`() {
         val threat = makeThreat(
             lat = userLat + 0.05, lon = userLng, speedKmh = 180.0, status = "resolved"
