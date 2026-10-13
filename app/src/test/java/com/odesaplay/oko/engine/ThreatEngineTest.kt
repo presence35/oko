@@ -837,7 +837,7 @@ class ThreatEngineTest {
     fun `scoreThreat - returns 0 beyond yellow zone`() {
         val threat = makeThreat()
         val props = NEPTUN_TYPES["shahed"]!!
-        val score = engine.scoreThreat(threat, props, 100.0, null, params.slowRedKm, params.slowYellowKm, System.currentTimeMillis())
+        val score = engine.scoreThreat(threat, props, 100.0, null, params, System.currentTimeMillis())
         assertEquals(0.0, score, 0.01)
     }
 
@@ -845,8 +845,17 @@ class ThreatEngineTest {
     fun `scoreThreat - returns positive within red zone`() {
         val threat = makeThreat()
         val props = NEPTUN_TYPES["shahed"]!!
-        val score = engine.scoreThreat(threat, props, 5.0, 2.0, params.slowRedKm, params.slowYellowKm, System.currentTimeMillis())
+        val score = engine.scoreThreat(threat, props, 5.0, 2.0, params, System.currentTimeMillis())
         assertTrue(score > 0.0)
+    }
+
+    @Test
+    fun `scoreThreat - fast threat scores by ETA even past the yellow-ring distance`() {
+        // Ballistic params: fastRedMin=2, fastYellowMin=5. 50 km at 3300 km/h ≈ 0.9 min → INNER
+        // by ETA, yet 50 km is far beyond fastYellowMin (5). The old km-vs-minutes mix scored 0.
+        val props = NEPTUN_TYPES["ballistic"]!!
+        val score = engine.scoreThreat(threat(id = "fast-in"), props, 50.0, 0.9, params, System.currentTimeMillis())
+        assertTrue("fast in-ETA threat must score > 0", score > 0.0)
     }
 
     @Test
@@ -854,7 +863,7 @@ class ThreatEngineTest {
         val props = NEPTUN_TYPES["shahed"]!!
         fun score(reliability: String) = engine.scoreThreat(
             threat(id = "r-$reliability", reliability = reliability),
-            props, 5.0, null, params.slowRedKm, params.slowYellowKm, System.currentTimeMillis()
+            props, 5.0, null, params, System.currentTimeMillis()
         )
         val high = score("high")
         val medium = score("medium")
@@ -870,7 +879,7 @@ class ThreatEngineTest {
         val props = NEPTUN_TYPES["shahed"]!!
         fun score(reliability: String) = engine.scoreThreat(
             threat(id = "r2-$reliability", reliability = reliability),
-            props, 5.0, null, params.slowRedKm, params.slowYellowKm, System.currentTimeMillis()
+            props, 5.0, null, params, System.currentTimeMillis()
         )
         assertEquals(score("medium"), score("mid"), 1e-12)
         assertEquals(score("unknown"), score("bogus"), 1e-12)
@@ -1034,11 +1043,11 @@ class ThreatEngineTest {
         val t = makeThreat(type = "unknown", speedKmh = null)
         val now = System.currentTimeMillis()
         val fromDefault = engine.scoreThreat(
-            t, engine.propsFor("unknown"), 5.0, null, params.slowRedKm, params.slowYellowKm, now
+            t, engine.propsFor("unknown"), 5.0, null, params, now
         )
         val doubled = engine.scoreThreat(
             t, NEPTUN_TYPES.getValue("unknown").copy(baseSeverity = 8.0),
-            5.0, null, params.slowRedKm, params.slowYellowKm, now
+            5.0, null, params, now
         )
         assertEquals(fromDefault * 2.0, doubled, 1e-9)
         assertEquals(10.0, NEPTUN_TYPES.getValue("ballistic").baseSeverity, 1e-9)
@@ -1052,7 +1061,7 @@ class ThreatEngineTest {
         assertEquals(4.0, empty.propsFor("made-up").baseSeverity, 1e-9)
         val score = empty.scoreThreat(
             t, empty.propsFor("made-up"), 5.0, null,
-            params.slowRedKm, params.slowYellowKm, System.currentTimeMillis()
+            params, System.currentTimeMillis()
         )
         assertTrue("default severity must still score", score > 0.0)
     }

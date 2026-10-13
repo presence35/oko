@@ -139,11 +139,8 @@ class ThreatEngine(
 
             if (tier != null) {
                 val eta = etaMinutes(distKm, speedKmh)
-                val (redVal, yellowVal) =
-                    if (props.isFast) params.fastRedMin to params.fastYellowMin
-                    else params.slowRedKm to params.slowYellowKm
                 threatScores.add(
-                    scoreThreat(t, props, distKm, eta, redVal, yellowVal, now)
+                    scoreThreat(t, props, distKm, eta, params, now)
                 )
                 // Spatial tier stays on the map (the sound path re-applies the bells itself),
                 // but a disarmed ring publishes nothing to the strip/header/widget lists.
@@ -470,19 +467,26 @@ class ThreatEngine(
         props: ThreatProps,
         distKm: Double,
         etaMin: Double?,
-        redKm: Int,
-        yellowKm: Int,
+        params: ZoneParams,
         now: Long
     ): Double {
-        val distanceFactor = when {
-            distKm <= redKm -> 1.0
-            distKm <= yellowKm -> 0.65
+        // Proximity band on the SAME axis the zone tier uses: fast threats band by ETA
+        // (minutes), slow by distance (km). The old callers fed fastRedMin/fastYellowMin
+        // (minutes) into a km comparison, zeroing every fast threat past ~20 km.
+        val proximityFactor = if (props.isFast) when {
+            etaMin == null -> 0.0
+            etaMin <= params.fastRedMin -> 1.0
+            etaMin <= params.fastYellowMin -> 0.65
+            else -> 0.0
+        } else when {
+            distKm <= params.slowRedKm -> 1.0
+            distKm <= params.slowYellowKm -> 0.65
             else -> 0.0
         }
-        if (distanceFactor == 0.0) return 0.0
+        if (proximityFactor == 0.0) return 0.0
         val baseSeverity = props.baseSeverity
         return (baseSeverity
-            * distanceFactor
+            * proximityFactor
             * reliabilityFactor(Reliability.fromApi(t.reliability))
             * confirmFactor(t.confirmations)
             * countFactor(t.count)
@@ -515,10 +519,7 @@ class ThreatEngine(
     ): Double {
         if (distKm == null) return 0.0
         val props = propsFor(t.type)
-        val (redVal, yellowVal) =
-            if (props.isFast) params.fastRedMin to params.fastYellowMin
-            else params.slowRedKm to params.slowYellowKm
-        return scoreThreat(t, props, distKm, etaMin, redVal, yellowVal, now)
+        return scoreThreat(t, props, distKm, etaMin, params, now)
     }
 
     companion object {

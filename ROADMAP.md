@@ -56,6 +56,33 @@ still sounds). Every patch still states the master explicitly rather than relyin
 and two tests now pin the pair: `AppIntensityTest` asserts that the shipped default *resolves* to
 `ONCE_PER_THREAT` through `NotifyPrefs.from`, and that `Normal` equals the default field for field.
 
+## Threat score ("skull") model — reshape + intensity sensitivity
+
+The per-threat skull gauge (`ThreatEngine.scoreThreat`, 0–10) is
+`baseSeverity × proximity × reliability × confirm × count × quality × stale × eta`. The
+km-vs-minutes bug is fixed: the proximity band now sits on the same axis the zone tier uses (fast by
+ETA, slow by distance), so a missile 50 km out no longer reads 0.
+
+Still to do — reshape before adding any knob, because sensitivity only scales a curve and cannot fix
+a wrong ranking:
+
+- **Fast threats should be ETA-led with a high floor**, not the 0.65 "outside red ring" cliff: a
+  cruise 10 min out currently lands in yellow and can score below a drone plotted on top of you.
+- **Don't grade distance-to-me off a synthetic position.** For `positionQuality == "approx"` /
+  inbound tracks the dot is destination/orbit-placed, so distance is a weak proxy and `qualityFactor`
+  only docks 0.85. Grade those by approach/time, and keep one certainty term instead of compounding
+  `reliability × confirm × count` (which triple-counts "how verified").
+- Consider a coarser 0–5 scale: 0–10 implies precision the heuristic does not have.
+
+Then the knob, tied to the existing `AppIntensity` personas — **not** the `reliability` data field
+and **not** tone/sound, because a preference must not masquerade as data or as an output: a
+`SkullSensitivity` (CALM / BALANCED / PARANOID) as one more field on `IntensityPatch`, written by
+`AppIntensity.patch()` (Aware→paranoid, Quiet/Watching→calm), default BALANCED = neutral 1.0 so
+nobody moves. It scales the caveat axes (proximity weighting, low-certainty attenuation), never
+`baseSeverity`, and is one more explicit pure input to `scoreThreat`. Optional manual row in
+Settings → Reliability. The skull gates nothing (zones/bells do), so it is cheap to iterate and needs
+no calibration data.
+
 ## Tell the user the app was asleep, and push for the battery exemption (notice SHIPPED)
 
 The notice is built and opt-in: Settings -> Reliability -> "Asleep notice" (`sleepNoticeEnabled`,
@@ -217,6 +244,33 @@ migration or be done standalone with a simple grid-bucket approach.
 
 Timer in footer "how long this alert has been active"
 Fill settings pills: city name, fill, border only
+
+## Zone rings look elliptical on device (reported 2026-10-13)
+
+A field report says the yellow/red zone rings are visibly not round on screen (Odesa), and pinching
+to another zoom does **not** fix it. Ruled out from the code, so don't re-walk it:
+
+- `MapLibreGeoJson.singleCircle` emits 64 points through `Distance.destinationPoint`, i.e. a
+  *geodesic* circle. Mercator is conformal, so it projects to a circle with only a
+  `1 + (σ/2)·tan φ` second-order deviation — 0.4% at 50 km / Odesa, ~1 px on a 300 px ring. The
+  classic `1/cos(lat)` squash needs equal-degree lat/lon offsets, which this generator never uses.
+- No in-app path to a non-uniform scale: every Compose `graphicsLayer` has scaleX == scaleY, tilt
+  gestures are off (`MapLibreView`), no `setProjection`, and the camera is a single scalar zoom —
+  `newLatLngBounds` contain-fits, it cannot stretch, which is also why a manual zoom changing
+  nothing is expected rather than surprising.
+
+Remaining candidates are both *outside* the drawing code: the map surface/bitmap is being rendered
+non-square (freeform or split window, display or emulator aspect, screenshot pipeline), or the ring
+is misread. Decisive test, one build: add a debug-only `CircleLayer` with a **pixel** radius at the
+same focus point (a perfect circle by construction — `MapLibreLayerManager.kt`) plus a one-shot log
+of `projection.toScreenLocation` for N/E/S/W at a fixed km radius (`MapLibreView.kt`). Reference
+round + ring oval ⇒ real projection/viewport bug; both equally oval ⇒ the pixels are stretched and
+the app is fine.
+
+Independent of the verdict, worth fixing anyway: the amber ring over the tan landmass at low
+contrast plus the aircraft icon sitting on the NE arc is what makes the shape read as lopsided. Add
+a cartographic **casing** (a wider dark `LineLayer` under each coloured ring) so the ring holds its
+shape against land, sea and icons — two extra layers in `MapLibreLayerManager.kt`.
 
 ## Deferred alert-path follow-ups (only if reproduced)
 

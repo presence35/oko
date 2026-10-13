@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- The threat-card skull gauge now reads fast threats (cruise, ballistic, KAB, aviation) by ETA instead of comparing their ETA thresholds against kilometres — a missile 50 km out no longer shows a skull of 0 10-13_21:24:29
 - The alarm summary no longer goes missing: two gates that mirror a saved setting started at "off" and waited for their background reader, and the report asked the service whether the alarm had been live — a fact the all-clear wipes on the same tick. Each gate now starts at its shipped default, and the window remembers for itself that it saw the alarm live 10-13_19:59:22
 
 ## [0.6.824]

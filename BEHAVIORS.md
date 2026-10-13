@@ -277,14 +277,16 @@ Return: distKm / speedKmh * 60.0
 Null when speedKmh is null or <= 0.
 ```
 
-### `scoreThreat(threat, props, distKm, etaMin, redKm, yellowKm, now)` — Per-Threat Score (0–10)
+### `scoreThreat(threat, props, distKm, etaMin, params, now)` — Per-Threat Score (0–10)
 
 ```
 Multiplicative combination:
-  props.baseSeverity × distanceFactor × reliabilityFactor × confirmFactor
+  props.baseSeverity × proximityFactor × reliabilityFactor × confirmFactor
   × countFactor × qualityFactor × staleFactor × etaFactor
 
-distanceFactor: 1.0 in red, 0.65 in yellow, 0.0 beyond
+proximityFactor: 1.0 in red, 0.65 in yellow, 0.0 beyond — banded on the SAME axis the
+  zone tier uses: fast types by ETA (minutes, params.fastRedMin/fastYellowMin), slow by
+  distance (km, params.slowRedKm/slowYellowKm). A fast type with no measurable ETA is 0.
 reliabilityFactor: HIGH=1.0, MEDIUM=0.8, UNKNOWN=0.7, LOW=0.5
 confirmFactor: 1.0 + 0.15 × min(confirmations-1, 6)
 countFactor: 1.0 + 0.1 × min(count-1, 8)
