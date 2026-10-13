@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- The monitoring trident is now always a standalone row you can glance at for the alert level: its notification carries no group key (a named group with no summary gets folded into the platform's app-level bundle anyway) and its channel moved off Silent importance — still silent, just no longer buried behind the resolved tally 10-13_17:20:00
+- The resolved tally and the air-raid summary no longer share one notification group — an unmapped id now fails loudly instead of quietly inheriting a bundle 10-13_17:20:00
+- An outage's connection log now survives its own milestone checks instead of being wiped at the start of every episode (the symptom was an offline banner above an empty log), and "Ignore for 30 min" is unaffected either way 10-13_15:40:00
 - Tapping Retry on the offline notification now visibly shows "Reconnecting…" on the row instead of doing nothing until the next tick 10-13_16:55:11
 - A course line that only restates the threat type and the place ("Balistychna threat — Kyiv, Kyivska oblast") no longer repeats the location already shown in the header 10-13_16:49:41
 - Switching off a zone's bell now hides its threats from the footer strip, header tint and widget too, not just the sound — a disarmed yellow ring no longer shows a missile icon (red-range threats demote to yellow while the yellow bell is on) 10-13_16:34:12

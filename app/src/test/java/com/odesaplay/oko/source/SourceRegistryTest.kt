@@ -13,6 +13,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.odesaplay.oko.connection.ConnEvent
+import com.odesaplay.oko.connection.ConnEventKind
+import com.odesaplay.oko.connection.ConnRetryState
 import com.odesaplay.oko.connection.Monotonic
 import com.odesaplay.oko.source.neptun.NeptunSource.Companion.NEPTUN_TYPES
 import com.odesaplay.oko.engine.NormalizedThreat
@@ -26,7 +29,7 @@ private class FakeSource(
     alertsInit: List<OblastAlert> = emptyList(),
     connectionInit: SourceState = SourceState.DISCONNECTED,
     override val sourceType: SourceType = SourceType.WS
-) : Source {
+) : Source, ConnectionLogSource {
     override val name = id
     override val typeCatalog: Map<String, ThreatProps> = NEPTUN_TYPES
     private val _threats = MutableStateFlow(threatsInit)
@@ -50,6 +53,18 @@ private class FakeSource(
     fun emitAlerts(list: List<OblastAlert>) { _alerts.value = list }
     fun emitConnection(state: SourceState) { _connectionState.value = state }
     fun emitOperationalMode(mode: OperationalMode) { _operationalMode.value = mode }
+
+    // ConnectionLogSource: a real ring, so a test can prove the registry does not clear it.
+    private val _connEvents = MutableStateFlow<List<ConnEvent>>(emptyList())
+    override val connEvents: StateFlow<List<ConnEvent>> = _connEvents.asStateFlow()
+    private val _retryState = MutableStateFlow<ConnRetryState?>(null)
+    override val retryState: StateFlow<ConnRetryState?> = _retryState.asStateFlow()
+    var dismissCount = 0; private set
+    override fun dismissLogCard() { dismissCount++; _connEvents.value = emptyList(); _retryState.value = null }
+    override fun annotateConnectionLog(kind: ConnEventKind, attempt: Int?, delayMs: Long?, detail: String?) {
+        _connEvents.value = (listOf(ConnEvent(0L, kind, attempt, delayMs, detail)) + _connEvents.value)
+    }
+    override fun setActiveAlertSource(sourceId: String?) = Unit
 }
 
 class SourceRegistryTest {
@@ -503,6 +518,36 @@ class SourceRegistryTest {
         tick += 1_000L
         ws.emitConnection(SourceState.OFFLINE)
         assertEquals(episodeStart, registry.degradedSince.value)
+    }
+
+    /**
+     * The milestone check fires on the same emission that publishes a new Offline state, so when it
+     * used to clear the log card it wiped the lines THIS outage had just written — the reported
+     * symptom being an offline banner above an empty connection log. The card is capped and
+     * timestamped, so the outage's own log must survive its milestone being evaluated.
+     */
+    @Test
+    fun `a milestone check does not clear the connection log of the outage it belongs to`() {
+        var tick = 1_000_000_000L
+        Monotonic.nowProvider = { tick }
+        val registry = SourceRegistry()
+        val ws = FakeSource("ws")
+        registry.register(ws, testScope())
+
+        tick += 1_000L
+        ws.emitConnection(SourceState.OFFLINE)
+        // The outage's first line, written as the socket drops.
+        registry.annotateConnectionLog(ConnEventKind.CONNECTION_LOST, detail = "boom")
+        assertEquals(1, registry.connEvents.value.size)
+
+        // Past the 3-minute milestone, and again later in the same episode.
+        repeat(2) { tick += 4 * 60_000L; registry.checkMilestones(tick) }
+
+        assertEquals(
+            "the milestone check must not erase the outage it is reporting on",
+            0, ws.dismissCount
+        )
+        assertTrue(registry.connEvents.value.any { it.kind == ConnEventKind.CONNECTION_LOST })
     }
 
     @Test

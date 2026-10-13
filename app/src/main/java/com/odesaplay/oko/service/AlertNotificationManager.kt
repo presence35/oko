@@ -92,17 +92,8 @@ const val NOTIF_MONITORING_PAUSED = 9
 
         /** Bump to delete + recreate all managed channels (sound/importance/attrs are
          *  frozen by Android at creation — this is the only way a change takes effect). */
-        const val CHANNEL_SCHEMA_VERSION = 4
+        const val CHANNEL_SCHEMA_VERSION = 5
 
-        /**
-         * Every Oko notification carries an explicit group key, so the platform never folds
-         * unrelated ones into its automatic app-level bundle. The monitoring notification is
-         * its own group precisely so it can never be collapsed behind another Oko notification:
-         * the trident is the always-visible claim that Oko is running (BEHAVIORS.md,
-         * Consumer Behaviors → Notification grouping).
-         */
-        const val GROUP_MONITOR = "oko_monitoring"
-        const val GROUP_PAUSED = "oko_paused"
         const val GROUP_ALERT = "oko_alert"
         const val GROUP_OFFLINE = "oko_offline"
         const val GROUP_TALLY = "oko_tally"
@@ -110,14 +101,25 @@ const val NOTIF_MONITORING_PAUSED = 9
         const val GROUP_UPDATE = "oko_update"
 
         /** The one place a notification id maps to its group: a producer can never invent a
-         *  group, and two ids can never share one by accident. */
-        fun groupFor(id: Int): String = when (id) {
-            NOTIF_MONITOR, NOTIF_MONITORING_PAUSED, NOTIF_SLEEP -> GROUP_MONITOR
+         *  group, and two ids can never share one by accident.
+         *
+         *  `null` means posted ungrouped, and the monitoring family ([NOTIF_MONITOR],
+         *  [NOTIF_MONITORING_PAUSED], [NOTIF_SLEEP]) is the one that maps to `null`. A named
+         *  group the app never gives a summary is folded back into the platform's app-level
+         *  auto-bundle (`GroupHelper.isGroupChildWithoutSummary` → `addToUngroupedAndMaybeAggregate`),
+         *  so naming a group buys nothing there; an ungrouped row is never collected as a bundle
+         *  child (`maybeUngroupOnAppGrouped`). Leaving the key off is what actually keeps the
+         *  always-on trident — the glanceable claim that Oko is running and at what alert level —
+         *  standalone, instead of one tap behind a bundle. An unmapped id throws rather than
+         *  inheriting some group's bundle. */
+        fun groupFor(id: Int): String? = when (id) {
+            NOTIF_MONITOR, NOTIF_MONITORING_PAUSED, NOTIF_SLEEP -> null
             NOTIF_ALERT, NOTIF_ALLCLEAR -> GROUP_ALERT
             NOTIF_MILESTONE, NOTIF_OFFLINE_CRITICAL -> GROUP_OFFLINE
             NOTIF_UPDATE -> GROUP_UPDATE
             NOTIF_NEUTRALIZED -> GROUP_TALLY
-            else -> GROUP_TALLY
+            NOTIF_ALARM_EPISODE -> GROUP_EPISODE
+            else -> error("no notification group mapped for id $id")
         }
 
         fun areNotificationsEnabled(context: Context): Boolean {
@@ -200,10 +202,17 @@ const val NOTIF_MONITORING_PAUSED = 9
         defineMonitorChannel(nm, Strings.get(AppLanguage.EN))
     }
 
+    /** DEFAULT, not LOW: importance is the shade's section classifier (`GroupHelper.getSections`
+     *  puts `importance < IMPORTANCE_DEFAULT` in the collapsed "Silent notifications" bucket),
+     *  so a LOW monitor row shared that collapsed section with the resolved tally and the trident's
+     *  alert-level colour cost a tap. DEFAULT + no sound/vibration still makes no noise — silence
+     *  comes from the sound attr, section placement from the level. */
     private fun defineMonitorChannel(nm: NotificationManager, s: Strings.StringSet) {
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_MONITOR, s.notifChannelName, NotificationManager.IMPORTANCE_LOW).apply {
+            NotificationChannel(CHANNEL_MONITOR, s.notifChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = s.notifChannelDesc
+                enableVibration(false)
+                setSound(null, null)
             }
         )
     }
@@ -479,10 +488,13 @@ const val NOTIF_MONITORING_PAUSED = 9
         }
     }
 
-    /** Build a notification belonging to [id]'s group. The single entrance for grouped
-     *  notifications: callers pass the notification id and never a group key. */
-    fun buildNotification(id: Int, channelId: String): NotificationCompat.Builder =
-        NotificationCompat.Builder(context, channelId).setGroup(groupFor(id))
+    /** Build a notification belonging to [id]'s group, or ungrouped when [groupFor] says so.
+     *  The single entrance for grouped notifications: callers pass the notification id and
+     *  never a group key. */
+    fun buildNotification(id: Int, channelId: String): NotificationCompat.Builder {
+        val b = NotificationCompat.Builder(context, channelId)
+        return groupFor(id)?.let(b::setGroup) ?: b
+    }
 
     /**
      * Background monitoring could not be restarted (Android 12+ blocks starting a foreground

@@ -24,18 +24,41 @@ class AlertNotificationManagerTest {
     private fun notification(id: Int): Notification =
         Shadows.shadowOf(notificationManager()).getNotification(id)!!
 
+    /** `null` = posted ungrouped. The monitoring family is the point of the test: a named group
+     *  with no summary gets folded into the platform's app-level bundle anyway, so the trident's
+     *  standalone row depends on there being no key at all. */
     @Test
     fun `groupFor maps each id to exactly one group`() {
-        assertEquals(AlertNotificationManager.GROUP_MONITOR, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_MONITOR))
-        assertEquals(AlertNotificationManager.GROUP_MONITOR, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_MONITORING_PAUSED))
-        assertEquals(AlertNotificationManager.GROUP_MONITOR, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_SLEEP))
+        assertEquals(null, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_MONITOR))
+        assertEquals(null, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_MONITORING_PAUSED))
+        assertEquals(null, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_SLEEP))
         assertEquals(AlertNotificationManager.GROUP_ALERT, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_ALERT))
         assertEquals(AlertNotificationManager.GROUP_ALERT, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_ALLCLEAR))
         assertEquals(AlertNotificationManager.GROUP_OFFLINE, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_MILESTONE))
         assertEquals(AlertNotificationManager.GROUP_OFFLINE, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_OFFLINE_CRITICAL))
         assertEquals(AlertNotificationManager.GROUP_UPDATE, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_UPDATE))
-        assertEquals(AlertNotificationManager.GROUP_TALLY, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_ALARM_EPISODE))
         assertEquals(AlertNotificationManager.GROUP_TALLY, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_NEUTRALIZED))
+        assertEquals(AlertNotificationManager.GROUP_EPISODE, AlertNotificationManager.groupFor(AlertNotificationManager.NOTIF_ALARM_EPISODE))
+    }
+
+    /** An unmapped id used to inherit the tally's group through a catch-all `else`, so a new
+     *  notification silently rode into a bundle nobody chose. It must fail loudly instead. */
+    @Test(expected = IllegalStateException::class)
+    fun `groupFor rejects an unmapped id`() {
+        AlertNotificationManager.groupFor(4242)
+    }
+
+    /** The trident's row must arrive with no group key — this, not a group of its own, is what
+     *  keeps it out of any Oko bundle. */
+    @Test
+    fun `monitor notification is posted ungrouped`() {
+        val mgr = AlertNotificationManager(context)
+        mgr.ensureMonitorChannel()
+        mgr.safeNotify(AlertNotificationManager.NOTIF_MONITOR, mgr.buildMonitorNotification("t", "b"))
+
+        val n = notification(AlertNotificationManager.NOTIF_MONITOR)
+        assertEquals(null, n.group)
+        assertEquals(AlertNotificationManager.CHANNEL_MONITOR, n.channelId)
     }
 
     /**
@@ -156,17 +179,21 @@ class AlertNotificationManagerTest {
      * ("Oko could not warn you"), already IMPORTANCE_HIGH, so the notice is actually seen rather
      * than sitting mute in the shade.
      *
-     * The GROUP is about bundling and stays the monitor one, alongside `NOTIF_MONITORING_PAUSED` —
-     * the same "monitoring could not run" family. It keeps a single id, so a night of Doze windows
+     * The GROUP is about bundling and stays unset, with the rest of the monitoring family
+     * (`NOTIF_MONITOR`, `NOTIF_MONITORING_PAUSED`): a group the app never gives a summary is
+     * folded back into the app-level bundle by the platform, so leaving the key off is the only
+     * thing that actually keeps this row visible. It keeps a single id, so a night of Doze windows
      * rewrites one row instead of stacking thirty.
      */
     @Test
-    fun `sleep notice reuses one id on the loud channel, in the monitor group`() {
+    @Test
+    fun `sleep notice reuses one id on the loud channel, ungrouped`() = runTest {
         val mgr = AlertNotificationManager(context)
+        mgr.createChannels()
         mgr.postSleepNotice("t", "b", "allow")
 
         val n = notification(AlertNotificationManager.NOTIF_SLEEP)
         assertEquals(AlertNotificationManager.CHANNEL_OFFLINE_CRITICAL, n.channelId)
-        assertEquals(AlertNotificationManager.GROUP_MONITOR, n.group)
+        assertEquals(null, n.group)
     }
 }

@@ -379,7 +379,9 @@ class SourceRegistry {
         _offlineCause.value = active.firstNotNullOfOrNull { it.offlineCause.value }
     }
 
-    private fun checkMilestones(nowMono: Long) {
+    /** Internal, not private: the log-wipe regression below can only be caught by driving this
+     *  exact function — the 15-second loop it runs in is far too slow to wait on in a test. */
+    internal fun checkMilestones(nowMono: Long) {
         val since = _degradedSince.value ?: return
         if (!isOffline(nowMono)) return
         if (since != milestoneEpisodeStart) {
