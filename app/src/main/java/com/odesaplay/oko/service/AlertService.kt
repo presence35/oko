@@ -85,6 +85,9 @@ import com.odesaplay.oko.service.ServiceState
 import com.odesaplay.oko.service.MonitoringStatus
 import com.odesaplay.oko.service.SuspendState
 import com.odesaplay.oko.service.AlertWakeup
+import com.odesaplay.oko.service.AlertWatchdog
+import com.odesaplay.oko.service.EmergencyResurrectionWorker
+import com.odesaplay.oko.service.OfflineIgnore
 import com.odesaplay.oko.service.RaidMuteState
 import com.odesaplay.oko.service.AudioAlarmDispatcher
 import com.odesaplay.oko.service.FallingDebrisBuffer
@@ -239,6 +242,23 @@ class AlertService : Service() {
 
         fun stop(context: Context) {
             context.stopService(Intent(context, AlertService::class.java))
+        }
+
+        /**
+         * Explicit "Stop & exit": the service stops AND every automatic resurrection path is
+         * disarmed (wakeup alarm, both periodic workers), so nothing revives monitoring minutes
+         * later with a tap-to-resume prompt. The next cold start re-arms what it needs —
+         * [MainActivity] starts the service and schedules the workers — so no flag is needed:
+         * a stop with nothing scheduled simply stays stopped.
+         */
+        fun shutdown(context: Context) {
+            val appContext = context.applicationContext
+            stop(appContext)
+            AlertWakeup.cancel(appContext)
+            AlertWatchdog.cancel(appContext)
+            EmergencyResurrectionWorker.cancel(appContext)
+            AlertNotificationManager(appContext).cancelNotification(NOTIF_MONITORING_PAUSED)
+            MonitoringStatus.setRunning(false)
         }
     }
 
@@ -399,6 +419,12 @@ class AlertService : Service() {
     /** "Ignore 30 min" mute deadline (session-only, wall clock). Offline milestone/critical
      *  notifications are suppressed until this instant; the connection keeps reconnecting. */
     @Volatile private var notifMuteUntilMs = 0L
+
+    /** True while the user asked offline rows to stay quiet — the in-memory tap plus the
+     *  process-wide [OfflineIgnore] the lightweight ignore receiver sets without a service
+     *  start, so a tap that lands while the process is cold is still honoured. */
+    private fun ignoreMuted(now: Long = System.currentTimeMillis()): Boolean =
+        now < notifMuteUntilMs || OfflineIgnore.isMuted(now)
 
     /** "Mute raid" state for the active raid (see [RaidMute]). A timed mute is persisted, so a
      *  recycled process cannot quietly un-mute a raid the user silenced ten minutes ago. */
@@ -628,28 +654,35 @@ class AlertService : Service() {
         if (!locationFgsActive) startForegroundCompat()
         when (intent?.action) {
             ACTION_RETRY -> {
-                scope.launch {
-                    AppSources.registry.retryNow()
-                }
-                logAction(DebugLogReason.USER_RETRY, s0.actionLog.retryConnection)
-                // The user has acted: the one-shot escalations for this episode are noise now, and
-                // the only Retry button left in the shade is the ongoing row they pressed.
+                // Visible effect first: dismiss the rows even if the reconnect below takes a
+                // moment — the tap must register before the work finishes, not after.
                 notificationManager.cancelNotification(NOTIF_MILESTONE)
                 notificationManager.cancelNotification(NOTIF_OFFLINE_CRITICAL)
+                scope.launch {
+                    AppSources.registry.retryNow()
+                    logAction(DebugLogReason.USER_RETRY, s0.actionLog.retryConnection)
+                }
+                // The user has acted: the one-shot escalations for this episode are noise now, and
+                // the only Retry button left in the shade is the ongoing row they pressed.
                 showRetryAcknowledged(Strings.get(lastChannelLang ?: AppLanguage.EN))
             }
             ACTION_IGNORE_RETRY -> {
-                notifMuteUntilMs = System.currentTimeMillis() + IGNORE_RETRY_MUTE_MS
+                // Visible effect first, bookkeeping off the main thread: the rows must vanish
+                // on tap, even on a cold process where the audit writes below take seconds.
                 notificationManager.cancelNotification(NOTIF_MILESTONE)
                 notificationManager.cancelNotification(NOTIF_OFFLINE_CRITICAL)
-                AppSources.registry.annotateConnectionLog(
-                    ConnEventKind.IGNORE_MUTED,
-                    detail = "${IGNORE_RETRY_MUTE_MS / 60_000} min"
-                )
-                logAction(
-                    DebugLogReason.MUTED, s0.actionLog.ignoreOffline,
-                    "${IGNORE_RETRY_MUTE_MS / 60_000} min"
-                )
+                OfflineIgnore.ignoreFor(IGNORE_RETRY_MUTE_MS)
+                notifMuteUntilMs = System.currentTimeMillis() + IGNORE_RETRY_MUTE_MS
+                scope.launch {
+                    AppSources.registry.annotateConnectionLog(
+                        ConnEventKind.IGNORE_MUTED,
+                        detail = "${IGNORE_RETRY_MUTE_MS / 60_000} min"
+                    )
+                    logAction(
+                        DebugLogReason.MUTED, s0.actionLog.ignoreOffline,
+                        "${IGNORE_RETRY_MUTE_MS / 60_000} min"
+                    )
+                }
             }
             ACTION_ALERT_OK -> {
                 notificationManager.cancelNotification(NOTIF_ALERT)
@@ -1188,7 +1221,7 @@ val mappedThreats = registry.allThreats.map { list ->
             retryLabel = if (isOfflineNow) s.offlineRetryAction else null,
             progressMax = if (isOfflineNow) 20 else null,
             progressNow = if (isOfflineNow) offlineMinutes else null,
-            ignoreLabel = if (isOfflineNow && System.currentTimeMillis() >= notifMuteUntilMs) s.offlineIgnoreAction else null,
+            ignoreLabel = if (isOfflineNow && !ignoreMuted()) s.offlineIgnoreAction else null,
             alertLevel = monitorAlertLevel
         )
 
@@ -1201,7 +1234,7 @@ val mappedThreats = registry.allThreats.map { list ->
             else CRITICAL_OFFLINE_MIN
         val episode = offlineSince
         if (isOfflineNow && episode != null && state.criticalOfflineOverride &&
-            System.currentTimeMillis() >= notifMuteUntilMs &&
+            !ignoreMuted() &&
             offlineMinutes >= criticalThresholdMin && criticalFiredForEpisode != episode
         ) {
             criticalFiredForEpisode = episode
@@ -1867,7 +1900,7 @@ val mappedThreats = registry.allThreats.map { list ->
     /** Maps supervisor milestone events to one-shot notifications. Stateless: the flow is
      *  already once-per-episode by supervisor guarantee, so there is nothing to reset. */
     private fun onConnectionMilestone(milestone: ConnectionMilestone) {
-        if (System.currentTimeMillis() < notifMuteUntilMs) return
+        if (ignoreMuted()) return
         val registry = AppSources.registry
         val nowMono = Monotonic.now()
         if (!registry.isOffline(nowMono)) return
@@ -1911,7 +1944,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 title = title,
                 text = s.offlineReconnectAck,
                 retryLabel = s.offlineRetryAction,
-                ignoreLabel = if (System.currentTimeMillis() >= notifMuteUntilMs) s.offlineIgnoreAction else null
+                ignoreLabel = if (!ignoreMuted()) s.offlineIgnoreAction else null
             )
         )
     }

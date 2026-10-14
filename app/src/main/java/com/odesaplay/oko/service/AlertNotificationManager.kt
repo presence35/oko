@@ -647,13 +647,11 @@ const val NOTIF_MONITORING_PAUSED = 9
     }
 
     private fun ignoreRetryPendingIntent(): PendingIntent {
-        val intent = Intent(context, AlertService::class.java).setAction(ACTION_IGNORE_RETRY)
+        // Served by IgnoreRetryReceiver, not the service: the tap dismisses the rows without
+        // paying for a (possibly cold) foreground-service start first.
+        val intent = Intent(context, com.odesaplay.oko.service.IgnoreRetryReceiver::class.java)
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            PendingIntent.getForegroundService(context, 2, intent, flags)
-        } else {
-            PendingIntent.getService(context, 2, intent, flags)
-        }
+        return PendingIntent.getBroadcast(context, 2, intent, flags)
     }
 
     /** Alert action button -> [AlertService] (OK / Mute raid / Mute 10 min / Mute type). */

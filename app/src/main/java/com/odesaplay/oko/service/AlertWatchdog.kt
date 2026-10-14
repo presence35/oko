@@ -33,5 +33,9 @@ class AlertWatchdog(ctx: Context, params: androidx.work.WorkerParameters) : Coro
                 req
             )
         }
+
+        fun cancel(context: Context) {
+            WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        }
     }
 }

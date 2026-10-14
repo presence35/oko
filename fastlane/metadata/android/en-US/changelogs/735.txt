@@ -1,0 +1,8 @@
+First F-Droid release.
+
+• Your own alert zones — red and yellow rings, with separate fast and slow thresholds
+• Per-type alerts and map visibility; frequency from every change to one digest
+• Night mode that silences everything and restores exactly what you had
+• Live tracks with heading, distance and time to arrival, plus official oblast and raion alerts
+• Home-screen widget and the nearest shelters with walking times
+• No account, no tracking — your location never leaves the phone

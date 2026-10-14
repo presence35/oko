@@ -55,6 +55,12 @@
             android:name=".service.AlertWakeupReceiver"
             android:exported="false" />
 
+        <!-- The shade's "Ignore 30 min" tap: dismisses the offline rows without starting the
+             service, so the tap registers even on a cold process. -->
+        <receiver
+            android:name=".service.IgnoreRetryReceiver"
+            android:exported="false" />
+
         <!-- The OS pause gesture (see SuspendReceiver): suspension stops our activities and hides
              our notifications but leaves a foreground service running, so ending it is ours to do.
              A protected system broadcast, delivered to manifest receivers; API 28+, so on older

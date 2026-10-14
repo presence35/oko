@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- Prepared the F-Droid submission: GPL-3.0 LICENSE, EN/UA store listing under `fastlane/`, and a build recipe that declares the Tracking and TetheredNet disclosures 10-14_21:49:34
+- An empty threat strip during an official alert now names the alert ("Odesa: red alert") instead of showing a playful calm line 10-14_20:33:40
+- The sound-frequency tiles (and digest window chips) fold to 2x2 at large font sizes instead of crushing quarter-width labels 10-14_20:33:40
+- Stop & exit now disarms every resurrection path (wakeup alarm + both workers), so monitoring stays stopped instead of posting a tap-to-resume prompt minutes later 10-14_20:33:40
+- Tapping Ignore on the offline notification dismisses its rows instantly without starting the service, and Retry/Ignore register before their bookkeeping runs 10-14_20:33:40
+- Alert notification buttons lead with the differentiator ("Raid mute", "10m mute", "<type> mute", "30m ignore"), so large fonts truncate the common tail instead of the meaning 10-14_20:33:40
+- Threat cards and the threat-type rows no longer collapse at large font sizes: counts stay on one truncating line and pills wrap below the title 10-14_20:33:40
 - The shelter list now falls back to the last good copy cached on disk, so a failed fetch (roaming, no data) no longer leaves you with no shelters 10-13_21:53:05
 - A shelter load that still fails shows a real error with a Retry button (and a dimmed map button) instead of "no shelters nearby" 10-13_21:53:05
 - The selected shelter pin is filled in its colour with a white halo, and tapping a shelter gives haptic feedback 10-13_21:53:05

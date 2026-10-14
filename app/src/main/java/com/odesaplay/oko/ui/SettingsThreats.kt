@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
@@ -41,10 +42,12 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** A single threat type as a bordered card that stands apart from its neighbours and from the
- *  page body — a thin divider was not enough separation. Order: title + speed + Fast/Slow tag +
- *  the two toggles, short description, the 2.5x pack art, then the full facts and the italic
- *  joke (the page scrolls, so nothing is truncated). The Fast/Slow pill repeats the group a row
- *  belongs to, so the distinction survives a mid-list scan now that the group headers are gone. */
+ *  page body — a thin divider was not enough separation. Order: title + the two toggles, then
+ *  the speed + Fast/Slow pills on their own wrapping line, short description, the 2.5x pack
+ *  art, then the full facts and the italic joke (the page scrolls, so nothing is truncated).
+ *  The pills sit below the title deliberately: at large system font sizes a single crowded
+ *  row crushed the name to a letter or two ("K..."), while a wrapping pill line stays whole. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ThreatTypeRow(
     type: ThreatType,
@@ -79,33 +82,18 @@ internal fun ThreatTypeRow(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 12.dp)
         ) {
-            // Title row: name, speed, Fast/Slow tag, then the two toggles hard right. The
-            // label+pills share the leftover width so the toggles always sit at the far edge.
+            // Title row: name plus the two toggles hard right. The pills live on their
+            // own wrapping line below so a large system font squeezes nothing: the name
+            // keeps the full width and the toggles never leave the far edge.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        label,
-                        fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        // Measured last inside this row, so the badges keep their room and the
-                        // name ellipsizes first instead of crushing the pills into a column.
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    typicalSpeed?.let {
-                        Spacer(Modifier.width(6.dp))
-                        Pill("~$it ${s.speedUnit}", MaterialTheme.colorScheme.primary)
-                    }
-                    Spacer(Modifier.width(6.dp))
-                    Pill(
-                        if (fast) s.fastGroupLabel else s.slowGroupLabel,
-                        if (fast) ZoneRedColor else ZoneYellowColor
-                    )
-                }
+                Text(
+                    label,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
                 Spacer(Modifier.width(4.dp))
                 IconToggle(
                     icon = Icons.Filled.Place,
@@ -120,6 +108,21 @@ internal fun ThreatTypeRow(
                     on = onAlerts,
                     enabled = true,
                     onClick = { onThreatAlertToggle(type, !onAlerts) }
+                )
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+            ) {
+                typicalSpeed?.let {
+                    Pill("~$it ${s.speedUnit}", MaterialTheme.colorScheme.primary)
+                }
+                Pill(
+                    if (fast) s.fastGroupLabel else s.slowGroupLabel,
+                    if (fast) ZoneRedColor else ZoneYellowColor
                 )
             }
             Spacer(Modifier.height(2.dp))

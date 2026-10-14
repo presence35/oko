@@ -41,6 +41,10 @@ class EmergencyResurrectionWorker(
                 workRequest
             )
         }
+
+        fun cancel(context: Context) {
+            WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_WORK_NAME)
+        }
     }
 
     override suspend fun doWork(): Result {

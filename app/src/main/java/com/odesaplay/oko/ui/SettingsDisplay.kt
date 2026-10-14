@@ -285,6 +285,8 @@ internal fun OverlapModeChip(
             label,
             style = MaterialTheme.typography.labelMedium,
             textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()
         )
     }
@@ -545,6 +547,50 @@ internal fun AlertRegionModeChip(
     }
 }
 
+/** Four option tiles in one row — or 2x2 when a large system font (or a narrow width)
+ *  would crush quarter-width labels. The breakpoint keys off the font scale, not just the
+ *  width: dp widths don't shrink when the user enlarges text, so a width-only check would
+ *  never fire for exactly the case that breaks. */
+@Composable
+private fun FourTiles(
+    a: @Composable RowScope.() -> Unit,
+    b: @Composable RowScope.() -> Unit,
+    c: @Composable RowScope.() -> Unit,
+    d: @Composable RowScope.() -> Unit
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val tight = LocalDensity.current.fontScale > 1.15f || maxWidth < 320.dp
+        if (!tight) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                a()
+                b()
+                c()
+                d()
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    a()
+                    b()
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    c()
+                    d()
+                }
+            }
+        }
+    }
+}
+
 /** Notification frequency preset picker: four full-width rows, each with title,
  *  description and the what-if retrospective over the last 24h of Decisions. */
 @Composable
@@ -574,14 +620,12 @@ internal fun NotifyPolicyRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(10.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ZonePolicy.values().forEach { policy ->
-                PolicyTile(policy, policy == selected, Modifier.weight(1f), s) { onChange(policy) }
-            }
-        }
+        FourTiles(
+            { PolicyTile(ZonePolicy.EVERY_CHANGE, selected == ZonePolicy.EVERY_CHANGE, Modifier.weight(1f), s) { onChange(ZonePolicy.EVERY_CHANGE) } },
+            { PolicyTile(ZonePolicy.ONCE_PER_THREAT, selected == ZonePolicy.ONCE_PER_THREAT, Modifier.weight(1f), s) { onChange(ZonePolicy.ONCE_PER_THREAT) } },
+            { PolicyTile(ZonePolicy.ONCE_PER_TYPE, selected == ZonePolicy.ONCE_PER_TYPE, Modifier.weight(1f), s) { onChange(ZonePolicy.ONCE_PER_TYPE) } },
+            { PolicyTile(ZonePolicy.DIGEST, selected == ZonePolicy.DIGEST, Modifier.weight(1f), s) { onChange(ZonePolicy.DIGEST) } }
+        )
         Spacer(Modifier.height(8.dp))
         Text(
             policyDesc(selected, s),
@@ -705,26 +749,34 @@ internal fun DigestControlsRow(
             fontWeight = FontWeight.SemiBold
         )
         Spacer(Modifier.height(6.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            listOf(2, 10, 60).forEach { min ->
-                val w = when (min) {
-                    2 -> DigestWindow.MIN_2
-                    10 -> DigestWindow.MIN_10
-                    else -> DigestWindow.MIN_60
-                }
+        FourTiles(
+            {
                 DigestChip(
-                    String.format(s.digestWindowMinFormat, min),
-                    window == w,
+                    String.format(s.digestWindowMinFormat, 2),
+                    window == DigestWindow.MIN_2,
                     Modifier.weight(1f)
-                ) { onWindowChange(w) }
+                ) { onWindowChange(DigestWindow.MIN_2) }
+            },
+            {
+                DigestChip(
+                    String.format(s.digestWindowMinFormat, 10),
+                    window == DigestWindow.MIN_10,
+                    Modifier.weight(1f)
+                ) { onWindowChange(DigestWindow.MIN_10) }
+            },
+            {
+                DigestChip(
+                    String.format(s.digestWindowMinFormat, 60),
+                    window == DigestWindow.MIN_60,
+                    Modifier.weight(1f)
+                ) { onWindowChange(DigestWindow.MIN_60) }
+            },
+            {
+                DigestChip(s.digestWindowEpisode, window == DigestWindow.EPISODE, Modifier.weight(1f)) {
+                    onWindowChange(DigestWindow.EPISODE)
+                }
             }
-            DigestChip(s.digestWindowEpisode, window == DigestWindow.EPISODE, Modifier.weight(1f)) {
-                onWindowChange(DigestWindow.EPISODE)
-            }
-        }
+        )
         Spacer(Modifier.height(8.dp))
         Text(
             s.digestScopeLabel,
@@ -763,6 +815,8 @@ private fun DigestChip(
             label,
             style = MaterialTheme.typography.labelMedium,
             textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()
         )
     }

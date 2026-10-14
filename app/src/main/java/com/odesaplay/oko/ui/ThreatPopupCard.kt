@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -518,9 +519,13 @@ fun ThreatPopupCard(
                                         titleLabel,
                                         fontWeight = FontWeight.SemiBold,
                                         style = MaterialTheme.typography.titleLarge,
-                                        color = Color.White
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
-                                    Spacer(Modifier.weight(1f))
+                                    Spacer(Modifier.width(8.dp))
                                     ThreatElapsedBadge(
                                         updatedAtMillis = threat.updatedAtMillis,
                                         strings = s
@@ -581,17 +586,24 @@ fun ThreatPopupCard(
                             Spacer(Modifier.height(6.dp))
                         }
 
-                        // Reliability (R) on its own line with sources count
+                        // Reliability (R) on its own line with sources count. The count keeps a
+                        // flexible slot and truncates instead of wrapping: in a narrow card at
+                        // large font it collapsed into a vertical letter column.
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             ReliabilityBar(reliability = Reliability.fromApi(threat.reliability), s = s)
                             confirmations?.let { n ->
                                 Text(
                                     "$n ${sourcesWord(n, lang)}",
                                     color = Color(AppPalette.TextSecondary),
-                                    style = MaterialTheme.typography.labelSmall
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                             }
                         }
@@ -1010,8 +1022,19 @@ private fun UncertaintyBar(uncertaintyKm: Double?, s: Strings.StringSet) {
     if (uncertaintyKm == null) return
     val bars = uncertaintyBars(uncertaintyKm)
     val color = uncertaintyColor(bars)
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(s.uncertaintyLabel, style = MaterialTheme.typography.bodySmall, color = Color(AppPalette.TextSecondary))
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            s.uncertaintyLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(AppPalette.TextSecondary),
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+        )
         Spacer(Modifier.width(8.dp))
         repeat(5) { i ->
             Box(
@@ -1026,7 +1049,9 @@ private fun UncertaintyBar(uncertaintyKm: Double?, s: Strings.StringSet) {
         Text(
             "±${formatKm(uncertaintyKm)} ${s.kmUnit}",
             style = MaterialTheme.typography.bodySmall,
-            color = Color(AppPalette.TextSecondary)
+            color = Color(AppPalette.TextSecondary),
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
@@ -1070,9 +1095,20 @@ private fun ReliabilityBar(
         Reliability.UNKNOWN -> Color(AppPalette.TextSecondary)
     }
     val segmentWidth = if (compact) fontAware(10.dp) else fontAware(22.dp)
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
         if (!compact) {
-            Text(s.reliabilityLabel, style = MaterialTheme.typography.bodySmall, color = Color(AppPalette.TextSecondary))
+            Text(
+                s.reliabilityLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(AppPalette.TextSecondary),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
             Spacer(Modifier.width(8.dp))
         }
         repeat(3) { i ->

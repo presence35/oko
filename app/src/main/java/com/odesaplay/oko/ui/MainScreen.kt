@@ -252,7 +252,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     }
 
     val onExit: () -> Unit = {
-        AlertService.stop(context)
+        AlertService.shutdown(context)
         val activity = context as? Activity
         if (activity != null) activity.finishAffinity()
     }
@@ -1339,6 +1339,16 @@ private fun MapScreen(
                             calmMessage = remember(uiState.language, uiState.calmMessagesEnabled, uiState.moralePersona) {
                                 noThreatsMessage(uiState.language, uiState.calmMessagesEnabled, uiState.moralePersona)
                             },
+                            officialLine = when {
+                                uiState.focusOblastAlertActive -> String.format(s.alertBannerFormat, uiState.focusBannerCity)
+                                uiState.focusOblastYellowAlertActive -> String.format(s.alertYellowBannerFormat, uiState.focusBannerCity)
+                                else -> null
+                            },
+                            officialLevel = when {
+                                uiState.focusOblastAlertActive -> AlertLevel.RED
+                                uiState.focusOblastYellowAlertActive -> AlertLevel.YELLOW
+                                else -> AlertLevel.NONE
+                            },
                             debrisText = debrisFooterText(s),
                             onThreatStripTap = onThreatStripTap
                         )
@@ -1755,6 +1765,8 @@ private fun ThreatStripFooter(
     focusLocation: LatLng?,
     iconSet: ThreatIconSet,
     calmMessage: String,
+    officialLine: String?,
+    officialLevel: AlertLevel,
     debrisText: String?,
     onThreatStripTap: (NormalizedThreat) -> Unit
 ) {
@@ -1764,10 +1776,18 @@ private fun ThreatStripFooter(
         (innerCounts[it] ?: 0) + (outerCounts[it] ?: 0)
     }
     if (total == 0) {
+        // A playful calm line under a red map reads tone-deaf: while an official alert
+        // stands, the empty strip names it instead. Debris countdown keeps priority.
+        val line = debrisText ?: officialLine ?: calmMessage
+        val color = when {
+            debrisText != null || officialLine == null -> Color(AppPalette.SafeGreen)
+            officialLevel == AlertLevel.RED -> Color(AppPalette.AlertRed)
+            else -> Color(AppPalette.AlertYellow)
+        }
         Text(
-            debrisText ?: calmMessage,
+            line,
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(AppPalette.SafeGreen),
+            color = color,
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()

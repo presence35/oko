@@ -76,6 +76,9 @@ class MainActivity : ComponentActivity() {
             splashReady = true
             runCatching { AlertService.start(this@MainActivity) }
             runCatching { com.odesaplay.oko.service.AlertWatchdog.schedule(applicationContext) }
+            // Stop & exit cancels every resurrection path, so a cold start re-arms all of them —
+            // the watchdog alone would leave the 15-minute safety net disarmed until a reboot.
+            runCatching { com.odesaplay.oko.service.EmergencyResurrectionWorker.schedule(applicationContext) }
         }
         setContent {
             // Cap the system font scale so extreme accessibility sizes can't break the layout;

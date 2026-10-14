@@ -1,0 +1,31 @@
+See what's coming — and how close it is.
+
+Око is a civilian air-threat map for Ukraine. Official alerts tell you a whole oblast is under attack. Око shows you the actual picture: where the threats are, which way they're heading, and how close they'll get — and it tells you, based on YOUR own zones.
+
+YOUR OWN WARNING ZONES
+Set a red and a yellow ring around wherever you are. Get a red-zone siren, a quieter yellow nudge, or nothing at all outside them. You choose the distance, not the app.
+
+FAST AND SLOW, SEPARATELY
+Ballistic missiles and Shahed-type drones behave nothing alike. Set separate radii, timing and alerts for fast and slow threats.
+
+ALERT BY TYPE
+Some threats matter to you, some don't. Turn alerts on or off per threat type, and decide what appears on the map.
+
+PER-ZONE SWITCHES
+Arm only the rings you want. Day and night have separate values, so your settings can change with the time of day.
+
+YOUR FREQUENCY, YOUR CALL
+Every change, once per threat, once per type, or a digest with a window you set. No more being woken for things you already know.
+
+NIGHT MODE THAT ACTUALLY SLEEPS
+One tap silences everything until morning — then restores exactly what you had. Or it alerts you more intensely if that's what you choose.
+
+THE FULL PICTURE
+Live tracks with predicted headings, distance and ETA, official oblast and raion alerts, a home-screen widget, and the nearest shelters with walking times.
+
+PRIVATE BY DESIGN
+No account. No tracking. Your location is processed on your phone and never uploaded.
+
+Око is an independent civilian tool, not an official alert source — always follow official air-raid signals. Positions and distances are approximate.
+
+Free. No ads.

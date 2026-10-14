@@ -12,6 +12,7 @@ Only when the user says **"release it"**, perform a full release:
    - `.\gradlew.bat :app:releasePlay` — Google Play path: builds the `play` App Bundle only (no self-update, no upload).
 5. The upload already re-fetches the live `version.json` and fails if the version/digest don't match what was just built; still eyeball it for version + both translations.
 6. Move the released entries under a new `## [<ver>]` heading in `CHANGELOG.md` and clear `## [Unreleased]` + mm-dd_h:m:s.
+7. Tag the release commit `git tag <versionName>` (no `v` prefix) and push it. F-Droid's update checker uses `UpdateCheckMode: Tags` with no pattern, so the tag *is* the build commit — a missing or `v`-prefixed tag silently stops F-Droid updates. Also refresh `fastlane/metadata/android/<locale>/changelogs/<versionCode>.txt` (max 500 chars, one per locale) — that is what the F-Droid listing shows for the release, and it is not auto-derived from this changelog.
 
 ## While working
 
