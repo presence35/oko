@@ -31,8 +31,8 @@ RepoType: git
 Repo: https://github.com/presence35/oko
 
 Builds:
-  - versionName: 0.6.735
-    versionCode: 735
+  - versionName: 0.6.827
+    versionCode: 827
     commit: REPLACE_WITH_TAGGED_COMMIT_SHA
     # Only the store flavor: it has no self-update path and no
     # REQUEST_INSTALL_PACKAGES, so F-Droid owns updates.
@@ -49,8 +49,8 @@ UpdateCheckData: 'app/version.properties|versionCode=(\d+)|app/version.propertie
 # Tags mode with no pattern: the tag itself is used as the build commit, so releases
 # must be tagged exactly `0.6.735` (no `v` prefix) for auto-update to find them.
 AutoUpdateMode: Version
-CurrentVersion: 0.6.735
-CurrentVersionCode: 735
+CurrentVersion: 0.6.827
+CurrentVersionCode: 827
 
 MaintainerNotes: >-
   No scanignore or scandelete entries are needed — fdroidserver only flags
@@ -61,3 +61,6 @@ MaintainerNotes: >-
   downloads platforms;android-36 and build-tools 36.x for compileSdk 36. If that
   download fails it will be the first thing in the log; the NDK is likewise absent,
   which should only produce an "unable to strip" warning for MapLibre's .so files.
+  The version here (0.6.827) and the matching fastlane/changelogs/<versionCode>.txt
+  must be re-pinned to whatever release is actually tagged when this is submitted —
+  the project releases often, so both drift.
