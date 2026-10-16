@@ -1,0 +1,4 @@
+• The feedback button is now on every screen (map, Settings, Logs, Shelters, Guide); turn it off in Settings > System
+• The map no longer re-centres on every GPS fix — the camera moves only when you do
+• Logs: a row for a threat that is already gone jumps to that spot and blinks; each row frames its own point, not threat-vs-you
+• Clearer log rows and legend, and long raid stories open instantly

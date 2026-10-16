@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.6.828]
 - The bug-report button now shows on every screen (map, Settings, Logs, Shelters, Guide) and no longer hides during the shootdown show; Settings > System > Feedback button turns it off 10-16_16:20:00
 - Bug report is reachable from the Settings top bar and the Logs header, not just the map FAB, so the screenshot shows whichever screen you were on 10-16_14:58:31
 - The map no longer re-centres on every GPS fix: "Follow me" governs your zones and alerts, and the camera moves only when you move it — or when a shootdown/other animation owns it 10-16_14:50:00
