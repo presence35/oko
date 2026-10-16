@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.6.827]
 - A tapped log row whose threat is already gone now blinks its icon at the recorded spot and fades, instead of flying you to apparently empty ground 10-16_14:40:00
 - Tap a threat row in Logs to fly the map to it — hours-old rows included, since each row now remembers where the threat was 10-16_14:05:00
 - Log rows carry one line of marks (day/night, sound, outcome, the pin) next to the clock, instead of splitting the icons across two lines and repeating the muted-bell 10-16_14:05:00
