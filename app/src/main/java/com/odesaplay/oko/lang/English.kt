@@ -378,8 +378,6 @@ internal val English: Strings.StringSet = Strings.StringSet(
         batteryOemBody = "Unrestricted background use keeps alerts ringing.",
         showThreatIdsOnMapTitle = "Show threat IDs",
         showThreatIdsOnMapDesc = "Last 4 digits of each threat ID on map markers and in notifications.",
-        feedbackButtonTitle = "Feedback button",
-        feedbackButtonDesc = "Show the feedback button on every screen.",
         batteryGenericBody = "This device may restrict background apps. Unrestricted background use keeps alerts alive.",
         resetTipsTitle = "Reset all tips",
         resetTipsDesc = "Show first-run hints again",
@@ -817,6 +815,8 @@ internal val English: Strings.StringSet = Strings.StringSet(
         send = "Send",
         sent = "Feedback sent — thanks!",
         failed = "Send failed",
+        buttonTitle = "Feedback button",
+        buttonDesc = "Show the feedback button on every screen.",
     ),
     logsPreview = Strings.LogPreviewStrings(
         tab = "Debug",

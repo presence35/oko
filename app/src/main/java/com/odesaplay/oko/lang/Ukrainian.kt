@@ -377,8 +377,6 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         batteryOemBody = "Без обмежень у фоні сповіщення лунатимуть вчасно.",
         showThreatIdsOnMapTitle = "Показувати ID загроз",
         showThreatIdsOnMapDesc = "Останні 4 цифри ID кожної загрози на маркерах мапи та у сповіщеннях.",
-        feedbackButtonTitle = "Кнопка відгуку",
-        feedbackButtonDesc = "Показувати кнопку відгуку на кожному екрані.",
         batteryGenericBody = "Цей пристрій може обмежувати фонову роботу. Дозвіл необмеженої фонової роботи гарантує, що сповіщення лунатимуть.",
         resetTipsTitle = "Скинути всі підказки",
         resetTipsDesc = "Показувати підказки першого запуску знову",
@@ -817,6 +815,8 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         send = "Надіслати",
         sent = "Відгук надіслано — дякуємо!",
         failed = "Не вдалося надіслати",
+        buttonTitle = "Кнопка відгуку",
+        buttonDesc = "Показувати кнопку відгуку на кожному екрані.",
     ),
     logsPreview = Strings.LogPreviewStrings(
         tab = "Debug",

@@ -383,8 +383,6 @@ object Strings {
         val batteryOemBody: String,
         val showThreatIdsOnMapTitle: String,
         val showThreatIdsOnMapDesc: String,
-        val feedbackButtonTitle: String,
-        val feedbackButtonDesc: String,
         val batteryGenericBody: String,
         val resetTipsTitle: String,
         val resetTipsDesc: String,
@@ -794,7 +792,9 @@ object Strings {
         val logs: String,
         val send: String,
         val sent: String,
-        val failed: String
+        val failed: String,
+        val buttonTitle: String,
+        val buttonDesc: String
     )
 
     /**
@@ -1382,8 +1382,6 @@ object Strings {
         val sleepNoticeAllowClause: String get() = status.sleepNoticeAllowClause
         val showThreatIdsOnMapTitle: String get() = misc.showThreatIdsOnMapTitle
         val showThreatIdsOnMapDesc: String get() = misc.showThreatIdsOnMapDesc
-        val feedbackButtonTitle: String get() = misc.feedbackButtonTitle
-        val feedbackButtonDesc: String get() = misc.feedbackButtonDesc
         val batteryGenericBody: String get() = misc.batteryGenericBody
         val resetTipsTitle: String get() = misc.resetTipsTitle
         val resetTipsDesc: String get() = misc.resetTipsDesc
@@ -1465,6 +1463,8 @@ object Strings {
         val feedbackSend: String get() = feedback.send
         val feedbackSent: String get() = feedback.sent
         val feedbackFailed: String get() = feedback.failed
+        val feedbackButtonTitle: String get() = feedback.buttonTitle
+        val feedbackButtonDesc: String get() = feedback.buttonDesc
         val logsFilterDebug: String get() = logsPreview.tab
         val logsPreviewWhy: String get() = logsPreview.why
         val logsPreviewWillSendAs: String get() = logsPreview.willSendAs

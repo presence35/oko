@@ -377,8 +377,6 @@ internal val Russian: Strings.StringSet = Strings.StringSet(
         batteryOemBody = "Неограниченное использование в фоне позволяет сиренам срабатывать вовремя.",
         showThreatIdsOnMapTitle = "Показывать ID угроз",
         showThreatIdsOnMapDesc = "Последние 4 цифры ID каждой угрозы на маркерах карты и в уведомлениях.",
-        feedbackButtonTitle = "Кнопка отзыва",
-        feedbackButtonDesc = "Показывать кнопку отзыва на каждом экране.",
         batteryGenericBody = "Это устройство может ограничивать фоновые приложения. Неограниченная работа в фоне сохранит работу оповещений.",
         resetTipsTitle = "Сбросить все подсказки",
         resetTipsDesc = "Показать подсказки первого запуска снова",
@@ -817,6 +815,8 @@ internal val Russian: Strings.StringSet = Strings.StringSet(
         send = "Отправить",
         sent = "Отзыв отправлен — спасибо!",
         failed = "Не удалось отправить",
+        buttonTitle = "Кнопка отзыва",
+        buttonDesc = "Показывать кнопку отзыва на каждом экране.",
     ),
     logsPreview = Strings.LogPreviewStrings(
         tab = "Debug",
