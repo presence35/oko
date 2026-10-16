@@ -110,6 +110,7 @@ class UserPrefs(private val context: Context) {
     private val showRegionBordersKey = booleanPreferencesKey("show_region_borders")
     private val showLargeCitiesKey = booleanPreferencesKey("show_large_cities")
     private val showThreatIdsOnMapKey = booleanPreferencesKey("show_threat_ids_on_map")
+    private val showFeedbackButtonKey = booleanPreferencesKey("show_feedback_button")
     private val notifyPolicyEnabledKey = booleanPreferencesKey("notify_policy_enabled")
     private val zonePolicyKey = stringPreferencesKey("zone_policy")
     private val digestMaxKey = intPreferencesKey("digest_max")
@@ -195,6 +196,7 @@ class UserPrefs(private val context: Context) {
             showSmallCities = this[showSmallCitiesKey] ?: d.showSmallCities,
             showLargeCities = this[showLargeCitiesKey] ?: d.showLargeCities,
             showThreatIdsOnMap = this[showThreatIdsOnMapKey] ?: d.showThreatIdsOnMap,
+            showFeedbackButton = this[showFeedbackButtonKey] ?: d.showFeedbackButton,
             highQualityExplosions = this[highQualityExplosionsKey] ?: d.highQualityExplosions,
             deathAnimationEnabled = this[deathAnimationEnabledKey] ?: d.deathAnimationEnabled,
             deathAnimationStyle = deathAnimationStyle,
@@ -577,6 +579,10 @@ class UserPrefs(private val context: Context) {
 
     suspend fun setShowThreatIdsOnMap(show: Boolean) {
         store.edit { it[showThreatIdsOnMapKey] = show }
+    }
+
+    suspend fun setShowFeedbackButton(show: Boolean) {
+        store.edit { it[showFeedbackButtonKey] = show }
     }
 
     suspend fun setHighQualityExplosions(enabled: Boolean) {

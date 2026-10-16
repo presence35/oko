@@ -111,6 +111,7 @@ internal val searchAnchors: List<SearchAnchor> = listOf(
     anchor("borders", SettingsSection.SYSTEM, "border", "borders", "outline", "boundary", "кордон", "межа", "контур"),
     anchor("haptics", SettingsSection.SYSTEM, "haptic", "vibration when tapping", "вібрація", "тап"),
     anchor("threatIds", SettingsSection.SYSTEM, "threat id", "ids", "номер", "ід"),
+    anchor("feedbackButton", SettingsSection.SYSTEM, "feedback", "bug", "report", "відгук", "баг", "помилка", "отзыв", "ошибка"),
     anchor("overlap", SettingsSection.SYSTEM, "overlap", "overlapping", "count", "перекриття", "рахунок"),
     anchor("iconZoom", SettingsSection.SYSTEM, "zoom", "icon zoom", "зум", "наближення"),
     anchor("iconSet", SettingsSection.THREATS, "icon", "icons", "icon set", "style", "іконка", "іконки", "набір", "стиль"),

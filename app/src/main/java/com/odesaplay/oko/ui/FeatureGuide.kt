@@ -1,5 +1,6 @@
 package com.odesaplay.oko
 
+import com.odesaplay.oko.beta.FeedbackIconButton
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -77,6 +78,7 @@ private sealed interface GuideItem {
 fun FeatureGuideScreen(
     s: Strings.StringSet,
     initialFeatureId: String? = null,
+    onReportBug: () -> Unit = {},
     onBack: () -> Unit
 ) {
     val features = remember(s) { guideFeatures(s) }
@@ -107,7 +109,8 @@ fun FeatureGuideScreen(
                     IconButton(onClick = onBack, interactionSource = rememberHapticInteractionSource()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
                     }
-                }
+                },
+                actions = { FeedbackIconButton(s = s, onClick = onReportBug) }
             )
         }
     ) { padding ->

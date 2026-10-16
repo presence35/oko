@@ -62,7 +62,7 @@ class AlertServiceTest {
     fun `alert-ok action cancels the alert notification`() {
         runBlocking {
             AlertNotificationManager(service())
-                .postAlertNotification(ThreatZone.OUTER, "t", "b", sirenOverride = false)
+                .postAlertNotification(AlertNotificationManager.CHANNEL_ALERTS_OUTER, "t", "b")
         }
         val nm = Shadows.shadowOf(notificationManager())
         assertNotNull(nm.getNotification(AlertNotificationManager.NOTIF_ALERT))

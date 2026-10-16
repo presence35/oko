@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- The bug-report button now shows on every screen (map, Settings, Logs, Shelters, Guide) and no longer hides during the shootdown show; Settings > System > Feedback button turns it off 10-16_16:20:00
+- Bug report is reachable from the Settings top bar and the Logs header, not just the map FAB, so the screenshot shows whichever screen you were on 10-16_14:58:31
+- The map no longer re-centres on every GPS fix: "Follow me" governs your zones and alerts, and the camera moves only when you move it — or when a shootdown/other animation owns it 10-16_14:50:00
+- Tapping a log row for a threat that is already gone now actually jumps to that spot and blinks the icon there, instead of leaving you on visually empty ground 10-16_14:50:00
+- A tapped log row frames that row's own point alone, not threat-vs-your-location — a row far from home used to frame half the country 10-16_14:50:00
+- Log rows carry one line of marks (day/night, sound, outcome) centred between the distance and the clock, instead of splitting them across two lines and repeating the muted bell 10-16_15:05:00
+- The Logs legend now matches the rows: green check = notified, amber struck bell = covered by a louder alert, grey struck bell = not notified 10-16_14:50:00
+- Expanding a long raid story opens instantly — its rows are virtualized instead of all laid out at once — and the log clock no longer ticks every second on an idle screen 10-16_16:01:01
 
 ## [0.6.827]
 - A tapped log row whose threat is already gone now blinks its icon at the recorded spot and fades, instead of flying you to apparently empty ground 10-16_14:40:00

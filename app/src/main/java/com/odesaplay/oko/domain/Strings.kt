@@ -145,6 +145,9 @@ object Strings {
         val nightModeDesc: String,
         val nightStartTimeLabel: String,
         val nightEndTimeLabel: String,
+        /** The window's own length, as hours and minutes: "%1$d h %2$d min". A duration, not a
+         *  clock time — it is what makes a backwards pair (22:00 → 10:00) read as 12 h. */
+        val nightSpanFormat: String,
         val nightZoneSirenOverrideTitle: String,
         val nightOfficialSirenOverrideTitle: String,
         val nightCustomZonesTitle: String,
@@ -155,6 +158,9 @@ object Strings {
         val silentMutedForRaid: String,
         val silentMutedTimedFormat: String,
         val notificationsDisabledLabel: String,
+        /** One title + one body per [SettingsConflict], in enum order. */
+        val settingsConflictTitles: List<String>,
+        val settingsConflictBodies: List<String>,
         val zoneButtonRed: String,
         val zoneButtonYellow: String,
         val slowSectionLabel: String,
@@ -377,6 +383,8 @@ object Strings {
         val batteryOemBody: String,
         val showThreatIdsOnMapTitle: String,
         val showThreatIdsOnMapDesc: String,
+        val feedbackButtonTitle: String,
+        val feedbackButtonDesc: String,
         val batteryGenericBody: String,
         val resetTipsTitle: String,
         val resetTipsDesc: String,
@@ -448,7 +456,6 @@ object Strings {
         val debugLogNight: String,
         val debugLogShown: String,
         val debugLogSuppressed: String,
-        val debugLogSuppressedLegend: String,
         val logsFilterSources: String,
         val logsEmptySources: String,
         val sourceTypeWs: String,
@@ -775,12 +782,6 @@ object Strings {
         val sendLogsBusy: String
     )
 
-    /** Log-row affordance copy. Own holder for the same JVM slot-ceiling reason as
-     *  [LogExportStrings] — [Misc] has no room left for a new Logs string. */
-    data class LogRowStrings(
-        val showOnMap: String
-    )
-
     /** Beta feedback sheet. Own holder for the same JVM slot-ceiling reason as [LogExportStrings]. */
     data class FeedbackStrings(
         val title: String,
@@ -911,7 +912,6 @@ object Strings {
         val wordForms: WordForms,
         val logsExport: LogExportStrings,
         val logsPreview: LogPreviewStrings,
-        val logsRow: LogRowStrings,
         val feedback: FeedbackStrings,
         val actionLog: ActionLog,
         val calmMessages: List<String>,
@@ -1053,6 +1053,7 @@ object Strings {
         val nightModeDesc: String get() = settings.nightModeDesc
         val nightStartTimeLabel: String get() = settings.nightStartTimeLabel
         val nightEndTimeLabel: String get() = settings.nightEndTimeLabel
+        val nightSpanFormat: String get() = settings.nightSpanFormat
         val nightZoneSirenOverrideTitle: String get() = settings.nightZoneSirenOverrideTitle
         val nightOfficialSirenOverrideTitle: String get() = settings.nightOfficialSirenOverrideTitle
         val nightCustomZonesTitle: String get() = settings.nightCustomZonesTitle
@@ -1063,6 +1064,8 @@ object Strings {
         val silentMutedForRaid: String get() = settings.silentMutedForRaid
         val silentMutedTimedFormat: String get() = settings.silentMutedTimedFormat
         val notificationsDisabledLabel: String get() = settings.notificationsDisabledLabel
+        val settingsConflictTitles: List<String> get() = settings.settingsConflictTitles
+        val settingsConflictBodies: List<String> get() = settings.settingsConflictBodies
         val zoneButtonRed: String get() = settings.zoneButtonRed
         val zoneButtonYellow: String get() = settings.zoneButtonYellow
         val slowSectionLabel: String get() = settings.slowSectionLabel
@@ -1379,6 +1382,8 @@ object Strings {
         val sleepNoticeAllowClause: String get() = status.sleepNoticeAllowClause
         val showThreatIdsOnMapTitle: String get() = misc.showThreatIdsOnMapTitle
         val showThreatIdsOnMapDesc: String get() = misc.showThreatIdsOnMapDesc
+        val feedbackButtonTitle: String get() = misc.feedbackButtonTitle
+        val feedbackButtonDesc: String get() = misc.feedbackButtonDesc
         val batteryGenericBody: String get() = misc.batteryGenericBody
         val resetTipsTitle: String get() = misc.resetTipsTitle
         val resetTipsDesc: String get() = misc.resetTipsDesc
@@ -1436,7 +1441,6 @@ object Strings {
         val logsOutcomeCovered: String get() = misc.logsOutcomeCovered
         val logsOutcomeNotNotified: String get() = misc.logsOutcomeNotNotified
         val logsOutcomeInfo: String get() = misc.logsOutcomeInfo
-        val logsShowOnMap: String get() = logsRow.showOnMap
         val logsModeStory: String get() = misc.logsModeStory
         val logsModeList: String get() = misc.logsModeList
         val logsSessionTold: String get() = misc.logsSessionTold
@@ -1483,7 +1487,6 @@ object Strings {
         val debugLogNight: String get() = misc.debugLogNight
         val debugLogShown: String get() = misc.debugLogShown
         val debugLogSuppressed: String get() = misc.debugLogSuppressed
-        val debugLogSuppressedLegend: String get() = misc.debugLogSuppressedLegend
         val logsFilterSources: String get() = misc.logsFilterSources
         val logsEmptySources: String get() = misc.logsEmptySources
         val sourceTypeWs: String get() = misc.sourceTypeWs

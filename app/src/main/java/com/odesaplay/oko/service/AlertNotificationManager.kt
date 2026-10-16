@@ -11,6 +11,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.core.content.ContextCompat
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -27,6 +28,7 @@ import com.odesaplay.oko.Strings
 import com.odesaplay.oko.UserPrefs
 import com.odesaplay.oko.NeutralizedTally
 import com.odesaplay.oko.service.ServiceState
+import com.odesaplay.oko.service.SuspendState
 
 /**
  * The alert notification's first button: silence every alert of one threat type for good, the
@@ -148,6 +150,68 @@ const val NOTIF_MONITORING_PAUSED = 9
         }
 
         /**
+         * Channels whose silencing costs the user an alert they asked for. One list, read by the
+         * log bundle and the settings conflict check, so neither can drift from the definitions
+         * above. Informational channels (monitor, tally, all-clear, the offline milestone) are
+         * deliberately absent: muting one of those loses no alert.
+         */
+        val alertChannelIds = listOf(
+            CHANNEL_ALERTS_INNER,
+            CHANNEL_ALERTS_OUTER,
+            CHANNEL_ALERTS_INNER_ALARM,
+            CHANNEL_ALERTS_OUTER_ALARM,
+            CHANNEL_OFFLINE_CRITICAL
+        )
+
+        /**
+         * Which channel an alert takes: the alarm pair when the user asked to be woken, the plain
+         * pair otherwise; a zone alert carries its own zone, an official alert (no zone) takes one
+         * from its level. Pure, and the single owner of this decision — the poster and the audit
+         * log both ask here rather than each deciding for itself.
+         */
+        fun alertChannelId(zone: ThreatZone?, level: String, sirenOverride: Boolean): String {
+            val target = zone ?: if (level.lowercase() == "yellow") ThreatZone.OUTER else ThreatZone.INNER
+            return when {
+                target == ThreatZone.INNER && sirenOverride -> CHANNEL_ALERTS_INNER_ALARM
+                target == ThreatZone.INNER -> CHANNEL_ALERTS_INNER
+                sirenOverride -> CHANNEL_ALERTS_OUTER_ALARM
+                else -> CHANNEL_ALERTS_OUTER
+            }
+        }
+
+        /**
+         * The OS's own view of what we may deliver. One reader for both consumers (log bundle,
+         * settings conflicts), so a diagnostic and a warning can never disagree about the same fact.
+         */
+        fun notificationState(context: Context): NotificationState {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val policyAccess = runCatching { nm.isNotificationPolicyAccessGranted }.getOrDefault(false)
+            return NotificationState(
+                enabled = areNotificationsEnabled(context),
+                channels = alertChannelIds.map { id ->
+                    val channel = runCatching { nm.getNotificationChannel(id) }.getOrNull()
+                    // A channel that does not exist yet is not "muted" — it is created on the next
+                    // start, and reporting it as muted would warn about a state the user never set.
+                    NotifChannel(
+                        id = id,
+                        importance = channel?.importance ?: NotificationManager.IMPORTANCE_DEFAULT,
+                        hasSound = channel?.sound != null
+                    )
+                },
+                policyAccess = policyAccess,
+                interruptionFilter = if (policyAccess) {
+                    runCatching { nm.currentInterruptionFilter }
+                        .getOrDefault(NotificationManager.INTERRUPTION_FILTER_UNKNOWN)
+                } else {
+                    NotificationManager.INTERRUPTION_FILTER_UNKNOWN
+                },
+                ringerMode = am.ringerMode,
+                suspended = SuspendState.isSuspended(context)
+            )
+        }
+
+        /**
          * Deep-link to this app's OS notification page — the only place the enabled toggle
          * lives, so it is the sole correct destination for a reason whose cause is there.
          */
@@ -173,19 +237,14 @@ const val NOTIF_MONITORING_PAUSED = 9
             .forEach { nm.deleteNotificationChannel(it.id) }
     }
 
-    private val managedChannels = setOf(
+    private val managedChannels = (alertChannelIds + listOf(
             CHANNEL_MONITOR,
-            CHANNEL_ALERTS_INNER,
-            CHANNEL_ALERTS_OUTER,
             CHANNEL_ALL_CLEAR,
-            CHANNEL_ALERTS_INNER_ALARM,
-            CHANNEL_ALERTS_OUTER_ALARM,
             CHANNEL_OFFLINE,
-            CHANNEL_OFFLINE_CRITICAL,
             NeutralizedTally.CHANNEL_NEUTRALIZED,
             CHANNEL_ALARM_EPISODE,
             CHANNEL_UPDATE
-        )
+        )).toSet()
 
     /** Deletes + recreates managed channels when the schema (or the bypass-silent config
      *  baked into the critical channel's audio attrs) changed since last applied. */
@@ -376,21 +435,14 @@ const val NOTIF_MONITORING_PAUSED = 9
     private fun yellowIconBitmap(): Bitmap = tintedIconBitmap(NotifYellow)
 
     suspend fun postAlertNotification(
-        zone: ThreatZone,
+        channel: String,
         title: String,
         body: String,
-        sirenOverride: Boolean,
         revealThreat: NormalizedThreat? = null,
         silent: Boolean = false,
         muted: Boolean = false,
         actions: AlertActions? = null
     ) {
-        val channel = when {
-            zone == ThreatZone.INNER && sirenOverride -> CHANNEL_ALERTS_INNER_ALARM
-            zone == ThreatZone.INNER -> CHANNEL_ALERTS_INNER
-            sirenOverride -> CHANNEL_ALERTS_OUTER_ALARM
-            else -> CHANNEL_ALERTS_OUTER
-        }
         val idSuffix = revealThreat?.let { t ->
             if (UserPrefs(context).preferences.first().showThreatIdsOnMap) " · #${t.id.takeLast(4)}" else ""
         }.orEmpty()

@@ -262,6 +262,21 @@ def cmd_show(args):
     )
     nets = collections.Counter(s.get("transport") or "unknown" for s in samples(b))
     print("transport mix:", ", ".join(f"{k}={v}" for k, v in sorted(nets.items())))
+    # Whether the OS will let us deliver at all. This is the fact whose absence made "I hear a
+    # beep with nothing in the shade" undiagnosable from a bundle, so it is stated, not buried.
+    n = b.get("notif")
+    if n:
+        muted = sorted(
+            cid for cid, ch in (n.get("channels") or {}).items()
+            if (ch or {}).get("importance") == 0  # NotificationManager.IMPORTANCE_NONE
+        )
+        print(
+            f"notif enabled {n.get('enabled')}  policyAccess {n.get('policyAccess')}  "
+            f"interruptionFilter {n.get('interruptionFilter')}  "
+            f"ringerMode {n.get('ringerMode')}  suspended {n.get('suspended')}"
+        )
+        if muted:
+            print("  MUTED CHANNELS:", ", ".join(muted))
     for key in ("exitSummary", "exits", "decisions", "connections", "reconnects", "gps",
                 "threats", "alerts", "wakeEvents"):
         block = section(b, key)

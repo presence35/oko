@@ -62,6 +62,7 @@ import com.odesaplay.oko.City
 import com.odesaplay.oko.DigestWindow
 import com.odesaplay.oko.ThreatType
 import com.odesaplay.oko.ZonePolicy
+import com.odesaplay.oko.beta.FeedbackIconButton
 import com.odesaplay.oko.theme.AppPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,7 +70,7 @@ import com.odesaplay.oko.theme.AppPalette
 fun SettingsScreen(
     state: SettingsState,
     hapticsEnabled: Boolean,
-    notificationsDisabled: Boolean,
+    settingsConflicts: List<SettingsConflict> = emptyList(),
     updateFlow: StateFlow<UpdateState>,
     latestVersionFlow: StateFlow<String?>,
     nightActive: Boolean,
@@ -145,6 +146,7 @@ fun SettingsScreen(
     onThreatIconZoomChange: (Boolean) -> Unit,
         showThreatIdsOnMap: Boolean,
     onShowThreatIdsOnMapChange: (Boolean) -> Unit,
+    onShowFeedbackButtonChange: (Boolean) -> Unit,
     zonePolicy: ZonePolicy,
     onZonePolicyChange: (ZonePolicy) -> Unit,
     digestMax: Int,
@@ -159,6 +161,7 @@ fun SettingsScreen(
     onCheckUpdate: () -> Unit,
     onForceUpdate: () -> Unit = {},
     onOpenGuide: () -> Unit,
+    onReportBug: () -> Unit,
     onRelaunchSetup: () -> Unit,
     onResetTips: () -> Unit = {}
 ) {
@@ -221,6 +224,7 @@ fun SettingsScreen(
     val alarmEpisodeTallyEnabled = state.alarmEpisodeTallyEnabled
     val threatIconZoom = state.threatIconZoom
         val showThreatIdsOnMap = state.showThreatIdsOnMap
+    val showFeedbackButton = state.showFeedbackButton
     val notifyPolicyEnabled = state.notifyPolicyEnabled
     val zonePolicy = state.zonePolicy
     val digestMax = state.digestMax
@@ -483,7 +487,10 @@ fun SettingsScreen(
                         IconButton(onClick = onBack, interactionSource = rememberHapticInteractionSource()) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
                         }
-                    }
+                    },
+                    // Report-a-bug sits in both bars: the search field shrinks (its slot is
+                    // weighted), and a detail page keeps the same escape hatch as the root.
+                    actions = { FeedbackIconButton(s = s, onClick = onReportBug) }
                 )
                 is SettingsRoute.Detail -> TopAppBar(
                     navigationIcon = {
@@ -494,7 +501,8 @@ fun SettingsScreen(
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
                         }
                     },
-                    title = { Text(sectionTitle(route.section), style = MaterialTheme.typography.titleMedium) }
+                    title = { Text(sectionTitle(route.section), style = MaterialTheme.typography.titleMedium) },
+                    actions = { FeedbackIconButton(s = s, onClick = onReportBug) }
                 )
             }
         }
@@ -783,7 +791,7 @@ fun SettingsScreen(
                     )
             }
             SettingsSection.ALERTS -> SectionDetailBody(stateSummary = sectionSummary(section)) {
-                    if (notificationsDisabled) {
+                    settingsConflicts.forEach { conflict ->
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -802,7 +810,7 @@ fun SettingsScreen(
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        lang.pick("Сповіщення вимкнено", "Notifications disabled", "Notifications disabled"),
+                                        s.settingsConflictTitles[conflict.ordinal],
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onErrorContainer
@@ -810,27 +818,28 @@ fun SettingsScreen(
                                 }
                                 Spacer(Modifier.height(6.dp))
                                 Text(
-                                    lang.pick(
-                                        "Додаток не зможе показувати тривоги та сирени. Увімкніть сповіщення в налаштуваннях системи.",
-                                        "The app cannot deliver sirens or alert notifications. Enable notifications in system settings.",
-                                        "The app cannot deliver sirens or alert notifications. Enable notifications in system settings."
-                                    ),
+                                    s.settingsConflictBodies[conflict.ordinal],
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
                                 )
-                                Spacer(Modifier.height(10.dp))
-                                Button(
-                                    onClick = { AlertNotificationManager.openNotificationSettings(appContext) },
-                                    interactionSource = rememberHapticInteractionSource(),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.error
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        lang.pick("Увімкнути сповіщення", "Enable notifications", "Enable notifications"),
-                                        fontWeight = FontWeight.SemiBold
-                                    )
+                                // Do Not Disturb has no in-app fix and no permission of ours behind
+                                // it, so that card states the problem and offers no button rather
+                                // than a button that would send the user somewhere unhelpful.
+                                if (conflict != SettingsConflict.DND_BLOCKS_LOUD) {
+                                    Spacer(Modifier.height(10.dp))
+                                    Button(
+                                        onClick = { AlertNotificationManager.openNotificationSettings(appContext) },
+                                        interactionSource = rememberHapticInteractionSource(),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.error
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            s.notificationsDisabledLabel,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
                                 }
                             }
                     }
@@ -1230,6 +1239,15 @@ fun SettingsScreen(
                         checked = showThreatIdsOnMap,
                         flash = flashId == "threatIds",
                         onCheckedChange = onShowThreatIdsOnMapChange
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // Report-a-bug entry point on every screen (map FAB, all top bars).
+                    AlertToggleRow(
+                        title = s.feedbackButtonTitle,
+                        description = s.feedbackButtonDesc,
+                        checked = showFeedbackButton,
+                        flash = flashId == "feedbackButton",
+                        onCheckedChange = onShowFeedbackButtonChange
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).explainerFlash(flashId == "overlap")) {

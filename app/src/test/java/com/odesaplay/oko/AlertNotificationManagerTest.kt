@@ -145,23 +145,49 @@ class AlertNotificationManagerTest {
     }
 
     @Test
-    fun `inner alert with siren override uses the inner alarm channel`() = runTest {
-        AlertNotificationManager(context)
-            .postAlertNotification(ThreatZone.INNER, "t", "b", sirenOverride = true)
-
+    fun `inner alert with siren override uses the inner alarm channel`() {
         assertEquals(
             AlertNotificationManager.CHANNEL_ALERTS_INNER_ALARM,
-            notification(AlertNotificationManager.NOTIF_ALERT).channelId
+            AlertNotificationManager.alertChannelId(ThreatZone.INNER, "red", sirenOverride = true)
         )
     }
 
     @Test
-    fun `outer alert without override uses the outer channel`() = runTest {
-        AlertNotificationManager(context)
-            .postAlertNotification(ThreatZone.OUTER, "t", "b", sirenOverride = false)
-
+    fun `outer alert without override uses the outer channel`() {
         assertEquals(
             AlertNotificationManager.CHANNEL_ALERTS_OUTER,
+            AlertNotificationManager.alertChannelId(ThreatZone.OUTER, "yellow", sirenOverride = false)
+        )
+    }
+
+    /**
+     * The decision that used to live inline in the poster: a zone alert carries its own zone, but
+     * an official alert has none and must take one from its level. Defaulting to INNER would put a
+     * yellow official on the red voice.
+     */
+    @Test
+    fun `an official alert takes its channel from its level`() {
+        assertEquals(
+            AlertNotificationManager.CHANNEL_ALERTS_OUTER,
+            AlertNotificationManager.alertChannelId(zone = null, level = "yellow", sirenOverride = false)
+        )
+        assertEquals(
+            AlertNotificationManager.CHANNEL_ALERTS_INNER,
+            AlertNotificationManager.alertChannelId(zone = null, level = "red", sirenOverride = false)
+        )
+        assertEquals(
+            AlertNotificationManager.CHANNEL_ALERTS_OUTER_ALARM,
+            AlertNotificationManager.alertChannelId(zone = null, level = "yellow", sirenOverride = true)
+        )
+    }
+
+    @Test
+    fun `the poster posts to the channel it is handed`() = runTest {
+        AlertNotificationManager(context)
+            .postAlertNotification(AlertNotificationManager.CHANNEL_ALERTS_OUTER_ALARM, "t", "b")
+
+        assertEquals(
+            AlertNotificationManager.CHANNEL_ALERTS_OUTER_ALARM,
             notification(AlertNotificationManager.NOTIF_ALERT).channelId
         )
     }

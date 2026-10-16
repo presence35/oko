@@ -2,6 +2,7 @@ package com.odesaplay.oko
 import com.odesaplay.oko.theme.AppPalette
 import com.odesaplay.oko.beta.FeedbackSheet
 import com.odesaplay.oko.beta.FeedbackPanel
+import com.odesaplay.oko.beta.LocalFeedbackVisible
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.LatLng
 import kotlin.math.roundToInt
@@ -251,6 +252,64 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         shelterTipStage = p.shelterTipStage
     }
 
+    // Beta feedback: the sheet is a root-level overlay rather than MapScreen's, so Settings and
+    // Logs can raise it too. The shot is a full-window PixelCopy, so it captures whichever screen
+    // the tester was actually looking at.
+    var feedback by remember { mutableStateOf<FeedbackSheet>(FeedbackSheet.Closed) }
+    var feedbackCapturing by remember { mutableStateOf(false) }
+    val feedbackUpload by LogUpload.state.collectAsState()
+    fun openFeedback() {
+        if (feedback is FeedbackSheet.Open || feedbackCapturing) return
+        // Full-window PixelCopy, not a GL snapshot and not map-cropped: our markers ride a
+        // Canvas overlay above the GL surface (GL-only reads black), and the header/footer
+        // say which pill, banner and screen the tester was looking at. The FAB hides for
+        // the one copy frame, then comes back with the sheet.
+        val activity = context as? Activity
+        val decor = activity?.window?.decorView
+        if (decor == null || decor.width <= 0 || decor.height <= 0) {
+            feedback = FeedbackSheet.Open(shotLoading = false, includeShot = false)
+            return
+        }
+        feedbackCapturing = true
+        decor.post {
+            val bmp = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
+            try {
+                PixelCopy.request(
+                    activity.window,
+                    null,
+                    bmp,
+                    { result ->
+                        feedbackCapturing = false
+                        feedback = if (result == PixelCopy.SUCCESS) {
+                            FeedbackSheet.Open(shot = bmp, shotLoading = false, includeShot = true)
+                        } else {
+                            bmp.recycle()
+                            FeedbackSheet.Open(shotLoading = false, includeShot = false)
+                        }
+                    },
+                    Handler(Looper.getMainLooper())
+                )
+            } catch (e: Exception) {
+                bmp.recycle()
+                feedbackCapturing = false
+                feedback = FeedbackSheet.Open(shotLoading = false, includeShot = false)
+            }
+        }
+    }
+    fun closeFeedback() {
+        feedback = FeedbackSheet.Closed
+        LogUpload.dismiss()
+    }
+    // A sent report closes the sheet itself and says thanks — no separate Done screen
+    // to dismiss by hand.
+    LaunchedEffect(feedbackUpload) {
+        if (feedbackUpload is UploadState.Done && feedback is FeedbackSheet.Open) {
+            feedback = FeedbackSheet.Closed
+            LogUpload.dismiss()
+            showToast(Strings.get(uiState.language).feedbackSent)
+        }
+    }
+
     val onExit: () -> Unit = {
         AlertService.shutdown(context)
         val activity = context as? Activity
@@ -296,7 +355,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 
     // The map stays composed under the Settings overlay so its camera and tiles are never
     // destroyed — returning from Settings used to reset the world into a low-zoom grid.
-    CompositionLocalProvider(LocalHapticsEnabled provides uiState.hapticsEnabled) {
+    CompositionLocalProvider(
+        LocalHapticsEnabled provides uiState.hapticsEnabled,
+        LocalFeedbackVisible provides settingsState.showFeedbackButton
+    ) {
     Box(modifier = Modifier.fillMaxSize()) {
         if (!prefsLoaded) {
             // DataStore hasn't emitted yet — blank dark frame instead of guessing the state.
@@ -349,6 +411,9 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onOpenLogs = {
                 screen = Screen.LOGS
             },
+            onReportBug = { openFeedback() },
+            reportBugVisible = feedback is FeedbackSheet.Closed && !feedbackCapturing &&
+                settingsState.showFeedbackButton,
             onShelterModeChange = { viewModel.setShelterModeActive(it) },
             showNearbyShelters = showNearbyShelters,
             onShowNearbySheltersChange = { showNearbyShelters = it },
@@ -376,7 +441,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             SettingsScreen(
                 state = settingsState,
                 hapticsEnabled = uiState.hapticsEnabled,
-                notificationsDisabled = uiState.notificationsDisabledBySystem,
+                settingsConflicts = uiState.settingsConflicts,
                 updateFlow = viewModel.updateFlow,
                 latestVersionFlow = viewModel.latestVersionState,
                 nightActive = uiState.nightActive,
@@ -482,8 +547,10 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                         screen = Screen.GUIDE
                     }
                 },
+                onReportBug = { openFeedback() },
                 showThreatIdsOnMap = settingsState.showThreatIdsOnMap,
                 onShowThreatIdsOnMapChange = remember { { viewModel.setShowThreatIdsOnMap(it) } },
+                onShowFeedbackButtonChange = remember { { viewModel.setShowFeedbackButton(it) } },
                 zonePolicy = settingsState.zonePolicy,
                 onZonePolicyChange = remember { { viewModel.setZonePolicy(it) } },
                 onNotifyPolicyEnabledChange = remember { { viewModel.setNotifyPolicyEnabled(it) } },
@@ -501,6 +568,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
             FeatureGuideScreen(
                 s = Strings.get(uiState.language),
                 initialFeatureId = guideFeatureId,
+                onReportBug = { openFeedback() },
                 onBack = { screen = if (guideFromSettings) Screen.SETTINGS else Screen.MAP }
             )
         }
@@ -515,6 +583,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 sheltersEnabled = uiState.sheltersEnabled,
                 onSheltersEnabledChange = { viewModel.setSheltersEnabled(it) },
                 onRetry = { viewModel.retryShelters() },
+                onReportBug = { openFeedback() },
                 onBack = { screen = if (sheltersFromSettings) Screen.SETTINGS else Screen.MAP }
             )
         }
@@ -528,11 +597,67 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 degraded = uiState.degraded,
                 focusToken = uiState.focusToken,
                 onBack = { screen = Screen.MAP },
+                onReportBug = { openFeedback() },
                 // A logged row flies to the position it was logged at; the existing reveal
                 // effect switches the screen back to the map and selects the threat when the
                 // track is still alive.
                 onOpenOnMap = { id, lat, lon, type -> viewModel.revealThreat(id, lat, lon, type = type) },
             )
+        }
+        // Beta feedback: scrim + bottom card, one instance shared by the map FAB, the Settings
+        // top bar and the Logs header. Registered after the per-screen back handlers, so Back
+        // closes the sheet instead of leaving the screen it was raised from. The logs row inside
+        // jumps to the Debug tab, where LogPreview shows the exact payload keys — no second
+        // preview to drift.
+        if (feedback is FeedbackSheet.Open) {
+            BackHandler { closeFeedback() }
+        }
+        val feedbackOpen = feedback as? FeedbackSheet.Open
+        if (feedbackOpen != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { closeFeedback() }
+                    )
+            )
+        }
+        AnimatedVisibility(
+            visible = feedbackOpen != null,
+            enter = if (animationsOff()) EnterTransition.None
+            else slideInVertically(tween(200)) { it } + fadeIn(tween(100)),
+            exit = if (animationsOff()) ExitTransition.None
+            else slideOutVertically(tween(250)) { it } + fadeOut(tween(200)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            feedbackOpen?.let { st ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(AppPalette.Card),
+                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                    border = BorderStroke(1.5.dp, Color(AppPalette.Border))
+                ) {
+                    FeedbackPanel(
+                        s = Strings.get(uiState.language),
+                        state = st,
+                        onState = { feedback = it },
+                        upload = feedbackUpload,
+                        onSend = {
+                            LogUpload.uploadFeedback(
+                                context,
+                                st.category,
+                                st.message,
+                                st.shot.takeIf { st.includeShot },
+                                st.includeLogs
+                            )
+                        },
+                        onClose = { closeFeedback() }
+                    )
+                }
+            }
         }
         SwipeableSnackbarHost(
             hostState = snackbarHostState,
@@ -691,6 +816,8 @@ private fun MapScreen(
     onShowZonesSheetChange: (Boolean) -> Unit,
     onOpenShelters: () -> Unit,
     onOpenLogs: () -> Unit,
+    onReportBug: () -> Unit,
+    reportBugVisible: Boolean,
     onShelterModeChange: (Boolean) -> Unit,
     showNearbyShelters: Boolean,
     onShowNearbySheltersChange: (Boolean) -> Unit,
@@ -715,61 +842,6 @@ private fun MapScreen(
     var fitZonesTick by remember { mutableStateOf(0) }
     var shelterSelectTick by remember { mutableStateOf(0) }
     var selectedShelter by remember { mutableStateOf<NearestShelter?>(null) }
-    // Beta feedback: bridge ref for the GL snapshot, and the panel's single state.
-    var feedback by remember { mutableStateOf<FeedbackSheet>(FeedbackSheet.Closed) }
-    var feedbackCapturing by remember { mutableStateOf(false) }
-    val feedbackUpload by LogUpload.state.collectAsState()
-    fun openFeedback() {
-        if (feedback is FeedbackSheet.Open || feedbackCapturing) return
-        // Full-window PixelCopy, not a GL snapshot and not map-cropped: our markers ride a
-        // Canvas overlay above the GL surface (GL-only reads black), and the header/footer
-        // say which pill, banner and screen the tester was looking at. The FAB hides for
-        // the one copy frame, then comes back with the sheet.
-        val activity = context as? Activity
-        val decor = activity?.window?.decorView
-        if (decor == null || decor.width <= 0 || decor.height <= 0) {
-            feedback = FeedbackSheet.Open(shotLoading = false, includeShot = false)
-            return
-        }
-        feedbackCapturing = true
-        decor.post {
-            val bmp = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
-            try {
-                PixelCopy.request(
-                    activity.window,
-                    null,
-                    bmp,
-                    { result ->
-                        feedbackCapturing = false
-                        feedback = if (result == PixelCopy.SUCCESS) {
-                            FeedbackSheet.Open(shot = bmp, shotLoading = false, includeShot = true)
-                        } else {
-                            bmp.recycle()
-                            FeedbackSheet.Open(shotLoading = false, includeShot = false)
-                        }
-                    },
-                    Handler(Looper.getMainLooper())
-                )
-            } catch (e: Exception) {
-                bmp.recycle()
-                feedbackCapturing = false
-                feedback = FeedbackSheet.Open(shotLoading = false, includeShot = false)
-            }
-        }
-    }
-    fun closeFeedback() {
-        feedback = FeedbackSheet.Closed
-        LogUpload.dismiss()
-    }
-    // A sent report closes the sheet itself and says thanks — no separate Done screen
-    // to dismiss by hand.
-    LaunchedEffect(feedbackUpload) {
-        if (feedbackUpload is UploadState.Done && feedback is FeedbackSheet.Open) {
-            feedback = FeedbackSheet.Closed
-            LogUpload.dismiss()
-            showToast(s.feedbackSent)
-        }
-    }
     // Measured overlay heights feeding the map's camera framing: the popup card covers the top
     // of the viewport, the zones sheet the bottom — the map fits/reveals inside the visible band.
     val popupCoverPxState = remember { mutableIntStateOf(0) }
@@ -1137,8 +1209,10 @@ private fun MapScreen(
                             onFinished = onFlybyFinished
                         )
                     }
-                    // Beta feedback: one small non-intrusive FAB, top-right of the map only.
-                    if (!flourishActive && feedback is FeedbackSheet.Closed && !feedbackCapturing) {
+                    // Beta feedback: one small non-intrusive FAB, top-right of the map only. The
+                    // sheet itself is owned at the MainScreen root (Settings and Logs raise the
+                    // same one), so it stays hidden while that sheet is up or being captured.
+                    if (reportBugVisible) {
                         val feedbackFabInteraction = remember { MutableInteractionSource() }
                         Box(
                             modifier = Modifier
@@ -1150,7 +1224,7 @@ private fun MapScreen(
                                 .clickable(
                                     interactionSource = feedbackFabInteraction,
                                     indication = ripple(bounded = false),
-                                    onClick = { openFeedback() }
+                                    onClick = { onReportBug() }
                                 )
                                 .semantics { semanticsContentDescription = s.feedbackTitle },
                             contentAlignment = Alignment.Center
@@ -1522,56 +1596,6 @@ private fun MapScreen(
                             onFastYellowArmedChange = onFastYellowArmedChange,
                             onOpenThreatSettings = openThreatSettings,
                             modifier = Modifier.padding(horizontal = 20.dp)
-                        )
-                    }
-                }
-            }
-            // Beta feedback panel: scrim + bottom card over the live map, same slide as the
-            // zones sheet. The logs row jumps to the Debug tab, where LogPreview shows the
-            // exact payload keys — no second preview to drift.
-            val feedbackOpen = feedback as? FeedbackSheet.Open
-            if (feedbackOpen != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = { closeFeedback() }
-                        )
-                )
-            }
-            AnimatedVisibility(
-                visible = feedbackOpen != null,
-                enter = if (animsOff) EnterTransition.None
-                else slideInVertically(tween(200)) { it } + fadeIn(tween(100)),
-                exit = if (animsOff) ExitTransition.None
-                else slideOutVertically(tween(250)) { it } + fadeOut(tween(200)),
-                modifier = Modifier.align(Alignment.BottomCenter)
-            ) {
-                feedbackOpen?.let { st ->
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Color(AppPalette.Card),
-                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                        border = BorderStroke(1.5.dp, Color(AppPalette.Border))
-                    ) {
-                        FeedbackPanel(
-                            s = s,
-                            state = st,
-                            onState = { feedback = it },
-                            upload = feedbackUpload,
-                            onSend = {
-                                LogUpload.uploadFeedback(
-                                    context,
-                                    st.category,
-                                    st.message,
-                                    st.shot.takeIf { st.includeShot },
-                                    st.includeLogs
-                                )
-                            },
-                            onClose = { closeFeedback() }
                         )
                     }
                 }

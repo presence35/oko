@@ -42,7 +42,7 @@ object LogBundle {
      * reader can tell "field absent because the build predates it" from "field absent because the
      * OS would not say".
      */
-    private const val SCHEMA = 2
+    private const val SCHEMA = 3
 
     private val SECRET = Regex(
         "(?i)bearer\\s+\\S+" +
@@ -175,6 +175,36 @@ object LogBundle {
             p("deviceIdle", pm?.isDeviceIdleMode)
             p("thermal", if (Build.VERSION.SDK_INT >= 29) pm?.currentThermalStatus else null)
             p("batteryUnoptimized", runCatching { pm?.isIgnoringBatteryOptimizations(context.packageName) }.getOrNull())
+            // Standby bucket is the OS's own throttling verdict on us: a phone that has quietly
+            // demoted Oko to a rare bucket explains a degraded wakeup far better than a guess.
+            p("standbyBucket", if (Build.VERSION.SDK_INT >= 28) runCatching {
+                context.getSystemService(android.app.usage.UsageStatsManager::class.java)?.appStandbyBucket
+            }.getOrNull() else null)
+            // Without this, a denied SCHEDULE_EXACT_ALARM degrades the wakeup alarm to inexact and
+            // nothing in the bundle would say so.
+            p("exactAlarmsAllowed", if (Build.VERSION.SDK_INT >= 31) runCatching {
+                context.getSystemService(android.app.AlarmManager::class.java)?.canScheduleExactAlarms()
+            }.getOrNull() else null)
+        })
+
+        // What the OS will actually let us deliver. Absent from this bundle until now, which is
+        // precisely why "I hear a beep with nothing in the shade" could not be diagnosed from a
+        // log at all — the app's own prefs cannot express a system-level block.
+        root.p("notif", JSONObject().apply {
+            val state = AlertNotificationManager.notificationState(context)
+            p("enabled", state.enabled)
+            p("policyAccess", state.policyAccess)
+            p("interruptionFilter", state.interruptionFilter)
+            p("ringerMode", state.ringerMode)
+            p("suspended", state.suspended)
+            p("channels", JSONObject().apply {
+                state.channels.forEach { channel ->
+                    p(channel.id, JSONObject().apply {
+                        p("importance", channel.importance)
+                        p("hasSound", channel.hasSound)
+                    })
+                }
+            })
         })
 
         root.p("cpu", JSONObject().apply {
@@ -271,6 +301,7 @@ object LogBundle {
                     p("notified", e.notified)
                     p("night", e.night)
                     p("sirenOverride", e.sirenOverride)
+                    p("channel", e.channel)
                     p("threatId", e.threatId)
                     p("threatType", e.threatType?.name)
                     p("tier", e.tier?.name)

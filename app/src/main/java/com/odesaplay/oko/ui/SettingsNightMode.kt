@@ -167,7 +167,7 @@ internal fun NightModeCard(
                 val spanMin = nightWindowDurationMin(startMin, endMin)
                 if (spanMin > 0) {
                     Text(
-                        "$spanMin ${s.minUnit}",
+                        String.format(s.nightSpanFormat, spanMin / 60, spanMin % 60),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,

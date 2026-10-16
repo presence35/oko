@@ -93,7 +93,13 @@ data class DebugLogEntry(
      *  off, in-zone-coalesced). Never inferred from the threat's own place at read time. */
     val aboutMe: Boolean = false,
     /** The threat's reported position at decision time; null for rows naming no threat. */
-    val position: LogPosition? = null
+    val position: LogPosition? = null,
+    /**
+     * The notification channel the row was actually posted through, when one was. Named because
+     * [notified] means "we called post", not "the user saw it" — this is what says which voice the
+     * alert used, and whether the alarm pair the user asked for is the pair that rang.
+     */
+    val channel: String? = null
 )
 
 /**
@@ -354,12 +360,13 @@ object DebugLog {
         locality: String?,
         scopeOblastId: String?,
         position: LogPosition?,
+        channel: String?,
         now: Long
     ) {
         val entry = DebugLogEntry(
             now, DebugLogKind.ZONE_ENTER, night, sirenOverride,
             true, DebugLogReason.FIRED, threatId, threatType, tier, distanceKm, locality,
-            scopeOblastId = scopeOblastId, aboutMe = true, position = position
+            scopeOblastId = scopeOblastId, aboutMe = true, position = position, channel = channel
         )
         synchronized(verdictsLock) { verdicts[threatId] = fingerprintOf(entry) }
         record(entry)
@@ -586,7 +593,8 @@ internal fun serializeDebugLog(entries: List<DebugLogEntry>): String =
             entry.scopeOblastId ?: "",
             entry.aboutMe,
             entry.position?.lat?.toString() ?: "",
-            entry.position?.lon?.toString() ?: ""
+            entry.position?.lon?.toString() ?: "",
+            entry.channel ?: ""
         ).joinToString("|")
     }
 
@@ -618,5 +626,6 @@ internal fun parseDebugLog(raw: String, maxEntries: Int = DebugLog.MAX_ENTRIES):
         val position = if (lat != null && lon != null && lat.isFinite() && lon.isFinite() &&
             lat in -90.0..90.0 && lon in -180.0..180.0
         ) LogPosition(lat, lon) else null
-        DebugLogEntry(at, kind, night, siren, notified, reason, threatId, type, tier, dist, locality, level, scope, aboutMe, position)
+        val channel = parts.getOrNull(16)?.takeIf { it.isNotEmpty() }
+        DebugLogEntry(at, kind, night, siren, notified, reason, threatId, type, tier, dist, locality, level, scope, aboutMe, position, channel)
     }.takeLast(maxEntries)

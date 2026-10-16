@@ -2,6 +2,7 @@ package com.odesaplay.oko
 import com.odesaplay.oko.theme.AppPalette
 
 import com.odesaplay.oko.engine.LatLng
+import com.odesaplay.oko.beta.FeedbackIconButton
 
 import android.Manifest
 import android.app.Activity
@@ -63,6 +64,7 @@ fun ShelterScreen(
     sheltersEnabled: Boolean,
     onSheltersEnabledChange: (Boolean) -> Unit,
     onRetry: () -> Unit,
+    onReportBug: () -> Unit,
     onBack: () -> Unit
 ) {
     val s = Strings.get(lang)
@@ -134,7 +136,8 @@ fun ShelterScreen(
                     IconButton(onClick = onBack, interactionSource = rememberHapticInteractionSource()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.backButton)
                     }
-                }
+                },
+                actions = { FeedbackIconButton(s = s, onClick = onReportBug) }
             )
         }
     ) { padding ->

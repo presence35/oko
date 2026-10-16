@@ -197,6 +197,7 @@ private data class NewRingState(val id: String?, val activeUntilMs: Long)
  * computes, so no second owner of "when does this end" can exist.
  */
 private data class LogPin(
+    val id: String?,
     val lat: Double,
     val lon: Double,
     val type: ThreatType,
@@ -455,7 +456,6 @@ fun NeptunMapView(
         )
     }
     val lastFitUkraineTick = remember { mutableStateOf(fitUkraineTick) }
-    val lastFollow = remember { mutableStateOf<LatLng?>(null) }
     val lastZoomTick = remember { mutableStateOf(-1) }
     val lastShelterSelectTick = remember { mutableStateOf(-1) }
     val lastFitZonesTick = remember { mutableStateOf(-1) }
@@ -597,15 +597,10 @@ fun NeptunMapView(
             (uiState.flourish != null && uiState.flourish.tick != lastFlourishTick.value)
         val focus = uiState.focusLocation
 
-        // Follow focus point
-        if (focus != null && (lastFollow.value?.lat != focus.lat || lastFollow.value?.lon != focus.lon)) {
-            lastFollow.value = focus
-            if (!replayOwnsCamera && !camera.isFollowLocked(System.currentTimeMillis())) {
-                bridge.animateTo(focus.lat, focus.lon)
-            }
-        } else if (focus == null && lastFollow.value != null) {
-            lastFollow.value = null
-        }
+        // No continuous follow-pan: the camera belongs to the user, and to the two moves below
+        // that happen on intent. Re-centring on every fix silently undid any deliberate camera
+        // position — a finger pan, a notification tap, a log row — a second after it was made,
+        // which is not what "Follow me" promises; that setting is about the zones and the scope.
 
         // Default fit
         if (!didDefaultFit.value && focus != null && !replayOwnsCamera) {
@@ -682,28 +677,35 @@ fun NeptunMapView(
         }
     }
 
-    // Reveal request
-    LaunchedEffect(revealRequest) {
+    // Reveal request. Held until the map is actually on screen: the request lands while the Logs
+    // screen is still up, and a mark whose clock had already started there would burn part of its
+    // blink where nobody can see it.
+    LaunchedEffect(revealRequest, mapVisibleState) {
         val reveal = revealRequest ?: return@LaunchedEffect
+        if (!mapVisibleState) return@LaunchedEffect
         if (reveal.tick != lastRevealTick.value) {
             lastRevealTick.value = reveal.tick
+            val bridge = bridgeState.value ?: return@LaunchedEffect
             newRingState.value = NewRingState(reveal.id, System.currentTimeMillis() + NEW_RING_MS)
             val focus = uiState.focusLocation
             val placed = reveal.id?.let { threatOutcomes[it] }
-            // A track that is still on the map is marked by its own reveal badge; one that is
-            // gone gets a blinking pin at its recorded fix, so the camera landing on apparently
-            // empty ground always has an explanation. Never both — that would read as two marks.
-            logPin.value = if (placed == null && reveal.type != null) {
-                LogPin(reveal.lat, reveal.lon, reveal.type, System.currentTimeMillis())
+            val targetLat = placed?.lat ?: reveal.lat
+            val targetLon = placed?.lon ?: reveal.lon
+            // A log row for a track the feed no longer has: fit that point alone and mark it,
+            // since no marker will be there to explain the camera. The liveness decision is the
+            // ViewModel's (it already reads the feed) — never re-made here.
+            if (reveal.missing != null) {
+                camera.revealPoint(bridge, targetLat, targetLon)
+                logPin.value = LogPin(reveal.id, targetLat, targetLon, reveal.missing, System.currentTimeMillis())
             } else {
-                null
+                logPin.value = null
+                camera.armFit(
+                    reveal.id, targetLat, targetLon,
+                    focus?.lat ?: Double.NaN, focus?.lon ?: Double.NaN,
+                    reveal.tick.toLong()
+                )
+                lastArmTick.value = camera.pendingVersion
             }
-            camera.armFit(
-                reveal.id, placed?.lat ?: reveal.lat, placed?.lon ?: reveal.lon,
-                focus?.lat ?: Double.NaN, focus?.lon ?: Double.NaN,
-                reveal.tick.toLong()
-            )
-            lastArmTick.value = camera.pendingVersion
         }
         // One-shot: consume so re-entering the map can never replay a stale reveal.
         onRevealHandled()
@@ -959,11 +961,16 @@ LaunchedEffect(selectedId) {
             }
 
             // Log-row pin: the mark owns its lifetime (see logPinAlpha), so an alpha of 0 IS
-            // the end. While it lives the loop must tick at frame rate — the blink is sampled
-            // by these ticks, and at the idle 1s cadence a 700ms blink renders as a stutter.
+            // the end. A pin is also dropped the moment its threat turns up in the live set —
+            // this loop is the one place that already knows which ids have a marker, so a track
+            // that reappears can never sit under a stale "was here" mark. While it lives the
+            // loop must tick at frame rate: the blink is sampled by these ticks, and at the idle
+            // 1s cadence a 700ms blink renders as a stutter.
             val pin = logPin.value
-            val pinAlive = pin != null && logPinAlpha(pin.armedAtMs, now) > 0f
-            if (pin != null && !pinAlive) logPin.value = null
+            if (pin != null && pin.id != null && pin.id in currentIds) logPin.value = null
+            val livePin = logPin.value
+            val pinAlive = livePin != null && logPinAlpha(livePin.armedAtMs, now) > 0f
+            if (livePin != null && !pinAlive) logPin.value = null
 
             delay(if (moving || pinAlive) 33 else 1000)
             bridge.invalidateOverlay()

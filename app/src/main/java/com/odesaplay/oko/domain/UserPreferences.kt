@@ -93,6 +93,7 @@ data class UserPreferences(
     val showSmallCities: Boolean = false,
     val showLargeCities: Boolean = true,
     val showThreatIdsOnMap: Boolean = false,
+    val showFeedbackButton: Boolean = true,
     val deathAnimationEnabled: Boolean = true,
     val deathAnimationStyle: DeathAnimationStyle = DeathAnimationStyle.ADVANCED,
     val followBullet: Boolean = true,

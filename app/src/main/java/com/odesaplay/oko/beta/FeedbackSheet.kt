@@ -30,11 +30,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +49,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.odesaplay.oko.UploadState
 import com.odesaplay.oko.Strings
+import com.odesaplay.oko.rememberHapticInteractionSource
 
 /** Single source of truth for the feedback panel. Upload progress lives in [UploadState]. */
 sealed interface FeedbackSheet {
@@ -64,6 +67,11 @@ sealed interface FeedbackSheet {
 }
 
 private data class CategoryMeta(val kind: FeedbackCategory, val icon: ImageVector, val label: String)
+
+/** Whether the report-a-bug entry points should render at all. Owned once at the app root from
+ *  the user's preference ([com.odesaplay.oko.domain.UserPreferences.showFeedbackButton]); every
+ *  [FeedbackIconButton] and the map FAB read it, so there is one gate, not one per screen. */
+val LocalFeedbackVisible = compositionLocalOf { true }
 
 @Composable
 fun FeedbackPanel(
@@ -214,6 +222,32 @@ fun FeedbackPanel(
                 )
             }
         }
+    }
+}
+
+/**
+ * The in-bar report entry point (Settings top bar, Logs header). One definition so the two bars
+ * cannot drift in icon, label or haptics; the map keeps its own scrimmed FAB, which is a
+ * different visual.
+ */
+@Composable
+fun FeedbackIconButton(
+    s: Strings.StringSet,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = LocalContentColor.current
+) {
+    if (!LocalFeedbackVisible.current) return
+    IconButton(
+        onClick = onClick,
+        interactionSource = rememberHapticInteractionSource(),
+        modifier = modifier
+    ) {
+        Icon(
+            imageVector = Icons.Filled.BugReport,
+            contentDescription = s.feedbackTitle,
+            tint = tint
+        )
     }
 }
 

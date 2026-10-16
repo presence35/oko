@@ -72,6 +72,20 @@ internal class MapCameraCoordinator {
         bridge.animateTo(lat, lon)
     }
 
+    /**
+     * Frame one point alone — a log row's "where was this", not a threat-vs-me reveal.
+     *
+     * Applied immediately rather than parked as a [PendingFit]: a pending fit is refined only
+     * once a popup card reports its measured height, and a threat that is already gone opens no
+     * card, so its reveal never moved the camera at all. Only the geometry is dropped — the
+     * follow suppression is the same window every other reveal takes.
+     */
+    fun revealPoint(bridge: MapLibreBridge, lat: Double, lon: Double) {
+        val box = singleThreatBox(lat, lon)
+        bridge.zoomToBounds(box.north, box.east, box.south, box.west)
+        lockUntilMs = System.currentTimeMillis() + CAMERA_FIT_LOCK_MS
+    }
+
     /** One-shot host record for a reveal/anchor; also re-arms the follow-me suppression. */
     fun armFit(id: String?, lat: Double, lon: Double, focusLat: Double, focusLon: Double, tick: Long) {
         pendingFit = PendingFit(id, lat, lon, focusLat, focusLon, tick)

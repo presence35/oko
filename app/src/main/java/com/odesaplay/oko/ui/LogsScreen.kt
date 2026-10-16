@@ -70,7 +70,6 @@ import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.NearMe
-import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -128,6 +127,7 @@ import kotlinx.coroutines.launch
 import com.odesaplay.oko.AppSources
 import com.odesaplay.oko.LogUpload
 import com.odesaplay.oko.UploadState
+import com.odesaplay.oko.beta.FeedbackIconButton
 import com.odesaplay.oko.source.OperationalMode
 import com.odesaplay.oko.source.SourceState
 import com.odesaplay.oko.source.SourceTestResult
@@ -228,6 +228,7 @@ fun LogsDropDownSheet(
     focusToken: String?,
     onClose: () -> Unit,
     onOpenOnMap: LogTargetRequest,
+    onReportBug: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val entries by DebugLog.entries.collectAsState()
@@ -263,10 +264,15 @@ fun LogsDropDownSheet(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var legendExpanded by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    // The clock only needs second-granularity while something live is on screen: the reconnect
+    // countdown, or an event still in the "N sec ago" bucket. Ticking every second over a page
+    // of settled rows re-derived every raid, group and row once a second for labels that move
+    // by the minute.
+    val liveClock = connRetry != null || entries.any { it.atMillis > now - 60_000 }
+    LaunchedEffect(liveClock) {
         while (true) {
             now = System.currentTimeMillis()
-            delay(1000)
+            delay(if (liveClock) 1000L else 15_000L)
         }
     }
 
@@ -293,7 +299,7 @@ fun LogsDropDownSheet(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
+                .padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
@@ -348,6 +354,9 @@ fun LogsDropDownSheet(
                 fontWeight = FontWeight.Bold,
                 color = connColor
             )
+            // Report-a-bug: here, not only on the map, so the shot captures the tab, filter and
+            // rows the tester was actually reading.
+            FeedbackIconButton(s = s, onClick = onReportBug, tint = Color.White)
         }
 
         // Tabs — taps drive the pager; swipes flow back via snapshotFlow above.
@@ -533,6 +542,13 @@ private fun LogsTabPage(
     fun toggle(id: String) {
         collapsed[id] = !(collapsed[id] ?: false)
     }
+    // Which raid cards are open. Hoisted out of the card: an open card's rows are separate
+    // LazyColumn items, so a 128-row raid composes only what fits on screen instead of every
+    // row at the instant the chevron is tapped.
+    val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    LaunchedEffect(storySessions.map { it.id }) {
+        expanded.keys.retainAll(storySessions.map { it.id }.toSet())
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -611,8 +627,20 @@ modifier = Modifier
                 )
             }
         } else if (isDecisions && mode == LogsMode.STORY) {
-            itemsIndexed(storySessions, key = { _, session -> session.id }) { _, session ->
-                SessionCard(session, s, lang, iconSet, now, onOpenOnMap)
+            // A raid's rows are their own lazy items: opening a long raid lays out only what
+            // fits on screen, and scrolling it is ordinary lazy scrolling.
+            storySessions.forEach { session ->
+                val open = expanded[session.id] == true
+                item(key = session.id) {
+                    SessionCard(session, s, lang, open) { expanded[session.id] = !open }
+                }
+                if (open) {
+                    itemsIndexed(session.entries, key = { i, _ -> "se-${session.id}-$i" }) { _, entry ->
+                        Box(Modifier.padding(start = 12.dp)) {
+                            DecisionCard(entry, s, lang, now, iconSet, onOpenOnMap)
+                        }
+                    }
+                }
             }
         } else if (isDecisions && mode == LogsMode.ACTIONS) {
             // The action trail is its own lens: no story (a tap is not a raid event), no groups,
@@ -696,6 +724,7 @@ fun LogsScreen(
     degraded: Boolean,
     focusToken: String?,
     onBack: () -> Unit,
+    onReportBug: () -> Unit,
     onOpenOnMap: LogTargetRequest,
 ) {
     LogsDropDownSheet(
@@ -706,6 +735,7 @@ fun LogsScreen(
         degraded = degraded,
         focusToken = focusToken,
         onClose = onBack,
+        onReportBug = onReportBug,
         onOpenOnMap = onOpenOnMap,
         modifier = Modifier.fillMaxHeight(1f),
     )
@@ -1029,19 +1059,18 @@ private fun <T> SegmentToggle(options: List<Pair<T, String>>, selected: T, onSel
 }
 
 /**
- * One raid, told as a story: a headline verdict, when and where, and — expanded — the
- * sub-events in order. Collapsed by default so the day reads as a handful of headlines.
+ * One raid's headline: when and how long, where, the verdict, the chevron. The rows it opens are
+ * separate LazyColumn items (see the STORY branch), so opening a long raid costs this composable
+ * nothing — only the rows on screen are ever composed.
  */
 @Composable
 private fun SessionCard(
     session: LogSession,
     s: Strings.StringSet,
     lang: AppLanguage,
-    iconSet: ThreatIconSet,
-    now: Long,
-    onOpenOnMap: LogTargetRequest
+    expanded: Boolean,
+    onToggle: () -> Unit
 ) {
-    var expanded by remember(session.id) { mutableStateOf(false) }
     val accent = when (session.official) {
         AlertLevel.RED -> DebugRed
         AlertLevel.YELLOW -> DebugAmber
@@ -1058,7 +1087,7 @@ private fun SessionCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .hapticClickable(onClick = { expanded = !expanded })
+                .hapticClickable(onClick = onToggle)
                 .padding(12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1134,15 +1163,6 @@ private fun SessionCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
                 )
-            }
-        }
-        if (expanded) {
-            Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
-                session.entries.forEach { entry ->
-                    Box(modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)) {
-                        DecisionCard(entry, s, lang, now, iconSet, onOpenOnMap)
-                    }
-                }
             }
         }
     }
@@ -1271,12 +1291,15 @@ private fun LegendRow(s: Strings.StringSet, expanded: Boolean, onToggle: () -> U
                     LegendItem(Icons.AutoMirrored.Filled.VolumeUp, s.debugLogSoundOverride)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    LegendItem(Icons.Filled.CheckCircle, s.debugLogShown)
-                    LegendItem(painterResource(R.drawable.ic_notifications_off), s.debugLogSuppressedLegend, tint = DebugAmber)
+                    LegendItem(Icons.Filled.CheckCircle, s.debugLogShown, tint = DebugGreen)
+                    LegendItem(painterResource(R.drawable.ic_notifications_off), s.logsOutcomeCovered, tint = DebugAmber)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LegendItem(
+                        painterResource(R.drawable.ic_notifications_off), s.logsOutcomeNotNotified,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
                     LegendItem(Icons.Filled.HourglassBottom, s.logsOutcomeInfo)
-                    LegendItem(Icons.Outlined.Place, s.logsShowOnMap)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LegendItem(Icons.Outlined.History, s.debugReasonStale)
@@ -1287,12 +1310,12 @@ private fun LegendRow(s: Strings.StringSet, expanded: Boolean, onToggle: () -> U
 }
 
 @Composable
-private fun LegendItem(icon: ImageVector, label: String) {
+private fun LegendItem(icon: ImageVector, label: String, tint: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = tint,
             modifier = Modifier.size(16.dp)
         )
         Spacer(Modifier.width(4.dp))
@@ -1663,8 +1686,10 @@ private fun DecisionCard(
                 )
             }
             Spacer(Modifier.height(3.dp))
-            // Every mark lives on this one line, immediately left of the clock: the title above
-            // is the line that flexes under a large font, and the right edge stays time-only.
+            // Every mark lives on this one line — the title above is the line that flexes under a
+            // large font, so the marks must not crowd it. The run sits centred between the
+            // distance and the clock (equal weights either side), which keeps the clock flush
+            // right where the age above it is.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 entry.distanceKm?.let { km ->
                     Text(
@@ -1691,16 +1716,7 @@ private fun DecisionCard(
                     Spacer(Modifier.width(6.dp))
                 }
                 OutcomeGlyph(outcome, entry.reason.label(s), s)
-                if (position != null) {
-                    Spacer(Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Icons.Outlined.Place,
-                        contentDescription = s.logsShowOnMap,
-                        tint = accent,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.weight(1f))
                 Text(
                     formatDateTime(lang, entry.atMillis),
                     style = MaterialTheme.typography.bodySmall,

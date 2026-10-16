@@ -205,6 +205,8 @@ data class UiState(
     val alertActive: Boolean = false,        // any threat or official alert live right now
     val threatDataStale: Boolean = false,
     val notificationsDisabledBySystem: Boolean = false,
+    /** OS-level reasons a configured alert cannot reach the user, most severe first. */
+    val settingsConflicts: List<SettingsConflict> = emptyList(),
     val raidMute: RaidMute = RaidMute.None
 ) {
     /** Derived summary of the two sub-channels — the master toggle. Can never be ON while red
@@ -303,6 +305,7 @@ data class SettingsState(
     val alarmEpisodeTallyEnabled: Boolean get() = prefs.alarmEpisodeTallyEnabled
     val threatIconZoom: Boolean get() = prefs.threatIconZoom
     val showThreatIdsOnMap: Boolean get() = prefs.showThreatIdsOnMap
+    val showFeedbackButton: Boolean get() = prefs.showFeedbackButton
 }
 
 /**
@@ -390,9 +393,10 @@ data class RevealRequest(
     val id: String?,
     val lat: Double,
     val lon: Double,
-    /** The threat's type when the caller knows it but the feed may not still have the track
-     *  (a tapped log row). The map uses it to mark the spot when nothing is left there. */
-    val type: ThreatType? = null
+    /** The threat's kind, present only when the feed no longer has the track (a tapped log row):
+     *  non-null means "gone", and the map frames that point alone and marks it. Decided here,
+     *  where the feed is already read for the selection — never re-derived downstream. */
+    val missing: ThreatType? = null
 )
 
 /** One-shot request from the locate button to center the map on a threat (threat-only framing). */
@@ -515,7 +519,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
      *  flipping the toggle from the shade while we are still foregrounded — updates the header
      *  status and the silent-bells pill. Equal re-reads are conflated by StateFlow, so the poll
      *  below costs no recomposition when nothing changed. */
-    private val notifEnabledFlow = MutableStateFlow(AlertNotificationManager.areNotificationsEnabled(app))
+    private val notificationStateFlow = MutableStateFlow(AlertNotificationManager.notificationState(app))
     /** Whether the current neutralization is user-initiated (long-press) so we show the
      *  "fake" text instead of the real "neutralizing" copy. Cleared on selection change. */
     private val fakeNeutralizeFlow = MutableStateFlow(false)
@@ -554,10 +558,10 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Re-read the OS notification toggle into [notifEnabledFlow]. Cheap: the StateFlow
-     *  conflates an unchanged value, so this never churns the uiState. */
+    /** Re-read the OS notification state. Cheap: the StateFlow conflates an unchanged value, so
+     *  this never churns the uiState, and nothing here touches DataStore. */
     private fun refreshNotificationPermission() {
-        notifEnabledFlow.value = AlertNotificationManager.areNotificationsEnabled(app)
+        notificationStateFlow.value = AlertNotificationManager.notificationState(app)
     }
 
     override fun onCleared() {
@@ -795,7 +799,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         registry.degraded,
         registry.coveredByFallback,
         RaidMuteState.state,
-        notifEnabledFlow
+        notificationStateFlow
     ) { values ->
         val live = values[1] as LiveSnapshot
         val rawPrefs = values[2] as UserPreferences
@@ -805,7 +809,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val flyby = values[5] as AviationFlybyShow?
         val monitoringRunning = values[6] as Boolean
         val raidMute = values[9] as RaidMute
-        val notificationsDisabledBySystem = !(values[10] as Boolean)
+        val notificationsDisabledBySystem = !(values[10] as NotificationState).enabled
         val bootRestartEnabled = rawPrefs.bootRestartEnabled
         val sleepNoticeEnabled = rawPrefs.sleepNoticeEnabled
         // No 1s wall-clock flow: the model rebuild is event-driven, so stamp the build time
@@ -973,6 +977,7 @@ showBorders = prefs.showBorders,
             shelterLoad = shelterLoad,
             shelterOverlayUp = live.shelterModeActive,
             notificationsDisabledBySystem = notificationsDisabledBySystem,
+            settingsConflicts = settingsConflicts(rawPrefs, values[10] as NotificationState),
             raidMute = raidMute,
             monitoringRunning = monitoringRunning,
             bootRestartEnabled = bootRestartEnabled,
@@ -1733,6 +1738,10 @@ fun setAlertsArmed(armed: Boolean) {
         viewModelScope.launch { prefs.setShowThreatIdsOnMap(show) }
     }
 
+    fun setShowFeedbackButton(show: Boolean) {
+        viewModelScope.launch { prefs.setShowFeedbackButton(show) }
+    }
+
     fun setNotifyPolicyEnabled(enabled: Boolean) {
         viewModelScope.launch {
             prefs.setNotifyPolicyEnabled(enabled)
@@ -1986,7 +1995,7 @@ fun setAlertsArmed(armed: Boolean) {
         } else if (select && id != null) {
             selectedThreatFlow.value = threat
         }
-        revealFlow.value = RevealRequest(revealTick, id, lat, lon, type)
+        revealFlow.value = RevealRequest(revealTick, id, lat, lon, missing = type.takeIf { threat == null })
     }
 
     /** Tally-tap replay: ask the map to shoot down the remembered resolutions in sequence. */

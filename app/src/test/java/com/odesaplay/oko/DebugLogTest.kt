@@ -216,7 +216,8 @@ class DebugLogTest {
             threatId = "t1", threatType = ThreatType.SHAHED, tier = ThreatZone.INNER,
             night = true, sirenOverride = false,
             distanceKm = 12.5, locality = "Одеса", scopeOblastId = "odeska",
-            position = LogPosition(46.48, 30.73), now = now
+            position = LogPosition(46.48, 30.73),
+            channel = AlertNotificationManager.CHANNEL_ALERTS_INNER, now = now
         )
         val recorded = DebugLog.entries.value.last()
         assertEquals(DebugLogKind.ZONE_ENTER, recorded.kind)

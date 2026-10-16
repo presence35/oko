@@ -36,12 +36,16 @@ class LogPreviewTest {
     private val bundle: JSONObject by lazy { runBlocking { LogBundle.build(context, UserPrefs(context)) } }
 
     /**
-     * Blocks the tab deliberately does not enumerate: dozens of pure numeric diagnostics with no
-     * personal content. Naming them here IS the review step — a new top-level key fails the test
-     * until someone decides which side of the line it belongs on, and moving a block into this set
-     * is a visible edit rather than a silent omission.
+     * Blocks the tab deliberately does not enumerate: diagnostics with no personal content, so the
+     * tester's consent covers their data rather than our counters. Naming them here IS the review
+     * step — a new top-level key fails the test until someone decides which side of the line it
+     * belongs on, and moving a block into this set is a visible edit rather than a silent omission.
+     *
+     * `notif` is here rather than on screen for that same reason: channel importance and ringer
+     * mode say nothing about the person, and they are read from the payload by whoever is
+     * diagnosing, not by the tester.
      */
-    private val unenumerated = setOf("battery", "cpu", "memory", "exitSummary")
+    private val unenumerated = setOf("battery", "cpu", "memory", "exitSummary", "notif")
 
     /** Shown in the tab's header rather than as a row of its own. */
     private val chrome = setOf("fileName")

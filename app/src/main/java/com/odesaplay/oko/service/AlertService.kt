@@ -1688,6 +1688,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     primary.isOnset -> {
                         wakeLockManager.acquireForAlert()
                         val muted = bellsMuted()
+                        val sirenOverride = state.zoneSirenOverride ?: state.officialSirenOverride
                         if (primary.zone != null) {
                             primary.revealThreat?.let { t ->
                                 DebugLog.recordZoneFired(
@@ -1700,13 +1701,18 @@ val mappedThreats = registry.allThreats.map { list ->
                                     locality = t.locality ?: t.district ?: t.region,
                                     scopeOblastId = threatOblastId(t),
                                     position = LogPosition(t.lat, t.lon),
+                                    // The same pure decision the poster takes, asked here so the
+                                    // audit row names the channel that actually rang.
+                                    channel = AlertNotificationManager.alertChannelId(
+                                        primary.zone, primary.level, sirenOverride
+                                    ),
                                     now = System.currentTimeMillis()
                                 )
                             }
                         }
                         if (holdOfficialSlot) return
                         postAlert(primary.zone, primary.level, primary.title, primary.body,
-                            state.zoneSirenOverride ?: state.officialSirenOverride,
+                            sirenOverride,
                             revealThreat = primary.revealThreat,
                             muted = muted, actions = actions)
                         lastOfficialOnsetShownMs =
@@ -1930,15 +1936,10 @@ val mappedThreats = registry.allThreats.map { list ->
         muted: Boolean = false,
         actions: AlertActions? = null
     ) {
-        // A zone alert carries its own zone; an official alert (zone == null) takes its channel
-        // from its level — yellow is an outer voice, red an inner one. Never default to INNER:
-        // that is the red / red-alarm channel.
-        val channelZone = zone ?: if (level.lowercase() == "yellow") ThreatZone.OUTER else ThreatZone.INNER
         notificationManager.postAlertNotification(
-            zone = channelZone,
+            channel = AlertNotificationManager.alertChannelId(zone, level, sirenOverride),
             title = title,
             body = body,
-            sirenOverride = sirenOverride,
             revealThreat = revealThreat,
             silent = silent,
             muted = muted,
