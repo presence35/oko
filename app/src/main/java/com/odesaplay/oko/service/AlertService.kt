@@ -89,7 +89,6 @@ import com.odesaplay.oko.service.AlertWatchdog
 import com.odesaplay.oko.service.EmergencyResurrectionWorker
 import com.odesaplay.oko.service.OfflineIgnore
 import com.odesaplay.oko.service.RaidMuteState
-import com.odesaplay.oko.service.AudioAlarmDispatcher
 import com.odesaplay.oko.service.FallingDebrisBuffer
 
 class AlertService : Service() {
@@ -181,8 +180,6 @@ class AlertService : Service() {
             nowMs: Long
         ): Boolean = primaryZone != null && primaryZone != ThreatZone.INNER &&
             shownOfficialStillLive && nowMs - onsetShownAtMs < OFFICIAL_SLOT_HOLD_MS
-        private const val VIBRATION_STRONG = 4
-        private const val VIBRATION_ZONE = 3
 
         /**
          * Start the monitor because the *user* acted — a cold launch, a settings change, the
@@ -371,7 +368,6 @@ class AlertService : Service() {
 
     private val notificationManager by lazy { AlertNotificationManager(applicationContext) }
     private val wakeLockManager by lazy { AlertWakeLockManager(applicationContext) }
-    private val audioAlarmDispatcher by lazy { AudioAlarmDispatcher(applicationContext) }
     /** The all-clear is off the shade and must not be brought back: swiped by the user,
      *  superseded by a new episode, or retired by the TTL. */
     @Volatile private var allClearClosed = false
@@ -401,7 +397,6 @@ class AlertService : Service() {
                         val s = Strings.get(lastChannelLang ?: AppLanguage.EN)
                         postAllClear(s, city, debrisSeconds = 0, silent = true, muted = bellsMuted(), replay = lastEpisodeReplay)
                     }
-                    if (!bellsMuted()) audioAlarmDispatcher.dispatchSmallVibration()
                 }
             }
         )
@@ -515,8 +510,6 @@ class AlertService : Service() {
         val alertsReady: Boolean = false,
         val criticalOfflineOverride: Boolean,
         val criticalOfflineBypassSilent: Boolean,
-        val fastVibrationLevel: Int,
-        val slowVibrationLevel: Int,
         val focusLocation: LatLng?,
         val gpsIssue: GpsIssue = GpsIssue.NONE,
         val gpsUnverifiedMin: Int = 0,
@@ -690,13 +683,11 @@ class AlertService : Service() {
             }
             ACTION_MUTE_RAID -> {
                 setRaidMute(raidMute.untilClear())
-                audioAlarmDispatcher.stopActiveAlert()
                 notificationManager.cancelNotification(NOTIF_ALERT)
                 logAction(DebugLogReason.MUTED, s0.actionLog.muteRaid, s0.actionLog.untilClear)
             }
             ACTION_MUTE_10 -> {
                 setRaidMute(raidMute.forDuration(System.currentTimeMillis(), MUTE_10_MS))
-                audioAlarmDispatcher.stopActiveAlert()
                 notificationManager.cancelNotification(NOTIF_ALERT)
                 logAction(
                     DebugLogReason.MUTED, s0.actionLog.muteRaid,
@@ -1041,9 +1032,6 @@ val mappedThreats = registry.allThreats.map { list ->
                     emptyMap()
                 }
 
-                val fastVib = VIBRATION_ZONE
-                val slowVib = VIBRATION_ZONE
-
                 MonitorState(
                     focusOblastAlertActive = focusOblastAlertActive,
                     focusOblastYellowAlertActive = focusOblastYellowAlertActive,
@@ -1080,8 +1068,6 @@ val mappedThreats = registry.allThreats.map { list ->
                     alertsReady = alertsReady,
                     criticalOfflineOverride = p.criticalOfflineOverride,
                     criticalOfflineBypassSilent = p.criticalOfflineBypassSilent,
-                    fastVibrationLevel = fastVib,
-                    slowVibrationLevel = slowVib,
                     focusLocation = focusLoc,
                     gpsIssue = gpsIssue,
                     gpsUnverifiedMin = gpsUnverifiedMin,
@@ -1238,7 +1224,6 @@ val mappedThreats = registry.allThreats.map { list ->
             offlineMinutes >= criticalThresholdMin && criticalFiredForEpisode != episode
         ) {
             criticalFiredForEpisode = episode
-            if (state.criticalOfflineBypassSilent) audioAlarmDispatcher.dispatchCriticalOffline(true)
             notificationManager.postCriticalOfflineNotification(
                 if (criticalThresholdMin == CRITICAL_OFFLINE_ALARM_MIN) s.offlineCriticalAlarmTitle
                 else s.offlineCriticalTitle,
@@ -1343,7 +1328,6 @@ val mappedThreats = registry.allThreats.map { list ->
             val body: String,
             val revealThreat: NormalizedThreat?,
             val silent: Boolean,
-            val vibration: Int,
             val isOnset: Boolean,
             val zone: ThreatZone?,
             val level: String,
@@ -1391,7 +1375,6 @@ val mappedThreats = registry.allThreats.map { list ->
                     body = t?.let { threatBody(it, state.lang) + etaSuffix(t, state) } ?: s.notifBodyRegion,
                     revealThreat = t,
                     silent = false,
-                    vibration = t?.let { if (isFastType(it.type.toThreatType(), typeCatalog)) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
                     isOnset = verdicts[id]?.kind == VerdictKind.SOUND,
                     zone = zone, level = if (zone == ThreatZone.INNER) "red" else "yellow"
                 )
@@ -1418,7 +1401,6 @@ val mappedThreats = registry.allThreats.map { list ->
                             body = (effReason ?: effRegion ?: state.focusRegion) + etaSuffix(reasonThreat, state),
                             revealThreat = reasonThreat,
                             silent = !onset,
-                            vibration = reasonThreat?.let { if (isFastType(it.type.toThreatType(), typeCatalog)) state.fastVibrationLevel else state.slowVibrationLevel } ?: VIBRATION_STRONG,
                             isOnset = onset,
                             zone = null, level = effLevel.name.lowercase()
                         )
@@ -1427,7 +1409,7 @@ val mappedThreats = registry.allThreats.map { list ->
                         identity = "$OFFICIAL_ID_YELLOW${effFrontier.token}|$effCity",
                         title = String.format(s.alertYellowBannerFormat, effCity),
                         body = effReason ?: effRegion ?: state.focusRegion,
-                        revealThreat = null, silent = !onset, vibration = VIBRATION_STRONG,
+                        revealThreat = null, silent = !onset,
                         isOnset = onset,
                         zone = null, level = "yellow"
                     )
@@ -1479,9 +1461,6 @@ val mappedThreats = registry.allThreats.map { list ->
                 val reasonThreat = if (state.focusOblastLevel == AlertLevel.RED) {
                     state.officialReasonThreatId?.let { all[it] }
                 } else null
-                val vibration = reasonThreat?.let {
-                    if (isFastType(it.type.toThreatType(), typeCatalog)) state.fastVibrationLevel else state.slowVibrationLevel
-                } ?: VIBRATION_STRONG
                 // The official row names the OFFICIAL area only — the cause is linked by
                 // threatId to its own swept zone/region row (a separate event), never
                 // borrowed into this one as locality/distance. threatId is attached only
@@ -1493,7 +1472,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     // A zone alert won the shared slot — the official episode still happened.
                     primary?.zone != null -> DebugLog.recordOfficial(
                         DebugLogKind.OFFICIAL_ON, night = state.nightActive,
-                        sirenOverride = state.officialSirenOverride, vibrationLevel = vibration,
+                        sirenOverride = state.officialSirenOverride,
                             notified = false, reason = DebugLogReason.COALESCED,
                             threatId = if (attachCause) reasonThreat?.id else null,
                             threatType = reasonThreat?.type?.toThreatType(),
@@ -1508,7 +1487,7 @@ val mappedThreats = registry.allThreats.map { list ->
                         // the Logs tab cannot claim a siren that was deliberately suppressed.
                         DebugLog.recordOfficial(
                             DebugLogKind.OFFICIAL_ON, night = state.nightActive,
-                            sirenOverride = state.officialSirenOverride, vibrationLevel = vibration,
+                            sirenOverride = state.officialSirenOverride,
                             notified = !mutedNow,
                             reason = if (mutedNow) DebugLogReason.BELL_MUTED else DebugLogReason.FIRED,
                             threatId = if (attachCause) reasonThreat?.id else null,
@@ -1522,7 +1501,7 @@ val mappedThreats = registry.allThreats.map { list ->
                     }
                     else -> DebugLog.recordOfficial(
                         DebugLogKind.OFFICIAL_ON, night = state.nightActive,
-                        sirenOverride = state.officialSirenOverride, vibrationLevel = vibration,
+                        sirenOverride = state.officialSirenOverride,
                             notified = false, reason = DebugLogReason.TOGGLE_OFF,
                             threatId = if (attachCause) reasonThreat?.id else null,
                             threatType = reasonThreat?.type?.toThreatType(),
@@ -1543,7 +1522,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 // alone decides — a level flip here is the same episode, hence `token !=`.
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_ON, night = state.nightActive,
-                    sirenOverride = state.officialSirenOverride, vibrationLevel = VIBRATION_STRONG,
+                    sirenOverride = state.officialSirenOverride,
                     notified = false, reason = DebugLogReason.TOGGLE_OFF,
                     threatId = null, threatType = null,
                     locality = state.officialRegion ?: state.focusCityUa,
@@ -1617,7 +1596,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 setRaidMute(raidMute.cleared())
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
-                    sirenOverride = state.officialSirenOverride, vibrationLevel = null,
+                    sirenOverride = state.officialSirenOverride,
                     notified = !mutedNow,
                     reason = if (mutedNow) DebugLogReason.BELL_MUTED else DebugLogReason.FIRED,
                     threatId = null, threatType = null,
@@ -1638,7 +1617,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 // Raw alert ended outside the notif scope: close its audit row silently.
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
-                    sirenOverride = state.officialSirenOverride, vibrationLevel = null,
+                    sirenOverride = state.officialSirenOverride,
                     notified = false, reason = DebugLogReason.TOGGLE_OFF,
                     threatId = null, threatType = null,
                     locality = null, distanceKm = null,
@@ -1653,7 +1632,7 @@ val mappedThreats = registry.allThreats.map { list ->
             ) {
                 DebugLog.recordOfficial(
                     DebugLogKind.OFFICIAL_OFF, night = state.nightActive,
-                    sirenOverride = state.officialSirenOverride, vibrationLevel = null,
+                    sirenOverride = state.officialSirenOverride,
                     notified = false, reason = DebugLogReason.TOGGLE_OFF,
                     threatId = null, threatType = null,
                     locality = state.officialRegion ?: state.focusCityUa, distanceKm = null,
@@ -1709,12 +1688,6 @@ val mappedThreats = registry.allThreats.map { list ->
                     primary.isOnset -> {
                         wakeLockManager.acquireForAlert()
                         val muted = bellsMuted()
-                        if (!muted) {
-                            audioAlarmDispatcher.dispatchDangerAlarm(
-                                isRed = (primary.level == "red"),
-                                overrideSilence = (state.zoneSirenOverride ?: state.officialSirenOverride)
-                            )
-                        }
                         if (primary.zone != null) {
                             primary.revealThreat?.let { t ->
                                 DebugLog.recordZoneFired(
@@ -1723,10 +1696,10 @@ val mappedThreats = registry.allThreats.map { list ->
                                     tier = primary.zone,
                                     night = state.nightActive,
                                     sirenOverride = state.zoneSirenOverride,
-                                    vibrationLevel = primary.vibration,
                                     distanceKm = distanceFromFocusKm(t, state),
                                     locality = t.locality ?: t.district ?: t.region,
                                     scopeOblastId = threatOblastId(t),
+                                    position = LogPosition(t.lat, t.lon),
                                     now = System.currentTimeMillis()
                                 )
                             }
@@ -1734,7 +1707,7 @@ val mappedThreats = registry.allThreats.map { list ->
                         if (holdOfficialSlot) return
                         postAlert(primary.zone, primary.level, primary.title, primary.body,
                             state.zoneSirenOverride ?: state.officialSirenOverride,
-                            revealThreat = primary.revealThreat, vibrationLevel = primary.vibration,
+                            revealThreat = primary.revealThreat,
                             muted = muted, actions = actions)
                         lastOfficialOnsetShownMs =
                             if (primary.zone == null) System.currentTimeMillis() else 0L
@@ -1744,7 +1717,6 @@ val mappedThreats = registry.allThreats.map { list ->
                         postAlert(primary.zone, primary.level, primary.title, primary.body,
                             state.zoneSirenOverride ?: state.officialSirenOverride,
                             revealThreat = primary.revealThreat, silent = true,
-                            vibrationLevel = primary.vibration,
                             muted = bellsMuted(), actions = actions)
                         if (primary.zone != null) lastOfficialOnsetShownMs = 0L
                     }
@@ -1822,8 +1794,6 @@ val mappedThreats = registry.allThreats.map { list ->
                     muted = bellsMuted(),
                     night = state.nightActive,
                     sirenOverride = state.zoneSirenOverride,
-                    fastVibrationLevel = state.fastVibrationLevel,
-                    slowVibrationLevel = state.slowVibrationLevel,
                     now = now,
                     focusToken = state.focusToken,
                     typeCatalog = typeCatalog
@@ -1957,7 +1927,6 @@ val mappedThreats = registry.allThreats.map { list ->
         sirenOverride: Boolean,
         revealThreat: NormalizedThreat? = null,
         silent: Boolean = false,
-        vibrationLevel: Int = 3,
         muted: Boolean = false,
         actions: AlertActions? = null
     ) {
@@ -1971,7 +1940,6 @@ val mappedThreats = registry.allThreats.map { list ->
             body = body,
             sirenOverride = sirenOverride,
             revealThreat = revealThreat,
-            vibrationLevel = vibrationLevel,
             silent = silent,
             muted = muted,
             actions = actions
@@ -2317,7 +2285,6 @@ private fun nextUpdateCheckMillis(from: Long): Long {
         // [restoreRaidMute]) precisely so the next instance keeps honouring it. The UI mirror is
         // reset because it is process-scoped and the process is going away.
         RaidMuteState.reset()
-        audioAlarmDispatcher.release()
         debrisBuffer.abort()
         // Detach the GNSS/network listeners so the radio can sleep. The next service instance
         // re-subscribes from startMonitoring; start() is idempotent.
@@ -2331,12 +2298,4 @@ private fun nextUpdateCheckMillis(from: Long): Long {
         scope.cancel()
         super.onDestroy()
     }
-}
-
-internal fun vibrationPattern(level: Int): LongArray = when (level) {
-    0 -> longArrayOf(0)
-    1 -> longArrayOf(0, 120, 60, 120)
-    2 -> longArrayOf(0, 200, 100, 200)
-    4 -> longArrayOf(0, 600, 100, 600, 100, 600)
-    else -> longArrayOf(0, 400, 120, 400)
 }

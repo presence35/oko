@@ -206,8 +206,6 @@ class AlertEpisodeClearTest {
         alertsReady = alertsReady,
         criticalOfflineOverride = false,
         criticalOfflineBypassSilent = false,
-        fastVibrationLevel = 3,
-        slowVibrationLevel = 2,
         focusLocation = null,
         nightActive = false,
         enabled = ThreatType.values().toSet(),

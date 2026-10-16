@@ -48,6 +48,14 @@ fun isNightActive(config: NightConfig, nowMillis: Long): Boolean {
     return isWithinNight(now.hour * 60 + now.minute, config.startMin, config.endMin)
 }
 
+/**
+ * How long the night window lasts, in minutes, wrap included (22:00→07:00 = 540). Zero when
+ * start == end, since such a window is never active and so has no length to state. Shown in the
+ * settings card so an absurd window (12:00→10:00 reads as 1320) is visible instead of silent.
+ */
+fun nightWindowDurationMin(startMin: Int, endMin: Int): Int =
+    if (startMin == endMin) 0 else (endMin - startMin + 1440) % 1440
+
 /** The active zone thresholds: night custom values while the window is active, else the day ones. */
 fun effectiveZoneParams(
     day: ZoneParams,

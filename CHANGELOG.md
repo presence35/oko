@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- A tapped log row whose threat is already gone now blinks its icon at the recorded spot and fades, instead of flying you to apparently empty ground 10-16_14:40:00
+- Tap a threat row in Logs to fly the map to it — hours-old rows included, since each row now remembers where the threat was 10-16_14:05:00
+- Log rows carry one line of marks (day/night, sound, outcome, the pin) next to the clock, instead of splitting the icons across two lines and repeating the muted-bell 10-16_14:05:00
+- Night mode now states how long its window actually lasts, so a backwards pair (12:00→10:00 reads as 1320 min) is visible instead of silently muting most of the day 10-16_13:13:22
+- Oko no longer plays alert sound of its own behind the OS's back: every alert sound is now the notification's own channel sound, so switching notifications off — or muting a raid — actually silences the alert instead of leaving a beep with nothing in the shade to explain it 10-16_00:07:32
+- "Always sound" is now "Loud alerts": it picks the alarm-volume channel, which Silent and Do Not Disturb still affect, rather than promising a siren no system setting could mute 10-16_00:07:32
+- Per-alert vibration levels are gone — Android has ignored per-notification vibration since API 26, so vibration now comes from the notification channel (stronger on loud alerts) 10-16_00:07:32
+- A release that fails part-way no longer strands the version: the bump is snapshotted and rolled back automatically unless the release actually published, so a red test or a rejected upload leaves version.properties exactly where it was 10-15_20:05:43
 - Prepared the F-Droid submission: GPL-3.0 LICENSE, EN/UA store listing under `fastlane/`, and a build recipe that declares the Tracking and TetheredNet disclosures 10-14_21:49:34
 - An empty threat strip during an official alert now names the alert ("Odesa: red alert") instead of showing a playful calm line 10-14_20:33:40
 - The sound-frequency tiles (and digest window chips) fold to 2x2 at large font sizes instead of crushing quarter-width labels 10-14_20:33:40
@@ -8,6 +16,8 @@
 - Tapping Ignore on the offline notification dismisses its rows instantly without starting the service, and Retry/Ignore register before their bookkeeping runs 10-14_20:33:40
 - Alert notification buttons lead with the differentiator ("Raid mute", "10m mute", "<type> mute", "30m ignore"), so large fonts truncate the common tail instead of the meaning 10-14_20:33:40
 - Threat cards and the threat-type rows no longer collapse at large font sizes: counts stay on one truncating line and pills wrap below the title 10-14_20:33:40
+
+## [0.6.826]
 - The shelter list now falls back to the last good copy cached on disk, so a failed fetch (roaming, no data) no longer leaves you with no shelters 10-13_21:53:05
 - A shelter load that still fails shows a real error with a Retry button (and a dimmed map button) instead of "no shelters nearby" 10-13_21:53:05
 - The selected shelter pin is filled in its colour with a white halo, and tapping a shelter gives haptic feedback 10-13_21:53:05

@@ -52,6 +52,14 @@ class NightModeTest {
     }
 
     @Test
+    fun `duration counts the wrap, and an equal pair is no window at all`() {
+        assertEquals(540, nightWindowDurationMin(22 * 60, 7 * 60))
+        assertEquals(900, nightWindowDurationMin(7 * 60, 22 * 60))
+        assertEquals(1320, nightWindowDurationMin(12 * 60, 10 * 60))
+        assertEquals(0, nightWindowDurationMin(12 * 60, 12 * 60))
+    }
+
+    @Test
     fun `effective params pick night values only while active and enabled`() {
         val day = ZoneParams(20, 50, 5, 20)
         val night = NightZones(10, 30, 3, 10, slowRedArmed = false, slowYellowArmed = true, fastRedArmed = true, fastYellowArmed = false)

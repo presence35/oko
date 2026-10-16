@@ -28,7 +28,7 @@ class LogStoryTest {
         aboutMe: Boolean = true
     ) = DebugLogEntry(
         atMillis = atMin * minute,
-        kind = kind, night = false, sirenOverride = false, vibrationLevel = 3,
+        kind = kind, night = false, sirenOverride = false,
         notified = notified, reason = reason, threatId = "t$atMin",
         threatType = ThreatType.SHAHED, tier = null, distanceKm = 5.0,
         locality = locality, level = level, scopeOblastId = scope, aboutMe = aboutMe

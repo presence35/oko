@@ -190,6 +190,38 @@ private fun dotScaleForZoom(zoom: Double): Float {
 
 private data class NewRingState(val id: String?, val activeUntilMs: Long)
 
+/**
+ * A tapped log row's mark: the threat's recorded fix, blinking then fading at the spot so a
+ * camera that lands on empty ground always has an explanation. [armedAtMs] is read once at the
+ * arm site — the lifetime and the fade belong to [logPinAlpha], never to a deadline a caller
+ * computes, so no second owner of "when does this end" can exist.
+ */
+private data class LogPin(
+    val lat: Double,
+    val lon: Double,
+    val type: ThreatType,
+    val armedAtMs: Long
+)
+
+private const val LOG_PIN_FLASH_MS = 4_200L
+private const val LOG_PIN_BLINK_MS = 700L
+private const val LOG_PIN_ON_MS = 380L
+private const val LOG_PIN_FADE_MS = 1_200L
+private const val LOG_PIN_ON = 0.9f
+private const val LOG_PIN_OFF = 0.25f
+
+/**
+ * The mark's whole lifetime, in one pure function. A crisp blink first — a smooth throb would
+ * read as a live marker, a square one cannot — then a slow fade to nothing. 0f IS the expiry:
+ * the tick loop drops the pin on it, so the fade and the ending can never disagree.
+ */
+internal fun logPinAlpha(armedAtMs: Long, nowMs: Long): Float {
+    val t = (nowMs - armedAtMs).coerceAtLeast(0L)
+    if (t < LOG_PIN_FLASH_MS) return if (t % LOG_PIN_BLINK_MS < LOG_PIN_ON_MS) LOG_PIN_ON else LOG_PIN_OFF
+    val faded = (t - LOG_PIN_FLASH_MS) / LOG_PIN_FADE_MS.toFloat()
+    return (LOG_PIN_ON * (1f - faded)).coerceAtLeast(0f)
+}
+
 private const val NEW_RING_MS = 8_000L
 private const val ZONE_REFIT_DEBOUNCE_MS = 350L
 
@@ -437,6 +469,7 @@ fun NeptunMapView(
     val lastWelcomeTick = remember { mutableStateOf(-1) }
     val welcomeJob = remember { mutableStateOf<Job?>(null) }
     val newRingState = remember { mutableStateOf<NewRingState?>(null) }
+    val logPin = remember { mutableStateOf<LogPin?>(null) }
     val didDefaultFit = remember { mutableStateOf(false) }
     val lastPinnedCity = remember { mutableStateOf<String?>(null) }
 
@@ -657,6 +690,14 @@ fun NeptunMapView(
             newRingState.value = NewRingState(reveal.id, System.currentTimeMillis() + NEW_RING_MS)
             val focus = uiState.focusLocation
             val placed = reveal.id?.let { threatOutcomes[it] }
+            // A track that is still on the map is marked by its own reveal badge; one that is
+            // gone gets a blinking pin at its recorded fix, so the camera landing on apparently
+            // empty ground always has an explanation. Never both — that would read as two marks.
+            logPin.value = if (placed == null && reveal.type != null) {
+                LogPin(reveal.lat, reveal.lon, reveal.type, System.currentTimeMillis())
+            } else {
+                null
+            }
             camera.armFit(
                 reveal.id, placed?.lat ?: reveal.lat, placed?.lon ?: reveal.lon,
                 focus?.lat ?: Double.NaN, focus?.lon ?: Double.NaN,
@@ -672,7 +713,7 @@ fun NeptunMapView(
 // popup card — it no longer pans the map. Deselecting clears any in-flight
 // reveal fit (and its follow-me lock) so a stale pending fit can't linger.
 LaunchedEffect(selectedId) {
-    if (selectedId == null) camera.clearFit()
+    if (selectedId == null) camera.clearFit() else logPin.value = null
 }
 
     // Refine pending camera fit once popup card is measured
@@ -917,7 +958,14 @@ LaunchedEffect(selectedId) {
                 newRingState.value = null
             }
 
-            delay(if (moving) 33 else 1000)
+            // Log-row pin: the mark owns its lifetime (see logPinAlpha), so an alpha of 0 IS
+            // the end. While it lives the loop must tick at frame rate — the blink is sampled
+            // by these ticks, and at the idle 1s cadence a 700ms blink renders as a stutter.
+            val pin = logPin.value
+            val pinAlive = pin != null && logPinAlpha(pin.armedAtMs, now) > 0f
+            if (pin != null && !pinAlive) logPin.value = null
+
+            delay(if (moving || pinAlive) 33 else 1000)
             bridge.invalidateOverlay()
         }
     }
@@ -1069,6 +1117,28 @@ LaunchedEffect(selectedId) {
                         val chip = chipLabel(t, placement?.chip, showThreatIdsOnMapState)
                         if (chip != null) {
                             canvas.drawText(chip, sx, sy + bmp.height / 2f + 14f * context.resources.displayMetrics.density, chipPaint)
+                        }
+                    }
+
+                    // 5b. A tapped log row's pin — the threat's recorded fix, blinking then
+                    // fading. Dimmed and never rotated: the map's own 45% alpha means "stale
+                    // live track", so this must read as a mark on the ground, not a marker.
+                    logPin.value?.let { pin ->
+                        val alpha = logPinAlpha(pin.armedAtMs, nowMs)
+                        if (alpha > 0f) {
+                            val pt = bridge.project(pin.lat, pin.lon)
+                            if (pt != null) {
+                                val icon = threatIconFor(
+                                    context, pin.type, iconSetState, sizeDp = 28
+                                ) as? BitmapDrawable
+                                val bmp = icon?.bitmap
+                                if (bmp != null) {
+                                    paint.alpha = (alpha * 255).toInt().coerceIn(0, 255)
+                                    canvas.drawBitmap(
+                                        bmp, pt.x - bmp.width / 2f, pt.y - bmp.height / 2f, paint
+                                    )
+                                }
+                            }
                         }
                     }
 

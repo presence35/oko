@@ -389,7 +389,10 @@ data class RevealRequest(
     val tick: Int,
     val id: String?,
     val lat: Double,
-    val lon: Double
+    val lon: Double,
+    /** The threat's type when the caller knows it but the feed may not still have the track
+     *  (a tapped log row). The map uses it to mark the spot when nothing is left there. */
+    val type: ThreatType? = null
 )
 
 /** One-shot request from the locate button to center the map on a threat (threat-only framing). */
@@ -1942,9 +1945,16 @@ fun setAlertsArmed(armed: Boolean) {
      * popup opens, then ask the map to pan the camera onto it. Best-effort selection — on a
      * cold start the stream may not have the threat yet, and the pan still works from the
      * coordinates carried in the intent. With [select] false the camera pans without opening
-     * the popup (footer strip taps).
+     * the popup (footer strip taps). [type] is the caller's knowledge of the threat's kind for
+     * a target the feed may no longer carry (a tapped log row), so the map can mark the spot.
      */
-    fun revealThreat(id: String?, lat: Double, lon: Double, select: Boolean = true) {
+    fun revealThreat(
+        id: String?,
+        lat: Double,
+        lon: Double,
+        select: Boolean = true,
+        type: ThreatType? = null
+    ) {
         revealTick++
         neutralizedFlow.value = null
         val threat = id?.let { threatsFlow.value[it] }
@@ -1976,7 +1986,7 @@ fun setAlertsArmed(armed: Boolean) {
         } else if (select && id != null) {
             selectedThreatFlow.value = threat
         }
-        revealFlow.value = RevealRequest(revealTick, id, lat, lon)
+        revealFlow.value = RevealRequest(revealTick, id, lat, lon, type)
     }
 
     /** Tally-tap replay: ask the map to shoot down the remembered resolutions in sequence. */

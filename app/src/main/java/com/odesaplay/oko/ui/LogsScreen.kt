@@ -70,6 +70,7 @@ import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.NearMe
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -226,6 +227,7 @@ fun LogsDropDownSheet(
     degraded: Boolean,
     focusToken: String?,
     onClose: () -> Unit,
+    onOpenOnMap: LogTargetRequest,
     modifier: Modifier = Modifier,
 ) {
     val entries by DebugLog.entries.collectAsState()
@@ -410,7 +412,8 @@ fun LogsDropDownSheet(
                 onGroupModeChange = { groupMode = it; visibleCount = VISIBLE_INITIAL },
                 onSortToggle = { newestFirst = !newestFirst },
                 onSearchChange = { searchQuery = it; visibleCount = VISIBLE_INITIAL },
-                onShowMore = { visibleCount += VISIBLE_STEP }
+                onShowMore = { visibleCount += VISIBLE_STEP },
+                onOpenOnMap = onOpenOnMap
             )
         }
         // Swipe-up drag handle to dismiss
@@ -478,6 +481,7 @@ private fun LogsTabPage(
     onSortToggle: () -> Unit,
     onSearchChange: (String) -> Unit,
     onShowMore: () -> Unit,
+    onOpenOnMap: LogTargetRequest,
 ) {
     val scope = rememberCoroutineScope()
     val isDecisions = pageFilter == LogsFilter.DECISIONS
@@ -608,7 +612,7 @@ modifier = Modifier
             }
         } else if (isDecisions && mode == LogsMode.STORY) {
             itemsIndexed(storySessions, key = { _, session -> session.id }) { _, session ->
-                SessionCard(session, s, lang, iconSet, now)
+                SessionCard(session, s, lang, iconSet, now, onOpenOnMap)
             }
         } else if (isDecisions && mode == LogsMode.ACTIONS) {
             // The action trail is its own lens: no story (a tap is not a raid event), no groups,
@@ -617,7 +621,7 @@ modifier = Modifier
                 decisionEntries.take(visibleCount).sortedByDescending { it.atMillis },
                 key = { _, e -> "act-${e.atMillis}-${e.reason.name}-${e.locality}" }
             ) { _, entry ->
-                DecisionCard(entry, s, lang, now, iconSet)
+                DecisionCard(entry, s, lang, now, iconSet, onOpenOnMap)
             }
         } else if (groups.isNotEmpty()) {
             groups.forEach { group ->
@@ -641,18 +645,18 @@ modifier = Modifier
                                 TypeSubHeader(TypeSubGroup(type, subEntries), lang, iconSet)
                             }
                             itemsIndexed(subEntries, key = { _, entry -> "sub-${group.id}-$type-${entry.atMillis}-${entry.threatId}-${entry.kind.name}-${entry.reason.name}" }) { _, entry ->
-                                DecisionCard(entry, s, lang, now, iconSet)
+                                DecisionCard(entry, s, lang, now, iconSet, onOpenOnMap)
                             }
                         }
                 } else {
                     itemsIndexed(group.entries, key = { _, entry -> "group-${group.id}-${entry.atMillis}-${entry.threatId}-${entry.kind.name}-${entry.reason.name}" }) { _, entry ->
-                        DecisionCard(entry, s, lang, now, iconSet)
+                        DecisionCard(entry, s, lang, now, iconSet, onOpenOnMap)
                     }
                 }
             }
         } else {
             itemsIndexed(visible, key = { _, row -> row.stableKey() }) { _, row ->
-                LogRowCard(row, s, lang, now, iconSet)
+                LogRowCard(row, s, lang, now, iconSet, onOpenOnMap)
             }
         }
         if (visible.isNotEmpty()) {
@@ -692,6 +696,7 @@ fun LogsScreen(
     degraded: Boolean,
     focusToken: String?,
     onBack: () -> Unit,
+    onOpenOnMap: LogTargetRequest,
 ) {
     LogsDropDownSheet(
         s = s,
@@ -701,6 +706,7 @@ fun LogsScreen(
         degraded = degraded,
         focusToken = focusToken,
         onClose = onBack,
+        onOpenOnMap = onOpenOnMap,
         modifier = Modifier.fillMaxHeight(1f),
     )
 }
@@ -1032,7 +1038,8 @@ private fun SessionCard(
     s: Strings.StringSet,
     lang: AppLanguage,
     iconSet: ThreatIconSet,
-    now: Long
+    now: Long,
+    onOpenOnMap: LogTargetRequest
 ) {
     var expanded by remember(session.id) { mutableStateOf(false) }
     val accent = when (session.official) {
@@ -1133,7 +1140,7 @@ private fun SessionCard(
             Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
                 session.entries.forEach { entry ->
                     Box(modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)) {
-                        DecisionCard(entry, s, lang, now, iconSet)
+                        DecisionCard(entry, s, lang, now, iconSet, onOpenOnMap)
                     }
                 }
             }
@@ -1266,6 +1273,10 @@ private fun LegendRow(s: Strings.StringSet, expanded: Boolean, onToggle: () -> U
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LegendItem(Icons.Filled.CheckCircle, s.debugLogShown)
                     LegendItem(painterResource(R.drawable.ic_notifications_off), s.debugLogSuppressedLegend, tint = DebugAmber)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LegendItem(Icons.Filled.HourglassBottom, s.logsOutcomeInfo)
+                    LegendItem(Icons.Outlined.Place, s.logsShowOnMap)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LegendItem(Icons.Outlined.History, s.debugReasonStale)
@@ -1472,10 +1483,11 @@ private fun LogRowCard(
     s: Strings.StringSet,
     lang: AppLanguage,
     now: Long,
-    iconSet: ThreatIconSet
+    iconSet: ThreatIconSet,
+    onOpenOnMap: LogTargetRequest
 ) {
     when (row) {
-        is DecisionRow -> DecisionCard(row.entry, s, lang, now, iconSet)
+        is DecisionRow -> DecisionCard(row.entry, s, lang, now, iconSet, onOpenOnMap)
         is ConnectionRow -> ConnectionCard(row.entry, s, lang, now)
         is GpsRow -> GpsCard(row.entry, s, lang, now)
     }
@@ -1588,13 +1600,21 @@ internal fun DebugLogReason.label(s: Strings.StringSet): String = when (this) {
     DebugLogReason.FIRED -> ""
 }
 
+/**
+ * Fly the map to a logged threat: its id (kept so a still-live track is selected and framed,
+ * null-safe otherwise), where the feed reported it, and its type — the map needs the type to
+ * mark the spot when the track is already gone.
+ */
+typealias LogTargetRequest = (threatId: String?, lat: Double, lon: Double, type: ThreatType?) -> Unit
+
 @Composable
 private fun DecisionCard(
     entry: DebugLogEntry,
     s: Strings.StringSet,
     lang: AppLanguage,
     now: Long,
-    iconSet: ThreatIconSet
+    iconSet: ThreatIconSet,
+    onOpenOnMap: LogTargetRequest
 ) {
     val accent = entry.kind.accent(entry.tier, entry.level)
     val outcome = notifyOutcome(entry)
@@ -1607,11 +1627,19 @@ private fun DecisionCard(
         NotifyOutcome.INFO -> 0.04f
         else -> 0.10f
     }
+    // Tappable only when the row carries a position: official rows, action rows and rows
+    // logged before positions existed have nowhere to fly to, so they stay inert.
+    val position = entry.position
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(accent.copy(alpha = bgAlpha))
+            .then(
+                if (position != null) Modifier.hapticClickable {
+                    onOpenOnMap(entry.threatId, position.lat, position.lon, entry.threatType)
+                } else Modifier
+            )
             .padding(horizontal = 12.dp, vertical = if (info) 5.dp else 12.dp),
         verticalAlignment = Alignment.Top
     ) {
@@ -1627,8 +1655,6 @@ private fun DecisionCard(
                     color = accent,
                     modifier = Modifier.weight(1f)
                 )
-                OutcomeGlyph(outcome, s)
-                Spacer(Modifier.width(6.dp))
                 Text(
                     formatAlertAge(now, entry.atMillis, s),
                     style = MaterialTheme.typography.bodySmall,
@@ -1637,6 +1663,8 @@ private fun DecisionCard(
                 )
             }
             Spacer(Modifier.height(3.dp))
+            // Every mark lives on this one line, immediately left of the clock: the title above
+            // is the line that flexes under a large font, and the right edge stays time-only.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 entry.distanceKm?.let { km ->
                     Text(
@@ -1646,15 +1674,7 @@ private fun DecisionCard(
                     )
                 }
                 Spacer(Modifier.weight(1f))
-                Text(
-                    formatDateTime(lang, entry.atMillis),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (!info) {
-                Spacer(Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!info) {
                     Icon(
                         imageVector = if (entry.night) Icons.Filled.DarkMode else Icons.Filled.LightMode,
                         contentDescription = if (entry.night) s.debugLogNight else s.debugLogDay,
@@ -1668,61 +1688,59 @@ private fun DecisionCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(14.dp)
                     )
-                    Spacer(Modifier.weight(1f))
-                    if (entry.notified) {
-                        Icon(
-                            Icons.Filled.Notifications,
-                            contentDescription = s.logsOutcomeRang,
-                            tint = DebugGreen,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    } else {
-                        // One suppressed mark, tinted by whether it was covered or declined — the
-                        // stale case is already carried by the row's own stale pill.
-                        Image(
-                            painter = painterResource(R.drawable.ic_notifications_off),
-                            contentDescription = String.format(s.debugLogSuppressed, entry.reason.label(s)),
-                            colorFilter = ColorFilter.tint(
-                                if (outcome == NotifyOutcome.COVERED) DebugAmber
-                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            ),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
+                    Spacer(Modifier.width(6.dp))
                 }
+                OutcomeGlyph(outcome, entry.reason.label(s), s)
+                if (position != null) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Outlined.Place,
+                        contentDescription = s.logsShowOnMap,
+                        tint = accent,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    formatDateTime(lang, entry.atMillis),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
 }
 
-/** The one glanceable signal: did this event reach the shade (RANG), get overtaken by a louder
- *  one (COVERED), or was it declined (NOT_NOTIFIED)? */
+/** The one glanceable signal on the row's mark line: did this event reach the shade (RANG, a
+ *  check — never a bell, which the line above already spends on the sound setting), get
+ *  overtaken by a louder one (COVERED), was it declined (NOT_NOTIFIED), or is it not an alert
+ *  event at all (INFO)? */
 @Composable
-private fun OutcomeGlyph(outcome: NotifyOutcome, s: Strings.StringSet) {
+private fun OutcomeGlyph(outcome: NotifyOutcome, reason: String, s: Strings.StringSet) {
     when (outcome) {
         NotifyOutcome.RANG -> Icon(
-            Icons.Filled.Notifications,
+            Icons.Filled.CheckCircle,
             contentDescription = s.logsOutcomeRang,
             tint = DebugGreen,
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(14.dp)
         )
         NotifyOutcome.COVERED -> Image(
             painter = painterResource(R.drawable.ic_notifications_off),
-            contentDescription = s.logsOutcomeCovered,
+            contentDescription = String.format(s.debugLogSuppressed, reason),
             colorFilter = ColorFilter.tint(DebugAmber),
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(14.dp)
         )
         NotifyOutcome.NOT_NOTIFIED -> Image(
             painter = painterResource(R.drawable.ic_notifications_off),
-            contentDescription = s.logsOutcomeNotNotified,
+            contentDescription = String.format(s.debugLogSuppressed, reason),
             colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)),
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(14.dp)
         )
         NotifyOutcome.INFO -> Icon(
             imageVector = Icons.Filled.HourglassBottom,
             contentDescription = s.logsOutcomeInfo,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(14.dp)
         )
     }
 }

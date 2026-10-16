@@ -528,6 +528,10 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 degraded = uiState.degraded,
                 focusToken = uiState.focusToken,
                 onBack = { screen = Screen.MAP },
+                // A logged row flies to the position it was logged at; the existing reveal
+                // effect switches the screen back to the map and selects the threat when the
+                // track is still alive.
+                onOpenOnMap = { id, lat, lon, type -> viewModel.revealThreat(id, lat, lon, type = type) },
             )
         }
         SwipeableSnackbarHost(

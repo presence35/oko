@@ -46,7 +46,10 @@ class IgnoreRetryReceiver : BroadcastReceiver() {
             } catch (_: Exception) {
                 // Best-effort audit: the user's contract (dismiss + mute) already holds above.
             } finally {
-                pending.finish()
+                // Null under Robolectric when the receiver is driven without a real dispatch, which
+                // is how the unit tests call it. This is the one line that can fail after the host
+                // has let go of the broadcast, and its failure would land on an unrelated test.
+                pending?.finish()
             }
         }
     }

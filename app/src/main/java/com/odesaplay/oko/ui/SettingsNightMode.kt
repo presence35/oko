@@ -12,6 +12,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.odesaplay.oko.theme.AppPalette
 
@@ -144,24 +145,37 @@ internal fun NightModeCard(
             Switch(checked = sleepActive, onCheckedChange = null)
         }
         if (enabled) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
             ) {
-                NightTimeField(
-                    label = s.nightStartTimeLabel,
-                    minute = startMin,
-                    onClick = { editing = "start" },
-                    modifier = Modifier.weight(1f)
-                )
-                NightTimeField(
-                    label = s.nightEndTimeLabel,
-                    minute = endMin,
-                    onClick = { editing = "end" },
-                    modifier = Modifier.weight(1f)
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    NightTimeField(
+                        label = s.nightStartTimeLabel,
+                        minute = startMin,
+                        onClick = { editing = "start" },
+                        modifier = Modifier.weight(1f)
+                    )
+                    NightTimeField(
+                        label = s.nightEndTimeLabel,
+                        minute = endMin,
+                        onClick = { editing = "end" },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                val spanMin = nightWindowDurationMin(startMin, endMin)
+                if (spanMin > 0) {
+                    Text(
+                        "$spanMin ${s.minUnit}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp)
+                    )
+                }
             }
             if (!sleepActive) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

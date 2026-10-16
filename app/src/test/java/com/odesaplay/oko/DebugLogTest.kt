@@ -17,7 +17,6 @@ class DebugLogTest {
         kind: DebugLogKind = DebugLogKind.ZONE_ENTER,
         night: Boolean = true,
         siren: Boolean = false,
-        vibr: Int? = 3,
         notified: Boolean = true,
         reason: DebugLogReason = DebugLogReason.FIRED,
         threatId: String? = "t1",
@@ -26,8 +25,32 @@ class DebugLogTest {
         dist: Double? = 12.5,
         locality: String? = "Одеса",
         level: AlertLevel? = null,
-        scope: String? = null
-    ) = DebugLogEntry(at, kind, night, siren, vibr, notified, reason, threatId, type, tier, dist, locality, level, scope)
+        scope: String? = null,
+        position: LogPosition? = null
+    ) = DebugLogEntry(at, kind, night, siren, notified, reason, threatId, type, tier, dist, locality, level, scope, position = position)
+
+    @Test
+    fun `threat position survives a round trip`() {
+        val src = listOf(entry(1_000, position = LogPosition(46.48, 30.73)))
+        val back = parseDebugLog(serializeDebugLog(src)).single()
+        assertEquals(LogPosition(46.48, 30.73), back.position)
+    }
+
+    @Test
+    fun `a row persisted before positions existed parses with none`() {
+        // Every field up to aboutMe, as written by an older build.
+        val legacy = listOf(
+            "5000|ZONE_ENTER|true|false|true|FIRED|t1|SHAHED|INNER|12.5|Одеса||odeska|true"
+        ).joinToString("\n")
+        assertNull(parseDebugLog(legacy).single().position)
+    }
+
+    @Test
+    fun `an out of range position is no position at all`() {
+        val row = parseDebugLog("5000|ZONE_ENTER|true|false|true|FIRED|t1|SHAHED|INNER|12.5|Одеса||odeska|true|999.0|30.7")
+            .single()
+        assertNull(row.position)
+    }
 
     @Test
     fun `scope oblast id survives a round trip`() {
@@ -96,7 +119,7 @@ class DebugLogTest {
     @Test
     fun `full round trip preserves every field`() {
         val src = listOf(
-            entry(1_000, kind = DebugLogKind.OFFICIAL_ON, threatId = null, type = null, tier = null, locality = "Одеська", vibr = 4, level = AlertLevel.YELLOW),
+            entry(1_000, kind = DebugLogKind.OFFICIAL_ON, threatId = null, type = null, tier = null, locality = "Одеська", level = AlertLevel.YELLOW),
             entry(2_000, kind = DebugLogKind.ZONE_ENTER, tier = ThreatZone.INNER),
             entry(3_000, kind = DebugLogKind.REGION_THREAT, reason = DebugLogReason.OUTSIDE_ZONES, notified = false, tier = null, dist = 90.0, locality = null)
         )
@@ -163,8 +186,6 @@ class DebugLogTest {
         winnerId = winnerId,
         night = true,
         sirenOverride = false,
-        fastVibrationLevel = 3,
-        slowVibrationLevel = 2,
         now = now
     )
 
@@ -193,8 +214,9 @@ class DebugLogTest {
         val now = System.currentTimeMillis()
         DebugLog.recordZoneFired(
             threatId = "t1", threatType = ThreatType.SHAHED, tier = ThreatZone.INNER,
-            night = true, sirenOverride = false, vibrationLevel = 3,
-            distanceKm = 12.5, locality = "Одеса", scopeOblastId = "odeska", now = now
+            night = true, sirenOverride = false,
+            distanceKm = 12.5, locality = "Одеса", scopeOblastId = "odeska",
+            position = LogPosition(46.48, 30.73), now = now
         )
         val recorded = DebugLog.entries.value.last()
         assertEquals(DebugLogKind.ZONE_ENTER, recorded.kind)
@@ -202,6 +224,7 @@ class DebugLogTest {
         assertEquals(ThreatZone.INNER, recorded.tier)
         assertEquals(true, recorded.notified)
         assertEquals(DebugLogReason.FIRED, recorded.reason)
+        assertEquals(LogPosition(46.48, 30.73), recorded.position)
         val t = threat(id = "t1", lat = 46.48, lon = 30.73)
         val (entries, _) = computeSweep(
             ctx(mapOf("t1" to t), zoneThreats = mapOf("t1" to ThreatZone.INNER),
@@ -225,6 +248,8 @@ class DebugLogTest {
         assertEquals(false, e.notified)
         assertEquals(DebugLogReason.BELL_MUTED, e.reason)
         assertEquals(ThreatZone.INNER, e.tier)
+        // A swept row carries the reported fix, so it can be flown to long after the track died.
+        assertEquals(LogPosition(46.48, 30.73), e.position)
     }
 
     @Test

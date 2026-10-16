@@ -775,6 +775,12 @@ object Strings {
         val sendLogsBusy: String
     )
 
+    /** Log-row affordance copy. Own holder for the same JVM slot-ceiling reason as
+     *  [LogExportStrings] — [Misc] has no room left for a new Logs string. */
+    data class LogRowStrings(
+        val showOnMap: String
+    )
+
     /** Beta feedback sheet. Own holder for the same JVM slot-ceiling reason as [LogExportStrings]. */
     data class FeedbackStrings(
         val title: String,
@@ -905,6 +911,7 @@ object Strings {
         val wordForms: WordForms,
         val logsExport: LogExportStrings,
         val logsPreview: LogPreviewStrings,
+        val logsRow: LogRowStrings,
         val feedback: FeedbackStrings,
         val actionLog: ActionLog,
         val calmMessages: List<String>,
@@ -1429,6 +1436,7 @@ object Strings {
         val logsOutcomeCovered: String get() = misc.logsOutcomeCovered
         val logsOutcomeNotNotified: String get() = misc.logsOutcomeNotNotified
         val logsOutcomeInfo: String get() = misc.logsOutcomeInfo
+        val logsShowOnMap: String get() = logsRow.showOnMap
         val logsModeStory: String get() = misc.logsModeStory
         val logsModeList: String get() = misc.logsModeList
         val logsSessionTold: String get() = misc.logsSessionTold

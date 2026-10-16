@@ -20,7 +20,6 @@ import com.odesaplay.oko.engine.LatLng
 import com.odesaplay.oko.engine.toThreatType
 import com.odesaplay.oko.engine.threatOblastId
 import com.odesaplay.oko.engine.inOblast
-import com.odesaplay.oko.engine.isFastType
 import com.odesaplay.oko.engine.resolveOblastId
 import com.odesaplay.oko.engine.AlertLevel
 
@@ -57,18 +56,26 @@ enum class DebugLogReason {
 }
 
 /**
- * One debug decision row. Every entry carries the day/night flag, the effective siren
- * override and the vibration level that WOULD have been used, plus whether a notification
- * fired and why not ([reason]). [tier] is the effective zone for zone alerts (what actually
+ * One debug decision row. Every entry carries the day/night flag and the effective siren
+ * override (which picks the notification channel, and with it the alert's sound and
+ * vibration), plus whether a notification fired and why not ([reason]). [tier] is the
+ * effective zone for zone alerts (what actually
  * rang), null for official alerts / region sweeps; [level] is the official alert severity
  * (RED/YELLOW) for OFFICIAL_ON rows, null otherwise. [distanceKm] is from the focus point.
  */
+/**
+ * Where a threat was when its decision was logged — the feed's own reported fix, never a
+ * dead-reckoned guess: the log records what the source said, and prediction stays where it
+ * already lives (the map, through the engine). Carried so a row can be tapped and flown to
+ * long after the track is gone. Null for rows that name no threat.
+ */
+data class LogPosition(val lat: Double, val lon: Double)
+
 data class DebugLogEntry(
     val atMillis: Long,
     val kind: DebugLogKind,
     val night: Boolean,
     val sirenOverride: Boolean,
-    val vibrationLevel: Int?,
     val notified: Boolean,
     val reason: DebugLogReason,
     val threatId: String?,
@@ -84,7 +91,9 @@ data class DebugLogEntry(
      *  Set at write time, where the service already knows the focus: in the focus oblast, or
      *  it rang, or it was declined for a reason that only applies to the user (bells off, type
      *  off, in-zone-coalesced). Never inferred from the threat's own place at read time. */
-    val aboutMe: Boolean = false
+    val aboutMe: Boolean = false,
+    /** The threat's reported position at decision time; null for rows naming no threat. */
+    val position: LogPosition? = null
 )
 
 /**
@@ -108,8 +117,6 @@ data class DebugLogContext(
     val muted: Boolean = false,
     val night: Boolean,
     val sirenOverride: Boolean,
-    val fastVibrationLevel: Int,
-    val slowVibrationLevel: Int,
     val now: Long,
     /** Focus oblast token for this tick — the write-time "about me" test. */
     val focusToken: String? = null,
@@ -178,7 +185,6 @@ object DebugLog {
         kind: DebugLogKind,
         night: Boolean,
         sirenOverride: Boolean,
-        vibrationLevel: Int?,
         notified: Boolean,
         reason: DebugLogReason,
         threatId: String?,
@@ -195,7 +201,7 @@ object DebugLog {
     ) {
         record(
             DebugLogEntry(
-                now, kind, night, sirenOverride, vibrationLevel, notified, reason,
+                now, kind, night, sirenOverride, notified, reason,
                 threatId, threatType, null, distanceKm, locality, level,
                 scopeOblastId = scopeOblastId, aboutMe = true
             )
@@ -211,7 +217,7 @@ object DebugLog {
         record(
             DebugLogEntry(
                 now, DebugLogKind.NOTIF, night = false, sirenOverride = false,
-                vibrationLevel = null, notified = false, reason = DebugLogReason.NOTIF_EXPIRED,
+                notified = false, reason = DebugLogReason.NOTIF_EXPIRED,
                 threatId = null, threatType = null, tier = null, distanceKm = null,
                 locality = locality, scopeOblastId = resolveOblastId(locality), aboutMe = true
             )
@@ -228,7 +234,7 @@ object DebugLog {
         record(
             DebugLogEntry(
                 now, DebugLogKind.NOTIF, night = false, sirenOverride = false,
-                vibrationLevel = null, notified = false, reason = DebugLogReason.ALREADY_NOTIFIED,
+                notified = false, reason = DebugLogReason.ALREADY_NOTIFIED,
                 threatId = null, threatType = null, tier = null, distanceKm = null,
                 locality = locality, scopeOblastId = resolveOblastId(locality), aboutMe = true
             )
@@ -250,7 +256,7 @@ object DebugLog {
         record(
             DebugLogEntry(
                 now, DebugLogKind.OFFICIAL_LEVEL, night = false, sirenOverride = false,
-                vibrationLevel = null, notified = false, reason = DebugLogReason.LEVEL_CHANGED,
+                notified = false, reason = DebugLogReason.LEVEL_CHANGED,
                 threatId = null, threatType = null, tier = null, distanceKm = null,
                 locality = locality, level = level, scopeOblastId = scopeOblastId, aboutMe = true
             )
@@ -273,7 +279,7 @@ object DebugLog {
         record(
             DebugLogEntry(
                 now, DebugLogKind.ACTION, night = false, sirenOverride = false,
-                vibrationLevel = null, notified = false, reason = reason,
+                notified = false, reason = reason,
                 threatId = null, threatType = null, tier = null, distanceKm = null,
                 locality = if (detail.isNullOrBlank()) label else "$label · $detail",
                 aboutMe = true
@@ -292,7 +298,7 @@ object DebugLog {
         record(
             DebugLogEntry(
                 now, DebugLogKind.NOTIF, night = false, sirenOverride = false,
-                vibrationLevel = null, notified = false, reason = DebugLogReason.PAUSED,
+                notified = false, reason = DebugLogReason.PAUSED,
                 threatId = null, threatType = null, tier = null, distanceKm = null,
                 locality = "paused ${minutes}m", aboutMe = false
             )
@@ -308,7 +314,7 @@ object DebugLog {
         record(
             DebugLogEntry(
                 now, DebugLogKind.NOTIF, night = false, sirenOverride = false,
-                vibrationLevel = null, notified = false, reason = DebugLogReason.TALLY_POSTED,
+                notified = false, reason = DebugLogReason.TALLY_POSTED,
                 threatId = null, threatType = null, tier = null, distanceKm = null,
                 locality = locality?.let { if (count > 0) "$it · $count" else it },
                 aboutMe = false
@@ -326,7 +332,7 @@ object DebugLog {
         record(
             DebugLogEntry(
                 now, DebugLogKind.FLOURISH, night = false, sirenOverride = false,
-                vibrationLevel = null, notified = reason == DebugLogReason.FIRED,
+                notified = reason == DebugLogReason.FIRED,
                 reason = reason, threatId = null, threatType = null, tier = null,
                 distanceKm = null, locality = detail
             )
@@ -344,16 +350,16 @@ object DebugLog {
         tier: ThreatZone,
         night: Boolean,
         sirenOverride: Boolean,
-        vibrationLevel: Int?,
         distanceKm: Double?,
         locality: String?,
         scopeOblastId: String?,
+        position: LogPosition?,
         now: Long
     ) {
         val entry = DebugLogEntry(
-            now, DebugLogKind.ZONE_ENTER, night, sirenOverride, vibrationLevel,
+            now, DebugLogKind.ZONE_ENTER, night, sirenOverride,
             true, DebugLogReason.FIRED, threatId, threatType, tier, distanceKm, locality,
-            scopeOblastId = scopeOblastId, aboutMe = true
+            scopeOblastId = scopeOblastId, aboutMe = true, position = position
         )
         synchronized(verdictsLock) { verdicts[threatId] = fingerprintOf(entry) }
         record(entry)
@@ -425,14 +431,13 @@ object DebugLog {
         // The tier shown is what actually rang (effective after arming toggles) — mirrors
         // AlertService, which posts with the effective tier, never the raw spatial one.
         val tier = effective ?: spatial
-        val fast = isFastType(t.type.toThreatType(), ctx.typeCatalog)
         val place = t.locality ?: t.district ?: t.region
         val mine = aboutUser(reason, notified = notified, inFocusOblast = inFocusOblast(t, ctx))
         return DebugLogEntry(
             ctx.now, DebugLogKind.ZONE_ENTER, ctx.night, ctx.sirenOverride,
-            if (fast) ctx.fastVibrationLevel else ctx.slowVibrationLevel,
             notified, reason, t.id, t.type.toThreatType(), tier, distKm,
-            place, scopeOblastId = threatOblastId(t), aboutMe = mine
+            place, scopeOblastId = threatOblastId(t), aboutMe = mine,
+            position = LogPosition(t.lat, t.lon)
         )
     }
 
@@ -444,14 +449,13 @@ object DebugLog {
             t.type.toThreatType() !in ctx.enabledTypes -> DebugLogReason.TYPE_OFF
             else -> DebugLogReason.OUTSIDE_ZONES
         }
-        val fast = isFastType(t.type.toThreatType(), ctx.typeCatalog)
         val place = t.locality ?: t.district ?: t.region
         val mine = aboutUser(reason, notified = false, inFocusOblast = inFocusOblast(t, ctx))
         return DebugLogEntry(
             ctx.now, DebugLogKind.REGION_THREAT, ctx.night, ctx.sirenOverride,
-            if (fast) ctx.fastVibrationLevel else ctx.slowVibrationLevel,
             false, reason, t.id, t.type.toThreatType(), null, distKm,
-            place, scopeOblastId = threatOblastId(t), aboutMe = mine
+            place, scopeOblastId = threatOblastId(t), aboutMe = mine,
+            position = LogPosition(t.lat, t.lon)
         )
     }
 
@@ -561,7 +565,7 @@ internal fun computeSweep(
 
 /**
  * Serialized form of the log — pipe-delimited lines, one per event:
- * "at|kind|night|siren|vibr|notified|reason|threatId|type|tier|distance|locality|level".
+ * "at|kind|night|siren|notified|reason|threatId|type|tier|distance|locality|level".
  * Blank fields mean null. Pure, so persistence is unit-testable without DataStore.
  */
 internal fun serializeDebugLog(entries: List<DebugLogEntry>): String =
@@ -571,7 +575,6 @@ internal fun serializeDebugLog(entries: List<DebugLogEntry>): String =
             entry.kind.name,
             entry.night,
             entry.sirenOverride,
-            entry.vibrationLevel ?: "",
             entry.notified,
             entry.reason.name,
             entry.threatId ?: "",
@@ -581,7 +584,9 @@ internal fun serializeDebugLog(entries: List<DebugLogEntry>): String =
             entry.locality ?: "",
             entry.level?.name ?: "",
             entry.scopeOblastId ?: "",
-            entry.aboutMe
+            entry.aboutMe,
+            entry.position?.lat?.toString() ?: "",
+            entry.position?.lon?.toString() ?: ""
         ).joinToString("|")
     }
 
@@ -594,18 +599,24 @@ internal fun parseDebugLog(raw: String, maxEntries: Int = DebugLog.MAX_ENTRIES):
         val kind = DebugLogKind.entries.firstOrNull { it.name == parts[1] } ?: return@mapNotNull null
         val night = parts[2].toBooleanStrictOrNull() ?: return@mapNotNull null
         val siren = parts[3].toBooleanStrictOrNull() ?: return@mapNotNull null
-        val vibr = parts[4].toIntOrNull()
-        val notified = parts[5].toBooleanStrictOrNull() ?: return@mapNotNull null
-        val reason = DebugLogReason.entries.firstOrNull { it.name == parts[6] } ?: return@mapNotNull null
-        val threatId = parts[7].takeIf { it.isNotEmpty() }
-        val type = ThreatType.entries.firstOrNull { it.name == parts[8] }
-        val tier = ThreatZone.entries.firstOrNull { it.name == parts[9] }
-        val dist = parts[10].toDoubleOrNull()
-        val locality = parts[11].takeIf { it.isNotEmpty() }
-        val level = parts.getOrNull(12)?.let { name -> AlertLevel.entries.firstOrNull { it.name == name } }
-        val scope = parts.getOrNull(13)?.takeIf { it.isNotEmpty() }
+        val notified = parts[4].toBooleanStrictOrNull() ?: return@mapNotNull null
+        val reason = DebugLogReason.entries.firstOrNull { it.name == parts[5] } ?: return@mapNotNull null
+        val threatId = parts[6].takeIf { it.isNotEmpty() }
+        val type = ThreatType.entries.firstOrNull { it.name == parts[7] }
+        val tier = ThreatZone.entries.firstOrNull { it.name == parts[8] }
+        val dist = parts[9].toDoubleOrNull()
+        val locality = parts[10].takeIf { it.isNotEmpty() }
+        val level = parts.getOrNull(11)?.let { name -> AlertLevel.entries.firstOrNull { it.name == name } }
+        val scope = parts.getOrNull(12)?.takeIf { it.isNotEmpty() }
         // Backward compatible: older rows predate aboutMe; the field's absence is not a
         // failure, so it defaults to false rather than dropping the whole line.
-        val aboutMe = parts.getOrNull(14)?.toBooleanStrictOrNull() ?: false
-        DebugLogEntry(at, kind, night, siren, vibr, notified, reason, threatId, type, tier, dist, locality, level, scope, aboutMe)
+        val aboutMe = parts.getOrNull(13)?.toBooleanStrictOrNull() ?: false
+        // Position arrived after the first persisted rows; a half-written or non-finite pair is
+        // no position at all, so the row simply stays un-tappable instead of flying to 0,0.
+        val lat = parts.getOrNull(14)?.toDoubleOrNull()
+        val lon = parts.getOrNull(15)?.toDoubleOrNull()
+        val position = if (lat != null && lon != null && lat.isFinite() && lon.isFinite() &&
+            lat in -90.0..90.0 && lon in -180.0..180.0
+        ) LogPosition(lat, lon) else null
+        DebugLogEntry(at, kind, night, siren, notified, reason, threatId, type, tier, dist, locality, level, scope, aboutMe, position)
     }.takeLast(maxEntries)

@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.odesaplay.oko.source.ThreatRemoved
 
@@ -101,8 +102,36 @@ class AlarmEpisodeTally(
     // run, which is how a window closing early dropped its summary entirely.
     private val episodeEnabled = MutableStateFlow(UserPreferences.DEFAULT.alarmEpisodeTallyEnabled)
 
+    /**
+     * What the shade should be showing, and the night's accumulated row with it. This is the only
+     * thing that writes the episode notification: the row is derived from one state, so two alarms
+     * finishing seconds apart cannot land out of order the way two independently launched posts can.
+     * [Held] is the row advancing while the app's own rule keeps it out of the shade; `null` is the
+     * night starting over, which is what [reset] leaves behind.
+     */
+    private sealed interface Shade {
+        val row: PostedRow
+
+        /** Up in the shade — as a summary, or as the quiet card an alarm that intercepted nothing gets. */
+        data class Shown(override val row: PostedRow, val lang: AppLanguage, val quiet: Boolean) : Shade
+
+        /** Advanced in memory only: an unpostable row still has to keep counting. */
+        data class Held(override val row: PostedRow) : Shade
+    }
+
+    private val shade = MutableStateFlow<Shade?>(null)
+
+    /** A window that has just closed, before it is folded into [shade]. */
+    private data class Closed(
+        val city: String,
+        val snapshot: EpisodeSnapshot,
+        val durationMin: Int,
+        val measured: Boolean
+    )
+
     init {
         moraleGate.ejectWhenOff(scope) { reset() }
+        scope.launch { shade.collect { render(it) } }
         scope.launch {
             UserPrefs(context).preferences
                 .map { it.alarmEpisodeTallyEnabled }
@@ -151,7 +180,6 @@ class AlarmEpisodeTally(
         val memory: List<ResolvedRecord>,
         val postedAtMs: Long
     )
-    private var postedRow: PostedRow? = null
 
     /**
      * A new alarm window opened on the focus: drop the previous window, keep the dedup ring.
@@ -200,7 +228,7 @@ class AlarmEpisodeTally(
             clearWindow()
             return
         }
-        val row = synchronized(tallyLock) {
+        val closed = synchronized(tallyLock) {
             // An alarm the focus never showed live is not ours to report: it closes silently and any
             // posted row stands. The window's own record decides, so a tick that tears the official
             // episode down can no longer take the summary with it.
@@ -208,23 +236,30 @@ class AlarmEpisodeTally(
                 clearWindow()
                 return
             }
-            val c = episodeCity ?: currentCity
+            val measured = episodeFromOnset
             // A duration is a measurement, not an arithmetic convenience: an episode this process
             // never watched begin has no honest start, so it states none and takes the dateless
             // title — the rule the all-clear already applies to a restored latch
             // (`RestoredResolution.EXPIRE_SILENTLY`).
-            val measured = episodeFromOnset
-            val dur = if (measured) ((nowMs - episodeStartMs) / 60_000L).toInt().coerceAtLeast(1) else 0
+            val durationMin = if (measured) ((nowMs - episodeStartMs) / 60_000L).toInt().coerceAtLeast(1) else 0
+            val city = episodeCity ?: currentCity
             val snapshot = EpisodeSnapshot(episodeCount, perTypeCounts.toMap(), episodeMemory.toList())
             clearWindow()
-            mergeInto(postedRow, c, snapshot, dur, measured, nowMs).also { postedRow = it }
+            Closed(city, snapshot, durationMin, measured)
         }
-        if (row.count == 0) {
-            if (!officialAlertsEnabled) return
-            postQuiet(row, lang)
-            return
+        // One atomic write, and the renderer reads nothing else. A finish that a later one
+        // supersedes is folded into the row rather than posted over it, so the shade can only
+        // converge on the newest row.
+        shade.update { prev ->
+            val merged = mergeInto(
+                prev?.row, closed.city, closed.snapshot, closed.durationMin, closed.measured, nowMs
+            )
+            when {
+                merged.count > 0 -> Shade.Shown(merged, lang, quiet = false)
+                officialAlertsEnabled -> Shade.Shown(merged, lang, quiet = true)
+                else -> Shade.Held(merged)
+            }
         }
-        postSummary(row, lang)
     }
 
     /**
@@ -240,7 +275,7 @@ class AlarmEpisodeTally(
      * can see anymore.
      */
     fun reset() {
-        synchronized(tallyLock) { postedRow = null }
+        shade.value = null
         clearWindow()
         try {
             NotificationManagerCompat.from(context).cancel(NOTIF_ALARM_EPISODE)
@@ -264,52 +299,57 @@ class AlarmEpisodeTally(
      *  reads the posted row instead — the tap must replay what the text claims. */
     fun snapshot(): List<FlourishRecord> {
         synchronized(tallyLock) {
-            val records = if (episodeCity != null) episodeMemory.toList() else postedRow?.memory.orEmpty()
+            val records = if (episodeCity != null) episodeMemory.toList() else shade.value?.row?.memory.orEmpty()
             return records.map { FlourishRecord(it.lat, it.lon, it.type, it.region) }
         }
     }
 
-    private fun postSummary(row: PostedRow, lang: AppLanguage) {
-        scope.launch {
-            val s = Strings.get(lang)
-            val breakdown = row.typeCounts.entries
-                .sortedWith(compareByDescending<Map.Entry<ThreatType, Int>> { it.value }.thenBy { it.key.ordinal })
-                .joinToString(" · ") { (type, count) ->
-                    val info = ThreatTypeCatalog.INFO[type]
-                    val label = info?.label(lang) ?: type.name
-                    "$label $count"
-                }
-            val title = alarmEpisodeTitle(s, row.city, row.totalMin, row.alarmCount)
-            val builder = AlertNotificationManager(context).buildNotification(NOTIF_ALARM_EPISODE, AlertNotificationManager.CHANNEL_ALARM_EPISODE)
-                .setSmallIcon(R.drawable.ic_trident)
-                .setContentTitle(title)
-                .setContentText(String.format(s.alarmEpisodeBodyFormat, resolvedThreatsPhrase(row.count, lang)))
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .setAutoCancel(true)
-                .setTimeoutAfter(MERGE_WINDOW_MS)
-                .setContentIntent(episodeTapPendingIntent(row.memory))
-                .setDeleteIntent(episodeDismissPendingIntent())
-            if (breakdown.isNotBlank()) builder.setSubText(breakdown)
-            safeNotify(NOTIF_ALARM_EPISODE, builder.build())
+    /** The single writer of the episode notification. Dismissal is [reset]'s job, synchronously. */
+    private fun render(state: Shade?) {
+        when (state) {
+            is Shade.Shown -> if (state.quiet) postQuiet(state.row, state.lang) else postSummary(state.row, state.lang)
+            is Shade.Held -> Unit
+            null -> Unit
         }
     }
 
+    private fun postSummary(row: PostedRow, lang: AppLanguage) {
+        val s = Strings.get(lang)
+        val breakdown = row.typeCounts.entries
+            .sortedWith(compareByDescending<Map.Entry<ThreatType, Int>> { it.value }.thenBy { it.key.ordinal })
+            .joinToString(" · ") { (type, count) ->
+                val info = ThreatTypeCatalog.INFO[type]
+                val label = info?.label(lang) ?: type.name
+                "$label $count"
+            }
+        val title = alarmEpisodeTitle(s, row.city, row.totalMin, row.alarmCount)
+        val builder = AlertNotificationManager(context).buildNotification(NOTIF_ALARM_EPISODE, AlertNotificationManager.CHANNEL_ALARM_EPISODE)
+            .setSmallIcon(R.drawable.ic_trident)
+            .setContentTitle(title)
+            .setContentText(String.format(s.alarmEpisodeBodyFormat, resolvedThreatsPhrase(row.count, lang)))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setTimeoutAfter(MERGE_WINDOW_MS)
+            .setContentIntent(episodeTapPendingIntent(row.memory))
+            .setDeleteIntent(episodeDismissPendingIntent())
+        if (breakdown.isNotBlank()) builder.setSubText(breakdown)
+        safeNotify(NOTIF_ALARM_EPISODE, builder.build())
+    }
+
     private fun postQuiet(row: PostedRow, lang: AppLanguage) {
-        scope.launch {
-            val s = Strings.get(lang)
-            val title = alarmEpisodeTitle(s, row.city, row.totalMin, row.alarmCount)
-            val builder = AlertNotificationManager(context).buildNotification(NOTIF_ALARM_EPISODE, AlertNotificationManager.CHANNEL_ALARM_EPISODE)
-                .setSmallIcon(R.drawable.ic_trident)
-                .setContentTitle(title)
-                .setContentText(s.alarmEpisodeQuietText)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setSilent(true)
-                .setAutoCancel(true)
-                .setTimeoutAfter(MERGE_WINDOW_MS)
-                .setContentIntent(quietOpenIntent())
-                .setDeleteIntent(episodeDismissPendingIntent())
-            safeNotify(NOTIF_ALARM_EPISODE, builder.build())
-        }
+        val s = Strings.get(lang)
+        val title = alarmEpisodeTitle(s, row.city, row.totalMin, row.alarmCount)
+        val builder = AlertNotificationManager(context).buildNotification(NOTIF_ALARM_EPISODE, AlertNotificationManager.CHANNEL_ALARM_EPISODE)
+            .setSmallIcon(R.drawable.ic_trident)
+            .setContentTitle(title)
+            .setContentText(s.alarmEpisodeQuietText)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .setAutoCancel(true)
+            .setTimeoutAfter(MERGE_WINDOW_MS)
+            .setContentIntent(quietOpenIntent())
+            .setDeleteIntent(episodeDismissPendingIntent())
+        safeNotify(NOTIF_ALARM_EPISODE, builder.build())
     }
 
     private fun episodeDismissPendingIntent(): PendingIntent {

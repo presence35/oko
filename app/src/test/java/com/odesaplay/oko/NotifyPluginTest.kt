@@ -280,7 +280,7 @@ class NotifyPluginTest {
     @Test
     fun `whatIf counts actual and estimated sounds`() {
         fun fired(id: String, type: ThreatType, at: Long) = DebugLogEntry(
-            at, DebugLogKind.ZONE_ENTER, false, false, 3, true,
+            at, DebugLogKind.ZONE_ENTER, false, false, true,
             DebugLogReason.FIRED, id, type, ThreatZone.INNER, 10.0, null
         )
         val rows = listOf(

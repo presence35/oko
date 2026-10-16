@@ -284,11 +284,27 @@ correctness bug today; both change product behaviour, so they wait for a real re
   (5 s was the original value) only if a field report shows the flicker; otherwise it is a magic
   constant with no reproduced symptom.
 - **Critical-offline alarm ignores the raid mute.** `AlertService.handleState`'s critical-offline
-  branch fires `dispatchCriticalOffline` + a notification while `bellsMuted()` is true; it honours
+  branch posts its notification while `bellsMuted()` is true; it honours
   only the offline-specific "ignore 30 min" deadline. That is arguably correct — the alarm means
-  "the app has gone blind", which is worst during a raid, and `criticalOfflineBypassSilent` exists
-  to make it pierce silence. If it must be muted too, route it through the one silence-decision
+  "the app has gone blind", which is worst during a raid, and `criticalOfflineBypassSilent` gives
+  that row the alarm channel's sound. If it must be muted too, route it through the one silence-decision
   owner (`SilentReason`) rather than adding a local `&& !bellsMuted()`.
+
+- **Stale offline age after a freeze** (reported 2026-10-16). `SourceRegistry.degradedSince` is
+  stamped on `Monotonic.now()` and only ever read, never re-justified. If the process freezes
+  (paused app, doze, watchdog starvation) while the socket is `Degraded` and thaws into a
+  physically dead transport, `isOffline()` escalates immediately on the first tick with an
+  already-aged stamp — so the 5-min critical-offline warning fires claiming 5 minutes of outage
+  nobody observed, and milestones M3/M5/M6 all land in one tick. Cosmetic/self-reporting only; the
+  outage was real, the user just learns about it late. Left alone deliberately: every fix we
+  evaluated trades warning lead-time (a real outage that freezes mid-episode loses up to a
+  window of grace) for honest timing. Preferred shape if it ever gets field reports: a trust
+  window — re-stamp when `nowMono - lastConfirmMono` exceeds one observation window, the same
+  "only believe what we watched" rule `ResilientConnectionSupervisor`'s awake credit already
+  applies to silence. Unverified before starting: what actually drives `recheckConnection()`
+  (if a live tick is the observation signal, a starved tick already counts as a freeze; if a
+  separate path drives it, the guard is blind to the common case) and whether the thaw path
+  already re-stamps.
 
 ## Alert-path testability (partly done)
 

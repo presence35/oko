@@ -271,7 +271,6 @@ object LogBundle {
                     p("notified", e.notified)
                     p("night", e.night)
                     p("sirenOverride", e.sirenOverride)
-                    p("vibrationLevel", e.vibrationLevel)
                     p("threatId", e.threatId)
                     p("threatType", e.threatType?.name)
                     p("tier", e.tier?.name)

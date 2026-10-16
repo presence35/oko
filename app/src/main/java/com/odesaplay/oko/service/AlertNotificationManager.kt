@@ -117,7 +117,14 @@ const val NOTIF_MONITORING_PAUSED = 9
 
         /** Bump to delete + recreate all managed channels (sound/importance/attrs are
          *  frozen by Android at creation — this is the only way a change takes effect). */
-        const val CHANNEL_SCHEMA_VERSION = 5
+        const val CHANNEL_SCHEMA_VERSION = 6
+
+        /** Vibration reaches the user ONLY through a channel: a per-notification
+         *  `setVibrate` has been ignored since API 26, which is our minSdk — so a
+         *  per-alert level could never have worked, and the level scale is gone rather
+         *  than left as decoration. Normal alerts buzz lightly, alarm-bypass ones hard. */
+        private val VIBRATION_LIGHT = longArrayOf(0, 200, 100, 200)
+        private val VIBRATION_STRONG = longArrayOf(0, 600, 100, 600, 100, 600)
 
         const val GROUP_ALERT = "oko_alert"
         const val GROUP_OFFLINE = "oko_offline"
@@ -237,6 +244,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             NotificationChannel(CHANNEL_ALERTS_INNER, s.alertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.alertChannelDesc
                 enableVibration(true)
+                vibrationPattern = VIBRATION_LIGHT
                 setSound(sirenUri("air_raid_siren"), notificationAttributes())
             }
         )
@@ -244,6 +252,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             NotificationChannel(CHANNEL_ALERTS_OUTER, s.outerAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.outerAlertChannelDesc
                 enableVibration(true)
+                vibrationPattern = VIBRATION_LIGHT
                 setSound(sirenUri("zone_outer"), notificationAttributes())
             }
         )
@@ -254,6 +263,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             NotificationChannel(CHANNEL_ALL_CLEAR, s.allClearChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = s.allClearChannelDesc
                 enableVibration(true)
+                vibrationPattern = VIBRATION_LIGHT
                 setSound(sirenUri("all_clear"), notificationAttributes())
             }
         )
@@ -261,6 +271,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             NotificationChannel(CHANNEL_ALERTS_INNER_ALARM, s.alarmAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.alarmAlertChannelDesc
                 enableVibration(true)
+                vibrationPattern = VIBRATION_STRONG
                 setSound(sirenUri("air_raid_siren"), alarmAttributes())
             }
         )
@@ -268,6 +279,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             NotificationChannel(CHANNEL_ALERTS_OUTER_ALARM, s.outerAlarmAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.outerAlarmAlertChannelDesc
                 enableVibration(true)
+                vibrationPattern = VIBRATION_STRONG
                 setSound(sirenUri("zone_outer"), alarmAttributes())
             }
         )
@@ -275,6 +287,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             NotificationChannel(CHANNEL_OFFLINE, s.offlineChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.offlineChannelDesc
                 enableVibration(true)
+                vibrationPattern = VIBRATION_LIGHT
                 setSound(sirenUri("critical_offline"), notificationAttributes())
             }
         )
@@ -285,6 +298,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             NotificationChannel(CHANNEL_OFFLINE_CRITICAL, s.offlineCriticalChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.offlineCriticalChannelDesc
                 enableVibration(true)
+                vibrationPattern = VIBRATION_STRONG
                 setSound(sirenUri("critical_offline"), criticalAttrs)
             }
         )
@@ -297,6 +311,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             NotificationChannel(CHANNEL_ALARM_EPISODE, s.alarmEpisodeChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = s.alarmEpisodeChannelDesc
                 enableVibration(true)
+                vibrationPattern = VIBRATION_LIGHT
                 setSound(sirenUri("all_clear"), notificationAttributes())
             }
         )
@@ -366,7 +381,6 @@ const val NOTIF_MONITORING_PAUSED = 9
         body: String,
         sirenOverride: Boolean,
         revealThreat: NormalizedThreat? = null,
-        vibrationLevel: Int = 3,
         silent: Boolean = false,
         muted: Boolean = false,
         actions: AlertActions? = null
@@ -386,7 +400,6 @@ const val NOTIF_MONITORING_PAUSED = 9
             .setContentText(body + idSuffix)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setVibrate(vibrationPattern(vibrationLevel))
             .setContentIntent(openAppIntent(revealThreat))
             .setOnlyAlertOnce(silent)
             // Full silence (channel sound + vibration); setOnlyAlertOnce is a repost knob.

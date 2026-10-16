@@ -24,6 +24,11 @@ fun readKeystoreProps(): Properties = Properties().apply {
 val hasReleaseKeystore = file("keystore.properties").exists()
 val unsignedReleaseAllowed = project.hasProperty("allowUnsignedRelease")
 
+/** `bumpVersion` writes the previous file here before touching version.properties, and clearing it
+ *  is what marks a release as published. Its existence therefore means exactly one thing: bumped,
+ *  not yet shipped. `restoreVersionOnFailure` keys off that. */
+val versionSnapshotFile = file("build/.version.previous")
+
 android {
     namespace = "com.odesaplay.oko"
     compileSdk = 36
@@ -191,10 +196,16 @@ tasks.register("bumpVersion") {
     // forbids touching `project` (or anything else from the build script) at execution time, and
     // reading the property here is what makes the task cacheable instead of a cache-poisoner.
     val propsFile = versionPropsFile
+    val snapshotFile = versionSnapshotFile
     val versionOverride = providers.gradleProperty("newVersion").orNull?.takeIf { it.isNotBlank() }
     doLast {
         val props = Properties()
         if (propsFile.exists()) propsFile.inputStream().use { props.load(it) }
+        // Snapshot before writing. A release bumps ahead of the build because the version is
+        // stamped into the APK, so a failure further along — a red test, a rejected upload — would
+        // otherwise leave the version advanced with nothing published.
+        snapshotFile.parentFile.mkdirs()
+        snapshotFile.writeText(if (propsFile.exists()) propsFile.readText(Charsets.UTF_8) else "", Charsets.UTF_8)
         val currentCode = (props.getProperty("versionCode") ?: "0").toIntOrNull() ?: 0
         val currentName = props.getProperty("versionName") ?: ""
         val newCode = currentCode + 1
@@ -239,16 +250,70 @@ tasks.register<Exec>("releaseDirect") {
     group = "release"
     description = "Bumps the version, then builds the sideload (direct/beta) APK and uploads it + version.json to the FTP server, in a fresh Gradle run so both carry the new version."
     dependsOn("bumpVersion")
+    // Runs whether or not the child build succeeds; it only acts when the snapshot is still there.
+    finalizedBy("restoreVersionOnFailure")
     workingDir = rootProject.projectDir
-    commandLine(gradleWrapperArgv() + listOf(":app:uploadRelease", "--no-configuration-cache"))
+    // A single child task carrying the end-of-release marker: its dependency on uploadRelease, not
+    // command-line order, is what guarantees the marker only runs after the release succeeded.
+    commandLine(gradleWrapperArgv() + listOf(":app:markDirectComplete", "--no-configuration-cache"))
 }
 
 tasks.register<Exec>("releasePlay") {
     group = "release"
     description = "Bumps the version, then builds the Google Play App Bundle (play flavor — no self-update). Does not upload."
     dependsOn("bumpVersion", "requireReleaseKeystore")
+    finalizedBy("restoreVersionOnFailure")
     workingDir = rootProject.projectDir
-    commandLine(gradleWrapperArgv() + listOf(":app:bundlePlayRelease", "--no-configuration-cache"))
+    commandLine(gradleWrapperArgv() + listOf(":app:markPlayComplete", "--no-configuration-cache"))
+}
+
+/** Marks a release as published by dropping the snapshot `bumpVersion` took. Without this the
+ *  finalizer treats the release as failed and puts the version back.
+ *
+ *  One marker per release flow, each depending on its release task: Gradle does not guarantee that
+ *  tasks named together on a command line run in the order written, and a marker that runs *before*
+ *  the release would clear the snapshot early and silently disable the rollback. */
+private fun registerReleaseMarker(name: String, releaseTask: String, markerDescription: String) {
+    tasks.register(name) {
+        group = "versioning"
+        description = markerDescription
+        dependsOn(releaseTask)
+        // Configuration-time capture: touching the script from the action breaks the configuration cache.
+        val snapshotFile = versionSnapshotFile
+        doLast { snapshotFile.delete() }
+    }
+}
+registerReleaseMarker(
+    "markDirectComplete",
+    "uploadRelease",
+    "Clears the version snapshot after the sideload release published successfully, keeping the bump.",
+)
+registerReleaseMarker(
+    "markPlayComplete",
+    "bundlePlayRelease",
+    "Clears the version snapshot after the Play bundle built successfully, keeping the bump.",
+)
+
+/** Undoes a version bump when the release that followed it did not complete. State travels through
+ *  the snapshot file rather than task state, because the parent build runs under the configuration
+ *  cache and may not read another task's outcome. */
+tasks.register("restoreVersionOnFailure") {
+    group = "versioning"
+    description = "Restores version.properties when a release failed after bumpVersion had already advanced it."
+    val propsFile = versionPropsFile
+    val snapshotFile = versionSnapshotFile
+    doLast {
+        if (!snapshotFile.exists()) return@doLast
+        val previous = snapshotFile.readText(Charsets.UTF_8)
+        snapshotFile.delete()
+        if (previous.isBlank()) return@doLast
+        propsFile.writeText(previous, Charsets.UTF_8)
+        val props = Properties().apply { load(previous.reader()) }
+        println(
+            "Release did not complete — version.properties restored to " +
+                "${props.getProperty("versionName")} (${props.getProperty("versionCode")})"
+        )
+    }
 }
 
 tasks.register("uploadRelease") {

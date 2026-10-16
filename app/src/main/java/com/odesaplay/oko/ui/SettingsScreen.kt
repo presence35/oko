@@ -1459,7 +1459,7 @@ private fun shelterPainter(): Painter = remember {
     }
 }
 
-/** "Always sound" — shared by the Alerts page and the Reliability page, so the same row has one
+/** "Loud alerts" — shared by the Alerts page and the Reliability page, so the same row has one
  *  definition rather than two that can drift. */
 @Composable
 private fun AlwaysSoundRow(
