@@ -28,13 +28,13 @@ class EmergencyResurrectionWorkerTest {
     fun setUp() {
         context = RuntimeEnvironment.getApplication()
         WorkManagerTestInitHelper.initializeTestWorkManager(context)
-        MonitoringStatus.setRunning(false)
+        MonitoringStatus.reset()
         runBlocking { UserPrefs(context).clearAll() }
     }
 
     @After
     fun tearDown() {
-        MonitoringStatus.setRunning(false)
+        MonitoringStatus.reset()
     }
 
     private fun runWorker() = runBlocking {
@@ -46,7 +46,7 @@ class EmergencyResurrectionWorkerTest {
 
     @Test
     fun `no-op while monitoring is already running`() {
-        MonitoringStatus.setRunning(true)
+        MonitoringStatus.running()
 
         runWorker()
 

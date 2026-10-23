@@ -45,13 +45,13 @@ class SuspendTest {
     fun setUp() {
         context = RuntimeEnvironment.getApplication()
         WorkManagerTestInitHelper.initializeTestWorkManager(context)
-        MonitoringStatus.setRunning(false)
+        MonitoringStatus.reset()
         runBlocking { UserPrefs(context).clearAll() }
     }
 
     @After
     fun tearDown() {
-        MonitoringStatus.setRunning(false)
+        MonitoringStatus.reset()
     }
 
     private fun receive(action: String) = receiver.onReceive(context, Intent(action))

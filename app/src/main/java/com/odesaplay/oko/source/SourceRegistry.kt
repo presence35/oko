@@ -19,7 +19,6 @@ import com.odesaplay.oko.connection.ConnRetryState
 import com.odesaplay.oko.connection.ConnectionMilestone
 import com.odesaplay.oko.connection.EPISODE_CONTINUITY_GRACE_MS
 import com.odesaplay.oko.connection.Monotonic
-import com.odesaplay.oko.connection.OfflineCause
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.OblastAlert
 import com.odesaplay.oko.engine.ThreatProps
@@ -76,11 +75,6 @@ class SourceRegistry {
      *  so the backup engages. */
     private val _wsHealthy = MutableStateFlow(false)
     val wsHealthy: StateFlow<Boolean> = _wsHealthy.asStateFlow()
-
-    /** Why the active sources are down (null = healthy). Aggregated from the same sources' own typed
-     *  causes, so there is one answer to "what is wrong" rather than a boolean per fact. */
-    private val _offlineCause = MutableStateFlow<OfflineCause?>(null)
-    val offlineCause: StateFlow<OfflineCause?> = _offlineCause.asStateFlow()
 
     /** Feed freshness: no WS source is delivering its live feed (disabled, silent, or down).
      *  The orange "degraded" tier — a data state, immediate. */
@@ -376,7 +370,6 @@ class SourceRegistry {
                 it.operationalMode.value == OperationalMode.POLLING &&
                 map[it.id] == SourceState.CONNECTED
         }
-        _offlineCause.value = active.firstNotNullOfOrNull { it.offlineCause.value }
     }
 
     /** Internal, not private: the log-wipe regression below can only be caught by driving this

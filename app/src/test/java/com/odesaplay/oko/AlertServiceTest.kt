@@ -35,7 +35,7 @@ class AlertServiceTest {
     @After
     fun tearDown() {
         controller.destroy()
-        MonitoringStatus.setRunning(false)
+        MonitoringStatus.reset()
     }
 
     private fun service() = controller.get()

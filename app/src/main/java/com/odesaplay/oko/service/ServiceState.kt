@@ -33,6 +33,7 @@ class ServiceState(private val context: Context) {
     private val raidMuteDeadlineKey = stringPreferencesKey("raid_mute_deadline")
     private val officialAnnouncedRowKey = stringPreferencesKey("official_announced_row")
     private val debugLogKey = stringPreferencesKey("debug_log")
+    private val monitorEventsKey = stringPreferencesKey("monitor_events")
     private val lastUpdateCheckKey = longPreferencesKey("last_update_check")
     private val lastNotifiedUpdateCodeKey = longPreferencesKey("last_notified_update_code")
     private val lastSdkManifestHashKey = stringPreferencesKey("last_sdk_manifest_hash")
@@ -131,6 +132,14 @@ class ServiceState(private val context: Context) {
 
     suspend fun setDebugLog(serialized: String) {
         store.edit { it[debugLogKey] = serialized }
+    }
+
+    /** Serialized `MonitorLifecycle` rows. One value: it is appended and read as a whole. */
+    fun monitorEvents(): Flow<String> =
+        store.data.map { prefs -> prefs[monitorEventsKey] ?: "" }
+
+    suspend fun setMonitorEvents(serialized: String) {
+        store.edit { it[monitorEventsKey] = serialized }
     }
 
     fun lastUpdateCheck(): Flow<Long> =

@@ -41,14 +41,14 @@ class ShutdownTest {
     fun setUp() {
         context = RuntimeEnvironment.getApplication()
         WorkManagerTestInitHelper.initializeTestWorkManager(context)
-        MonitoringStatus.setRunning(false)
+        MonitoringStatus.reset()
         OfflineIgnore.reset()
         runBlocking { UserPrefs(context).clearAll() }
     }
 
     @After
     fun tearDown() {
-        MonitoringStatus.setRunning(false)
+        MonitoringStatus.reset()
         OfflineIgnore.reset()
     }
 
@@ -63,12 +63,12 @@ class ShutdownTest {
 
     @Test
     fun `shutdown stops the service and disarms every resurrection path`() {
-        MonitoringStatus.setRunning(true)
+        MonitoringStatus.running()
         AlertWakeup.schedule(context)
         AlertWatchdog.schedule(context)
         EmergencyResurrectionWorker.schedule(context)
 
-        AlertService.shutdown(context)
+        runBlocking { AlertService.shutdown(context) }
 
         assertEquals(AlertService::class.java.name, Shadows.shadowOf(context).nextStoppedService?.component?.className)
         assertTrue(!alarmArmed())

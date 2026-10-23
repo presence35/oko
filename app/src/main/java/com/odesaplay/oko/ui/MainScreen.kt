@@ -311,9 +311,13 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     }
 
     val onExit: () -> Unit = {
-        AlertService.shutdown(context)
         val activity = context as? Activity
-        if (activity != null) activity.finishAffinity()
+        // The record of a deliberate stop is awaited before the task goes away: it is the only
+        // thing that later tells a multi-day silence apart from an OS kill.
+        scope.launch {
+            AlertService.shutdown(context)
+            if (activity != null) activity.finishAffinity()
+        }
     }
 
     // Stable callbacks: fresh instances every recomposition would dirty every downstream
@@ -1031,7 +1035,7 @@ private fun MapScreen(
                     else -> s.appTitle
                 }
             }
-            if (!uiState.monitoringRunning) {
+            if (uiState.monitorDown) {
                 MonitoringOffBanner(
                     text = s.serviceOfflineBanner,
                     onClick = onReactivateMonitoring,

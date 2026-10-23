@@ -18,7 +18,9 @@ sealed interface OfflineCause {
     /** No usable internet at all — the socket never had a link to try. */
     data object NoNetwork : OfflineCause
 
-    /** The link is fine but the resolver will not answer for this host. Unfixable by retrying. */
+    /** The resolver would not answer for this host. Log-only: the shade row never names a cause
+     *  it cannot verify — one failed lookup is also what a wifi joining or a stale resolver
+     *  produces, and telling the user "DNS blocked" for that is a claim, not a fact. */
     data class DnsFailure(val host: String) : OfflineCause
 
     /** The host was resolved and refused us (or hung up): retrying is the whole point. */
@@ -45,18 +47,12 @@ sealed interface OfflineCause {
         is SocketFailure, SilenceTimeout -> s.connEventLost
     }
 
-    /** Notification headline. Kept separate from [label] on purpose: the log explains the outage to
-     *  someone debugging it, the headline has to fit a collapsed shade row. */
-    fun notifTitle(s: Strings.StringSet): String = when (this) {
-        is DnsFailure -> s.offlineDnsTitle
-        else -> s.offlineStatusTitle
-    }
-
-    /** Notification body. Short by design — anything longer is truncated in a collapsed row. */
-    fun notifBody(s: Strings.StringSet, minutes: Int): String = when (this) {
-        is DnsFailure -> s.offlineDnsBody
-        else -> String.format(s.offlineLiveFormat, minutes)
-    }
+    /**
+     * Deliberately NO notification copy here. The cause explains the outage to someone reading
+     * the connection log; the shade row says only what is true for every cause ("server
+     * unreachable, N min"). A cause-specific headline was a diagnosis the transport cannot make
+     * — the OS and the browser already tell a user when their network is broken.
+     */
 }
 
 private inline fun <reified T : Throwable> Throwable?.hasCause(): Boolean {

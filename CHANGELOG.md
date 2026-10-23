@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- Returning to Oko re-arms monitoring when the OS had killed it; the service-offline header now waits for the service to confirm it is up instead of being a guess 10-23_14:08:30
+- Stop & exit stays stopped on the next resume, and the battery card no longer blames the OS for a stop you chose 10-23_14:08:30
+- The log bundle records every monitor start, user stop, OS kill and refused revive, so hours of silence can be told apart from a kill 10-23_14:08:30
+- The offline row no longer claims "DNS blocked — switch network": one failed lookup is not proof, so it says only "server unreachable, N min" and the cause stays in the connection log 10-23_15:40:00
 - Updated the home-screen widget library to 1.1.1, clearing the Play Console protobuf (CVE-2024-7254) SDK warning 10-23_13:09:23
 
 ## [0.6.828]

@@ -13,7 +13,7 @@ import com.odesaplay.oko.UserPrefs
 class AlertWatchdog(ctx: Context, params: androidx.work.WorkerParameters) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result {
-        if (MonitoringStatus.running.value) return Result.success()
+        if (MonitoringStatus.isServiceUp()) return Result.success()
         val bootRestart = UserPrefs(applicationContext).preferences.first().bootRestartEnabled
         if (!bootRestart) return Result.success()
         // Background-safe: a blocked FGS start (Android 12+) posts a resume prompt instead.

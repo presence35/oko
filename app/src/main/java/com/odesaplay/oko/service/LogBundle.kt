@@ -10,6 +10,8 @@ import android.os.Build
 import android.os.Debug
 import android.os.Process
 import android.os.SystemClock
+import com.odesaplay.oko.service.MonitorLifecycle
+import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -42,7 +44,7 @@ object LogBundle {
      * reader can tell "field absent because the build predates it" from "field absent because the
      * OS would not say".
      */
-    private const val SCHEMA = 3
+    private const val SCHEMA = 4
 
     private val SECRET = Regex(
         "(?i)bearer\\s+\\S+" +
@@ -334,6 +336,16 @@ object LogBundle {
                 JSONObject().apply {
                     p("atMillis", e.atMillis)
                     p("kind", e.kind.name)
+                }
+            }.toJson())
+            // Durable monitoring lifecycle: the only record that outlives the service, and so
+            // the only way to read a hours-long gap in `power` as "the user stopped it" rather
+            // than "the OS killed it" (or the reverse).
+            p("monitorEvents", MonitorLifecycle.events(context).first().map { e ->
+                JSONObject().apply {
+                    p("atMillis", e.atMs)
+                    p("kind", e.kind.name)
+                    p("cause", e.cause)
                 }
             }.toJson())
             p("gps", GpsLog.entries.value.map { e ->

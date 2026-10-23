@@ -49,7 +49,7 @@ class EmergencyResurrectionWorker(
 
     override suspend fun doWork(): Result {
         WakeEventLog.record(WakeKind.WORKER)
-        if (MonitoringStatus.running.value) return Result.success()
+        if (MonitoringStatus.isServiceUp()) return Result.success()
         // Before the pref, and before the side effect below: a paused package cannot alert at all,
         // so there is no kill to report and no resurrection to attempt — `startResilient` would
         // refuse anyway, but the battery-exemption evidence flagged here would be a claim about a

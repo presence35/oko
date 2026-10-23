@@ -83,6 +83,8 @@ import com.odesaplay.oko.NeutralizedTally
 import com.odesaplay.oko.engine.ThreatEngine
 import com.odesaplay.oko.service.ServiceState
 import com.odesaplay.oko.service.MonitoringStatus
+import com.odesaplay.oko.service.MonitorEvent
+import com.odesaplay.oko.service.MonitorLifecycle
 import com.odesaplay.oko.service.SuspendState
 import com.odesaplay.oko.service.AlertWakeup
 import com.odesaplay.oko.service.AlertWatchdog
@@ -188,13 +190,14 @@ class AlertService : Service() {
          * through [startResilient] instead, which is where the one policy lives.
          */
         fun start(context: Context) {
-            MonitoringStatus.setRunning(true)
+            MonitoringStatus.startRequested()
             try {
                 ContextCompat.startForegroundService(context, Intent(context, AlertService::class.java))
             } catch (e: Exception) {
                 // A failed start must never look like working monitoring �?" leave the flag off
                 // so the UI banner surfaces the dead state instead of going silent.
-                MonitoringStatus.setRunning(false)
+                MonitoringStatus.died(MonitoringStatus.Reason.START_REFUSED)
+                MonitorLifecycle.recordNow(context, MonitorEvent.Kind.START, "refused")
                 throw e
             }
         }
@@ -214,7 +217,14 @@ class AlertService : Service() {
             return try {
                 start(context)
                 true
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                // Android 12+ refuses a foreground start from the background. That refusal is the
+                // reason monitoring is off, so it belongs in the durable record, not only in a
+                // tap-to-resume row the user may swipe away.
+                MonitorLifecycle.recordNow(
+                    context, MonitorEvent.Kind.RESURRECT_BLOCKED,
+                    e.javaClass.simpleName
+                )
                 AlertNotificationManager(context.applicationContext).postRestartBlocked()
                 false
             }
@@ -248,14 +258,19 @@ class AlertService : Service() {
          * [MainActivity] starts the service and schedules the workers — so no flag is needed:
          * a stop with nothing scheduled simply stays stopped.
          */
-        fun shutdown(context: Context) {
+        suspend fun shutdown(context: Context) {
             val appContext = context.applicationContext
+            // Written first, and awaited by the caller: this row is the only thing that will ever
+            // tell a later silence apart from an OS kill.
+            MonitorLifecycle.record(appContext, MonitorEvent.Kind.STOP_BY_USER)
+            MonitoringStatus.stoppedByUser()
             stop(appContext)
             AlertWakeup.cancel(appContext)
             AlertWatchdog.cancel(appContext)
             EmergencyResurrectionWorker.cancel(appContext)
             AlertNotificationManager(appContext).cancelNotification(NOTIF_MONITORING_PAUSED)
-            MonitoringStatus.setRunning(false)
+            // A stop the user asked for is not the kill the battery card warns about.
+            runCatching { UserPrefs(appContext).setServiceResurrected(false) }
         }
     }
 
@@ -272,6 +287,9 @@ class AlertService : Service() {
     /** True once the FGS was (re)started with the location type. Left false when a background
      *  start had to fall back (no location exemption), so the next foreground start re-promotes. */
     private var locationFgsActive = false
+    /** True once a foreground notification was actually accepted by the platform - the fact
+     *  [MonitoringStatus.running] is allowed to depend on. */
+    private var foregroundPromoted = false
     private var lastShownId: String? = null
     /** Frequency policy: the service feeds it per-tick facts and executes verdicts. */
     private val notifyPlugin = NotifyPlugin()
@@ -635,7 +653,8 @@ class AlertService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        MonitoringStatus.setRunning(true)
+        if (foregroundPromoted) MonitoringStatus.running()
+        MonitorLifecycle.recordNow(this, MonitorEvent.Kind.START)
         // Every start (cold launch, boot, resurrection by worker or alarm) re-arms the Doze-legal
         // wakeup, so no path can leave a device with no next wakeup.
         AlertWakeup.schedule(this)
@@ -751,8 +770,9 @@ class AlertService : Service() {
             locationFgsActive = false
             return
         }
-        // Even the base type was refused — surface the dead state like startResilient intends.
-        MonitoringStatus.setRunning(false)
+        // Even the base type was refused - surface the dead state like startResilient intends.
+        MonitoringStatus.died(MonitoringStatus.Reason.START_REFUSED)
+        MonitorLifecycle.recordNow(this, MonitorEvent.Kind.STOP_OS, "start-refused")
         AlertNotificationManager(applicationContext).postRestartBlocked()
         stopSelf()
     }
@@ -763,6 +783,7 @@ class AlertService : Service() {
      *  (an [IllegalStateException]); both mean "do not crash, degrade instead". */
     private fun startForegroundTyped(type: Int, notif: android.app.Notification): Boolean = try {
         ServiceCompat.startForeground(this, NOTIF_MONITOR, notif, type)
+        foregroundPromoted = true
         true
     } catch (_: SecurityException) {
         false
@@ -1179,18 +1200,16 @@ val mappedThreats = registry.allThreats.map { list ->
             state.focusOblastYellowAlertActive -> AlertLevel.YELLOW
             else -> AlertLevel.NONE
         }
-        // The cause owns its own words, so the row cannot claim a plain outage while the transport
-        // knows something stronger (a name that will not resolve) — and cannot say the opposite.
-        val offlineCause = registry.offlineCause.value
+        // The row says what is true for every cause: the cause is log currency, not a diagnosis
+        // the transport can make (a single failed lookup is not proof of DNS filtering).
         val monitorTitle = when {
-            isOfflineNow -> offlineCause?.notifTitle(s) ?: s.offlineStatusTitle
+            isOfflineNow -> s.offlineStatusTitle
             state.focusPinned -> String.format(s.notifMonitoringCityFormat, state.focusBannerCity)
             else -> s.notifOngoingTitle
         }
 
         val monitorText = when {
-            isOfflineNow -> offlineCause?.notifBody(s, offlineMinutes)
-                ?: offlineLiveBody(s, offlineMinutes)
+            isOfflineNow -> offlineLiveBody(s, offlineMinutes)
             // A stale position is NOT a GPS-access problem, and saying so was the bug: the phone
             // may simply be still. Only a denied permission or a disabled provider earns that
             // wording; anything else says what we can actually vouch for.
@@ -2280,7 +2299,11 @@ private fun nextUpdateCheckMillis(from: Long): Long {
     }
 
     override fun onDestroy() {
-        MonitoringStatus.setRunning(false)
+        val before = MonitoringStatus.state.value
+        MonitoringStatus.died(MonitoringStatus.Reason.DESTROYED)
+        if (before !is MonitoringStatus.State.StoppedByUser && before !is MonitoringStatus.State.Dead) {
+            MonitorLifecycle.recordNow(this, MonitorEvent.Kind.STOP_OS)
+        }
         // The mute is deliberately NOT reset here: a destroy is not a mute clear, and the OS
         // recycles a foreground service freely. A timed mute lives in ServiceState (see
         // [restoreRaidMute]) precisely so the next instance keeps honouring it. The UI mirror is

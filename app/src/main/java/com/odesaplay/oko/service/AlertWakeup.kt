@@ -96,7 +96,7 @@ class AlertWakeupReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         WakeEventLog.record(WakeKind.ALARM)
         val appContext = context.applicationContext
-        if (MonitoringStatus.running.value) {
+        if (MonitoringStatus.isServiceUp()) {
             // Alive: the thaw is the whole point, so only the chain needs attention.
             AlertWakeup.schedule(appContext)
             return

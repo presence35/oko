@@ -336,3 +336,13 @@ attached, 1 rating + 1 free-text field, auto-attached version/city. Alternative 
 hovering top-right feedback button — same sheet, different trigger. Needs a Settings
 opt-out (shake off by default?) and a manual button fallback since shake is
 undiscoverable. Transport TBD: in-app sheet POST vs external link (Telegram/Form).
+
+## Widget truth about monitoring (not started)
+
+The widget's status line reads only `AppSources.registry.isOffline` (`WidgetUpdater`/`ThreatWidget`),
+so it can say "online" while the alert service is dead - the same lie the in-app header used to tell.
+The widget updates from a process that frequently has no service at all, so it cannot read the
+in-memory `MonitoringStatus`; it needs the persisted monitoring lifecycle record (see the
+`MonitorLifecycle` stream in `ARCHITECTURE.md`) and a third state next to connected/offline:
+"not monitoring". Decide there whether the widget should keep updating on its own schedule when
+monitoring is down, or stop pretending and say so.

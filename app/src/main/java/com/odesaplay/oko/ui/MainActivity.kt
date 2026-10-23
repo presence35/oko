@@ -27,6 +27,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
+import com.odesaplay.oko.service.MonitoringStatus
+import com.odesaplay.oko.service.SuspendState
 import java.io.File
 import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +67,8 @@ class MainActivity : ComponentActivity() {
         // Registry first: after an OS force-stop the process is fresh and anything
         // touching AppSources.registry before init throws (immediate crash on launch).
         AppSources.ensureInit(applicationContext)
+        // A launch is a new session: a Stop & exit from the last one does not outlive it.
+        MonitoringStatus.sessionStarted()
         // Monitoring is always-on: "Stop Monitoring & Exit" is a session-only stop, so a
         // cold start (re)arms the service — but past the first frame, never ahead of it:
         // binder + WorkManager enqueue on the critical path is what stretches black on
@@ -74,7 +78,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             viewModel.uiState.first { it.wizardCompleted != null }
             splashReady = true
-            runCatching { AlertService.start(this@MainActivity) }
+            ensureMonitoring()
             runCatching { com.odesaplay.oko.service.AlertWatchdog.schedule(applicationContext) }
             // Stop & exit cancels every resurrection path, so a cold start re-arms all of them —
             // the watchdog alone would leave the 15-minute safety net disarmed until a reboot.
@@ -205,6 +209,22 @@ class MainActivity : ComponentActivity() {
         // the race with the service start — never crash the foreground on it.
         AppSources.ensureInit(applicationContext)
         runCatching { AppSources.registry.onAppForeground() }
+        // Coming back is a legal moment to start a foreground service, and after the battery
+        // exemption is gone it is the only one the platform still allows - the alarm and the
+        // 15-minute workers are refused in the background. The splash gate keeps a cold launch
+        // on its original ordering (prefs first, then the binder call).
+        if (splashReady) ensureMonitoring()
+    }
+
+    /**
+     * Re-arm the monitor only when the facts say it is not running. Not gated on
+     * "auto-restart after reboot": that switch is about the background, and the user is here.
+     * It does answer to [MonitoringStatus], which refuses after a deliberate Stop & exit.
+     */
+    private fun ensureMonitoring() {
+        if (SuspendState.isSuspended(this)) return
+        if (!MonitoringStatus.needsRestart()) return
+        runCatching { AlertService.start(this) }
     }
 
     /**

@@ -348,8 +348,6 @@ object Strings {
         val offlineCriticalBypassSilentDesc: String,
         val offlineIgnoreAction: String,
         val offlineLiveFormat: String,
-        val offlineDnsTitle: String,
-        val offlineDnsBody: String,
         val alertChannelName: String,
         val alertChannelDesc: String,
         val outerAlertChannelName: String,
@@ -1349,8 +1347,6 @@ object Strings {
         val offlineCriticalBypassSilentDesc: String get() = threat.offlineCriticalBypassSilentDesc
         val offlineIgnoreAction: String get() = threat.offlineIgnoreAction
         val offlineLiveFormat: String get() = threat.offlineLiveFormat
-        val offlineDnsTitle: String get() = threat.offlineDnsTitle
-        val offlineDnsBody: String get() = threat.offlineDnsBody
         val alertChannelName: String get() = threat.alertChannelName
         val alertChannelDesc: String get() = threat.alertChannelDesc
         val outerAlertChannelName: String get() = threat.outerAlertChannelName

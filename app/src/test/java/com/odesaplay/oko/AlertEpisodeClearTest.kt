@@ -81,7 +81,7 @@ class AlertEpisodeClearTest {
     @After
     fun tearDown() {
         controller.destroy()
-        MonitoringStatus.setRunning(false)
+        MonitoringStatus.reset()
         DebugLog.clear()
     }
 

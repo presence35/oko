@@ -15,9 +15,7 @@ import com.odesaplay.oko.connection.ConnEventKind
 import com.odesaplay.oko.connection.ConnRetryState
 import com.odesaplay.oko.connection.ConnectionState
 import com.odesaplay.oko.connection.ResilientConnectionSupervisor
-import com.odesaplay.oko.connection.offlineCauseOrNull
 import com.odesaplay.oko.connection.isConnected
-import com.odesaplay.oko.connection.OfflineCause
 import com.odesaplay.oko.connection.isDegraded
 import com.odesaplay.oko.engine.MonitorCoreImpl
 import com.odesaplay.oko.engine.NormalizedThreat
@@ -79,9 +77,6 @@ class NeptunSource(private val context: Context) : Source, ConnectionLogSource {
     private val _enabled = MutableStateFlow(true)
     override val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
 
-    private val _offlineCause = MutableStateFlow<OfflineCause?>(null)
-    override val offlineCause: StateFlow<OfflineCause?> = _offlineCause.asStateFlow()
-
     override val removedThreats: SharedFlow<ThreatRemoved> get() = decoder.removedThreats
     override val siteUrl: String? get() = NEPTUN_SITE_URL
 
@@ -94,9 +89,6 @@ class NeptunSource(private val context: Context) : Source, ConnectionLogSource {
         }
         scope.launch {
             supervisor.connectionState.collect { cs ->
-                // Cause first: the registry derives its own view off this same emission, and reading a
-                // half-updated source is how a derived fact ends up one tick stale.
-                _offlineCause.value = cs.offlineCauseOrNull
                 _connectionState.value = mapConnectionState(cs)
                 if (cs is ConnectionState.Offline) {
                     core.onNetworkDisconnected()

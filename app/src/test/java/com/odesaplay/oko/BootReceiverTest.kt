@@ -30,7 +30,7 @@ class BootReceiverTest {
     fun setUp() {
         context = RuntimeEnvironment.getApplication()
         WorkManagerTestInitHelper.initializeTestWorkManager(context)
-        MonitoringStatus.setRunning(false)
+        MonitoringStatus.reset()
         context.getSharedPreferences(MonitorCoreImpl.PREFS_NAME, Context.MODE_PRIVATE)
             .edit().clear().commit()
         runBlocking { UserPrefs(context).clearAll() }
@@ -38,7 +38,7 @@ class BootReceiverTest {
 
     @After
     fun tearDown() {
-        MonitoringStatus.setRunning(false)
+        MonitoringStatus.reset()
     }
 
     private fun boot(action: String = Intent.ACTION_BOOT_COMPLETED) =

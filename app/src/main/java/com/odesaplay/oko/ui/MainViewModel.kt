@@ -76,7 +76,7 @@ data class UiState(
     val connected: Boolean = false,
     val neptunDown: Boolean = false,                 // NEPTUN offline
     val degraded: Boolean = false,                   // connected but stream quiet (orange pill)
-    val monitoringRunning: Boolean = true,           // AlertService foreground monitor alive
+    val monitorDown: Boolean = false,                // show the "service offline" header
     val bootRestartEnabled: Boolean = true,          // Settings: restart monitoring after reboot
     val sleepNoticeEnabled: Boolean = false,         // Settings: "Oko was asleep" notice (opt-in)
     val threatsInner: List<NormalizedThreat> = emptyList(), // reaching within the red time tier
@@ -795,7 +795,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         updateUiFlow,
         shelterLoadFlow,
         flybyFlow,
-        MonitoringStatus.running,
+        MonitoringStatus.state,
         registry.degraded,
         registry.coveredByFallback,
         RaidMuteState.state,
@@ -807,7 +807,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val updateUi = values[3] as UpdateUi
         val shelterLoad = values[4] as ShelterLoad
         val flyby = values[5] as AviationFlybyShow?
-        val monitoringRunning = values[6] as Boolean
         val raidMute = values[9] as RaidMute
         val notificationsDisabledBySystem = !(values[10] as NotificationState).enabled
         val bootRestartEnabled = rawPrefs.bootRestartEnabled
@@ -979,7 +978,7 @@ showBorders = prefs.showBorders,
             notificationsDisabledBySystem = notificationsDisabledBySystem,
             settingsConflicts = settingsConflicts(rawPrefs, values[10] as NotificationState),
             raidMute = raidMute,
-            monitoringRunning = monitoringRunning,
+            monitorDown = MonitoringStatus.bannerVisible(nowMono),
             bootRestartEnabled = bootRestartEnabled,
             sleepNoticeEnabled = sleepNoticeEnabled,
             problems = problems,
