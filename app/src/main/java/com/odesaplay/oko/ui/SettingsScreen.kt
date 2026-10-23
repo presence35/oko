@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -1246,8 +1247,10 @@ fun SettingsScreen(
                         title = s.feedbackButtonTitle,
                         description = s.feedbackButtonDesc,
                         checked = showFeedbackButton,
-                        flash = flashId == "feedbackButton",
-                        onCheckedChange = onShowFeedbackButtonChange
+                        onCheckedChange = onShowFeedbackButtonChange,
+                        icon = rememberVectorPainter(Icons.Filled.BugReport),
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        flash = flashId == "feedbackButton"
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).explainerFlash(flashId == "overlap")) {
