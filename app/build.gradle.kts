@@ -166,7 +166,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.11.0")
 
     // Home-screen widget
-    implementation("androidx.glance:glance-appwidget:1.1.0")
+    implementation("androidx.glance:glance-appwidget:1.1.1")
 
     testImplementation("junit:junit:4.13.2")
     // Robolectric lets Android-bound units (SharedPreferences, Context, system services) run as
