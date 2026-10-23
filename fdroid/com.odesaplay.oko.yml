@@ -1,31 +1,18 @@
-# F-Droid build recipe for Oko.
-#
-# This is a copy of the file that belongs in the fdroiddata repository at
-# metadata/com.odesaplay.oko.yml. It is kept here for reviewability only —
-# fdroiddata is the source of truth, so edits must be mirrored back or they will
-# silently drift.
-#
-# Submitting: fork fdroiddata, add this as metadata/com.odesaplay.oko.yml, then open
-# a merge request. Their CI builds it in the official buildserver, which is the only
-# place the SDK-download path (see MaintainerNotes) can actually be exercised.
+AntiFeatures:
+  - TetheredNet
+  - Tracking
 Categories:
-  - Navigation
   - Emergency Action
+  - Navigation
 License: GPL-3.0-only
 AuthorName: presaince
 AuthorEmail: contact@odesaplay.com.ua
+WebSite: https://odesaplay.com.ua/other_apps/oko/privacy.html
 SourceCode: https://github.com/presence35/oko
 IssueTracker: https://github.com/presence35/oko/issues
 Changelog: https://github.com/presence35/oko/blob/main/CHANGELOG.md
-WebSite: https://odesaplay.com.ua/other_apps/oko/privacy.html
 
-# Both are honest disclosures rather than defects:
-#  - Tracking: the basemap fetches tiles for the viewport the user is looking at.
-#  - TetheredNet: the app is wholly dependent on neptun.in.ua and there is no
-#    self-hostable alternative.
-AntiFeatures:
-  - Tracking
-  - TetheredNet
+AutoName: Oko
 
 RepoType: git
 Repo: https://github.com/presence35/oko
@@ -34,33 +21,25 @@ Builds:
   - versionName: 0.6.828
     versionCode: 828
     commit: 650758d6d16786911f10e80909faab282c6e6f85
-    # Only the store flavor: it has no self-update path and no
-    # REQUEST_INSTALL_PACKAGES, so F-Droid owns updates.
     gradle:
       - play
-    # We ship no keystore to a builder; the APK is emitted unsigned for F-Droid to
-    # sign. Without this the build fails by design (see app/build.gradle.kts).
+    output: app/build/outputs/apk/play/release/app-play-release-unsigned.apk
     gradleprops:
       - allowUnsignedRelease
-    output: app/build/outputs/apk/play/release/app-play-release-unsigned.apk
 
-UpdateCheckMode: Tags
-UpdateCheckData: 'app/version.properties|versionCode=(\d+)|app/version.properties|versionName=(.*)'
-# Tags mode with no pattern: the tag itself is used as the build commit, so releases
-# must be tagged exactly `0.6.828` (no `v` prefix) for auto-update to find them.
+MaintainerNotes: No scanignore or scandelete entries are needed — fdroidserver only
+  flags .a/.aar/.class/.dex/.gz/.so/.zip/.jar/.wasm/.apk plus extensionless or executable
+  binaries, so the bundled .webp/.png/.mp4 assets pass. Adding an unused scanignore
+  path is itself a hard error, so do not add one speculatively. The buildserver ships
+  almost no Android SDK (only `tools`), so the first build downloads platforms;android-36
+  and build-tools 36.x for compileSdk 36. If that download fails it will be the first
+  thing in the log; the NDK is likewise absent, which should only produce an "unable
+  to strip" warning for MapLibre's .so files. The version here (0.6.828) and the matching
+  fastlane/changelogs/<versionCode>.txt must be re-pinned to whatever release is actually
+  tagged when this is submitted — the project releases often, so both drift.
+
 AutoUpdateMode: Version
+UpdateCheckMode: Tags
+UpdateCheckData: app/version.properties|versionCode=(\d+)|app/version.properties|versionName=(.*)
 CurrentVersion: 0.6.828
 CurrentVersionCode: 828
-
-MaintainerNotes: >-
-  No scanignore or scandelete entries are needed — fdroidserver only flags
-  .a/.aar/.class/.dex/.gz/.so/.zip/.jar/.wasm/.apk plus extensionless or executable
-  binaries, so the bundled .webp/.png/.mp4 assets pass. Adding an unused scanignore
-  path is itself a hard error, so do not add one speculatively.
-  The buildserver ships almost no Android SDK (only `tools`), so the first build
-  downloads platforms;android-36 and build-tools 36.x for compileSdk 36. If that
-  download fails it will be the first thing in the log; the NDK is likewise absent,
-  which should only produce an "unable to strip" warning for MapLibre's .so files.
-  The version here (0.6.828) and the matching fastlane/changelogs/<versionCode>.txt
-  must be re-pinned to whatever release is actually tagged when this is submitted —
-  the project releases often, so both drift.
