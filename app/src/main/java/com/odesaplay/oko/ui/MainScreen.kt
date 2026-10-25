@@ -137,7 +137,11 @@ private val AlertRed = Color(AppPalette.AlertRed)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel = viewModel()) {
+fun MainScreen(
+    viewModel: MainViewModel = viewModel(),
+    /** Window input focus — see [NeptunMapView]; a covered app must not start a show. */
+    windowFocused: Boolean = true
+) {
     val uiState by viewModel.uiState.collectAsState()
     val settingsState by viewModel.settingsState.collectAsState()
     val context = LocalContext.current
@@ -429,6 +433,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onReactivateMonitoring = { viewModel.reactivateMonitoring() },
             welcomeShootdown = welcomeShootdown,
             onWelcomeFinished = { viewModel.consumeWelcomeShootdown() },
+            windowFocused = windowFocused,
             onShelterTipAdvance = {
                 val next = (shelterTipStage + 1).coerceAtMost(6)
                 shelterTipStage = next
@@ -750,7 +755,10 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
     // Battery prompt: contextual, never on a timer. It appears only after the OS actually
     // killed background monitoring (the resurrection worker had to restart it), and only in a
     // calm window: map visible, welcome greeting done, no flourish, alert, sheet, or update.
-    val batteryExemptNow = { BatteryOptimization.isIgnoringBatteryOptimizations(context) }
+    val batteryExemptNow = {
+        BatteryOptimization.isIgnoringBatteryOptimizations(context) &&
+            !BatteryOptimization.isBackgroundRestricted(context)
+    }
     var batteryExempt by remember { mutableStateOf(batteryExemptNow()) }
     DisposableEffect(lifecycleOwner) {
         val batteryObserver = LifecycleEventObserver { _, event ->
@@ -774,7 +782,13 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
             onAllow = {
                 viewModel.setBatteryOnboardShown(true)
                 viewModel.clearServiceResurrected()
-                BatteryOptimization.requestExemption(context)
+                if (BatteryOptimization.isBackgroundRestricted(context)) {
+                    runCatching {
+                        context.startActivity(BatteryOptimization.appInfoIntent(context))
+                    }
+                } else {
+                    BatteryOptimization.requestExemption(context)
+                }
             },
             onLater = {
                 viewModel.setBatteryOnboardShown(true)
@@ -833,7 +847,8 @@ private fun MapScreen(
     onHeaderHeightChange: (Int) -> Unit = {},
     onReactivateMonitoring: () -> Unit = {},
     welcomeShootdown: WelcomeShootdown? = null,
-    onWelcomeFinished: () -> Unit = {}
+    onWelcomeFinished: () -> Unit = {},
+    windowFocused: Boolean = true
 ) {
     val s = remember(uiState.language) { Strings.get(uiState.language) }
     val context = LocalContext.current
@@ -1037,8 +1052,16 @@ private fun MapScreen(
             }
             if (uiState.monitorDown) {
                 MonitoringOffBanner(
-                    text = s.serviceOfflineBanner,
-                    onClick = onReactivateMonitoring,
+                    text = if (uiState.monitorRestricted) s.serviceRestrictedBanner else s.serviceOfflineBanner,
+                    onClick = {
+                        if (uiState.monitorRestricted) {
+                            runCatching {
+                                context.startActivity(BatteryOptimization.appInfoIntent(context))
+                            }
+                        } else {
+                            onReactivateMonitoring()
+                        }
+                    },
                     onHeightChange = onHeaderHeightChange
                 )
             } else {
@@ -1093,7 +1116,8 @@ private fun MapScreen(
                     modifier = Modifier.padding(end = 4.dp)
                 )
                 // A problem that needs fixing must distract: a severity-tinted warning glyph with
-                // a soft halo. Glyph-only so it needs no copy in any language, and tapping it goes
+                // a soft halo and a one-word cause underneath ("GPS", "Network", "Alerts") — the
+                // glyph alone showed that something was wrong, never what. Tapping it goes
                 // wherever the cause actually lives (out of the app for a permission).
                 val worstProblem = uiState.problems.firstOrNull()
                 if (worstProblem != null) {
@@ -1102,10 +1126,9 @@ private fun MapScreen(
                         ProblemSeverity.Critical -> Color(AppPalette.AlertRed)
                         ProblemSeverity.Warn -> Color(AppPalette.WarningOrange)
                     }
-                    Box(
+                    Column(
                         modifier = Modifier
                             .padding(end = 4.dp)
-                            .size(32.dp)
                             .pressTick(problemInteraction)
                             .clickable(
                                 interactionSource = problemInteraction,
@@ -1113,21 +1136,35 @@ private fun MapScreen(
                                 onClick = { onProblemFix(worstProblem.fix) }
                             )
                             .semantics { semanticsContentDescription = s.problemFixA11y },
-                        contentAlignment = Alignment.Center
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Box(
-                            modifier = Modifier
-                                .size(30.dp)
-                                .background(accent.copy(alpha = 0.18f), CircleShape)
-                        )
-                        // One glyph, optically centred. A second icon stacked on the first
-                        // merged with it into one unreadable silhouette; the "this is fixable,
-                        // tap it" part is the ripple plus the content description.
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = accent,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .background(accent.copy(alpha = 0.18f), CircleShape)
+                            )
+                            // One glyph, optically centred. A second icon stacked on the first
+                            // merged with it into one unreadable silhouette; the "this is fixable,
+                            // tap it" part is the ripple plus the content description.
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Text(
+                            text = problemTag(worstProblem.id, s),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 9.sp,
+                                lineHeight = 10.sp
+                            ),
+                            color = accent,
+                            maxLines = 1
                         )
                     }
                 }
@@ -1204,6 +1241,7 @@ private fun MapScreen(
                         onCancelRequestTick = cancelTick,
                         welcomeShootdown = welcomeShootdown,
                         onWelcomeFinished = onWelcomeFinished,
+                        windowFocused = windowFocused,
                         modifier = Modifier.fillMaxSize()
                     )
                     uiState.flyby?.let { show ->
@@ -1283,18 +1321,45 @@ private fun MapScreen(
                             )
                         }
                     }
-                    // OSMF allows the corner credit to be short provided the full "contributors"
-                    // form (plus OpenMapTiles and OpenFreeMap) stays reachable — it lives in the
-                    // first-launch wizard, re-armable from Settings → Reset tips.
+                    // Attribution: the basemap credit stays short (the full form lives in the
+                    // wizard), and NEPTUN — the reason this app has data — gets its own line,
+                    // one tap from the map instead of buried behind the connection pill.
                     if (!flourishActive) {
-                        Text(
-                            "© OSM",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.40f),
+                        val siteUrl = AppSources.registry.siteUrl
+                        val creditInteraction = remember { MutableInteractionSource() }
+                        Column(
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
-                                .padding(end = 12.dp, bottom = 4.dp)
-                        )
+                                .padding(end = 12.dp, bottom = 4.dp),
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            Text(
+                                "© OSM",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.40f)
+                            )
+                            Text(
+                                "NEPTUN",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.70f),
+                                modifier = Modifier
+                                    .pressTick(creditInteraction)
+                                    .clickable(
+                                        interactionSource = creditInteraction,
+                                        indication = ripple(bounded = false),
+                                        enabled = siteUrl != null,
+                                        onClick = {
+                                            siteUrl?.let { url ->
+                                                runCatching {
+                                                    context.startActivity(
+                                                        Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    )
+                            )
+                        }
                     }
                     if (!flourishActive) {
                         val shelterFocus = uiState.focusLocation
@@ -2184,6 +2249,18 @@ private fun problemLabel(id: ProblemId, s: Strings.StringSet): String = when (id
     ProblemId.AllChannelsOff -> s.problemAllChannelsOff
     ProblemId.AllTypesSilenced -> s.problemAllTypesSilenced
     ProblemId.SourceOffline -> s.problemSourceOffline
+}
+
+/**
+ * The header glyph's one-word cause: which thing is broken, when there is no room for the
+ * sentence [problemLabel] carries. Separate map on purpose — the same problem, two lengths,
+ * both exhaustive so a new degradation cannot silently ship without a tag.
+ */
+private fun problemTag(id: ProblemId, s: Strings.StringSet): String = when (id) {
+    ProblemId.NotificationsDisabled -> s.problemTagNotifications
+    ProblemId.GpsUnreliable -> s.sourceGps
+    ProblemId.AllChannelsOff, ProblemId.AllTypesSilenced -> s.problemTagAlerts
+    ProblemId.SourceOffline -> s.sourceNetwork
 }
 
 /**

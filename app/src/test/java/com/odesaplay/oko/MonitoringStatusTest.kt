@@ -58,16 +58,16 @@ class MonitoringStatusTest {
         MonitoringStatus.died(MonitoringStatus.Reason.DESTROYED, nowMonoMs = 2_000L)
 
         assertEquals(MonitoringStatus.State.StoppedByUser, MonitoringStatus.state.value)
-        assertFalse(MonitoringStatus.bannerVisible(nowMonoMs = 2_000L))
+        assertTrue(MonitoringStatus.bannerVisible(nowMonoMs = 2_000L))
         assertFalse(MonitoringStatus.needsRestart())
         assertFalse(MonitoringStatus.isServiceUp())
     }
 
     @Test
-    fun `a deliberate stop is not a banner`() {
+    fun `a deliberate stop is a banner, never an automatic restart`() {
         MonitoringStatus.stoppedByUser()
 
-        assertFalse(MonitoringStatus.bannerVisible(nowMonoMs = 0L))
+        assertTrue(MonitoringStatus.bannerVisible(nowMonoMs = 0L))
         assertFalse(MonitoringStatus.needsRestart())
     }
 

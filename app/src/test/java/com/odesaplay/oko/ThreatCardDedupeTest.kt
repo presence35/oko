@@ -99,6 +99,35 @@ class ThreatCardDedupeTest {
     }
 
     @Test
+    fun placeNamedLikeAGenericNounIsTransliteratedNotTranslated() {
+        // Затока is a town near Odesa whose name is also the noun "gulf". Translating it turned
+        // the course into "Missile — Gulf", which read as scenery and never matched the region.
+        val course = translateCourseAssessment("Ракета — Затока", AppLanguage.EN)!!
+        assertEquals("Missile — Zatoka", course)
+        assertTrue(repeatsShownInfo(course, "Cruise missile", "Cruise missile", "Zatoka"))
+    }
+
+    @Test
+    fun knownCityNameWinsOverTheGenericWordList() {
+        // Лиман (Donetsk oblast) is a city and the noun "estuary"; the fallback used to print
+        // the noun because it never consulted the city catalog.
+        assertEquals(
+            "Missile — Lyman",
+            translateCourseAssessment("Ракета — Лиман", AppLanguage.EN)!!
+        )
+    }
+
+    @Test
+    fun seaPhraseStillTranslates() {
+        // The concentration of nonsense in the whitelist: a word that can never be a
+        // settlement must keep its meaning instead of being romanized.
+        assertEquals(
+            "Missile over the sea",
+            translateCourseAssessment("Ракета над морем", AppLanguage.EN)!!
+        )
+    }
+
+    @Test
     fun areaAdvisoryTemplateRecognized() {
         assertTrue(
             isAreaAdvisory("БпЛА — Чернігівська область: попередження по області, точка невідома")

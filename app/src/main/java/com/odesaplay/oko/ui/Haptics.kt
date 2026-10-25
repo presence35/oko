@@ -10,10 +10,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -40,9 +38,9 @@ fun animationsOff(): Boolean {
 }
 
 /**
- * Plays a small haptic tick while [source] reports a press. Driven by the interaction source
- * that already powers each control's press animation (a signal proven to fire in this app) —
- * not by pointer events, which proved unreliable here.
+ * Plays a small haptic tick when [source] reports the press being *released* — the same instant
+ * the control's click fires. Ticking on press-down buzzed for taps that never became actions
+ * (finger drifted, a scroll or a parent consumed the gesture), so a buzz lied about the tap.
  *
  * The source must also be passed to the element's clickable/toggleable, so both observe it:
  * ```
@@ -60,10 +58,9 @@ fun Modifier.pressTick(source: InteractionSource): Modifier {
     val enabled = LocalHapticsEnabled.current
     if (!enabled) return this
     val appContext = LocalContext.current.applicationContext
-    val pressed by source.collectIsPressedAsState()
-    LaunchedEffect(pressed) {
-        if (pressed) {
-            tick(appContext)
+    LaunchedEffect(source) {
+        source.interactions.collect {
+            if (it is PressInteraction.Release) tick(appContext)
         }
     }
     return this
@@ -141,9 +138,9 @@ fun Modifier.hapticClickable(
 }
 
 /**
- * Interaction source that ticks on press. Pass it to any Material component with an
- * `interactionSource` param (`Switch`, `Button`, `TextButton`, `IconButton`) and keep the
- * handler raw — haptics fire from the press itself, so handlers stay pure business logic:
+ * Interaction source that ticks when a press is released. Pass it to any Material component
+ * with an `interactionSource` param (`Switch`, `Button`, `TextButton`, `IconButton`) and keep
+ * the handler raw — haptics fire from the release itself, so handlers stay pure business logic:
  * ```
  * Switch(checked = c, onCheckedChange = onChange,
  *     interactionSource = rememberHapticInteractionSource())
@@ -157,7 +154,7 @@ fun rememberHapticInteractionSource(): MutableInteractionSource {
     LaunchedEffect(interaction, enabled) {
         if (!enabled) return@LaunchedEffect
         interaction.interactions.collect {
-            if (it is PressInteraction.Press) tick(appContext)
+            if (it is PressInteraction.Release) tick(appContext)
         }
     }
     return interaction

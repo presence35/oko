@@ -77,6 +77,7 @@ data class UiState(
     val neptunDown: Boolean = false,                 // NEPTUN offline
     val degraded: Boolean = false,                   // connected but stream quiet (orange pill)
     val monitorDown: Boolean = false,                // show the "service offline" header
+    val monitorRestricted: Boolean = false,          // ...because the OS restricts its background use
     val bootRestartEnabled: Boolean = true,          // Settings: restart monitoring after reboot
     val sleepNoticeEnabled: Boolean = false,         // Settings: "Oko was asleep" notice (opt-in)
     val threatsInner: List<NormalizedThreat> = emptyList(), // reaching within the red time tier
@@ -979,6 +980,8 @@ showBorders = prefs.showBorders,
             settingsConflicts = settingsConflicts(rawPrefs, values[10] as NotificationState),
             raidMute = raidMute,
             monitorDown = MonitoringStatus.bannerVisible(nowMono),
+            monitorRestricted = MonitoringStatus.bannerVisible(nowMono) &&
+                BatteryOptimization.isBackgroundRestricted(app),
             bootRestartEnabled = bootRestartEnabled,
             sleepNoticeEnabled = sleepNoticeEnabled,
             problems = problems,
@@ -2030,7 +2033,7 @@ fun setAlertsArmed(armed: Boolean) {
 
     /** Auto-check at most once per day. [allowPopup] pops the dialog on start when no alert is active. */
     fun autoCheckForUpdates(allowPopup: Boolean) {
-        if (!BuildConfig.SELF_UPDATE) return
+        if (!BuildConfig.SELF_UPDATE || BuildConfig.DEBUG) return
         viewModelScope.launch {
             val lastCheck = svcState.lastUpdateCheck().first()
             if (System.currentTimeMillis() - lastCheck >= DAILY_CHECK_INTERVAL_MS) {
@@ -2045,7 +2048,7 @@ fun setAlertsArmed(armed: Boolean) {
      * reminder is surfaced by MainScreen as a snackbar with a Download action.
      */
     fun checkForUpdatesOnSettingsOpen() {
-        if (!BuildConfig.SELF_UPDATE) return
+        if (!BuildConfig.SELF_UPDATE || BuildConfig.DEBUG) return
         if (latestVersionFlow.value != null) {
             updateReminderFlow.value++
         } else {

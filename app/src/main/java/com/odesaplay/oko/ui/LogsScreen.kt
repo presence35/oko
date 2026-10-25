@@ -16,11 +16,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -87,13 +83,11 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.ripple
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -111,8 +105,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -120,14 +112,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
-import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import com.odesaplay.oko.AppSources
 import com.odesaplay.oko.LogUpload
 import com.odesaplay.oko.UploadState
 import com.odesaplay.oko.beta.FeedbackIconButton
+import com.odesaplay.oko.community.CompactOblastBoundaries
+import com.odesaplay.oko.hapticClickable
 import com.odesaplay.oko.source.OperationalMode
 import com.odesaplay.oko.source.SourceState
 import com.odesaplay.oko.source.SourceTestResult
@@ -238,23 +233,11 @@ fun LogsDropDownSheet(
     val registry = AppSources.registry
     val connRetry by registry.retryState.collectAsState()
     val connEvents by registry.connEvents.collectAsState()
-    val scope = rememberCoroutineScope()
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     var visibleCount by remember { mutableIntStateOf(VISIBLE_INITIAL) }
-    var filter by rememberSaveable { mutableStateOf(LogsFilter.DECISIONS) }
     val tabFilters = remember { listOf(LogsFilter.DECISIONS, LogsFilter.CONNECTIONS, LogsFilter.SOURCES, LogsFilter.DEBUG) }
-    val pagerState = rememberPagerState(pageCount = { tabFilters.size })
-    // Single truth: pager -> filter. Tab taps animate the pager; swipes flow back here.
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.currentPage }.collect {
-            val f = tabFilters[it]
-            if (f != filter) { filter = f; visibleCount = VISIBLE_INITIAL }
-        }
-    }
-    LaunchedEffect(filter) {
-        val i = tabFilters.indexOf(filter)
-        if (i != pagerState.currentPage) pagerState.scrollToPage(i)
-    }
+    // One tab at a time: no pager, so a tap composes exactly the page you asked for.
+    var selectedTab by rememberSaveable { mutableStateOf(LogsFilter.DECISIONS) }
     var scopeMode by rememberSaveable { mutableStateOf(LogScope.MINE) }
     var outcomeFilter by rememberSaveable { mutableStateOf<NotifyOutcome?>(null) }
     var mode by rememberSaveable { mutableStateOf(LogsMode.STORY) }
@@ -282,11 +265,6 @@ fun LogsDropDownSheet(
         neptunDown -> Color(AppPalette.AlertRed)
         degraded -> Color(AppPalette.DegradedOrange)
         else -> Color(AppPalette.SafeGreen)
-    }
-    val healthWord = when {
-        neptunDown -> s.connOffline
-        degraded -> s.connDegraded
-        else -> s.connOnline
     }
 
     Column(
@@ -322,62 +300,65 @@ fun LogsDropDownSheet(
                     .weight(1f)
                     .padding(start = 4.dp)
             )
-            Image(
-                painter = painterResource(R.drawable.neptun),
-                contentDescription = s.attributionText,
-                colorFilter = ColorFilter.tint(connColor),
-                modifier = Modifier.height(22.dp)
-            )
-            Spacer(Modifier.width(6.dp))
             val siteUrl = registry.siteUrl
-            Text(
-                siteUrl?.removePrefix("https://")?.removeSuffix("/") ?: "",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.clickable {
+            // Logo and address are one tap target: the attribution page is the only thing this
+            // strip can mean, so there is no reason to make the small text the sole hot zone.
+            Row(
+                modifier = Modifier.hapticClickable(enabled = siteUrl != null) {
                     siteUrl?.let { url ->
-                        context.startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse(url)
-                            )
-                        )
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        }
                     }
-                }
-            )
+                },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.neptun),
+                    contentDescription = s.attributionText,
+                    colorFilter = ColorFilter.tint(connColor),
+                    modifier = Modifier.height(22.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    siteUrl?.removePrefix("https://")?.removeSuffix("/") ?: "",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Spacer(Modifier.width(10.dp))
-            Text(
-                healthWord,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = connColor
-            )
             // Report-a-bug: here, not only on the map, so the shot captures the tab, filter and
             // rows the tester was actually reading.
             FeedbackIconButton(s = s, onClick = onReportBug, tint = Color.White)
         }
 
-        // Tabs — taps drive the pager; swipes flow back via snapshotFlow above.
+        // Tabs — a tap swaps which single page is composed.
         val tabLabels = listOf(s.logsFilterDecisions, s.logsFilterConnections, s.logsFilterSources, s.logsFilterDebug)
         ScrollableTabRow(
-            selectedTabIndex = pagerState.currentPage,
+            selectedTabIndex = tabFilters.indexOf(selectedTab),
             containerColor = Color(AppPalette.CardAlt),
             contentColor = MaterialTheme.colorScheme.primary,
             edgePadding = 0.dp
         ) {
             tabFilters.forEachIndexed { index, f ->
                 Tab(
-                    selected = pagerState.currentPage == index,
-                    onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                    selected = selectedTab == f,
+                    onClick = {
+                        if (f != selectedTab) {
+                            selectedTab = f
+                            visibleCount = VISIBLE_INITIAL
+                        }
+                    },
                     text = { Text(tabLabels[index]) },
                     interactionSource = rememberHapticInteractionSource()
                 )
             }
         }
 
-        if (filter == LogsFilter.DECISIONS) {
+        if (selectedTab == LogsFilter.DECISIONS) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -388,80 +369,42 @@ fun LogsDropDownSheet(
             }
         }
 
-        // Swipeable pages — each tab owns its rows so content follows the swipe.
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            beyondViewportPageCount = 1
-        ) { page ->
-            LogsTabPage(
-                pageFilter = tabFilters[page],
-                s = s,
-                lang = lang,
-                iconSet = iconSet,
-                window = window,
-                connEntries = connEntries,
-                gpsEntries = gpsEntries,
-                connEvents = connEvents,
-                connRetry = connRetry,
-                now = now,
-                focusToken = focusToken,
-                scopeMode = scopeMode,
-                outcomeFilter = outcomeFilter,
-                mode = mode,
-                groupMode = groupMode,
-                newestFirst = newestFirst,
-                searchQuery = searchQuery,
-                visibleCount = visibleCount,
-                onScopeChange = { scopeMode = it; visibleCount = VISIBLE_INITIAL },
-                onOutcomeFilterChange = { outcomeFilter = it; visibleCount = VISIBLE_INITIAL },
-                onModeChange = { mode = it; visibleCount = VISIBLE_INITIAL },
-                onGroupModeChange = { groupMode = it; visibleCount = VISIBLE_INITIAL },
-                onSortToggle = { newestFirst = !newestFirst },
-                onSearchChange = { searchQuery = it; visibleCount = VISIBLE_INITIAL },
-                onShowMore = { visibleCount += VISIBLE_STEP },
-                onOpenOnMap = onOpenOnMap
-            )
-        }
-        // Swipe-up drag handle to dismiss
-        val density = LocalDensity.current
-        val dismissThresholdPx = with(density) { 60.dp.toPx() }
-        var dragAccum by remember { mutableFloatStateOf(0f) }
-        val dismissInteraction = remember { MutableInteractionSource() }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .pressTick(dismissInteraction)
-                .clickable(
-                    interactionSource = dismissInteraction,
-                    indication = ripple(bounded = true),
-                    onClick = onClose
-                )
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragEnd = {
-                            if (dragAccum < -dismissThresholdPx) onClose()
-                            dragAccum = 0f
-                        },
-                        onDragCancel = { dragAccum = 0f }
-                    ) { change, dragAmount ->
-                        change.consume()
-                        dragAccum += dragAmount
-                    }
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            SheetDragHandle()
-        }
+        // Only the selected tab exists in the composition.
+        LogsTabPage(
+            pageFilter = selectedTab,
+            s = s,
+            lang = lang,
+            iconSet = iconSet,
+            window = window,
+            connEntries = connEntries,
+            gpsEntries = gpsEntries,
+            connEvents = connEvents,
+            connRetry = connRetry,
+            now = now,
+            focusToken = focusToken,
+            scopeMode = scopeMode,
+            outcomeFilter = outcomeFilter,
+            mode = mode,
+            groupMode = groupMode,
+            newestFirst = newestFirst,
+            searchQuery = searchQuery,
+            visibleCount = visibleCount,
+            onScopeChange = { scopeMode = it; visibleCount = VISIBLE_INITIAL },
+            onOutcomeFilterChange = { outcomeFilter = it; visibleCount = VISIBLE_INITIAL },
+            onModeChange = { mode = it; visibleCount = VISIBLE_INITIAL },
+            onGroupModeChange = { groupMode = it; visibleCount = VISIBLE_INITIAL },
+            onSortToggle = { newestFirst = !newestFirst },
+            onSearchChange = { searchQuery = it; visibleCount = VISIBLE_INITIAL },
+            onShowMore = { visibleCount += VISIBLE_STEP },
+            onOpenOnMap = onOpenOnMap,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
 /**
- * One swipeable Logs tab page. Each tab derives its own rows from the shared
- * log state so content follows the pager; a new tab is one [LogsFilter] value
- * plus one branch below — no sync logic to touch.
+ * One Logs tab page. Each tab derives its own rows from the shared log state; a new tab is one
+ * [LogsFilter] value plus one branch below — no sync logic to touch.
  */
 @Composable
 private fun LogsTabPage(
@@ -491,6 +434,7 @@ private fun LogsTabPage(
     onSearchChange: (String) -> Unit,
     onShowMore: () -> Unit,
     onOpenOnMap: LogTargetRequest,
+    modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
     val isDecisions = pageFilter == LogsFilter.DECISIONS
@@ -550,7 +494,7 @@ private fun LogsTabPage(
         expanded.keys.retainAll(storySessions.map { it.id }.toSet())
     }
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -1260,19 +1204,20 @@ private fun LegendRow(s: Strings.StringSet, expanded: Boolean, onToggle: () -> U
                 .fillMaxWidth()
                 .hapticClickable(onClick = onToggle)
                 .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Text(
+                s.logsLegend,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(4.dp))
             Icon(
                 imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp)
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(
-                s.logsLegend,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         AnimatedVisibility(visible = expanded) {
@@ -1280,28 +1225,44 @@ private fun LegendRow(s: Strings.StringSet, expanded: Boolean, onToggle: () -> U
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 4.dp, bottom = 4.dp),
+                horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+                ) {
                     LegendItem(Icons.Filled.LightMode, s.debugLogDay)
                     LegendItem(Icons.Filled.DarkMode, s.debugLogNight)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+                ) {
                     LegendItem(Icons.Filled.Notifications, s.debugLogSoundFollows)
                     LegendItem(Icons.AutoMirrored.Filled.VolumeUp, s.debugLogSoundOverride)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+                ) {
                     LegendItem(Icons.Filled.CheckCircle, s.debugLogShown, tint = DebugGreen)
                     LegendItem(painterResource(R.drawable.ic_notifications_off), s.logsOutcomeCovered, tint = DebugAmber)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+                ) {
                     LegendItem(
                         painterResource(R.drawable.ic_notifications_off), s.logsOutcomeNotNotified,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                     LegendItem(Icons.Filled.HourglassBottom, s.logsOutcomeInfo)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+                ) {
                     LegendItem(Icons.Outlined.History, s.debugReasonStale)
                 }
             }
@@ -2605,6 +2566,17 @@ private fun SourceCard(source: Source, state: SourceState, s: Strings.StringSet)
             onClick = {
                 scope.launch {
                     testing = true
+                    // Testing an off source has to switch it on first — otherwise the "test" can
+                    // only report that the source is off. Enabling starts it asynchronously, so
+                    // wait for the start state to settle before asking it anything.
+                    if (!enabled) {
+                        AppSources.registry.setEnabled(source, true)
+                        withTimeoutOrNull(5_000L) {
+                            source.connectionState.first {
+                                it != SourceState.DISCONNECTED && it != SourceState.CONNECTING
+                            }
+                        }
+                    }
                     testResult = source.testConnection()
                     testing = false
                 }
@@ -2632,9 +2604,11 @@ private fun SourceDataCard(
 ) {
     val threats by source.threats.collectAsState()
     val alerts by source.alerts.collectAsState()
+    val enabled by source.enabled.collectAsState()
+    // A switched-off source has no live data to show, even if it still holds its last snapshot.
+    if (!enabled) return
     val grouped = threats.groupBy { it.type }
-    val isEmpty = threats.isEmpty() && alerts.isEmpty()
-    if (isEmpty) return
+    if (threats.isEmpty() && alerts.isEmpty()) return
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -2674,7 +2648,9 @@ private fun SourceDataCard(
         }
         if (alerts.isNotEmpty()) {
             if (grouped.isNotEmpty()) Spacer(Modifier.height(2.dp))
-            val oblasts = alerts.map { it.oblast }.distinct()
+            val oblasts = alerts
+                .map { oblastTitle(CompactOblastBoundaries.canonicalId(it.oblast), lang, s) }
+                .distinct()
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Filled.Warning,

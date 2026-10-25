@@ -208,6 +208,10 @@ object Strings {
         val yellowZoneAlert: String,
         val notifOngoingTitle: String,
         val notifMonitoringCityFormat: String,
+        val sourceGps: String,
+        val sourceNetwork: String,
+        val problemTagNotifications: String,
+        val problemTagAlerts: String,
         val notifChannelName: String,
         val notifChannelDesc: String,
         val notifBodyRegion: String,
@@ -258,6 +262,11 @@ object Strings {
         val mixedTimeFormat: String,
         val noThreatsMessage: String,
         val serviceOfflineBanner: String,
+        val serviceRestrictedBanner: String,
+        // These three sit in Status, not Misc: Misc is at the JVM's 255-slot method limit.
+        val batteryRestrictedTitle: String,
+        val batteryRestrictedBody: String,
+        val batteryRestrictedButton: String,
         val sirenOverrideWarning: String,
         val bootRestartPaused: String,
         val monitoringRestartBlocked: String,
@@ -1218,6 +1227,10 @@ object Strings {
         val yellowZoneAlert: String get() = status.yellowZoneAlert
         val notifOngoingTitle: String get() = status.notifOngoingTitle
         val notifMonitoringCityFormat: String get() = status.notifMonitoringCityFormat
+        val sourceGps: String get() = status.sourceGps
+        val sourceNetwork: String get() = status.sourceNetwork
+        val problemTagNotifications: String get() = status.problemTagNotifications
+        val problemTagAlerts: String get() = status.problemTagAlerts
         val notifChannelName: String get() = status.notifChannelName
         val notifChannelDesc: String get() = status.notifChannelDesc
         val notifBodyRegion: String get() = status.notifBodyRegion
@@ -1236,6 +1249,7 @@ object Strings {
         val connOff: String get() = status.connOff
         val connOffline: String get() = status.connOffline
         val serviceOfflineBanner: String get() = status.serviceOfflineBanner
+        val serviceRestrictedBanner: String get() = status.serviceRestrictedBanner
         val sirenOverrideWarning: String get() = status.sirenOverrideWarning
         val bootRestartPaused: String get() = status.bootRestartPaused
         val monitoringRestartBlocked: String get() = status.monitoringRestartBlocked
@@ -1371,6 +1385,9 @@ object Strings {
         val batteryGranted: String get() = misc.batteryGranted
         val batteryOemTitle: String get() = misc.batteryOemTitle
         val batteryOemBody: String get() = misc.batteryOemBody
+        val batteryRestrictedTitle: String get() = status.batteryRestrictedTitle
+        val batteryRestrictedBody: String get() = status.batteryRestrictedBody
+        val batteryRestrictedButton: String get() = status.batteryRestrictedButton
         val sleepNoticeTitle: String get() = status.sleepNoticeTitle
         val sleepNoticeOffFormat: String get() = status.sleepNoticeOffFormat
         val sleepNoticeOffSummaryFormat: String get() = status.sleepNoticeOffSummaryFormat

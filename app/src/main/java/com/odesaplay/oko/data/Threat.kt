@@ -503,6 +503,10 @@ private fun slavicPluralIndex(count: Int): Int {
  * translated, not transliterated — "морем" → "morem" would be pointless. Looked up
  * whole-phrase first in the course-template slot; applied word-by-word in the fallback.
  * Lowercase keys; proper nouns must NOT be added here (they live in [Cities]).
+ *
+ * This list is a whitelist of words that can never be a settlement name: a key that is also
+ * a town would turn a place into scenery ("Ракета — Затока" read as "Missile — Gulf"), so
+ * toponym-shaped generics (затока, лиман, берег, острів) stay out and transliterate instead.
  */
 private val COMMON_WORDS: Map<String, String> = mapOf(
     "чорне море" to "Black Sea",
@@ -525,9 +529,6 @@ private val COMMON_WORDS: Map<String, String> = mapOf(
     "морі" to "the sea",
     "моря" to "the sea",
     "море" to "the sea",
-    "берег" to "the coast",
-    "берега" to "the coast",
-    "берегом" to "the coast",
     "узбережжя" to "the coast",
     "узбережжі" to "the coast",
     "кордон" to "the border",
@@ -542,14 +543,6 @@ private val COMMON_WORDS: Map<String, String> = mapOf(
     "водосховище" to "reservoir",
     "водосховища" to "reservoir",
     "водосховищем" to "reservoir",
-    "лиман" to "estuary",
-    "лиману" to "estuary",
-    "лиманом" to "estuary",
-    "затока" to "gulf",
-    "затоки" to "gulf",
-    "затокою" to "gulf",
-    "острів" to "island",
-    "острова" to "island",
     "село" to "a village",
     "села" to "a village",
     "селом" to "a village",
@@ -626,6 +619,27 @@ private fun translateCommonWords(raw: String): String? {
     return out.takeIf { it != raw }
 }
 
+/**
+ * Curated UA spelling → EN name, lowercased, for [CITY_NAME_PATTERN]. Case-insensitive on
+ * purpose: NEPTUN capitalises names, but a lowercased name must still not reach the glossary.
+ */
+private val CITY_NAMES: Map<String, String> =
+    Cities.uaToEn.entries.associate { it.key.lowercase() to it.value }
+
+/** One alternation over every name in [Cities], longest first so "Біла Церква" wins over a
+ *  shorter name it contains. Letter boundaries keep a name from matching inside a word. */
+private val CITY_NAME_PATTERN: Regex = Regex(
+    "(?<![\\p{L}])(?:" +
+        CITY_NAMES.keys.sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) } +
+        ")(?![\\p{L}])",
+    RegexOption.IGNORE_CASE
+)
+
+/** Curated EN names beat both the generic-word list ("Лиман" is a town, not "estuary") and the
+ *  transliterator, which knows no spelling but its own. */
+private fun replaceCityNames(raw: String): String =
+    CITY_NAME_PATTERN.replace(raw) { CITY_NAMES[it.value.lowercase()] ?: it.value }
+
 private fun courseFallback(raw: String): String {
-    return Transliteration.transliterate(replaceKnownWords(raw))
+    return Transliteration.transliterate(replaceKnownWords(replaceCityNames(raw)))
 }

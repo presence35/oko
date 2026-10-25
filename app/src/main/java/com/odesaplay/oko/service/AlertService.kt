@@ -268,6 +268,7 @@ class AlertService : Service() {
             AlertWakeup.cancel(appContext)
             AlertWatchdog.cancel(appContext)
             EmergencyResurrectionWorker.cancel(appContext)
+            AlertNotificationManager(appContext).cancelNotification(NOTIF_MONITOR)
             AlertNotificationManager(appContext).cancelNotification(NOTIF_MONITORING_PAUSED)
             // A stop the user asked for is not the kill the battery card warns about.
             runCatching { UserPrefs(appContext).setServiceResurrected(false) }
@@ -284,12 +285,11 @@ class AlertService : Service() {
      *  restore runs before the tick loop is launched in the same coroutine). */
     private val monitoringReady = CompletableDeferred<Unit>()
     internal suspend fun awaitMonitoringReady() = monitoringReady.await()
-    /** True once the FGS was (re)started with the location type. Left false when a background
-     *  start had to fall back (no location exemption), so the next foreground start re-promotes. */
-    private var locationFgsActive = false
     /** True once a foreground notification was actually accepted by the platform - the fact
      *  [MonitoringStatus.running] is allowed to depend on. */
     private var foregroundPromoted = false
+    /** The type the platform accepted, reused by every later update (see [promote]). */
+    private var promotedType = 0
     private var lastShownId: String? = null
     /** Frequency policy: the service feeds it per-tick facts and executes verdicts. */
     private val notifyPlugin = NotifyPlugin()
@@ -661,9 +661,6 @@ class AlertService : Service() {
         // Action-log copy is language-neutral on purpose: an audit row outlives the session and
         // is re-read after a language change, so a localized label would go stale in place.
         val s0 = Strings.get(AppLanguage.EN)
-        // A background start (package-replaced/boot) may have had to drop the location type;
-        // once we're started again in the foreground, re-promote so background fixes resume.
-        if (!locationFgsActive) startForegroundCompat()
         when (intent?.action) {
             ACTION_RETRY -> {
                 // Visible effect first: dismiss the rows even if the reconnect below takes a
@@ -748,34 +745,66 @@ class AlertService : Service() {
     private fun startForegroundCompat() {
         val s = Strings.get(AppLanguage.EN)
         val notif = notificationManager.buildMonitorNotification(s.notifOngoingTitle, "")
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            startForeground(NOTIF_MONITOR, notif)
-            locationFgsActive = true
-            return
-        }
-        val baseType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-        } else {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-        }
-        // API 34+ rejects the location type when the start lacks the exemption (e.g. an
-        // ACTION_MY_PACKAGE_REPLACED background start) or the runtime permission. Try it, then
-        // fall back to the base type so monitoring survives; onStartCommand re-promotes later.
-        val wantLocation = hasLocationPermission()
-        if (wantLocation && startForegroundTyped(baseType or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION, notif)) {
-            locationFgsActive = true
-            return
-        }
-        if (startForegroundTyped(baseType, notif)) {
-            locationFgsActive = false
-            return
-        }
+        if (promote(notif)) return
         // Even the base type was refused - surface the dead state like startResilient intends.
         MonitoringStatus.died(MonitoringStatus.Reason.START_REFUSED)
         MonitorLifecycle.recordNow(this, MonitorEvent.Kind.STOP_OS, "start-refused")
         AlertNotificationManager(applicationContext).postRestartBlocked()
         stopSelf()
     }
+
+    /** Post the monitor row. A refused update never becomes a plain post once promoted: that
+     *  would detach the row from the service and get the service stopped for idleness. */
+    private fun postMonitor(notif: android.app.Notification) {
+        if (promote(notif)) return
+        if (!foregroundPromoted) notificationManager.safeNotify(NOTIF_MONITOR, notif)
+    }
+
+    /**
+     * The one writer of the monitor row, and therefore of the FGS notification. Posting that row
+     * with `notify()` while the service owns the same id detaches it from the service - the
+     * platform logs STOP_FOREGROUND, Oko leaves "Active apps", and minutes later the OS stops it
+     * for idleness - so an update IS a re-promotion, never a plain post.
+     *
+     * The type is decided once, on the first promotion, and reused forever after: re-deciding it
+     * mid-run could drop LOCATION, which is what keeps background location legal.
+     */
+    private fun promote(notif: android.app.Notification): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            startForeground(NOTIF_MONITOR, notif)
+            foregroundPromoted = true
+            return true
+        }
+        if (foregroundPromoted) {
+            if (startForegroundTyped(promotedType, notif)) return true
+            // The permission behind the accepted type can be revoked mid-run: fall back once and
+            // remember it, or the row would freeze on its last text.
+            if (!startForegroundTyped(baseFgsType, notif)) return false
+            promotedType = baseFgsType
+            return true
+        }
+        // API 34+ rejects the location type when the start lacks the exemption (e.g. an
+        // ACTION_MY_PACKAGE_REPLACED background start) or the runtime permission. Try it, then
+        // fall back to the base type so monitoring survives.
+        val type = if (hasLocationPermission() &&
+            startForegroundTyped(baseFgsType or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION, notif)
+        ) {
+            baseFgsType or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        } else if (startForegroundTyped(baseFgsType, notif)) {
+            baseFgsType
+        } else {
+            return false
+        }
+        promotedType = type
+        return true
+    }
+
+    private val baseFgsType: Int
+        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        } else {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        }
 
     /** Attempts [ServiceCompat.startForeground]; returns false when the platform refuses the
      *  start. A background start denies the location type via [SecurityException], and denies
@@ -803,7 +832,7 @@ class AlertService : Service() {
         val svcState = ServiceState(applicationContext)
         LocationTracker.start(applicationContext)
 
-        if (BuildConfig.SELF_UPDATE) {
+        if (BuildConfig.SELF_UPDATE && !BuildConfig.DEBUG) {
             scope.launch {
                 dailyUpdateCheckLoop()
             }
@@ -1205,7 +1234,9 @@ val mappedThreats = registry.allThreats.map { list ->
         val monitorTitle = when {
             isOfflineNow -> s.offlineStatusTitle
             state.focusPinned -> String.format(s.notifMonitoringCityFormat, state.focusBannerCity)
-            else -> s.notifOngoingTitle
+            else -> LocationTracker.lastFixSource.value
+                ?.let { String.format(s.notifMonitoringCityFormat, it.label(s)) }
+                ?: s.notifOngoingTitle
         }
 
         val monitorText = when {
@@ -1886,8 +1917,7 @@ val mappedThreats = registry.allThreats.map { list ->
         lastMonitorProgressNow = progressNow
         lastMonitorIgnore = ignoreLabel
         lastMonitorAlertLevel = alertLevel
-        notificationManager.safeNotify(
-            NOTIF_MONITOR,
+        postMonitor(
             notificationManager.buildMonitorNotification(title, text, retryLabel, progressMax, progressNow, ignoreLabel, alertLevel)
         )
     }
@@ -1933,8 +1963,7 @@ val mappedThreats = registry.allThreats.map { list ->
         lastMonitorProgressNow = null
         lastMonitorIgnore = null
         lastMonitorAlertLevel = AlertLevel.NONE
-        notificationManager.safeNotify(
-            NOTIF_MONITOR,
+        postMonitor(
             notificationManager.buildMonitorNotification(
                 title = title,
                 text = s.offlineReconnectAck,
@@ -2304,6 +2333,9 @@ private fun nextUpdateCheckMillis(from: Long): Long {
         if (before !is MonitoringStatus.State.StoppedByUser && before !is MonitoringStatus.State.Dead) {
             MonitorLifecycle.recordNow(this, MonitorEvent.Kind.STOP_OS)
         }
+        // The row is the service's own; a stop must not leave "Monitoring GPS" (or any other
+        // copy of it) pretending the monitor is still there.
+        notificationManager.cancelNotification(NOTIF_MONITOR)
         // The mute is deliberately NOT reset here: a destroy is not a mute clear, and the OS
         // recycles a foreground service freely. A timed mute lives in ServiceState (see
         // [restoreRaidMute]) precisely so the next instance keeps honouring it. The UI mirror is

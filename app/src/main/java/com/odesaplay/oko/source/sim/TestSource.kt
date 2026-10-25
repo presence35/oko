@@ -110,6 +110,7 @@ class TestSource : Source {
             scriptJob = null
             cancelAllMovers()
             _threats.value = emptyList()
+            _alerts.value = emptyList()
             _connectionState.value = SourceState.DISCONNECTED
             _operationalMode.value = OperationalMode.STANDBY
         }

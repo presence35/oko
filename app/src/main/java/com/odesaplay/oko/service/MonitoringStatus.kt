@@ -108,11 +108,12 @@ object MonitoringStatus {
         State.Unknown, State.StoppedByUser, is State.Dead -> false
     }
 
-    /** The full-header "service offline" banner: known dead, or a start that never landed. */
+    /** The full-header "service offline" banner: known dead, a start that never landed, or a
+     *  stop the user asked for while the app is still open — the one place a restart lives. */
     fun bannerVisible(nowMonoMs: Long = Monotonic.now()): Boolean = when (val current = _state.value) {
-        is State.Dead -> true
+        is State.Dead, State.StoppedByUser -> true
         is State.Starting -> nowMonoMs - current.atMs > START_GRACE_MS
-        State.Unknown, State.StoppedByUser, is State.Running -> false
+        State.Unknown, is State.Running -> false
     }
 
     /**

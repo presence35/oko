@@ -1,5 +1,6 @@
 package com.odesaplay.oko
 
+import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -26,6 +27,26 @@ object BatteryOptimization {
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         return pm.isIgnoringBatteryOptimizations(context.packageName)
     }
+
+    /**
+     * True when the app's battery usage is *Restricted* — a state the Doze whitelist above does
+     * not describe. A restricted app has every foreground service stopped by the system the
+     * moment it leaves the screen (`ActiveServices.BackgroundRestrictedListener`), so monitoring
+     * dies minutes after each start no matter how it was promoted. Only this check tells the
+     * user which switch actually matters.
+     */
+    fun isBackgroundRestricted(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        return am?.isBackgroundRestricted == true
+    }
+
+    /** App info, the page one step above the Battery usage switch that clears a restriction. */
+    fun appInfoIntent(context: Context): Intent =
+        Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null)
+        )
 
     /**
      * Detects the device manufacturer and returns battery-restriction info.

@@ -84,6 +84,14 @@ object LocationTracker {
     val lastAccuracyM: StateFlow<Float?> = _lastAccuracyM.asStateFlow()
 
     /**
+     * Which provider produced the last fix. Read as the provenance label ("GPS" / "Network"),
+     * never as a quality signal — [lastPreciseFixAtMs] answers that, and the two disagree by
+     * design: a network fix can be accurate, and a GPS fix can be old.
+     */
+    private val _lastFixSource = MutableStateFlow<FixSource?>(null)
+    val lastFixSource: StateFlow<FixSource?> = _lastFixSource.asStateFlow()
+
+    /**
      * Location access is definitively unusable: permission revoked, or every provider disabled.
      * Read directly from the platform (never inferred from silence) — this is the only failure
      * mode the user is actually expected to act on. A stale fix is NOT this; see [GpsIssue].
@@ -429,6 +437,8 @@ object LocationTracker {
         _lastFixAtMs.value = fixTime
         _lastReceivedAtMs.value = now
         if (loc.hasAccuracy()) _lastAccuracyM.value = loc.accuracy
+        _lastFixSource.value =
+            if (loc.provider == LocationManager.GPS_PROVIDER) FixSource.GPS else FixSource.NETWORK
         val isGps = loc.provider == LocationManager.GPS_PROVIDER || (loc.hasAccuracy() && loc.accuracy < 35f)
         if (isGps) {
             _lastPreciseFixAtMs.value = fixTime
@@ -484,4 +494,14 @@ object LocationTracker {
             else -> net
         }
     }
+}
+
+/** Provenance of a fix, as the user cares about it: satellite or network-assisted. */
+enum class FixSource { GPS, NETWORK }
+
+/** The one place a [FixSource] becomes words — the notification title and the header caption
+ *  both read this, so they can never name the same fix differently. */
+fun FixSource.label(s: Strings.StringSet): String = when (this) {
+    FixSource.GPS -> s.sourceGps
+    FixSource.NETWORK -> s.sourceNetwork
 }

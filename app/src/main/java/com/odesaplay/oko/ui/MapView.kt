@@ -418,6 +418,9 @@ fun NeptunMapView(
     onCenterHandled: () -> Unit = {},
     paused: Boolean = false,
     mapVisible: Boolean = true,
+    /** Window input focus. The activity is already STARTED while the notification shade is
+     *  still collapsing over it — starting a show then plays the first bullet unseen. */
+    windowFocused: Boolean = true,
     shelterZoomTick: Int = 0,
     shelterSelectTick: Int = 0,
     onNeutralize: (String) -> Unit = {},
@@ -477,6 +480,7 @@ fun NeptunMapView(
 
     val pausedState by rememberUpdatedState(paused)
     val mapVisibleState by rememberUpdatedState(mapVisible)
+    val windowFocusedState by rememberUpdatedState(windowFocused)
     val alertActiveState by rememberUpdatedState(uiState.alertActive)
     val showNearbySheltersState by rememberUpdatedState(showNearbyShelters)
     val shelterSnapshot = remember { mutableStateOf<List<NearestShelter>>(emptyList()) }
@@ -802,6 +806,7 @@ LaunchedEffect(selectedId) {
     val flourishShow = uiState.flourish
     if (flourishShow != null && flourishShow.tick != lastFlourishTick.value) {
         val playable = bridgeState.value != null && (flourishRetryTick.value >= 0) &&
+            windowFocusedState &&
             mapIsUserFocus(pausedState, mapVisibleState, showNearbySheltersState, lifecycle.currentState)
         if (playable) {
             lastFlourishTick.value = flourishShow.tick
@@ -820,6 +825,7 @@ LaunchedEffect(selectedId) {
     val welcomeShow = welcomeShootdown
     if (welcomeShow != null && welcomeShow.tick != lastWelcomeTick.value) {
         val playable = bridgeState.value != null && (flourishRetryTick.value >= 0) &&
+            windowFocusedState &&
             mapIsUserFocus(pausedState, mapVisibleState, showNearbySheltersState, lifecycle.currentState)
         if (playable) {
             lastWelcomeTick.value = welcomeShow.tick

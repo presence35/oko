@@ -10,6 +10,16 @@
 
 Без акаунта. Без трекера. Без нашого хмару. Лише картина загрози — просто з першоджерела, на мапі, яка лишається читабельною тоді, коли це найважливіше.
 
+<p align="center">
+  <img src="fastlane/metadata/android/uk/images/phoneScreenshots/1.png" width="200" alt="Жива мапа загроз">
+  <img src="fastlane/metadata/android/uk/images/phoneScreenshots/2.png" width="200" alt="Картка загрози: відстань і час">
+  <img src="fastlane/metadata/android/uk/images/phoneScreenshots/3.png" width="200" alt="Денні зони тривоги">
+  <br>
+  <img src="fastlane/metadata/android/uk/images/phoneScreenshots/4.png" width="200" alt="Нічні зони окремо від денних">
+  <img src="fastlane/metadata/android/uk/images/phoneScreenshots/5.png" width="200" alt="Найближчі укриття з часом пішки">
+  <img src="fastlane/metadata/android/uk/images/phoneScreenshots/6.png" width="200" alt="Зони під тривогою по всій країні">
+</p>
+
 ### Що ти отримуєш
 
 - 🗺️ **Жива мапа неба** — ворожі цілі надходять потоком і рухаються мапою в реальному часі.
@@ -68,6 +78,16 @@ GNU General Public License v3.0 only — див. [`LICENSE`](LICENSE). Флей�
 **A live air-threat map for Ukraine — see what's inbound, where it's heading, and when to take cover.**
 
 No account. No tracker. No cloud of ours. Just the threat picture, straight from the source, on a map that stays readable when it matters most.
+
+<p align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="200" alt="Live threat map">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="200" alt="Threat card: distance and ETA">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" width="200" alt="Day alert zones">
+  <br>
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" width="200" alt="Night zones, separate from day">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" width="200" alt="Nearest shelters with walking time">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" width="200" alt="Alerted areas across the country">
+</p>
 
 ### What you get
 

@@ -626,12 +626,11 @@ private fun WizardBullet(s: Strings.StringSet, text: String, accent: Color) {
     WizardBulletRow(claimThenDetail(s, text), accent, gearInlineContent(s))
 }
 
-/** The bug-report bullet. Its instruction ends with the REAL NEPTUN mark and the source's own
- *  state word drawn inside the sentence — the reader is told to tap a picture of the header pill,
- *  not a description of it, so they recognise it the moment they see the header. */
+/** The bug-report bullet. Its instruction ends with the source's own state word drawn inside the
+ *  sentence — the header pill is word-only now, so the reader looks for that word rather than a
+ *  description of it. */
 @Composable
 private fun WizardBugBullet(s: Strings.StringSet, markColor: Color, markLabel: String) {
-    val glyphId = "neptun"
     val head = s.wizardAlphaBugs.substringBefore(" — ")
     val lead = s.wizardAlphaBugs.substringAfter(" — ", "")
     WizardBulletRow(
@@ -643,26 +642,14 @@ private fun WizardBugBullet(s: Strings.StringSet, markColor: Color, markLabel: S
                 append(" — ")
                 append(lead)
                 append(' ')
-                appendInlineContent(glyphId, "[neptun]")
-                append(' ')
-                withStyle(SpanStyle(color = markColor)) { append(markLabel) }
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = markColor)) {
+                    append(markLabel)
+                }
                 append(' ')
                 append(s.wizardAlphaBugsTail)
             }
         },
-        accent = _ukraineYellow,
-        inlineContent = mapOf(
-            glyphId to InlineTextContent(
-                Placeholder(16.sp, 16.sp, PlaceholderVerticalAlign.TextCenter)
-            ) {
-                // Named for TalkBack: a screen reader cannot see the mark this sentence asks for.
-                Icon(
-                    painter = painterResource(R.drawable.neptun),
-                    contentDescription = s.wizardSourceChannel,
-                    tint = markColor
-                )
-            }
-        )
+        accent = _ukraineYellow
     )
 }
 

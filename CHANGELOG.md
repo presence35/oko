@@ -1,11 +1,24 @@
 # Changelog
 
 ## [Unreleased]
+- The monitor row now names the actual fix source ("GPS" / "Network") instead of always claiming GPS, and the header's warning glyph carries a one-word cause under it 10-25_15:22:49
+- Monitoring no longer dies minutes after every start: the ongoing row is updated through the foreground service instead of a plain post that detached it, so Oko stays in Active apps, and "Stop & exit" now shows the red header again instead of leaving no way back 10-23_17:19:46
+- Tapping a shot-down notification no longer starts the bullet while the shade is still collapsing: the show waits for window focus, so it begins on a screen you can actually see 10-23_14:53:04
 - Returning to Oko re-arms monitoring when the OS had killed it; the service-offline header now waits for the service to confirm it is up instead of being a guess 10-23_14:08:30
 - Stop & exit stays stopped on the next resume, and the battery card no longer blames the OS for a stop you chose 10-23_14:08:30
 - The log bundle records every monitor start, user stop, OS kill and refused revive, so hours of silence can be told apart from a kill 10-23_14:08:30
 - The offline row no longer claims "DNS blocked — switch network": one failed lookup is not proof, so it says only "server unreachable, N min" and the cause stays in the connection log 10-23_15:40:00
 - Updated the home-screen widget library to 1.1.1, clearing the Play Console protobuf (CVE-2024-7254) SDK warning 10-23_13:09:23
+- Threat cards no longer misread a town as scenery ("Missile — Gulf" for Zatoka, "Estuary" for Lyman), and the course line sits under the title instead of hanging beside the icon 10-23_11:30:12
+- Logs tabs switch instantly and the bottom drag handle is gone — the back arrow is the only way out 10-23_14:38:43
+- Logs no longer keeps a pager alive: one tab exists at a time, so switching tabs is a plain swap with no swipe machinery 10-23_15:12:07
+- The NEPTUN logo and neptun.in.ua in the Logs header are one tap target that opens the attribution page, and a missing browser can no longer swallow the tap 10-23_14:52:16
+- Haptics now tick when the press is released, the moment the tap actually lands, so a buzz no longer fires for taps that were cancelled by a scroll or a drag 10-23_14:52:16
+- NEPTUN credit now has its own tappable line in the map's bottom-right corner, so the source is one tap away instead of buried behind the Logs pill 10-23_15:16:07
+- The map's connection pill is word-only and the NEPTUN address in the Logs header is larger, so the header no longer shows the same mark twice 10-23_15:16:07
+- The welcome wizard's bug-report line no longer shows a NEPTUN mark: it points at the pill's state word, which is all the header shows now 10-23_15:20:58
+- Testing a switched-off source now turns it on and waits for it to connect before reporting, instead of telling you to enable it on the tab you are on 10-23_14:38:43
+- The Sources tab hides live data the moment a source is switched off, and its oblast names follow the app language instead of the raw feed text 10-23_14:38:43
 
 ## [0.6.828]
 - The bug-report button now shows on every screen (map, Settings, Logs, Shelters, Guide) and no longer hides during the shootdown show; Settings > System > Feedback button turns it off 10-16_16:20:00

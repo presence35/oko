@@ -539,25 +539,27 @@ fun ThreatPopupCard(
                                         modifier = Modifier.weight(1f, fill = false)
                                     )
                                 }
+
+                                // NEPTUN's course assessment, e.g. "Drone heading toward Chornomorsk".
+                                // Inside the header column so every text line shares one left edge —
+                                // drawn in the outer column it hung under the icon like an escaped wrap.
+                                visibleCourse?.let {
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(it, style = MaterialTheme.typography.bodyLarge, color = Color(AppPalette.TextDetail))
+                                }
+
+                                // Inbound track: the source names the destination. It is a caption, not a headline —
+                                // the numbers below it are the real position, and the previous bodyLarge amber
+                                // line out-shouted the distance it sat next to.
+                                approachingCity?.let { city ->
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        String.format(s.approachingFormat, city),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = AdvisoryAmber.copy(alpha = 0.85f)
+                                    )
+                                }
                             }
-                        }
-
-                        // NEPTUN's course assessment, e.g. "Drone heading toward Chornomorsk"
-                        visibleCourse?.let {
-                            Text(it, style = MaterialTheme.typography.bodyLarge, color = Color(AppPalette.TextDetail))
-                            Spacer(Modifier.height(4.dp))
-                        }
-
-                        // Inbound track: the source names the destination. It is a caption, not a headline — the
-                        // numbers below it are the real position, and the previous bodyLarge amber
-                        // line out-shouted the distance it sat next to.
-                        approachingCity?.let { city ->
-                            Text(
-                                String.format(s.approachingFormat, city),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = AdvisoryAmber.copy(alpha = 0.85f)
-                            )
-                            Spacer(Modifier.height(4.dp))
                         }
 
                         // Distance + ETA + speed; absent without a user fix (SummaryPills

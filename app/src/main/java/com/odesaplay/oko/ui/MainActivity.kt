@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -99,7 +100,7 @@ class MainActivity : ComponentActivity() {
                             .windowInsetsPadding(WindowInsets.systemBars),
                         color = MaterialTheme.colorScheme.background
                     ) {
-                        MainScreen()
+                        MainScreen(windowFocused = windowFocused.value)
                     }
                 }
             }
@@ -114,6 +115,16 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         handleReveal(intent)
         handleFlourish(intent)
+    }
+
+    /** True only while this window owns input focus. A notification tap resumes the activity
+     *  while the shade is still collapsing over it, so focus is the one signal that says the
+     *  map is actually on screen — the shot-down replay holds its first bullet until then. */
+    private val windowFocused = mutableStateOf(false)
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        windowFocused.value = hasFocus
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -213,6 +224,15 @@ class MainActivity : ComponentActivity() {
         // exemption is gone it is the only one the platform still allows - the alarm and the
         // 15-minute workers are refused in the background. The splash gate keeps a cold launch
         // on its original ordering (prefs first, then the binder call).
+    }
+
+    /**
+     * Re-arm on resume, never on start: the platform still counts a started-but-not-resumed
+     * activity as background, and Android 16 answers such a start with "Background started FGS:
+     * Disallowed" and a denied service - the exact state the red header reports.
+     */
+    override fun onResume() {
+        super.onResume()
         if (splashReady) ensureMonitoring()
     }
 

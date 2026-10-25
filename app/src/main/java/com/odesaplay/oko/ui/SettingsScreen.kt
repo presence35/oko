@@ -1580,8 +1580,12 @@ private fun BatteryExemptionBlock(
     flash: Boolean,
     onAllow: () -> Unit
 ) {
+    val context = LocalContext.current
+    // A Doze whitelist does not clear the *Restricted* app battery state - and only that state
+    // stops the monitor the moment the screen locks, so a granted checkmark would be a lie.
+    val restricted = BatteryOptimization.isBackgroundRestricted(context)
     Column(modifier = Modifier.padding(16.dp).explainerFlash(flash)) {
-        if (granted) {
+        if (granted && !restricted) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     painter = painterResource(R.drawable.ic_check),
@@ -1596,23 +1600,42 @@ private fun BatteryExemptionBlock(
             Text(s.batteryBody, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             Text(
-                if (oemInfo.isAggressive) s.batteryOemTitle else s.batteryTitle,
+                when {
+                    restricted -> s.batteryRestrictedTitle
+                    oemInfo.isAggressive -> s.batteryOemTitle
+                    else -> s.batteryTitle
+                },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                if (oemInfo.isAggressive) s.batteryOemBody else s.batteryBody,
+                when {
+                    restricted -> s.batteryRestrictedBody
+                    oemInfo.isAggressive -> s.batteryOemBody
+                    else -> s.batteryBody
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(12.dp))
             Button(
-                onClick = onAllow,
+                onClick = {
+                    if (restricted) {
+                        runCatching {
+                            context.startActivity(BatteryOptimization.appInfoIntent(context))
+                        }
+                    } else {
+                        onAllow()
+                    }
+                },
                 interactionSource = rememberHapticInteractionSource(),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(s.batteryAllowButton, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (restricted) s.batteryRestrictedButton else s.batteryAllowButton,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
     }

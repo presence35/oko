@@ -1,15 +1,11 @@
 package com.odesaplay.oko
 import com.odesaplay.oko.theme.AppPalette
 
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -20,13 +16,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 
 /** The pill's one reading of how the source is doing — three tiers, three words. Anything that
@@ -74,14 +67,6 @@ internal fun ConnectionStatus(
             },
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Image(
-            painter = painterResource(R.drawable.neptun),
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
-            colorFilter = ColorFilter.tint(connColor),
-            modifier = Modifier.size(width = 14.dp, height = 14.dp)
-        )
-        Spacer(Modifier.width(6.dp))
         Text(
             text = label,
             color = connColor,
