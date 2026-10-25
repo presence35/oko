@@ -221,7 +221,7 @@ private fun bakeSheet(frame: Int, mid: Int, hot: Int): Bitmap? = runCatching {
     val paint = Paint().apply { isAntiAlias = true }
     val add = PorterDuffXfermode(PorterDuff.Mode.ADD)
     val half = frame / 2f
-    val smoke = intArrayOf(48, 46, 44)
+    val smoke = SmokePuff()
 
     for (f in 0 until ELITE_FRAMES) {
         val t = f / (ELITE_FRAMES - 1f)
@@ -264,17 +264,22 @@ private fun bakeSheet(frame: Int, mid: Int, hot: Int): Bitmap? = runCatching {
         paint.style = Paint.Style.FILL
         paint.xfermode = null
 
-        // Smoke skirt on the back half only, rising as the fireball dies.
+        // Smoke skirt on the back half only, rising as the fireball dies. Same baked billows the
+        // live styles draw, baked into the sheet here so Film keeps costing one drawBitmap a death.
         if (t > 0.3f) {
             val st = (t - 0.3f) / 0.7f
-            paint.color = Color.argb((70 * (1f - st)).toInt().coerceIn(0, 90), smoke[0], smoke[1], smoke[2])
+            val alpha = (150 * (1f - st)).toInt().coerceIn(0, 190)
             repeat(5) { p ->
                 val a = p * (ELITE_TAU / 5f) + 0.7f
-                c.drawCircle(
+                // Keyed on the puff, not the frame: a billow must keep its shape as it climbs,
+                // otherwise the sheet shimmers.
+                smoke.draw(
+                    c,
                     cx + cos(a) * fireR * (0.5f + 0.6f * st),
                     cy + sin(a) * fireR * (0.5f + 0.6f * st) - fireR * 0.7f * st,
                     fireR * (0.34f + 0.3f * st),
-                    paint
+                    alpha,
+                    0x51DE + p * 0x9E37
                 )
             }
         }
