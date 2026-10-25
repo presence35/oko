@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Explosion smoke is billows now, not circles: each puff is baked from domain-warped noise so its outline breaks up and dissolves instead of ending on a rim, and the bank swirls as the blast ages 10-25_22:56:43
 - Settings → Alerts opens with seven ready-made setups (grandma, parent, frontline, teen, abroad, at work, on the road): one tap sets this page, the "i" explains each, and a "Mine" cell puts your own setup back — also on Reliability 10-25_23:12:41
 - The wizard's step bar now sits above the buttons with a "3 / 7" counter, so the page you are on is readable instead of a 3dp sliver on the Next button 10-25_21:30:34
 - A small pill under the header names what the warning glyph is about (GPS, Network, Alerts), and a dead connection now shows there too 10-25_15:22:49

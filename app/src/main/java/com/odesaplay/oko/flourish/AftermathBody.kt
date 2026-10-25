@@ -47,7 +47,7 @@ class AftermathBody : ExplosionBody, ExplosionWarmer {
         isAntiAlias = true
         xfermode = PorterDuffXfermode(PorterDuff.Mode.ADD)
     }
-    private val smokePaint = Paint().apply { isAntiAlias = true }
+    private val smoke = SmokePuff()
     private val debrisPath = Path()
 
     private val puff = ElitePuff(sizeDp = 128)
@@ -65,6 +65,7 @@ class AftermathBody : ExplosionBody, ExplosionWarmer {
 
     override fun warmUp() {
         shader
+        smoke.warm()
     }
 
     private var debris: FloatArray? = null
@@ -226,7 +227,6 @@ class AftermathBody : ExplosionBody, ExplosionWarmer {
         // still there when the fireball is gone — that is what makes it aftermath and not smoke.
         val tail = 1f - (e - COLUMN_START) * 0.42f
         if (tail <= 0.02f) return
-        smokePaint.color = Color.rgb(58, 55, 52)
         val arr = column ?: buildColumn(death).also { column = it }
         val rise = maxR * 1.35f
         var i = 0
@@ -250,11 +250,10 @@ class AftermathBody : ExplosionBody, ExplosionWarmer {
                 val puffR = maxR * (0.06f + 0.5f * climb) * size
                 // Dilutes with volume: opacity follows the radius it grew from.
                 val growth = (puffR / (maxR * 0.3f)).coerceIn(0f, 1f)
-                val alpha = (105 * growth * tail).toInt().coerceIn(0, 120)
-                if (alpha > 2 && puffR > 1f) {
-                    smokePaint.alpha = alpha
-                    canvas.drawCircle(puffX, puffY, puffR, smokePaint)
-                }
+                // The sprite peaks at full alpha in its core and falls away, so it needs more than
+                // the flat fill it replaced to read as the same weight of smoke.
+                val alpha = (210 * growth * tail).toInt().coerceIn(0, 235)
+                smoke.draw(canvas, puffX, puffY, puffR, alpha, death.seed + i * 0x9E37)
             }
             i += 3
         }

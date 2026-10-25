@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" width="1280" height="420" role="img" aria-label="Oko — live air-threat map for Ukraine">
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="0.6">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="0.55" stop-color="#a5e4f5"/>
+      <stop offset="1" stop-color="#4cc2e8"/>
+    </linearGradient>
+    <linearGradient id="tridentGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0057b7"/>
+      <stop offset="0.5" stop-color="#ffd700"/>
+      <stop offset="1" stop-color="#0057b7"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#4cc2e8" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#4cc2e8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bg" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#0c0f11"/>
+      <stop offset="1" stop-color="#050505"/>
+    </linearGradient>
+    <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4cc2e8" stop-opacity="0"/>
+      <stop offset="1" stop-color="#4cc2e8" stop-opacity="0.16"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4cc2e8" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#4cc2e8" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#4cc2e8" stop-opacity="0"/>
+    </linearGradient>
+
+    <g id="tryzub" transform="translate(-37.2,-25.9)">
+      <g transform="translate(30.9,22.5) scale(0.28)">
+        <g transform="translate(82.5,0)" fill="url(#tridentGrad)">
+          <path d="M5.985561 78.82382a104.079383 104.079383 0 0 0 14.053598 56.017033 55 55 0 0 1-13.218774 70.637179A20 20 0 0 0 0 212.5a20 20 0 0 0-6.820384-7.021968 55 55 0 0 1-13.218774-70.637179A104.079383 104.079383 0 0 0-5.98556 78.82382l-1.599642-45.260519A30.103986 30.103986 0 0 1 0 12.5a30.103986 30.103986 0 0 1 7.585202 21.063301zM5 193.624749a45 45 0 0 0 6.395675-53.75496A114.079383 114.079383 0 0 1 0 112.734179a114.079383 114.079383 0 0 1-11.395675 27.13561A45 45 0 0 0-5 193.624749V162.5H5z"/>
+          <path d="M27.779818 75.17546A62.64982 62.64982 0 0 1 60 27.5v145H0l-5-10a22.5 22.5 0 0 1 17.560976-21.95122l14.634147-3.292683a10 10 0 1 0-4.427443-19.503751zm5.998315 34.353887a20 20 0 0 1-4.387889 37.482848l-14.634146 3.292683A12.5 12.5 0 0 0 5 162.5h45V48.265462a52.64982 52.64982 0 0 0-12.283879 28.037802zM42 122.5h10v10H42z"/>
+          <path transform="scale(-1,1)" d="M27.779818 75.17546A62.64982 62.64982 0 0 1 60 27.5v145H0l-5-10a22.5 22.5 0 0 1 17.560976-21.95122l14.634147-3.292683a10 10 0 1 0-4.427443-19.503751zm5.998315 34.353887a20 20 0 0 1-4.387889 37.482848l-14.634146 3.292683A12.5 12.5 0 0 0 5 162.5h45V48.265462a52.64982 52.64982 0 0 0-12.283879 28.037802zM42 122.5h10v10H42z"/>
+        </g>
+      </g>
+    </g>
+  </defs>
+
+  <rect width="1280" height="420" rx="20" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="1279" height="419" rx="19.5" fill="none" stroke="#2a2a2a"/>
+
+  <g transform="translate(1002,210)">
+    <circle r="200" fill="url(#glow)"/>
+    <path d="M0,0 L156,-62 A168,168 0 0,0 156,62 Z" fill="url(#sweep)"/>
+    <circle r="72" fill="none" stroke="#4cc2e8" stroke-opacity="0.42" stroke-width="1.5"/>
+    <circle r="122" fill="none" stroke="#4cc2e8" stroke-opacity="0.26" stroke-width="1.5" stroke-dasharray="5 9"/>
+    <circle r="172" fill="none" stroke="#4cc2e8" stroke-opacity="0.14" stroke-width="1.5"/>
+    <circle r="72" fill="#4cc2e8" fill-opacity="0.06"/>
+    <circle cx="0" cy="0" r="4" fill="#a5e4f5"/>
+    <circle cx="-96" cy="-86" r="3.5" fill="#4cc2e8"/>
+    <circle cx="118" cy="96" r="3.5" fill="#4cc2e8" fill-opacity="0.7"/>
+    <circle cx="-140" cy="66" r="3" fill="#4cc2e8" fill-opacity="0.5"/>
+    <path d="M-150,8 L58,-58" stroke="#4cc2e8" stroke-opacity="0.4" stroke-width="1.5" stroke-dasharray="4 7"/>
+    <circle cx="58" cy="-58" r="30" fill="none" stroke="#4cc2e8" stroke-opacity="0.35"/>
+    <use href="#tryzub" transform="translate(44.5,-80.9) scale(0.82)"/>
+  </g>
+
+  <use href="#tryzub" transform="translate(88,156) scale(1.71)"/>
+
+  <g font-family="'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif">
+    <text x="90" y="132" fill="#4cc2e8" font-size="15" font-weight="600" letter-spacing="5">BETA &#183; ANDROID &#183; FREE</text>
+    <text x="168" y="252" fill="url(#brand)" font-size="124" font-weight="700" letter-spacing="-2">Oko</text>
+    <text x="90" y="320" fill="#a3a3a3" font-size="25" letter-spacing="0.2">Live air-threat map for Ukraine.</text>
+    <text x="90" y="366" fill="#6b7280" font-size="17" letter-spacing="0.3">Zones you size &#183; alerts by type &#183; one engine, one truth</text>
+  </g>
+
+  <rect x="0" y="412" width="1280" height="8" rx="4" fill="url(#rule)"/>
+</svg>

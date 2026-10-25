@@ -68,10 +68,7 @@ class AdvancedBody : ExplosionBody {
         isAntiAlias = true
         isFilterBitmap = true
     }
-    private val smokePaint = Paint().apply {
-        isAntiAlias = true
-        style = Paint.Style.FILL
-    }
+    private val smoke = SmokePuff()
     private val debrisPaint = Paint().apply {
         isAntiAlias = true
         style = Paint.Style.FILL
@@ -442,15 +439,21 @@ class AdvancedBody : ExplosionBody {
         val rnd = Random(seed xor 0x5F3759DF)
         val n = if (rising) 6 else 4
         repeat(n) { i ->
-            val a = rnd.nextFloat() * ELITE_TAU
+            // The birth angle precesses as the blast ages: a rigid drift of the bank around the
+            // impact is the cheap stand-in for curl noise, and it is what stops the puffs from
+            // sitting on the same four spokes for the whole animation.
+            val a = rnd.nextFloat() * ELITE_TAU + e * SMOKE_SWIRL
             val rise = if (rising) -maxR * 0.55f * e * (0.5f + i * 0.12f) else 0f
-            val spread = maxR * (0.15f + 0.55f * e) * (0.5f + rnd.nextFloat() * 0.6f)
+            // Puffs have to overlap to merge into one mass — a sparse ring of separate blobs reads
+            // as bubbles no matter how good the billow is.
+            val spread = maxR * (0.10f + 0.30f * e) * (0.5f + rnd.nextFloat() * 0.6f)
             val cx = x + cos(a) * spread * (0.4f + rnd.nextFloat() * 0.6f)
             val cy = y + sin(a) * spread * 0.35f + rise
-            val r = maxR * (0.12f + 0.22f * e) * (0.7f + rnd.nextFloat() * 0.5f)
-            val alpha = (75 * fade * (1f - e * 0.5f)).toInt().coerceIn(0, 120)
-            smokePaint.color = Color.argb(alpha, 35 + rnd.nextInt(25), 35, 35)
-            canvas.drawCircle(cx, cy, r, smokePaint)
+            val r = maxR * (0.14f + 0.26f * e) * (0.7f + rnd.nextFloat() * 0.5f)
+            // A billow only reaches full alpha in its core, so it needs more than the flat fill it
+            // replaced to carry the same weight.
+            val alpha = (150 * fade * (1f - e * 0.5f)).toInt().coerceIn(0, 225)
+            smoke.draw(canvas, cx, cy, r, alpha, seed + i * 0x9E37)
         }
     }
 
@@ -482,3 +485,6 @@ class AdvancedBody : ExplosionBody {
         }
     }
 }
+
+/** Radians the smoke bank precesses through over one blast. Under a full turn, so it swirls. */
+private const val SMOKE_SWIRL = 1.15f

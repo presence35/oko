@@ -52,6 +52,7 @@ class ClassicBody : ExplosionBody {
     }
     private val flashPaint = Paint().apply { isAntiAlias = true }
     private val sparkPaint = Paint().apply { isAntiAlias = true }
+    private val smoke = SmokePuff()
     private var glowBitmap: Bitmap? = null
     private val reuseRect = RectF()
 
@@ -166,7 +167,7 @@ class ClassicBody : ExplosionBody {
         // 6. HD-only extras
         if (hq) {
             when (kind) {
-                EliteKind.SHAHED -> drawSmokePuffs(canvas, x, y, e, fade, r)
+                EliteKind.SHAHED -> drawSmokePuffs(canvas, x, y, e, fade, r, death.seed)
                 EliteKind.AVIATION -> drawLargeDebris(canvas, x, y, e, fade, density, r)
                 else -> {}
             }
@@ -274,19 +275,20 @@ class ClassicBody : ExplosionBody {
         y: Float,
         e: Float,
         fade: Float,
-        maxR: Float
+        maxR: Float,
+        seed: Int
     ) {
-        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb((90 * fade).toInt(), 40, 40, 40)
-            style = Paint.Style.FILL
-        }
         repeat(4) { i ->
-            val a = i * 1.7f
+            val a = i * 1.7f + e * 0.9f
             val r = maxR * (0.3f + 0.5f * e) * (0.7f + i * 0.15f)
-            canvas.drawCircle(
+            val alpha = (170 * fade).toInt().coerceIn(0, 240)
+            smoke.draw(
+                canvas,
                 x + cos(a) * maxR * 0.25f * e,
                 y + sin(a) * maxR * 0.2f * e,
-                r * 0.35f, p
+                r * 0.35f,
+                alpha,
+                seed + i * 0x9E37
             )
         }
     }
