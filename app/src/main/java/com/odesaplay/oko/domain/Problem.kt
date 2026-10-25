@@ -57,8 +57,7 @@ fun deriveProblems(
     officialRedAlertsEnabled: Boolean,
     officialYellowAlertsEnabled: Boolean,
     allTypesSilenced: Boolean,
-    criticalOfflineOverride: Boolean,
-    sourceOffline: Boolean
+    transportDown: Boolean
 ): List<Problem> = buildList {
     // The two causes that mean no warning reaches the user at all outrank the narrower ones.
     if (notificationsDisabled) {
@@ -73,7 +72,7 @@ fun deriveProblems(
     if (allTypesSilenced) {
         add(Problem(ProblemId.AllTypesSilenced, ProblemSeverity.Warn, ProblemFix.ZonesPanel))
     }
-    if (!criticalOfflineOverride && sourceOffline) {
+    if (transportDown) {
         add(Problem(ProblemId.SourceOffline, ProblemSeverity.Warn, ProblemFix.OpenLogs))
     }
 }

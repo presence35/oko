@@ -14,8 +14,7 @@ class ProblemTest {
         officialRedAlertsEnabled: Boolean = true,
         officialYellowAlertsEnabled: Boolean = true,
         allTypesSilenced: Boolean = false,
-        criticalOfflineOverride: Boolean = true,
-        sourceOffline: Boolean = false
+        transportDown: Boolean = false
     ) = deriveProblems(
         notificationsDisabled,
         gpsUnreliable,
@@ -23,8 +22,7 @@ class ProblemTest {
         officialRedAlertsEnabled,
         officialYellowAlertsEnabled,
         allTypesSilenced,
-        criticalOfflineOverride,
-        sourceOffline
+        transportDown
     )
 
     @Test
@@ -57,8 +55,7 @@ class ProblemTest {
             officialRedAlertsEnabled = false,
             officialYellowAlertsEnabled = false,
             allTypesSilenced = true,
-            sourceOffline = true,
-            criticalOfflineOverride = false
+            transportDown = true
         ).map { it.id }
         assertEquals(
             listOf(
@@ -88,12 +85,16 @@ class ProblemTest {
     }
 
     @Test
-    fun `an offline source is only a problem when the override is off`() {
-        assertTrue(derive(sourceOffline = true).isEmpty())
+    fun `a dead transport is a problem on its own, with the offline alarm on`() {
         assertEquals(
             listOf(ProblemId.SourceOffline),
-            derive(sourceOffline = true, criticalOfflineOverride = false).map { it.id }
+            derive(transportDown = true).map { it.id }
         )
+    }
+
+    @Test
+    fun `a degraded feed is not a transport problem, so the glyph stays off`() {
+        assertTrue(derive(transportDown = false).isEmpty())
     }
 
     @Test
@@ -105,8 +106,7 @@ class ProblemTest {
             officialRedAlertsEnabled = false,
             officialYellowAlertsEnabled = false,
             allTypesSilenced = true,
-            sourceOffline = true,
-            criticalOfflineOverride = false
+            transportDown = true
         ).map { it.id }
         assertEquals(ids.size, ids.toSet().size)
     }

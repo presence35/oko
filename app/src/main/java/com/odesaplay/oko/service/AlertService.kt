@@ -1234,9 +1234,7 @@ val mappedThreats = registry.allThreats.map { list ->
         val monitorTitle = when {
             isOfflineNow -> s.offlineStatusTitle
             state.focusPinned -> String.format(s.notifMonitoringCityFormat, state.focusBannerCity)
-            else -> LocationTracker.lastFixSource.value
-                ?.let { String.format(s.notifMonitoringCityFormat, it.label(s)) }
-                ?: s.notifOngoingTitle
+            else -> s.notifOngoingTitle
         }
 
         val monitorText = when {

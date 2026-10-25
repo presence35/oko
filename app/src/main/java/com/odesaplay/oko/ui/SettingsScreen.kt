@@ -96,6 +96,11 @@ fun SettingsScreen(
     onBootRestartChange: (Boolean) -> Unit,
     onSleepNoticeChange: (Boolean) -> Unit,
     onApplyIntensity: (AppIntensity) -> Unit,
+    onApplyAlertPersona: (AlertPersona) -> Unit,
+    canRestoreAlertMine: Boolean,
+    onRestoreAlertMine: () -> Unit,
+    canRestoreIntensity: Boolean,
+    onRestoreIntensity: () -> Unit,
     onNightEnabledChange: (Boolean) -> Unit,
     onNightStartChange: (Int) -> Unit,
     onNightEndChange: (Int) -> Unit,
@@ -247,6 +252,8 @@ fun SettingsScreen(
     var showBootRestartOffConfirm by remember { mutableStateOf(false) }
     // Which quadrant the subtext is describing. Starts null — nothing has been applied from here.
     var presetShown by remember { mutableStateOf<AppIntensity?>(null) }
+    // Same contract for the Alerts page: lit means "tapped from here", never "currently active".
+    var alertPersonaShown by remember { mutableStateOf<AlertPersona?>(null) }
     val searching = searchNormalized.isNotEmpty()
     val searchDb = remember(pinnedCity) { buildSearchDb(pinnedCity) }
     val matchedSections = remember(searchNormalized, searchDb) {
@@ -710,6 +717,14 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        PresetRestoreRow(
+                            label = s.alertPersonaRestore,
+                            canRestore = canRestoreIntensity,
+                            onRestore = {
+                                onRestoreIntensity()
+                                presetShown = null
+                            }
+                        )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlwaysSoundRow(
@@ -792,6 +807,24 @@ fun SettingsScreen(
                     )
             }
             SettingsSection.ALERTS -> SectionDetailBody(stateSummary = sectionSummary(section)) {
+                    // Above the conflict cards on purpose: someone whose notifications are already
+                    // broken is exactly who needs a whole setup in one tap.
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        AlertPersonaPicker(
+                            s = s,
+                            selected = alertPersonaShown,
+                            canRestore = canRestoreAlertMine,
+                            onPick = { persona ->
+                                onApplyAlertPersona(persona)
+                                alertPersonaShown = persona
+                            },
+                            onRestore = {
+                                onRestoreAlertMine()
+                                alertPersonaShown = null
+                            }
+                        )
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     settingsConflicts.forEach { conflict ->
                         Surface(
                             modifier = Modifier

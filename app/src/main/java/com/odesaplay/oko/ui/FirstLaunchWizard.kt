@@ -192,6 +192,36 @@ internal fun FirstLaunchWizard(
                 }
             }
             Spacer(Modifier.height(12.dp))
+            // The step bar sits above the button row, not inside Next: the Back button appears on
+            // page 2 and would otherwise shift the indicator along with the button.
+            val progressFrac = (step.ordinal + 1) / WizardPage.COUNT.toFloat()
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progressFrac)
+                            .fillMaxHeight()
+                            .background(Brush.horizontalGradient(listOf(_ukraineYellow, _ukraineBlue)))
+                    )
+                }
+                Text(
+                    "${step.ordinal + 1} / ${WizardPage.COUNT}",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(10.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -211,7 +241,6 @@ internal fun FirstLaunchWizard(
                         )
                     }
                 }
-                val progressFrac = (step.ordinal + 1) / WizardPage.COUNT.toFloat()
                 val nextEnabled = step.isNextEnabled(locationMode, pinnedCity != null)
                 val nextInteraction = remember { MutableInteractionSource() }
                 Box(
@@ -252,20 +281,6 @@ internal fun FirstLaunchWizard(
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .background(MaterialTheme.colorScheme.outlineVariant)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .fillMaxWidth(progressFrac)
-                            .height(3.dp)
-                            .background(Brush.horizontalGradient(listOf(_ukraineYellow, _ukraineBlue)))
-                    )
                 }
             }
         }

@@ -190,6 +190,25 @@ object Strings {
         val setupPresetTitle: String,
         val setupPresetDesc: String,
         val setupPresetHint: String,
+        val alertPersonaTitle: String,
+        val alertPersonaDesc: String,
+        val alertPersonaInfoTitle: String,
+        val alertPersonaRestore: String,
+        val alertPersonaRestoreDesc: String,
+        val personaGrandma: String,
+        val personaGrandmaDesc: String,
+        val personaParent: String,
+        val personaParentDesc: String,
+        val personaMilitary: String,
+        val personaMilitaryDesc: String,
+        val personaKid: String,
+        val personaKidDesc: String,
+        val personaAbroad: String,
+        val personaAbroadDesc: String,
+        val personaWork: String,
+        val personaWorkDesc: String,
+        val personaRoad: String,
+        val personaRoadDesc: String,
         val flybyAnimationLabel: String,
         val flybyAnimationDesc: String,
         val cardSizeSmallLabel: String,
@@ -1111,6 +1130,25 @@ object Strings {
         val setupPresetTitle: String get() = settings.setupPresetTitle
         val setupPresetDesc: String get() = settings.setupPresetDesc
         val setupPresetHint: String get() = settings.setupPresetHint
+        val alertPersonaTitle: String get() = settings.alertPersonaTitle
+        val alertPersonaDesc: String get() = settings.alertPersonaDesc
+        val alertPersonaInfoTitle: String get() = settings.alertPersonaInfoTitle
+        val alertPersonaRestore: String get() = settings.alertPersonaRestore
+        val alertPersonaRestoreDesc: String get() = settings.alertPersonaRestoreDesc
+        val personaGrandma: String get() = settings.personaGrandma
+        val personaGrandmaDesc: String get() = settings.personaGrandmaDesc
+        val personaParent: String get() = settings.personaParent
+        val personaParentDesc: String get() = settings.personaParentDesc
+        val personaMilitary: String get() = settings.personaMilitary
+        val personaMilitaryDesc: String get() = settings.personaMilitaryDesc
+        val personaKid: String get() = settings.personaKid
+        val personaKidDesc: String get() = settings.personaKidDesc
+        val personaAbroad: String get() = settings.personaAbroad
+        val personaAbroadDesc: String get() = settings.personaAbroadDesc
+        val personaWork: String get() = settings.personaWork
+        val personaWorkDesc: String get() = settings.personaWorkDesc
+        val personaRoad: String get() = settings.personaRoad
+        val personaRoadDesc: String get() = settings.personaRoadDesc
         val flybyAnimationLabel: String get() = settings.flybyAnimationLabel
         val flybyAnimationDesc: String get() = settings.flybyAnimationDesc
         val cardSizeSmallLabel: String get() = settings.cardSizeSmallLabel

@@ -298,6 +298,125 @@ class UserPrefs(private val context: Context) {
         }
     }
 
+    /**
+     * Write a whole [AlertPersona] in one transaction, for the same reason as [applyIntensity]: a
+     * dozen setter calls would let collectors render a half-applied persona.
+     *
+     * Claiming the night window drops the "Just let me sleep!" snapshot, exactly like [editNightBell]
+     * does for a hand edit — the tap has just said what the night should do.
+     */
+    suspend fun applyAlertPersona(patch: AlertPersonaPatch) {
+        store.edit { p ->
+            p[officialRedAlertsKey] = patch.officialRed
+            p[officialYellowAlertsKey] = patch.officialYellow
+            p[officialAlertCityScopeKey] = patch.officialCityScope
+            p[sirenOverrideKey] = patch.sirenOverride
+            p[criticalOfflineOverrideKey] = patch.criticalOfflineOverride
+            p[criticalOfflineBypassSilentKey] = patch.criticalOfflineBypassSilent
+            p[bootRestartEnabledKey] = patch.bootRestartEnabled
+            p[notifyPolicyEnabledKey] = patch.notifyPolicyEnabled
+            p[zonePolicyKey] = patch.zonePolicy.name
+            p[digestWindowKey] = patch.digestWindow.name
+            p[digestPerTypeKey] = patch.digestPerType
+            p[digestMaxKey] = patch.digestMax.coerceIn(1, 10)
+            p[autoDismissAllClearKey] = patch.autoDismissAllClear
+            p[fallingDebrisDelaySecKey] = patch.fallingDebrisDelaySec.coerceIn(0, 600)
+            p[fastRedMinKey] = patch.fastRedMin
+            p[fastYellowMinKey] = patch.fastYellowMin
+            p[slowRedArmedKey] = patch.slowRedArmed
+            p[slowYellowArmedKey] = patch.slowYellowArmed
+            p[fastRedArmedKey] = patch.fastRedArmed
+            p[fastYellowArmedKey] = patch.fastYellowArmed
+            for (type in ThreatType.values()) {
+                p[cachedBooleanKey("threat_alert_${type.name}")] = patch.alertTypes.contains(type)
+            }
+            p.remove(nightSleepRestoreKey)
+            p[nightZoneSirenOverrideKey] = patch.night.zoneSirenOverride
+            p[nightOfficialSirenOverrideKey] = patch.night.officialSirenOverride
+            p[nightOfficialRedEnabledKey] = patch.night.officialRed
+            p[nightOfficialYellowEnabledKey] = patch.night.officialYellow
+            p[nightSlowRedArmedKey] = patch.night.slowRedArmed
+            p[nightSlowYellowArmedKey] = patch.night.slowYellowArmed
+            p[nightFastRedArmedKey] = patch.night.fastRedArmed
+            p[nightFastYellowArmedKey] = patch.night.fastYellowArmed
+        }
+    }
+
+    /**
+     * The alerting state exactly as it stands now, shaped like the patch a persona writes. This is
+     * what "Mine" restores, captured once just before the first preset tap on the page.
+     */
+    suspend fun alertPersonaSnapshot(): AlertPersonaPatch {
+        val p = preferences.first()
+        return AlertPersonaPatch(
+            officialRed = p.officialRedAlertsEnabled,
+            officialYellow = p.officialYellowAlertsEnabled,
+            officialCityScope = p.officialAlertCityScope,
+            sirenOverride = p.sirenOverride,
+            criticalOfflineOverride = p.criticalOfflineOverride,
+            criticalOfflineBypassSilent = p.criticalOfflineBypassSilent,
+            bootRestartEnabled = p.bootRestartEnabled,
+            notifyPolicyEnabled = p.notifyPolicyEnabled,
+            zonePolicy = p.zonePolicy,
+            digestWindow = p.digestWindow,
+            digestPerType = p.digestPerType,
+            digestMax = p.digestMax,
+            autoDismissAllClear = p.autoDismissAllClear,
+            fallingDebrisDelaySec = p.fallingDebrisDelaySec,
+            fastRedMin = p.fastRedMin,
+            fastYellowMin = p.fastYellowMin,
+            slowRedArmed = p.slowRedArmed,
+            slowYellowArmed = p.slowYellowArmed,
+            fastRedArmed = p.fastRedArmed,
+            fastYellowArmed = p.fastYellowArmed,
+            alertTypes = p.alertEnabledTypes,
+            night = IntensityNight(
+                zoneSirenOverride = p.nightZoneSirenOverride,
+                officialSirenOverride = p.nightOfficialSirenOverride,
+                officialRed = p.nightOfficialRedEnabled,
+                officialYellow = p.nightOfficialYellowEnabled,
+                slowRedArmed = p.nightSlowRedArmed,
+                slowYellowArmed = p.nightSlowYellowArmed,
+                fastRedArmed = p.nightFastRedArmed,
+                fastYellowArmed = p.nightFastYellowArmed
+            )
+        )
+    }
+
+    /**
+     * The intensity-owned state as it stands now — the "Mine" snapshot for Settings → Reliability.
+     *
+     * Night is deliberately null: the window is another page's state, and claiming it here would
+     * drop a "Just let me sleep!" snapshot the user never asked this undo to touch.
+     */
+    suspend fun intensitySnapshot(): IntensityPatch {
+        val p = preferences.first()
+        return IntensityPatch(
+            sirenOverride = p.sirenOverride,
+            criticalOfflineOverride = p.criticalOfflineOverride,
+            criticalOfflineBypassSilent = p.criticalOfflineBypassSilent,
+            bootRestartEnabled = p.bootRestartEnabled,
+            periodicGps = p.periodicGps,
+            batteryAskEnabled = !p.batteryOnboardShown,
+            notifyPolicyEnabled = p.notifyPolicyEnabled,
+            zonePolicy = p.zonePolicy,
+            digestWindow = p.digestWindow,
+            digestPerType = p.digestPerType,
+            digestMax = p.digestMax,
+            fastRedMin = p.fastRedMin,
+            fastYellowMin = p.fastYellowMin,
+            slowRedArmed = p.slowRedArmed,
+            slowYellowArmed = p.slowYellowArmed,
+            fastRedArmed = p.fastRedArmed,
+            fastYellowArmed = p.fastYellowArmed,
+            alertTypes = p.alertEnabledTypes,
+            followBullet = p.followBullet,
+            highQualityExplosions = p.highQualityExplosions,
+            deathAnimationStyle = p.deathAnimationStyle,
+            sheltersEnabled = p.sheltersEnabled
+        )
+    }
+
     suspend fun setSlowRedKm(km: Int) {
         store.edit { prefs ->
             prefs[slowRedKmKey] = km.coerceIn(1, 20)

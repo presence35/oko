@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,7 +63,7 @@ internal fun IntensityPicker(
             modifier = Modifier.fillMaxWidth()
         ) {
             for (intensity in AppIntensity.values()) {
-                IntensityQuadrant(
+                PresetQuadrant(
                     icon = intensity.icon(),
                     label = intensity.title(s),
                     selected = intensity == selected,
@@ -84,20 +85,29 @@ internal fun IntensityPicker(
     }
 }
 
-/** One quadrant: icon over the name, filling an equal share of the row. */
+/** One quadrant: icon over the name, filling an equal share of the row. Shared with the
+ *  persona picker on Settings → Alerts so both grids stay one visual thing.
+ *
+ *  [muted] is the "nothing to restore" look: visible, so the control does not appear only after
+ *  the user already needed it, but inert — not just faded. */
 @Composable
-private fun IntensityQuadrant(
+internal fun PresetQuadrant(
     icon: ImageVector,
     label: String,
     selected: Boolean,
     isDefault: Boolean,
     defaultLabel: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    muted: Boolean = false
 ) {
     val interaction = remember { MutableInteractionSource() }
     val shape = RoundedCornerShape(12.dp)
-    Box(modifier = modifier.height(78.dp)) {
+    val alpha = if (muted) 0.45f else 1f
+    // Grows with the system font instead of ellipsising the label: a tile that cannot show its own
+    // name is a tile nobody picks. Capped, because past ~1.6× the grid switches columns instead.
+    val scale = LocalDensity.current.fontScale.coerceIn(1f, 1.6f)
+    Box(modifier = modifier.height((78 * scale).dp)) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -116,17 +126,18 @@ private fun IntensityQuadrant(
                 )
                 .pressTick(interaction)
                 .clickable(
+                    enabled = !muted,
                     interactionSource = interaction,
                     indication = ripple(bounded = true),
                     onClick = onClick
                 )
-                .padding(horizontal = 4.dp)
+                .padding(horizontal = 4.dp, vertical = 8.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = (if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = alpha),
                 modifier = Modifier.size(20.dp)
             )
             Spacer(Modifier.height(5.dp))
@@ -134,8 +145,8 @@ private fun IntensityQuadrant(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = if (selected) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = (if (selected) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = alpha),
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis

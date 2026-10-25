@@ -1,7 +1,9 @@
 # Changelog
 
 ## [Unreleased]
-- The monitor row now names the actual fix source ("GPS" / "Network") instead of always claiming GPS, and the header's warning glyph carries a one-word cause under it 10-25_15:22:49
+- Settings → Alerts opens with seven ready-made setups (grandma, parent, frontline, teen, abroad, at work, on the road): one tap sets this page, the "i" explains each, and a "Mine" cell puts your own setup back — also on Reliability 10-25_23:12:41
+- The wizard's step bar now sits above the buttons with a "3 / 7" counter, so the page you are on is readable instead of a 3dp sliver on the Next button 10-25_21:30:34
+- A small pill under the header names what the warning glyph is about (GPS, Network, Alerts), and a dead connection now shows there too 10-25_15:22:49
 - Monitoring no longer dies minutes after every start: the ongoing row is updated through the foreground service instead of a plain post that detached it, so Oko stays in Active apps, and "Stop & exit" now shows the red header again instead of leaving no way back 10-23_17:19:46
 - Tapping a shot-down notification no longer starts the bullet while the shade is still collapsing: the show waits for window focus, so it begins on a screen you can actually see 10-23_14:53:04
 - Returning to Oko re-arms monitoring when the OS had killed it; the service-offline header now waits for the service to confirm it is up instead of being a guess 10-23_14:08:30

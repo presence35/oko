@@ -481,6 +481,11 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onBootRestartChange = remember { { viewModel.setBootRestartEnabled(it) } },
                 onSleepNoticeChange = remember { { viewModel.setSleepNoticeEnabled(it) } },
                 onApplyIntensity = remember { { intensity: AppIntensity -> viewModel.applyIntensity(intensity) } },
+                onApplyAlertPersona = remember { { persona: AlertPersona -> viewModel.applyAlertPersona(persona) } },
+                canRestoreAlertMine = viewModel.canRestoreAlertMine.collectAsState().value,
+                onRestoreAlertMine = remember { { viewModel.restoreAlertPersona() } },
+                canRestoreIntensity = viewModel.canRestoreIntensity.collectAsState().value,
+                onRestoreIntensity = remember { { viewModel.restoreIntensity() } },
                 onNightEnabledChange = remember { { viewModel.setNightEnabled(it) } },
                 onNightStartChange = remember { { viewModel.setNightStartMin(it) } },
                 onNightEndChange = remember { { viewModel.setNightEndMin(it) } },
@@ -1115,9 +1120,23 @@ private fun MapScreen(
                     s = s,
                     modifier = Modifier.padding(end = 4.dp)
                 )
+                // Beta feedback: the header's action row, left of the warning glyph, so the
+                // corner above the map belongs to the problem pill alone.
+                if (reportBugVisible) {
+                    IconButton(
+                        onClick = { onReportBug() },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.BugReport,
+                            contentDescription = s.feedbackTitle,
+                            tint = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
                 // A problem that needs fixing must distract: a severity-tinted warning glyph with
-                // a soft halo and a one-word cause underneath ("GPS", "Network", "Alerts") — the
-                // glyph alone showed that something was wrong, never what. Tapping it goes
+                // a soft halo. Glyph-only so it needs no copy in any language, and tapping it goes
                 // wherever the cause actually lives (out of the app for a permission).
                 val worstProblem = uiState.problems.firstOrNull()
                 if (worstProblem != null) {
@@ -1126,9 +1145,10 @@ private fun MapScreen(
                         ProblemSeverity.Critical -> Color(AppPalette.AlertRed)
                         ProblemSeverity.Warn -> Color(AppPalette.WarningOrange)
                     }
-                    Column(
+                    Box(
                         modifier = Modifier
                             .padding(end = 4.dp)
+                            .size(32.dp)
                             .pressTick(problemInteraction)
                             .clickable(
                                 interactionSource = problemInteraction,
@@ -1136,35 +1156,21 @@ private fun MapScreen(
                                 onClick = { onProblemFix(worstProblem.fix) }
                             )
                             .semantics { semanticsContentDescription = s.problemFixA11y },
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        contentAlignment = Alignment.Center
                     ) {
                         Box(
-                            modifier = Modifier.size(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(30.dp)
-                                    .background(accent.copy(alpha = 0.18f), CircleShape)
-                            )
-                            // One glyph, optically centred. A second icon stacked on the first
-                            // merged with it into one unreadable silhouette; the "this is fixable,
-                            // tap it" part is the ripple plus the content description.
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = accent,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Text(
-                            text = problemTag(worstProblem.id, s),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 9.sp,
-                                lineHeight = 10.sp
-                            ),
-                            color = accent,
-                            maxLines = 1
+                            modifier = Modifier
+                                .size(30.dp)
+                                .background(accent.copy(alpha = 0.18f), CircleShape)
+                        )
+                        // One glyph, optically centred. A second icon stacked on the first
+                        // merged with it into one unreadable silhouette; the "this is fixable,
+                        // tap it" part is the ripple plus the content description.
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -1251,31 +1257,43 @@ private fun MapScreen(
                             onFinished = onFlybyFinished
                         )
                     }
-                    // Beta feedback: one small non-intrusive FAB, top-right of the map only. The
-                    // sheet itself is owned at the MainScreen root (Settings and Logs raise the
-                    // same one), so it stays hidden while that sheet is up or being captured.
-                    if (reportBugVisible) {
-                        val feedbackFabInteraction = remember { MutableInteractionSource() }
-                        Box(
+                    // The header's warning glyph says something is wrong; this pill, floating just
+                    // under the header, says what. Same first problem and the same tap target, so
+                    // the two can never disagree about the cause.
+                    uiState.problems.firstOrNull()?.let { problem ->
+                        val pillInteraction = remember { MutableInteractionSource() }
+                        val pillAccent = when (problem.severity) {
+                            ProblemSeverity.Critical -> Color(AppPalette.AlertRed)
+                            ProblemSeverity.Warn -> Color(AppPalette.WarningOrange)
+                        }
+                        Row(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(top = 12.dp, end = 12.dp)
-                                .size(40.dp)
-                                .background(Color.Black.copy(alpha = 0.55f), CircleShape)
-                                .pressTick(feedbackFabInteraction)
+                                .padding(end = 12.dp, top = 8.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(Color.Black.copy(alpha = 0.62f))
+                                .border(1.dp, pillAccent.copy(alpha = 0.55f), RoundedCornerShape(50))
+                                .pressTick(pillInteraction)
                                 .clickable(
-                                    interactionSource = feedbackFabInteraction,
+                                    interactionSource = pillInteraction,
                                     indication = ripple(bounded = false),
-                                    onClick = { onReportBug() }
+                                    onClick = { onProblemFix(problem.fix) }
                                 )
-                                .semantics { semanticsContentDescription = s.feedbackTitle },
-                            contentAlignment = Alignment.Center
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.BugReport,
+                                imageVector = Icons.Default.Warning,
                                 contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.85f),
-                                modifier = Modifier.size(22.dp)
+                                tint = pillAccent,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = problemTag(problem.id, s),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = pillAccent,
+                                maxLines = 1
                             )
                         }
                     }
@@ -1322,8 +1340,8 @@ private fun MapScreen(
                         }
                     }
                     // Attribution: the basemap credit stays short (the full form lives in the
-                    // wizard), and NEPTUN — the reason this app has data — gets its own line,
-                    // one tap from the map instead of buried behind the connection pill.
+                    // wizard), and neptun.in.ua — the reason this app has data — gets its own
+                    // line, one tap from the map instead of buried behind the connection pill.
                     if (!flourishActive) {
                         val siteUrl = AppSources.registry.siteUrl
                         val creditInteraction = remember { MutableInteractionSource() }
@@ -1339,7 +1357,7 @@ private fun MapScreen(
                                 color = Color.White.copy(alpha = 0.40f)
                             )
                             Text(
-                                "NEPTUN",
+                                "neptun.in.ua",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White.copy(alpha = 0.70f),
                                 modifier = Modifier

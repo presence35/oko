@@ -411,6 +411,15 @@ class SourceRegistry {
         firedM3 = false; firedM5 = false; firedM6 = false; firedM10 = false; firedM20 = false
     }
 
+    /** The transport has no path at all: no network, airplane mode, socket torn down. Narrower
+     *  than [isOffline], which also counts a Connecting retry as down — that distinction is what
+     *  keeps an ordinary reconnect blip out of the header's problem glyph. Consumers pass no
+     *  clock: this is a fact about the state, not an age. */
+    fun isTransportDown(): Boolean = when (_connectionState.value) {
+        SourceState.OFFLINE, SourceState.DISCONNECTED -> true
+        SourceState.CONNECTING, SourceState.CONNECTED, SourceState.DEGRADED -> false
+    }
+
     /** Offline escalation (red + offline notification): immediate when the transport is physically
      *  down (no network or disconnected), and degraded past the episode grace with no
      *  fallback covering for the silent-socket case. Consumers pass a monotonic `now` (mirror

@@ -485,6 +485,14 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     val updateFlow: StateFlow<UpdateState> get() = updateStateFlow
     val latestVersionState: StateFlow<String?> get() = latestVersionFlow
 
+    /** "Mine" snapshots, captured lazily on the first preset tap of the session. */
+    private var alertMine: AlertPersonaPatch? = null
+    private var intensityMine: IntensityPatch? = null
+    private val canRestoreAlertMineFlow = MutableStateFlow(false)
+    private val canRestoreIntensityFlow = MutableStateFlow(false)
+    val canRestoreAlertMine: StateFlow<Boolean> get() = canRestoreAlertMineFlow
+    val canRestoreIntensity: StateFlow<Boolean> get() = canRestoreIntensityFlow
+
     // The plugin registry must exist before any property below reads it — property
     // initializers run before the init{} block, so init it here (idempotent; the later
     // init block also calls it after AlertService may have started).
@@ -879,8 +887,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             officialYellowAlertsEnabled = prefs.officialYellowAlertsEnabled,
             allTypesSilenced = (ThreatType.values().toSet() - prefs.alertEnabled).size ==
                 ThreatType.values().size,
-            criticalOfflineOverride = prefs.criticalOfflineOverride,
-            sourceOffline = registry.isOffline(nowMono)
+            transportDown = registry.isTransportDown()
         )
         val freshProblemIds = if (nowMono >= problemsArmedAtMono) {
             problems.map { it.id }.filter { problemSeenIds.add(it) }
@@ -1840,9 +1847,50 @@ fun setAlertsArmed(armed: Boolean) {
     /**
      * Apply a ready-made setup. One-shot by design: this writes the fields the intensity owns and
      * nothing re-applies it later, so every switch stays hand-editable afterwards.
+     *
+     * Before the first tap of the session the live setup is captured once, so "Mine" can put it
+     * back. Captured lazily rather than on every entry: memory only, nothing stored, and no stale
+     * snapshot can outlive the visit.
      */
     fun applyIntensity(intensity: AppIntensity) {
-        viewModelScope.launch { prefs.applyIntensity(intensity.patch()) }
+        viewModelScope.launch {
+            if (intensityMine == null) {
+                intensityMine = prefs.intensitySnapshot()
+                canRestoreIntensityFlow.value = true
+            }
+            prefs.applyIntensity(intensity.patch())
+        }
+    }
+
+    /** "Mine" on the Reliability page: write back the setup captured before the first preset tap. */
+    fun restoreIntensity() {
+        val mine = intensityMine ?: return
+        viewModelScope.launch { prefs.applyIntensity(mine) }
+    }
+
+    /**
+     * Apply a ready-made alert persona. One-shot by design, like [applyIntensity], and it rebuilds
+     * the notification channels because the silent-mode bypass is one of the switches it writes:
+     * sound attributes freeze at channel creation, so without this the flip would wait for a restart.
+     */
+    fun applyAlertPersona(persona: AlertPersona) {
+        viewModelScope.launch {
+            if (alertMine == null) {
+                alertMine = prefs.alertPersonaSnapshot()
+                canRestoreAlertMineFlow.value = true
+            }
+            prefs.applyAlertPersona(persona.patch())
+            AlertNotificationManager(getApplication()).createChannels()
+        }
+    }
+
+    /** "Mine" on the Alerts page: write back the setup captured before the first persona tap. */
+    fun restoreAlertPersona() {
+        val mine = alertMine ?: return
+        viewModelScope.launch {
+            prefs.applyAlertPersona(mine)
+            AlertNotificationManager(getApplication()).createChannels()
+        }
     }
 
     /** Wizard finished (Done): setup complete. */

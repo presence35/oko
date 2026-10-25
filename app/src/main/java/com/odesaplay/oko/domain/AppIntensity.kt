@@ -46,11 +46,14 @@ data class IntensityNight(
  * full intent, so re-applying one from Settings restores exactly that setup instead of
  * half-restoring it.
  *
- * Fields deliberately absent, because no preset has an opinion on them: language, map appearance,
- * official-alert levels, the neutralized/alarm tallies, the morale master, GPS follow-me,
- * shelters-for-kids, the pinned city and the zone radii. Those belong to the person, not to a
- * persona — in particular the rings are the user's own reach, and a preset tap silently resizing
- * them is a change nobody asked for.
+ * Fields deliberately absent, because this dial has no opinion on them: language, map appearance,
+ * the neutralized/alarm tallies, the morale master, GPS follow-me, shelters-for-kids, the pinned
+ * city and the zone radii. Those belong to the person, not to a persona — in particular the rings
+ * are the user's own reach, and a preset tap silently resizing them is a change nobody asked for.
+ *
+ * Official-alert levels, auto-dismiss and the night bells moved out of this dial and into
+ * [AlertPersona]: "how hard the app fights" and "who is holding the phone" are different questions,
+ * and one patch stating both would make each preset answer the other's.
  */
 data class IntensityPatch(
     // Reliability: how much the phone is expected to fight for the alert.
