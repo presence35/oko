@@ -116,7 +116,7 @@ object IconCatalog {
         ThreatType.FPV_LOITERING -> 180f  // _bottom_middle
         ThreatType.KAB -> 240f            // _bottom_left
         ThreatType.AVIATION -> 265f       // _left
-        ThreatType.RECON -> 247f          // _bottom_left
+        ThreatType.RECON -> 232f          // _bottom_left, measured along the fuselage
         ThreatType.SHAHED -> 0f           // _top_middle
         ThreatType.UNKNOWN -> 0f
     }
@@ -131,7 +131,7 @@ object IconCatalog {
         ThreatType.FPV_LOITERING -> 180f  // _bottom
         ThreatType.KAB -> 240f            // _bottom_left
         ThreatType.AVIATION -> 265f       // _left
-        ThreatType.RECON -> 247f          // _bottom_left
+        ThreatType.RECON -> 232f          // _bottom_left, measured along the fuselage
         ThreatType.SHAHED -> 0f           // _top
         ThreatType.UNKNOWN -> 0f
     }

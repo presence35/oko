@@ -343,6 +343,29 @@ hovering top-right feedback button — same sheet, different trigger. Needs a Se
 opt-out (shake off by default?) and a manual button fallback since shake is
 undiscoverable. Transport TBD: in-app sheet POST vs external link (Telegram/Form).
 
+## Alert escalation intensity (not started)
+
+Today yellow→red for the same threat re-rings the siren (INNER channel, `air_raid_siren`) but
+at the same channel volume/vibration (`VIBRATION_LIGHT`) and with no escalation-specific UI.
+Options on the table: re-ring on the alarm channel's STRONG vibration pattern when the
+escalation is a genuine red, a distinct multi-pulse "escalation" vibration, or an insistent
+repeating siren until acknowledged. Needs a decision on whether escalation should outrank the
+user's siren-alarm/night override. No churn until field feedback.
+
+## Recon marker reads as a 3/4 render, not a map symbol (not started)
+
+Every threat icon is a flat top-down sprite except recon: `threat_{photo,army,comic,russian}_recon`
+are the same 3/4 "flying away from you" render, so once `MapView` rotates it to the course the drone
+looks banked/rolled rather than seen from above. The 2026-10-26 base fix (247° → 232° in
+`IconCatalog.photoBaseDeg`/`armyBaseDeg`, the latter also feeding comic and russian) removed the
+constant 15° skew; the posture itself cannot be fixed by rotation, mirror or flip — a 2D transform
+cannot change the camera angle.
+
+Real fix: re-export the four recon rasters from a top-down camera like `threat_photo_shahed` /
+`threat_photo_kab` (nose up, wings flat, no visible belly pod), then re-measure each one's baked nose
+angle into `baseDeg`. Cropping each file tight to a square around the aircraft is worth doing in the
+same pass — the current wide canvas makes the rotated body orbit the pivot.
+
 ## Widget truth about monitoring (not started)
 
 The widget's status line reads only `AppSources.registry.isOffline` (`WidgetUpdater`/`ThreatWidget`),
