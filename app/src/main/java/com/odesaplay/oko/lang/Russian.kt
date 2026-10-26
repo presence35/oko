@@ -581,6 +581,7 @@ internal val Russian: Strings.StringSet = Strings.StringSet(
         iconSetArmyLabel = "Армия",
         iconSetComicLabel = "Комикс",
         iconSetRussianLabel = "Русский",
+        iconSetSensorLabel = "Сенсор",
         shelterButtonLabel = "Укрытие",
         shelterScreenTitle = "Ближайшие укрытия",
         shelterOpenInMaps = "Открыть",

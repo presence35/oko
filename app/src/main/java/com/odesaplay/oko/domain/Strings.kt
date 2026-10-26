@@ -588,6 +588,7 @@ object Strings {
         val iconSetArmyLabel: String,
         val iconSetComicLabel: String,
         val iconSetRussianLabel: String,
+        val iconSetSensorLabel: String,
         val shelterButtonLabel: String,
         val shelterScreenTitle: String,
         val shelterOpenInMaps: String,
@@ -1259,6 +1260,7 @@ object Strings {
                 ThreatIconSet.ARMY -> iconSetArmyLabel
                 ThreatIconSet.COMIC -> iconSetComicLabel
                 ThreatIconSet.RUSSIAN -> iconSetRussianLabel
+                ThreatIconSet.SENSOR -> iconSetSensorLabel
             }
             return "${subtitles.selfLanguageName} · $sizeName · ${subtitles.iconsLabel}: $iconName"
         }
@@ -1662,6 +1664,7 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val iconSetArmyLabel: String get() = misc.iconSetArmyLabel
         val iconSetComicLabel: String get() = misc.iconSetComicLabel
         val iconSetRussianLabel: String get() = misc.iconSetRussianLabel
+        val iconSetSensorLabel: String get() = misc.iconSetSensorLabel
         val shelterButtonLabel: String get() = misc.shelterButtonLabel
         val shelterScreenTitle: String get() = misc.shelterScreenTitle
         val shelterOpenInMaps: String get() = misc.shelterOpenInMaps

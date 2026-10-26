@@ -41,7 +41,32 @@ object IconCatalog {
         ThreatIconSet.ARMY -> armyRes(type) ?: classicRes(type)
         ThreatIconSet.COMIC -> comicRes(type) ?: classicRes(type)
         ThreatIconSet.RUSSIAN -> russianRes(type) ?: classicRes(type)
+        ThreatIconSet.SENSOR -> photoRes(type) ?: classicRes(type)
     }
+
+    /**
+     * Colour grade for a recipe pack: the set reuses the photo master's assets and only
+     * recolours them, so geometry, facing and exhaust anchors are shared with PHOTO instead
+     * of being re-baked per pack. Returned row-major 4x5, applied identically by Compose and
+     * by the map's bitmap path so both surfaces agree.
+     */
+    fun recipeMatrix(set: ThreatIconSet): FloatArray? = when (set) {
+        ThreatIconSet.SENSOR -> SENSOR_MATRIX
+        else -> null
+    }
+
+    /** Cool sensor look: luminance through a steel-cyan ramp, hot metal stays near-white. */
+    private val SENSOR_MATRIX: FloatArray = monoRamp(1.50f, 1.80f, 1.95f, -56f, -70f, -78f)
+
+    private fun monoRamp(
+        gainR: Float, gainG: Float, gainB: Float,
+        offR: Float, offG: Float, offB: Float
+    ): FloatArray = floatArrayOf(
+        0.299f * gainR, 0.587f * gainR, 0.114f * gainR, 0f, offR,
+        0.299f * gainG, 0.587f * gainG, 0.114f * gainG, 0f, offG,
+        0.299f * gainB, 0.587f * gainB, 0.114f * gainB, 0f, offB,
+        0f, 0f, 0f, 1f, 0f
+    )
 
     /** Army icon for [type], or null when the set has no asset (UNKNOWN). */
     internal fun armyRes(type: ThreatType): Int? = when (type) {
@@ -151,9 +176,11 @@ object IconCatalog {
         ThreatIconSet.ARMY -> armyBaseDeg(type)
         ThreatIconSet.COMIC -> comicBaseDeg(type)
         ThreatIconSet.RUSSIAN -> russianBaseDeg(type)
+        ThreatIconSet.SENSOR -> photoBaseDeg(type)
     }
 
     fun aviationGeometry(set: ThreatIconSet): AviationGeometry = when (set) {
+        ThreatIconSet.SENSOR -> aviationGeometry(ThreatIconSet.PHOTO)
         ThreatIconSet.RUSSIAN -> AviationGeometry(
             facingDeg = baseDeg(ThreatType.AVIATION, set),
             exhausts = listOf(
@@ -237,17 +264,20 @@ fun ThreatIcon(
             modifier = Modifier.size(size).alpha(if (dimmed) 0.45f else 1f)
         )
     } else {
+        val recipe = IconCatalog.recipeMatrix(set)
         Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) {
             Image(
                 painter = painterResource(id = IconCatalog.res(type, set)),
                 contentDescription = contentDescription,
                 contentScale = ContentScale.Fit,
                 colorFilter = when {
+                    tint != Color.Unspecified -> ColorFilter.tint(tint)
+                    recipe != null -> ColorFilter.colorMatrix(ColorMatrix(recipe.copyOf()))
                     dimmed -> DimmedPhotoFilter
-                    tint == Color.Unspecified -> null
-                    else -> ColorFilter.tint(tint)
+                    else -> null
                 },
                 modifier = Modifier.fillMaxSize()
+                    .alpha(if (dimmed && recipe != null) 0.45f else 1f)
             )
         }
     }

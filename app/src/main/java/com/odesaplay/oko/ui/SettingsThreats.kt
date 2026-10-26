@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -147,6 +149,9 @@ internal fun ThreatTypeRow(
                         painter = painterResource(IconCatalog.res(type, iconSet)),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
+                        colorFilter = IconCatalog.recipeMatrix(iconSet)?.let {
+                            ColorFilter.colorMatrix(ColorMatrix(it.copyOf()))
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }

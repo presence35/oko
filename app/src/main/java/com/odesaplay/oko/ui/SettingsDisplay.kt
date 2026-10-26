@@ -314,6 +314,7 @@ internal fun IconSetSelector(
                     ThreatIconSet.ARMY -> s.iconSetArmyLabel
                     ThreatIconSet.COMIC -> s.iconSetComicLabel
                     ThreatIconSet.RUSSIAN -> s.iconSetRussianLabel
+                ThreatIconSet.SENSOR -> s.iconSetSensorLabel
                 },
                 selected = selected == set,
                 onClick = { onChange(set) },

@@ -581,6 +581,7 @@ internal val English: Strings.StringSet = Strings.StringSet(
         iconSetArmyLabel = "Army",
         iconSetComicLabel = "Comic",
         iconSetRussianLabel = "Russian",
+        iconSetSensorLabel = "Sensor",
         shelterButtonLabel = "Shelter",
         shelterScreenTitle = "Nearby shelters",
         shelterOpenInMaps = "Open",

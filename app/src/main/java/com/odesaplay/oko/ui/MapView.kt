@@ -8,6 +8,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
@@ -119,7 +121,7 @@ private fun threatIconFor(
 ): Drawable {
     val key = "${type.name}|${iconSet.name}|$revealed|$areaOnly|$sizeDp"
     val cached = threatIconCache.get(key)
-    val bmp: Bitmap
+    var bmp: Bitmap
     if (cached != null) {
         bmp = cached
     } else {
@@ -131,9 +133,21 @@ private fun threatIconFor(
         val w = targetW
         val h = (ih.toFloat() * targetW / iw).toInt().coerceAtLeast(1)
         bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
         src.setBounds(0, 0, w, h)
-        src.draw(canvas)
+        src.draw(Canvas(bmp))
+        val graded = IconCatalog.recipeMatrix(iconSet)?.let { grade ->
+            Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { out ->
+                Canvas(out).drawBitmap(bmp, 0f, 0f, Paint().apply {
+                    isAntiAlias = true
+                    colorFilter = ColorMatrixColorFilter(ColorMatrix(grade))
+                })
+            }
+        }
+        if (graded != null) {
+            bmp.recycle()
+            bmp = graded
+        }
+        val canvas = Canvas(bmp)
         if (revealed || areaOnly) {
             val r = 4f * density
             val cx = w - r - 1.5f * density

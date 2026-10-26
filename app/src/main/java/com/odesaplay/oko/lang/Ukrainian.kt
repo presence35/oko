@@ -581,6 +581,7 @@ internal val Ukrainian: Strings.StringSet = Strings.StringSet(
         iconSetArmyLabel = "Армія",
         iconSetComicLabel = "Комікс",
         iconSetRussianLabel = "Російські",
+        iconSetSensorLabel = "Сенсор",
         shelterButtonLabel = "Укриття",
         shelterScreenTitle = "Укриття поруч",
         shelterOpenInMaps = "Відкрити",

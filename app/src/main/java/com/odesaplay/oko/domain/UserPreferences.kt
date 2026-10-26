@@ -29,7 +29,7 @@ fun systemLanguage(): AppLanguage = when (java.util.Locale.getDefault().language
 enum class ThreatCardSize { SMALL, LARGE }
 
 enum class ThreatIconSet {
-    PHOTO, ARMY, COMIC, RUSSIAN;
+    PHOTO, ARMY, COMIC, RUSSIAN, SENSOR;
     companion object {
         val DEFAULT = PHOTO
     }
