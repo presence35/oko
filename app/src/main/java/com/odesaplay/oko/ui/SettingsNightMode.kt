@@ -2,6 +2,7 @@ package com.odesaplay.oko
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -10,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -18,6 +20,63 @@ import com.odesaplay.oko.theme.AppPalette
 
 internal fun timeText(min: Int): String =
     String.format(java.util.Locale.US, "%02d:%02d", min / 60, min % 60)
+
+/**
+ * One night *policy* key — official red/yellow, the two siren overrides, the alert scope.
+ *
+ * Three states, not two, because "I never said anything about the night" and "off at night" are
+ * different facts: the first follows whatever the day says ([effectiveNightPolicy]), the second is
+ * a choice. Rendering the inherited day value as the row's switch is what makes the night window
+ * honest; the Day chip is how the user gets back to following the day after pinning one.
+ */
+@Composable
+private fun NightPolicyRow(
+    title: String,
+    value: Boolean?,
+    day: Boolean,
+    dayLabel: String,
+    onLabel: String,
+    offLabel: String,
+    onChange: (Boolean?) -> Unit,
+    icon: Painter? = null,
+    iconTint: Color? = null
+) {
+    AlertToggleRow(
+        title = title,
+        checked = value ?: day,
+        onCheckedChange = { onChange(it) },
+        icon = icon,
+        iconTint = iconTint,
+        trailing = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                NightPolicyChip(dayLabel, value == null) { onChange(null) }
+                NightPolicyChip(onLabel, value == true) { onChange(true) }
+                NightPolicyChip(offLabel, value == false) { onChange(false) }
+            }
+        }
+    )
+}
+
+@Composable
+private fun NightPolicyChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) accent.copy(alpha = 0.18f) else Color.Transparent,
+        border = BorderStroke(
+            1.dp,
+            if (selected) accent else MaterialTheme.colorScheme.outlineVariant
+        ),
+        modifier = Modifier.hapticClickable(onClick = onClick)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+        )
+    }
+}
 
 /** Bordered, rounded box that visually groups a set of zone slider rows (night custom zones). */
 @Composable
@@ -76,10 +135,12 @@ internal fun NightModeCard(
     slowYellowArmed: Boolean,
     fastRedArmed: Boolean,
     fastYellowArmed: Boolean,
-    zoneSirenOverride: Boolean,
-    officialSirenOverride: Boolean,
+    zoneSirenOverride: Boolean?,
+    officialSirenOverride: Boolean?,
     daySirenOverride: Boolean,
     dayOfficialAlertCityScope: Boolean,
+    dayOfficialRedEnabled: Boolean,
+    dayOfficialYellowEnabled: Boolean,
     daySlowRedKm: Int,
     daySlowYellowKm: Int,
     dayFastRedMin: Int,
@@ -95,14 +156,14 @@ internal fun NightModeCard(
     onSlowYellowArmedChange: (Boolean) -> Unit,
     onFastRedArmedChange: (Boolean) -> Unit,
     onFastYellowArmedChange: (Boolean) -> Unit,
-    onZoneSirenOverrideChange: (Boolean) -> Unit,
-    onOfficialSirenOverrideChange: (Boolean) -> Unit,
-    nightOfficialAlertCityScope: Boolean,
-    nightOfficialRedEnabled: Boolean,
-    nightOfficialYellowEnabled: Boolean,
-    onNightOfficialAlertCityScopeChange: (Boolean) -> Unit,
-    onNightOfficialRedChange: (Boolean) -> Unit,
-    onNightOfficialYellowChange: (Boolean) -> Unit,
+    onZoneSirenOverrideChange: (Boolean?) -> Unit,
+    onOfficialSirenOverrideChange: (Boolean?) -> Unit,
+    nightOfficialAlertCityScope: Boolean?,
+    nightOfficialRedEnabled: Boolean?,
+    nightOfficialYellowEnabled: Boolean?,
+    onNightOfficialAlertCityScopeChange: (Boolean?) -> Unit,
+    onNightOfficialRedChange: (Boolean?) -> Unit,
+    onNightOfficialYellowChange: (Boolean?) -> Unit,
     onSleepToggle: (Boolean) -> Unit
 ) {
     val s = Strings.get(lang)
@@ -181,36 +242,61 @@ internal fun NightModeCard(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Column(modifier = Modifier.padding(horizontal = 14.dp)) {
                     SectionCaption(s.officialAlertsTitle)
-                    OfficialPairToggleRow(
-                        redTitle = s.officialRedAlertsTitle,
-                        redChecked = nightOfficialRedEnabled,
-                        onRedChange = onNightOfficialRedChange,
-                        yellowTitle = s.officialYellowAlertsTitle,
-                        yellowChecked = nightOfficialYellowEnabled,
-                        onYellowChange = onNightOfficialYellowChange
+                    NightPolicyRow(
+                        title = s.officialRedAlertsTitle,
+                        value = nightOfficialRedEnabled,
+                        day = dayOfficialRedEnabled,
+                        dayLabel = s.dayShortLabel,
+                        onLabel = s.subtitles.onWord,
+                        offLabel = s.subtitles.offWord,
+                        onChange = onNightOfficialRedChange,
+                        icon = painterResource(R.drawable.ic_trident),
+                        iconTint = if (nightOfficialRedEnabled ?: dayOfficialRedEnabled)
+                            Color(AppPalette.AlertRed) else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    NightPolicyRow(
+                        title = s.officialYellowAlertsTitle,
+                        value = nightOfficialYellowEnabled,
+                        day = dayOfficialYellowEnabled,
+                        dayLabel = s.dayShortLabel,
+                        onLabel = s.subtitles.onWord,
+                        offLabel = s.subtitles.offWord,
+                        onChange = onNightOfficialYellowChange,
+                        icon = painterResource(R.drawable.ic_trident),
+                        iconTint = if (nightOfficialYellowEnabled ?: dayOfficialYellowEnabled)
+                            Color(AppPalette.AlertYellow) else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    AlertToggleRow(
+                    NightPolicyRow(
                         title = s.nightOfficialSirenOverrideTitle,
-                        description = "Day: ${if (daySirenOverride) "ON" else "OFF"}",
-                        checked = officialSirenOverride,
-                        onCheckedChange = onOfficialSirenOverrideChange,
+                        value = officialSirenOverride,
+                        day = daySirenOverride,
+                        dayLabel = s.dayShortLabel,
+                        onLabel = s.subtitles.onWord,
+                        offLabel = s.subtitles.offWord,
+                        onChange = onOfficialSirenOverrideChange,
                         icon = painterResource(R.drawable.ic_trident)
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    AlertToggleRow(
+                    NightPolicyRow(
                         title = s.nightZoneSirenOverrideTitle,
-                        description = "Day: ${if (daySirenOverride) "ON" else "OFF"}",
-                        checked = zoneSirenOverride,
-                        onCheckedChange = onZoneSirenOverrideChange,
+                        value = zoneSirenOverride,
+                        day = daySirenOverride,
+                        dayLabel = s.dayShortLabel,
+                        onLabel = s.subtitles.onWord,
+                        offLabel = s.subtitles.offWord,
+                        onChange = onZoneSirenOverrideChange,
                         icon = painterResource(R.drawable.ic_volume_up),
                         iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    AlertToggleRow(
+                    NightPolicyRow(
                         title = s.officialAlertScopeTitle,
-                        description = "Day: ${if (dayOfficialAlertCityScope) "ON" else "OFF"}",
-                        checked = nightOfficialAlertCityScope,
-                        onCheckedChange = onNightOfficialAlertCityScopeChange,
+                        value = nightOfficialAlertCityScope,
+                        day = dayOfficialAlertCityScope,
+                        dayLabel = s.dayShortLabel,
+                        onLabel = s.subtitles.onWord,
+                        offLabel = s.subtitles.offWord,
+                        onChange = onNightOfficialAlertCityScopeChange,
                         icon = painterResource(R.drawable.ic_city_medium),
                         iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.ripple
@@ -18,15 +19,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.Image
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -294,8 +299,7 @@ internal fun OverlapModeChip(
 
 /** Icon-style picker: one row of packs (Photo, Army, Comic, Russian), each tile showing
  *  only its Shahed — the full pack art already sits on every type card below, so the strip of
- *  sevens was redundant. Names sit under the drones. */
-@Composable
+ *  sevens was redundant. Names sit under the drones. */@Composable
 internal fun IconSetSelector(
     lang: AppLanguage,
     selected: ThreatIconSet,
@@ -314,7 +318,6 @@ internal fun IconSetSelector(
                     ThreatIconSet.ARMY -> s.iconSetArmyLabel
                     ThreatIconSet.COMIC -> s.iconSetComicLabel
                     ThreatIconSet.RUSSIAN -> s.iconSetRussianLabel
-                ThreatIconSet.SENSOR -> s.iconSetSensorLabel
                 },
                 selected = selected == set,
                 onClick = { onChange(set) },
@@ -323,6 +326,92 @@ internal fun IconSetSelector(
             )
         }
     }
+}
+
+/**
+ * Grade row: five dots, one per look, with the active one named once beside them. A dot states
+ * the hue without repeating the threat art that the cards below already carry; the grade is
+ * remembered per pack, so this row shows the grade of the pack selected above it.
+ */
+@Composable
+internal fun IconGradeSelector(
+    lang: AppLanguage,
+    selected: ThreatIconGrade,
+    onChange: (ThreatIconGrade) -> Unit
+) {
+    val s = Strings.get(lang)
+    val labelOf = { grade: ThreatIconGrade ->
+        when (grade) {
+            ThreatIconGrade.NONE -> s.iconGradeNoneLabel
+            ThreatIconGrade.CYAN -> s.iconGradeCyanLabel
+            ThreatIconGrade.IR -> s.iconGradeIrLabel
+            ThreatIconGrade.VIOLET -> s.iconGradeVioletLabel
+            ThreatIconGrade.STENCIL -> s.iconGradeStencilLabel
+        }
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        ThreatIconGrade.values().forEach { grade ->
+            val isSelected = grade == selected
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .clickable(onClickLabel = labelOf(grade)) { onChange(grade) }
+                    .semantics {
+                        contentDescription = labelOf(grade)
+                        this.selected = isSelected
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                GradeDot(grade = grade, selected = isSelected)
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            labelOf(selected),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** One grade dot: its hue, or a black/white split for the grade that has no single hue. */
+@Composable
+private fun GradeDot(grade: ThreatIconGrade, selected: Boolean) {
+    val ring = if (selected) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.outlineVariant
+    val dashColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val strokePx = with(LocalDensity.current) { 2.dp.toPx() }
+    val dot = Modifier
+        .size(if (selected) 32.dp else 26.dp)
+        .clip(CircleShape)
+        .then(
+            when (grade) {
+                // "Nothing" is an empty ring with a dash, not a grey swatch — a filled circle
+                // read as just another colour.
+                ThreatIconGrade.NONE -> Modifier.drawBehind {
+                    drawLine(
+                        color = dashColor,
+                        start = Offset(size.width * 0.28f, size.height / 2f),
+                        end = Offset(size.width * 0.72f, size.height / 2f),
+                        strokeWidth = strokePx,
+                        cap = StrokeCap.Round
+                    )
+                }
+                ThreatIconGrade.CYAN -> Modifier.background(Color(0xFF7FD4F0))
+                ThreatIconGrade.IR -> Modifier.background(Color(0xFFF2F2F2))
+                ThreatIconGrade.VIOLET -> Modifier.background(Color(0xFFB79CFF))
+                ThreatIconGrade.STENCIL -> Modifier.drawBehind {
+                    drawCircle(Color.White)
+                    drawArc(Color(0xFF111111), 90f, 180f, useCenter = true)
+                }
+            }
+        )
+        .border(if (selected) 2.dp else 1.dp, ring, CircleShape)
+    Box(modifier = dot)
 }
 
 @Composable
@@ -362,10 +451,13 @@ internal fun IconSetTile(
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // The selected tile wears the active grade so a tap gives immediate feedback; the
+            // others stay ungraded, so the strip still shows each pack's own art.
             ThreatIcon(
                 type = ThreatType.SHAHED,
                 set = set,
                 size = slot,
+                grade = if (selected) LocalIconGrade.current else ThreatIconGrade.NONE,
                 contentDescription = label
             )
             Spacer(Modifier.height(8.dp))

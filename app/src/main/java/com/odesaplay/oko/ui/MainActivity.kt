@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -33,6 +35,7 @@ import com.odesaplay.oko.service.SuspendState
 import java.io.File
 import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -90,8 +93,17 @@ class MainActivity : ComponentActivity() {
             // the popup/banner still wrap and scroll up to this ceiling.
             val baseDensity = LocalDensity.current
             val fontScale = min(baseDensity.fontScale, 1.5f)
+            // The grade is a render setting, not screen state: one local keeps every
+            // ThreatIcon in the tree in step without threading it through each screen.
+            val iconGrade by produceState(ThreatIconGrade.DEFAULT) {
+                viewModel.uiState
+                    .map { if (it.moraleMasterEnabled) it.iconGrade else ThreatIconGrade.DEFAULT }
+                    .distinctUntilChanged()
+                    .collect { value = it }
+            }
             CompositionLocalProvider(
-                LocalDensity provides Density(baseDensity.density, fontScale)
+                LocalDensity provides Density(baseDensity.density, fontScale),
+                LocalIconGrade provides iconGrade
             ) {
                 MaterialTheme(colorScheme = DarkThemePlugin.colors) {
                     Surface(

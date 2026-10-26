@@ -58,6 +58,7 @@ class UserPrefs(private val context: Context) {
     private val shelterTipRemainingKey = intPreferencesKey("shelter_tip_remaining")
     private val threatCardSizeKey = stringPreferencesKey("threat_card_size")
     private val threatIconSetKey = stringPreferencesKey("threat_icon_set")
+    private val threatIconGradesKey = stringPreferencesKey("threat_icon_grades")
     private val overlapModeKey = stringPreferencesKey("threat_overlap_mode")
     private val moralePersonaKey = stringPreferencesKey("morale_persona")
     private val showMapScaleKey = booleanPreferencesKey("show_map_scale")
@@ -132,6 +133,7 @@ class UserPrefs(private val context: Context) {
         val iconSet = this[threatIconSetKey]?.let { stored ->
             ThreatIconSet.values().firstOrNull { it.name == stored }
         } ?: d.threatIconSet
+        val iconGrades = parseIconGrades(this[threatIconGradesKey])
         val overlap = this[overlapModeKey]?.let { stored ->
             OverlapMode.values().firstOrNull { it.name == stored }
         } ?: d.overlapMode
@@ -189,6 +191,7 @@ class UserPrefs(private val context: Context) {
             criticalOfflineBypassSilent = this[criticalOfflineBypassSilentKey] ?: d.criticalOfflineBypassSilent,
             threatCardSize = cardSize,
             threatIconSet = iconSet,
+            threatIconGrades = iconGrades,
             overlapMode = overlap,
             moralePersona = moralePersona,
             showMapScale = this[showMapScaleKey] ?: d.showMapScale,
@@ -220,11 +223,12 @@ class UserPrefs(private val context: Context) {
             nightSlowYellowArmed = this[nightSlowYellowArmedKey] ?: d.nightSlowYellowArmed,
             nightFastRedArmed = this[nightFastRedArmedKey] ?: d.nightFastRedArmed,
             nightFastYellowArmed = this[nightFastYellowArmedKey] ?: d.nightFastYellowArmed,
-            nightZoneSirenOverride = this[nightZoneSirenOverrideKey] ?: d.nightZoneSirenOverride,
-            nightOfficialSirenOverride = this[nightOfficialSirenOverrideKey] ?: d.nightOfficialSirenOverride,
-            nightOfficialAlertCityScope = this[nightOfficialAlertCityScopeKey] ?: d.nightOfficialAlertCityScope,
-            nightOfficialRedEnabled = this[nightOfficialRedEnabledKey] ?: d.nightOfficialRedEnabled,
-            nightOfficialYellowEnabled = this[nightOfficialYellowEnabledKey] ?: d.nightOfficialYellowEnabled,
+            // Read raw: an absent key IS the fact "no night override, follow the day value".
+            nightZoneSirenOverride = this[nightZoneSirenOverrideKey],
+            nightOfficialSirenOverride = this[nightOfficialSirenOverrideKey],
+            nightOfficialAlertCityScope = this[nightOfficialAlertCityScopeKey],
+            nightOfficialRedEnabled = this[nightOfficialRedEnabledKey],
+            nightOfficialYellowEnabled = this[nightOfficialYellowEnabledKey],
             nightSleepRestore = this[nightSleepRestoreKey] ?: d.nightSleepRestore,
             flybyAnimationEnabled = this[flybyAnimationEnabledKey] ?: d.flybyAnimationEnabled,
             threatIconZoom = this[threatIconZoomKey] ?: d.threatIconZoom,
@@ -539,6 +543,24 @@ class UserPrefs(private val context: Context) {
         store.edit { it[threatIconSetKey] = set.name }
     }
 
+    suspend fun setThreatIconGrade(set: ThreatIconSet, grade: ThreatIconGrade) {
+        store.edit { prefs ->
+            val grades = parseIconGrades(prefs[threatIconGradesKey]).toMutableMap()
+            if (grade == ThreatIconGrade.DEFAULT) grades.remove(set) else grades[set] = grade
+            prefs[threatIconGradesKey] = grades.entries.joinToString(",") { "${it.key.name}:${it.value.name}" }
+        }
+    }
+
+    /** "PHOTO:CYAN,ARMY:IR" → map. Unparseable entries are dropped, never fatal. */
+    private fun parseIconGrades(raw: String?): Map<ThreatIconSet, ThreatIconGrade> =
+        raw?.split(',')?.mapNotNull { entry ->
+            val parts = entry.split(':')
+            if (parts.size != 2) return@mapNotNull null
+            val set = ThreatIconSet.values().firstOrNull { it.name == parts[0] } ?: return@mapNotNull null
+            val grade = ThreatIconGrade.values().firstOrNull { it.name == parts[1] } ?: return@mapNotNull null
+            set to grade
+        }?.toMap() ?: emptyMap()
+
     suspend fun setOverlapMode(mode: OverlapMode) {
         store.edit { it[overlapModeKey] = mode.name }
     }
@@ -778,24 +800,36 @@ class UserPrefs(private val context: Context) {
     }
     suspend fun setNightFastYellowZoneArmed(armed: Boolean) = setNightFastYellowArmed(armed)
 
-    suspend fun setNightZoneSirenOverride(override: Boolean) {
-        editNightBell { it[nightZoneSirenOverrideKey] = override }
+    suspend fun setNightZoneSirenOverride(override: Boolean?) {
+        editNightPolicy(nightZoneSirenOverrideKey, override)
     }
 
-    suspend fun setNightOfficialSirenOverride(override: Boolean) {
-        editNightBell { it[nightOfficialSirenOverrideKey] = override }
+    suspend fun setNightOfficialSirenOverride(override: Boolean?) {
+        editNightPolicy(nightOfficialSirenOverrideKey, override)
     }
 
-    suspend fun setNightOfficialAlertCityScope(enabled: Boolean) {
-        store.edit { it[nightOfficialAlertCityScopeKey] = enabled }
+    suspend fun setNightOfficialAlertCityScope(enabled: Boolean?) {
+        editNightPolicy(nightOfficialAlertCityScopeKey, enabled)
     }
 
-    suspend fun setNightOfficialRedEnabled(enabled: Boolean) {
-        editNightBell { it[nightOfficialRedEnabledKey] = enabled }
+    suspend fun setNightOfficialRedEnabled(enabled: Boolean?) {
+        editNightPolicy(nightOfficialRedEnabledKey, enabled)
     }
 
-    suspend fun setNightOfficialYellowEnabled(enabled: Boolean) {
-        editNightBell { it[nightOfficialYellowEnabledKey] = enabled }
+    suspend fun setNightOfficialYellowEnabled(enabled: Boolean?) {
+        editNightPolicy(nightOfficialYellowEnabledKey, enabled)
+    }
+
+    /**
+     * Write (or clear) one night *policy* override. `null` means "no opinion for the night", which
+     * is stored as an absent key so the day value wins for the whole window — the state a switch
+     * cannot express as `false`. Clearing it also drops the sleep snapshot, like every other night
+     * edit, since the night settings are no longer the ones the preset captured.
+     */
+    private suspend fun editNightPolicy(key: Preferences.Key<Boolean>, value: Boolean?) {
+        editNightBell { p ->
+            if (value == null) p.remove(key) else p[key] = value
+        }
     }
 
     /**
@@ -834,7 +868,8 @@ class UserPrefs(private val context: Context) {
         }
     }
 
-    /** The night settings currently stored, as the preset the sleep button snapshots. */
+    /** The night settings currently stored, as the preset the sleep button snapshots. Inheritance is
+     *  preserved as inheritance — restoring must not pin a key the user never set. */
     private fun nightSleepPresetOf(p: Preferences): NightSleepPreset {
         val d = UserPreferences.DEFAULT
         return NightSleepPreset(
@@ -843,24 +878,27 @@ class UserPrefs(private val context: Context) {
             slowYellowArmed = p[nightSlowYellowArmedKey] ?: d.nightSlowYellowArmed,
             fastRedArmed = p[nightFastRedArmedKey] ?: d.nightFastRedArmed,
             fastYellowArmed = p[nightFastYellowArmedKey] ?: d.nightFastYellowArmed,
-            zoneSirenOverride = p[nightZoneSirenOverrideKey] ?: d.nightZoneSirenOverride,
-            officialSirenOverride = p[nightOfficialSirenOverrideKey] ?: d.nightOfficialSirenOverride,
-            officialRed = p[nightOfficialRedEnabledKey] ?: d.nightOfficialRedEnabled,
-            officialYellow = p[nightOfficialYellowEnabledKey] ?: d.nightOfficialYellowEnabled
+            zoneSirenOverride = p[nightZoneSirenOverrideKey],
+            officialSirenOverride = p[nightOfficialSirenOverrideKey],
+            officialRed = p[nightOfficialRedEnabledKey],
+            officialYellow = p[nightOfficialYellowEnabledKey]
         )
     }
 
-    /** Write all nine night-sleep keys at once. */
+    /** Write all nine night-sleep keys at once; `null` clears the override back to inheriting. */
     private fun applyNightSleep(p: MutablePreferences, preset: NightSleepPreset) {
         p[nightUseCustomZonesKey] = preset.useCustomZones
         p[nightSlowRedArmedKey] = preset.slowRedArmed
         p[nightSlowYellowArmedKey] = preset.slowYellowArmed
         p[nightFastRedArmedKey] = preset.fastRedArmed
         p[nightFastYellowArmedKey] = preset.fastYellowArmed
-        p[nightZoneSirenOverrideKey] = preset.zoneSirenOverride
-        p[nightOfficialSirenOverrideKey] = preset.officialSirenOverride
-        p[nightOfficialRedEnabledKey] = preset.officialRed
-        p[nightOfficialYellowEnabledKey] = preset.officialYellow
+        fun put(key: Preferences.Key<Boolean>, v: Boolean?) {
+            if (v == null) p.remove(key) else p[key] = v
+        }
+        put(nightZoneSirenOverrideKey, preset.zoneSirenOverride)
+        put(nightOfficialSirenOverrideKey, preset.officialSirenOverride)
+        put(nightOfficialRedEnabledKey, preset.officialRed)
+        put(nightOfficialYellowEnabledKey, preset.officialYellow)
     }
 
     private companion object {
@@ -935,10 +973,13 @@ fun UserPreferences.alertPersonaSnapshot(): AlertPersonaPatch = AlertPersonaPatc
     fastYellowArmed = fastYellowArmed,
     alertTypes = alertEnabledTypes,
     night = IntensityNight(
-        zoneSirenOverride = nightZoneSirenOverride,
-        officialSirenOverride = nightOfficialSirenOverride,
-        officialRed = nightOfficialRedEnabled,
-        officialYellow = nightOfficialYellowEnabled,
+        // A preset is one concrete intent, so an inherited night key states the day value it
+        // resolves to rather than leaving the patch half-stated (the documented invariant on
+        // IntensityPatch: no nullable fields).
+        zoneSirenOverride = nightOverrideOr(nightZoneSirenOverride, sirenOverride),
+        officialSirenOverride = nightOverrideOr(nightOfficialSirenOverride, sirenOverride),
+        officialRed = nightOverrideOr(nightOfficialRedEnabled, officialRedAlertsEnabled),
+        officialYellow = nightOverrideOr(nightOfficialYellowEnabled, officialYellowAlertsEnabled),
         slowRedArmed = nightSlowRedArmed,
         slowYellowArmed = nightSlowYellowArmed,
         fastRedArmed = nightFastRedArmed,

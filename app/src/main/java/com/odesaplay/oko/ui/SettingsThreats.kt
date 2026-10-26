@@ -149,7 +149,7 @@ internal fun ThreatTypeRow(
                         painter = painterResource(IconCatalog.res(type, iconSet)),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        colorFilter = IconCatalog.recipeMatrix(iconSet)?.let {
+                        colorFilter = IconCatalog.gradeMatrix(LocalIconGrade.current)?.let {
                             ColorFilter.colorMatrix(ColorMatrix(it.copyOf()))
                         },
                         modifier = Modifier.fillMaxSize()

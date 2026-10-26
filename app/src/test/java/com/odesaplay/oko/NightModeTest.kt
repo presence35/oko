@@ -86,21 +86,38 @@ class NightModeTest {
 
     @Test
     fun `official enable follows the night window`() {
-        // Outside the window the day value wins; inside it the night value wins.
-        assertTrue(effectiveOfficialEnabled(day = true, night = false, nightActive = false))
-        assertFalse(effectiveOfficialEnabled(day = true, night = false, nightActive = true))
-        assertFalse(effectiveOfficialEnabled(day = false, night = true, nightActive = false))
-        assertTrue(effectiveOfficialEnabled(day = false, night = true, nightActive = true))
+        // Outside the window the day value wins; inside it the night override wins.
+        assertTrue(effectiveNightPolicy(day = true, night = false, nightActive = false))
+        assertFalse(effectiveNightPolicy(day = true, night = false, nightActive = true))
+        assertFalse(effectiveNightPolicy(day = false, night = true, nightActive = false))
+        assertTrue(effectiveNightPolicy(day = false, night = true, nightActive = true))
     }
 
     @Test
-    fun `city scope follows the night window, never an OR`() {
-        // Day on / night off must be able to turn scoping OFF for the night: `day || night`
-        // cannot express that, and it disagreed with the widget.
-        assertFalse(effectiveCityScope(day = true, night = false, nightActive = true))
-        assertTrue(effectiveCityScope(day = false, night = true, nightActive = true))
-        assertTrue(effectiveCityScope(day = true, night = false, nightActive = false))
-        assertFalse(effectiveCityScope(day = false, night = true, nightActive = false))
+    fun `an unset night policy follows the day value inside the window`() {
+        // The reported bug: "city level" on, night active, no night override -> the day choice must
+        // survive the window. Before this, every night policy key carried its own hardcoded default
+        // and city scope defaulted to false, so the whole oblast rang at night.
+        assertTrue(effectiveNightPolicy(day = true, night = null, nightActive = true))
+        assertFalse(effectiveNightPolicy(day = false, night = null, nightActive = true))
+        assertTrue(effectiveNightPolicy(day = true, night = null, nightActive = false))
+        assertFalse(effectiveNightPolicy(day = false, night = null, nightActive = false))
+    }
+
+    @Test
+    fun `an explicit night override wins over the day value`() {
+        // Both directions, so neither `day || night` nor `night ?: day` gets the pin wrong.
+        assertFalse(effectiveNightPolicy(day = true, night = false, nightActive = true))
+        assertTrue(effectiveNightPolicy(day = false, night = true, nightActive = true))
+    }
+
+    @Test
+    fun `night override resolves to the day value when unset`() {
+        // What a preset or the sleep snapshot states for an inherited key.
+        assertTrue(nightOverrideOr(null, true))
+        assertFalse(nightOverrideOr(null, false))
+        assertTrue(nightOverrideOr(true, false))
+        assertFalse(nightOverrideOr(false, true))
     }
 
     @Test

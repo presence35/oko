@@ -588,7 +588,11 @@ object Strings {
         val iconSetArmyLabel: String,
         val iconSetComicLabel: String,
         val iconSetRussianLabel: String,
-        val iconSetSensorLabel: String,
+        val iconGradeNoneLabel: String,
+        val iconGradeCyanLabel: String,
+        val iconGradeIrLabel: String,
+        val iconGradeVioletLabel: String,
+        val iconGradeStencilLabel: String,
         val shelterButtonLabel: String,
         val shelterScreenTitle: String,
         val shelterOpenInMaps: String,
@@ -1250,7 +1254,7 @@ object Strings {
                 String.format(subtitles.threatsSilencedFormat, silencedCount)
             }
 
-        fun systemSubtitle(cardSize: ThreatCardSize, iconSet: ThreatIconSet): String {
+        fun systemSubtitle(cardSize: ThreatCardSize, iconSet: ThreatIconSet, iconGrade: ThreatIconGrade): String {
             val sizeName = when (cardSize) {
                 ThreatCardSize.SMALL -> cardSizeSmallLabel
                 ThreatCardSize.LARGE -> cardSizeLargeLabel
@@ -1260,9 +1264,16 @@ object Strings {
                 ThreatIconSet.ARMY -> iconSetArmyLabel
                 ThreatIconSet.COMIC -> iconSetComicLabel
                 ThreatIconSet.RUSSIAN -> iconSetRussianLabel
-                ThreatIconSet.SENSOR -> iconSetSensorLabel
             }
-            return "${subtitles.selfLanguageName} · $sizeName · ${subtitles.iconsLabel}: $iconName"
+            val gradeName = when (iconGrade) {
+                ThreatIconGrade.NONE -> null
+                ThreatIconGrade.CYAN -> iconGradeCyanLabel
+                ThreatIconGrade.IR -> iconGradeIrLabel
+                ThreatIconGrade.VIOLET -> iconGradeVioletLabel
+                ThreatIconGrade.STENCIL -> iconGradeStencilLabel
+            }
+            val iconsName = if (gradeName == null) iconName else "$iconName · $gradeName"
+            return "${subtitles.selfLanguageName} · $sizeName · ${subtitles.iconsLabel}: $iconsName"
         }
         val redZoneAlert: String get() = status.redZoneAlert
         val yellowZoneAlert: String get() = status.yellowZoneAlert
@@ -1664,7 +1675,11 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val iconSetArmyLabel: String get() = misc.iconSetArmyLabel
         val iconSetComicLabel: String get() = misc.iconSetComicLabel
         val iconSetRussianLabel: String get() = misc.iconSetRussianLabel
-        val iconSetSensorLabel: String get() = misc.iconSetSensorLabel
+        val iconGradeNoneLabel: String get() = misc.iconGradeNoneLabel
+        val iconGradeCyanLabel: String get() = misc.iconGradeCyanLabel
+        val iconGradeIrLabel: String get() = misc.iconGradeIrLabel
+        val iconGradeVioletLabel: String get() = misc.iconGradeVioletLabel
+        val iconGradeStencilLabel: String get() = misc.iconGradeStencilLabel
         val shelterButtonLabel: String get() = misc.shelterButtonLabel
         val shelterScreenTitle: String get() = misc.shelterScreenTitle
         val shelterOpenInMaps: String get() = misc.shelterOpenInMaps

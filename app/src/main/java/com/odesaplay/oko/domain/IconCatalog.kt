@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -18,8 +19,10 @@ import androidx.compose.ui.unit.Dp
 
 /**
  * Single source of truth for which drawable represents a threat type in which icon set.
- * The classic set is the monochrome vector set; the photo/army/comic sets are the bundled
- * direction-oriented rasters (see `iconpacks/{photo,army,comic}/drawable-nodpi/threat_*_*.webp`).
+ * Every pack is one [PackArt] entry: the classic set is the monochrome vector fallback, the
+ * rest are the bundled direction-oriented rasters (see
+ * `iconpacks/{photo,army,comic,russian}/drawable-nodpi/threat_*_*.webp`). Adding a pack is a
+ * table entry, not a new `when` branch.
  */
 object IconCatalog {
 
@@ -35,91 +38,30 @@ object IconCatalog {
         ThreatType.UNKNOWN -> R.drawable.ic_threat_unknown
     }
 
-    /** Photo icon for [type], or the classic vector when no photo is bundled (UNKNOWN). */
-    fun res(type: ThreatType, set: ThreatIconSet): Int = when (set) {
-    ThreatIconSet.PHOTO -> photoRes(type) ?: classicRes(type)
-        ThreatIconSet.ARMY -> armyRes(type) ?: classicRes(type)
-        ThreatIconSet.COMIC -> comicRes(type) ?: classicRes(type)
-        ThreatIconSet.RUSSIAN -> russianRes(type) ?: classicRes(type)
-        ThreatIconSet.SENSOR -> photoRes(type) ?: classicRes(type)
-    }
+    /** Icon for [type] in [set], or the classic vector when that pack has no asset (UNKNOWN). */
+    fun res(type: ThreatType, set: ThreatIconSet): Int =
+        PACKS[set]?.art?.get(type) ?: classicRes(type)
 
     /**
-     * Colour grade for a recipe pack: the set reuses the photo master's assets and only
-     * recolours them, so geometry, facing and exhaust anchors are shared with PHOTO instead
-     * of being re-baked per pack. Returned row-major 4x5, applied identically by Compose and
-     * by the map's bitmap path so both surfaces agree.
+     * Direction each icon's subject faces as baked into the artwork, in degrees clockwise from
+     * north/up. Map markers rotate by `courseDeg - base` so the subject points along its course.
      */
-    fun recipeMatrix(set: ThreatIconSet): FloatArray? = when (set) {
-        ThreatIconSet.SENSOR -> SENSOR_MATRIX
-        else -> null
-    }
+    fun baseDeg(type: ThreatType, set: ThreatIconSet): Float =
+        PACKS[set]?.facing?.get(type) ?: 0f
 
-    /** Cool sensor look: luminance through a steel-cyan ramp, hot metal stays near-white. */
-    private val SENSOR_MATRIX: FloatArray = monoRamp(1.50f, 1.80f, 1.95f, -56f, -70f, -78f)
-
-    private fun monoRamp(
-        gainR: Float, gainG: Float, gainB: Float,
-        offR: Float, offG: Float, offB: Float
-    ): FloatArray = floatArrayOf(
-        0.299f * gainR, 0.587f * gainR, 0.114f * gainR, 0f, offR,
-        0.299f * gainG, 0.587f * gainG, 0.114f * gainG, 0f, offG,
-        0.299f * gainB, 0.587f * gainB, 0.114f * gainB, 0f, offB,
-        0f, 0f, 0f, 1f, 0f
-    )
-
-    /** Army icon for [type], or null when the set has no asset (UNKNOWN). */
-    internal fun armyRes(type: ThreatType): Int? = when (type) {
-        ThreatType.SHAHED -> R.drawable.threat_army_shahed
-        ThreatType.FPV_LOITERING -> R.drawable.threat_army_fpv
-        ThreatType.CRUISE_MISSILE -> R.drawable.threat_army_cruise
-        ThreatType.BALLISTIC -> R.drawable.threat_army_ballistic
-        ThreatType.KAB -> R.drawable.threat_army_kab
-        ThreatType.AVIATION -> R.drawable.threat_army_aviation
-        ThreatType.RECON -> R.drawable.threat_army_recon
-        ThreatType.UNKNOWN -> null
-    }
-
-    internal fun photoRes(type: ThreatType): Int? = when (type) {
-        ThreatType.SHAHED -> R.drawable.threat_photo_shahed
-        ThreatType.FPV_LOITERING -> R.drawable.threat_photo_fpv
-        ThreatType.CRUISE_MISSILE -> R.drawable.threat_photo_cruise
-        ThreatType.BALLISTIC -> R.drawable.threat_photo_ballistic
-        ThreatType.KAB -> R.drawable.threat_photo_kab
-        ThreatType.AVIATION -> R.drawable.threat_photo_aviation
-        ThreatType.RECON -> R.drawable.threat_photo_recon
-        ThreatType.UNKNOWN -> null
-    }
-
-    /** Russian icon for [type], or null when the set has no asset (UNKNOWN). */
-    internal fun russianRes(type: ThreatType): Int? = when (type) {
-        ThreatType.SHAHED -> R.drawable.threat_russian_shahed
-        ThreatType.FPV_LOITERING -> R.drawable.threat_russian_fpv
-        ThreatType.CRUISE_MISSILE -> R.drawable.threat_russian_cruise
-        ThreatType.BALLISTIC -> R.drawable.threat_russian_ballistic
-        ThreatType.KAB -> R.drawable.threat_russian_kab
-        ThreatType.AVIATION -> R.drawable.threat_russian_aviation
-        ThreatType.RECON -> R.drawable.threat_russian_recon
-        ThreatType.UNKNOWN -> null
-    }
-
-    /** Comic icon for [type], or null when the set has no asset (UNKNOWN). */
-    internal fun comicRes(type: ThreatType): Int? = when (type) {
-        ThreatType.SHAHED -> R.drawable.threat_comic_shahed
-        ThreatType.FPV_LOITERING -> R.drawable.threat_comic_fpv
-        ThreatType.CRUISE_MISSILE -> R.drawable.threat_comic_cruise
-        ThreatType.BALLISTIC -> R.drawable.threat_comic_ballistic
-        ThreatType.KAB -> R.drawable.threat_comic_kab
-        ThreatType.AVIATION -> R.drawable.threat_comic_aviation
-        ThreatType.RECON -> R.drawable.threat_comic_recon
-        ThreatType.UNKNOWN -> null
+    /** Exhaust anchors for the aviation flyby; packs without raster art fall back to PHOTO. */
+    fun aviationGeometry(set: ThreatIconSet): AviationGeometry {
+        val pack = PACKS[set] ?: PACKS.getValue(ThreatIconSet.PHOTO)
+        return AviationGeometry(
+            facingDeg = pack.facing.getValue(ThreatType.AVIATION),
+            exhausts = pack.exhausts
+        )
     }
 
     /** True when [type] has a bundled raster in any set (UNKNOWN never does). */
-    fun hasRaster(type: ThreatType): Boolean =
-        photoRes(type) != null || armyRes(type) != null || comicRes(type) != null || russianRes(type) != null
+    fun hasRaster(type: ThreatType): Boolean = PACKS.values.any { type in it.art }
 
-    /** The seven threat types that have bundled photos, in display order. */
+    /** The seven threat types that have bundled rasters, in display order. */
     fun photoTypes(): List<ThreatType> = listOf(
         ThreatType.SHAHED,
         ThreatType.FPV_LOITERING,
@@ -131,86 +73,139 @@ object IconCatalog {
     )
 
     /**
-     * Direction each photo's subject faces as baked into the image, in degrees clockwise
-     * from north/up (the filename suffix, e.g. "top_right" = 45°). Map markers rotate the
-     * icon by `courseDeg - base` so the subject points along its true course.
+     * Colour grade for [grade], or null for the untouched artwork. A grade is a row-major 4x5
+     * matrix in the same 0..255 space for Compose and for the map's bitmap path, so the two
+     * surfaces cannot drift. Grades are orthogonal to packs: any master can wear any of them.
      */
-    fun photoBaseDeg(type: ThreatType): Float = when (type) {
-        ThreatType.BALLISTIC -> 0f       // vertical (up), after the 90°-right photo rotation
-        ThreatType.CRUISE_MISSILE -> 45f  // _top_right (PNGs re-faced)
-        ThreatType.FPV_LOITERING -> 180f  // _bottom_middle
-        ThreatType.KAB -> 240f            // _bottom_left
-        ThreatType.AVIATION -> 265f       // _left
-        ThreatType.RECON -> 232f          // _bottom_left, measured along the fuselage
-        ThreatType.SHAHED -> 0f           // _top_middle
-        ThreatType.UNKNOWN -> 0f
+    fun gradeMatrix(grade: ThreatIconGrade): FloatArray? = when (grade) {
+        ThreatIconGrade.NONE -> null
+        ThreatIconGrade.CYAN -> CYAN_MATRIX
+        ThreatIconGrade.IR -> IR_MATRIX
+        ThreatIconGrade.VIOLET -> VIOLET_MATRIX
+        ThreatIconGrade.STENCIL -> STENCIL_MATRIX
     }
 
-    /**
-     * Direction each army icon's subject faces as baked into the image, in degrees clockwise
-     * from north/up (the source-file name, e.g. "top_right" = 45°).
-     */
-    fun armyBaseDeg(type: ThreatType): Float = when (type) {
-        ThreatType.BALLISTIC -> 45f       // _top_right
-        ThreatType.CRUISE_MISSILE -> 90f  // _right
-        ThreatType.FPV_LOITERING -> 180f  // _bottom
-        ThreatType.KAB -> 240f            // _bottom_left
-        ThreatType.AVIATION -> 265f       // _left
-        ThreatType.RECON -> 232f          // _bottom_left, measured along the fuselage
-        ThreatType.SHAHED -> 0f           // _top
-        ThreatType.UNKNOWN -> 0f
-    }
+    /** Cool steel: luminance through a cyan ramp, hot metal stays near-white. */
+    private val CYAN_MATRIX = monoRamp(1.50f, 1.80f, 1.95f, -56f, -70f, -78f)
 
-    /**
-     * Direction each comic icon's subject faces as baked into the image, in degrees clockwise
-     * from north/up (the source-file name, e.g. "top_right" = 45°).
-     */
-    fun comicBaseDeg(type: ThreatType): Float = armyBaseDeg(type)
+    /** White-hot sensor return, neutral. */
+    private val IR_MATRIX = monoRamp(1.85f, 1.85f, 1.85f, -82f, -82f, -82f)
 
-    /** Direction each russian icon's subject faces as baked into the image (same orientation as army). */
-    fun russianBaseDeg(type: ThreatType): Float = armyBaseDeg(type)
+    /** Violet cast; no other UI element uses this hue, so the icons never read as a status. */
+    private val VIOLET_MATRIX = monoRamp(1.80f, 1.50f, 2.05f, -75f, -62f, -88f)
 
-    /** Baked-in facing direction for the active set (0° for the rotation-free classic set). */
-    fun baseDeg(type: ThreatType, set: ThreatIconSet): Float = when (set) {
-        ThreatIconSet.PHOTO -> photoBaseDeg(type)
-        ThreatIconSet.ARMY -> armyBaseDeg(type)
-        ThreatIconSet.COMIC -> comicBaseDeg(type)
-        ThreatIconSet.RUSSIAN -> russianBaseDeg(type)
-        ThreatIconSet.SENSOR -> photoBaseDeg(type)
-    }
+    /** Two-tone crush: interiors flatten into a stark decal. Pale masters (comic) go solid. */
+    private val STENCIL_MATRIX = monoRamp(2.60f, 2.60f, 2.60f, -140f, -140f, -140f)
 
-    fun aviationGeometry(set: ThreatIconSet): AviationGeometry = when (set) {
-        ThreatIconSet.SENSOR -> aviationGeometry(ThreatIconSet.PHOTO)
-        ThreatIconSet.RUSSIAN -> AviationGeometry(
-            facingDeg = baseDeg(ThreatType.AVIATION, set),
+    private fun monoRamp(
+        gainR: Float, gainG: Float, gainB: Float,
+        offR: Float, offG: Float, offB: Float
+    ): FloatArray = floatArrayOf(
+        0.299f * gainR, 0.587f * gainR, 0.114f * gainR, 0f, offR,
+        0.299f * gainG, 0.587f * gainG, 0.114f * gainG, 0f, offG,
+        0.299f * gainB, 0.587f * gainB, 0.114f * gainB, 0f, offB,
+        0f, 0f, 0f, 1f, 0f
+    )
+
+    /** One pack's artwork: which drawable per type, its baked facing, its flyby exhausts. */
+    private class PackArt(
+        val art: Map<ThreatType, Int>,
+        val facing: Map<ThreatType, Float>,
+        val exhausts: List<Exhaust>
+    )
+
+    /** Army and comic share one facing table; only their artwork and exhausts differ. */
+    private val DRAWN_FACING = mapOf(
+        ThreatType.SHAHED to 0f,
+        ThreatType.FPV_LOITERING to 180f,
+        ThreatType.CRUISE_MISSILE to 90f,
+        ThreatType.BALLISTIC to 45f,
+        ThreatType.KAB to 240f,
+        ThreatType.AVIATION to 265f,
+        ThreatType.RECON to 232f
+    )
+
+    private val PACKS: Map<ThreatIconSet, PackArt> = mapOf(
+        ThreatIconSet.PHOTO to PackArt(
+            art = mapOf(
+                ThreatType.SHAHED to R.drawable.threat_photo_shahed,
+                ThreatType.FPV_LOITERING to R.drawable.threat_photo_fpv,
+                ThreatType.CRUISE_MISSILE to R.drawable.threat_photo_cruise,
+                ThreatType.BALLISTIC to R.drawable.threat_photo_ballistic,
+                ThreatType.KAB to R.drawable.threat_photo_kab,
+                ThreatType.AVIATION to R.drawable.threat_photo_aviation,
+                ThreatType.RECON to R.drawable.threat_photo_recon
+            ),
+            facing = mapOf(
+                ThreatType.SHAHED to 0f,
+                ThreatType.FPV_LOITERING to 180f,
+                ThreatType.CRUISE_MISSILE to 45f,
+                ThreatType.BALLISTIC to 0f,
+                ThreatType.KAB to 240f,
+                ThreatType.AVIATION to 265f,
+                ThreatType.RECON to 232f
+            ),
+            exhausts = listOf(
+                Exhaust(0.299205f, -0.014911f),
+                Exhaust(0.454274f, 0.024851f)
+            )
+        ),
+        ThreatIconSet.ARMY to PackArt(
+            art = mapOf(
+                ThreatType.SHAHED to R.drawable.threat_army_shahed,
+                ThreatType.FPV_LOITERING to R.drawable.threat_army_fpv,
+                ThreatType.CRUISE_MISSILE to R.drawable.threat_army_cruise,
+                ThreatType.BALLISTIC to R.drawable.threat_army_ballistic,
+                ThreatType.KAB to R.drawable.threat_army_kab,
+                ThreatType.AVIATION to R.drawable.threat_army_aviation,
+                ThreatType.RECON to R.drawable.threat_army_recon
+            ),
+            facing = DRAWN_FACING,
+            exhausts = listOf(
+                Exhaust(0.354871f, -0.014911f),
+                Exhaust(0.454274f, 0.024851f)
+            )
+        ),
+        ThreatIconSet.COMIC to PackArt(
+            art = mapOf(
+                ThreatType.SHAHED to R.drawable.threat_comic_shahed,
+                ThreatType.FPV_LOITERING to R.drawable.threat_comic_fpv,
+                ThreatType.CRUISE_MISSILE to R.drawable.threat_comic_cruise,
+                ThreatType.BALLISTIC to R.drawable.threat_comic_ballistic,
+                ThreatType.KAB to R.drawable.threat_comic_kab,
+                ThreatType.AVIATION to R.drawable.threat_comic_aviation,
+                ThreatType.RECON to R.drawable.threat_comic_recon
+            ),
+            facing = DRAWN_FACING,
+            exhausts = listOf(
+                Exhaust(0.201717f, -0.066524f),
+                Exhaust(0.379828f, 0.000000f)
+            )
+        ),
+        ThreatIconSet.RUSSIAN to PackArt(
+            art = mapOf(
+                ThreatType.SHAHED to R.drawable.threat_russian_shahed,
+                ThreatType.FPV_LOITERING to R.drawable.threat_russian_fpv,
+                ThreatType.CRUISE_MISSILE to R.drawable.threat_russian_cruise,
+                ThreatType.BALLISTIC to R.drawable.threat_russian_ballistic,
+                ThreatType.KAB to R.drawable.threat_russian_kab,
+                ThreatType.AVIATION to R.drawable.threat_russian_aviation,
+                ThreatType.RECON to R.drawable.threat_russian_recon
+            ),
+            facing = DRAWN_FACING,
             exhausts = listOf(
                 Exhaust(0.218816f, -0.051800f),
                 Exhaust(0.402748f, 0.022199f)
             )
         )
-        ThreatIconSet.PHOTO -> AviationGeometry(
-            facingDeg = baseDeg(ThreatType.AVIATION, set),
-            exhausts = listOf(
-                Exhaust(0.299205f, -0.014911f),
-                Exhaust(0.454274f, 0.024851f)
-            )
-        )
-        ThreatIconSet.ARMY -> AviationGeometry(
-            facingDeg = baseDeg(ThreatType.AVIATION, set),
-            exhausts = listOf(
-                Exhaust(0.354871f, -0.014911f),
-                Exhaust(0.454274f, 0.024851f)
-            )
-        )
-        ThreatIconSet.COMIC -> AviationGeometry(
-            facingDeg = baseDeg(ThreatType.AVIATION, set),
-            exhausts = listOf(
-                Exhaust(0.201717f, -0.066524f),
-                Exhaust(0.379828f, 0.000000f)
-            )
-        )
-    }
+    )
 }
+
+/**
+ * Active colour grade, provided once near the app root. Callers that preview a grade for the
+ * user pass it explicitly; everything else inherits.
+ */
+val LocalIconGrade = compositionLocalOf { ThreatIconGrade.NONE }
 
 data class Exhaust(
     val anchorXFrac: Float,
@@ -243,9 +238,9 @@ private val DimmedPhotoFilter = ColorFilter.colorMatrix(
 )
 
 /**
- * Threat icon that letterboxes the photo set inside its square slot (the vector set draws
- * as-is). The photo assets are wide/short or narrow/tall, so they must keep their aspect
- * ratio instead of stretching into the box like `Icon` would.
+ * Threat icon that letterboxes the raster packs inside their square slot (the vector set draws
+ * as-is). The photo assets are wide/short or narrow/tall, so they must keep their aspect ratio
+ * instead of stretching into the box like `Icon` would.
  */
 @Composable
 fun ThreatIcon(
@@ -254,7 +249,8 @@ fun ThreatIcon(
     size: Dp,
     tint: Color = Color.Unspecified,
     dimmed: Boolean = false,
-    contentDescription: String? = null
+    contentDescription: String? = null,
+    grade: ThreatIconGrade? = null
 ) {
     if (type != ThreatType.UNKNOWN && !IconCatalog.hasRaster(type)) {
         Icon(
@@ -264,7 +260,8 @@ fun ThreatIcon(
             modifier = Modifier.size(size).alpha(if (dimmed) 0.45f else 1f)
         )
     } else {
-        val recipe = IconCatalog.recipeMatrix(set)
+        val effectiveGrade = grade ?: LocalIconGrade.current
+        val recipe = IconCatalog.gradeMatrix(effectiveGrade)
         Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) {
             Image(
                 painter = painterResource(id = IconCatalog.res(type, set)),

@@ -93,16 +93,27 @@ fun isWithinNight(nowMin: Int, startMin: Int, endMin: Int): Boolean =
     if (startMin < endMin) nowMin in startMin until endMin
     else nowMin >= startMin || nowMin < endMin
 
-/** The official-alert enable for this tick: the night value while the window is active, else the day one. */
-fun effectiveOfficialEnabled(day: Boolean, night: Boolean, nightActive: Boolean): Boolean =
-    if (nightActive) night else day
+/**
+ * The active value of a *night policy* key (official red/yellow enable, siren overrides, city
+ * scope) for this tick. The night value is an **override**, not a second setting: `null` means the
+ * user never said anything about the night for this key, so the day value carries over.
+ *
+ * The `null` case is the whole point. Every one of these keys used to be a plain boolean with its
+ * own hardcoded default, so an active window silently replaced a day choice the user had made —
+ * with "city level" on, a raion yellow three oblasts of data away from your own raion still rang
+ * the banner at night, because the night default for that key was `false` = whole oblast. A quiet
+ * mode may narrow what reaches the user, never widen it behind their back, and the same trap sat
+ * on four other keys.
+ *
+ * One function, not five copies: the copies each carried their own default, which is exactly how
+ * they drifted apart.
+ */
+fun effectiveNightPolicy(day: Boolean, night: Boolean?, nightActive: Boolean): Boolean =
+    if (nightActive) night ?: day else day
 
-/** The active city-scope gate: the night value while the window is active, else the day one.
- *  Same `if (nightActive)` idiom as [effectiveZoneParams]/[effectiveArmed]/[effectiveOfficialEnabled]
- *  — a consumer that ORs the two instead (`day || night`) cannot turn scoping off for the night,
- *  and the map ends up disagreeing with the service. */
-fun effectiveCityScope(day: Boolean, night: Boolean, nightActive: Boolean): Boolean =
-    if (nightActive) night else day
+/** A night override resolved for writing: an unset override means "same as day", so snapshots and
+ *  presets state the [day] value they would inherit rather than inventing a third answer. */
+fun nightOverrideOr(night: Boolean?, day: Boolean): Boolean = night ?: day
 
 /** The night-mode zone values as one value object, so the service and the widget cannot read a
  *  different subset of the night prefs (the widget used to read none of them). */
@@ -125,33 +136,49 @@ data class NightSleepPreset(
     val slowYellowArmed: Boolean,
     val fastRedArmed: Boolean,
     val fastYellowArmed: Boolean,
-    val zoneSirenOverride: Boolean,
-    val officialSirenOverride: Boolean,
-    val officialRed: Boolean,
-    val officialYellow: Boolean
+    /** The four policy keys are tri-state here too: `null` = the night had no override and was
+     *  following the day value, which the restore must put back rather than pin. */
+    val zoneSirenOverride: Boolean?,
+    val officialSirenOverride: Boolean?,
+    val officialRed: Boolean?,
+    val officialYellow: Boolean?
 ) {
-    /** Every alert is off. */
+    /** Every alert is off — an inherited key is not a choice to be off. */
     val isSilent: Boolean
         get() = !slowRedArmed && !slowYellowArmed && !fastRedArmed && !fastYellowArmed &&
-            !zoneSirenOverride && !officialSirenOverride && !officialRed && !officialYellow
+            zoneSirenOverride == false && officialSirenOverride == false &&
+            officialRed == false && officialYellow == false
 
     /** The button's ON state: custom zones on (so the night bells actually apply) and every alert off. */
     val isMuted: Boolean get() = useCustomZones && isSilent
 
     fun encode(): String = buildString(BITS) {
-        append(if (useCustomZones) '1' else '0')
-        append(if (slowRedArmed) '1' else '0')
-        append(if (slowYellowArmed) '1' else '0')
-        append(if (fastRedArmed) '1' else '0')
-        append(if (fastYellowArmed) '1' else '0')
-        append(if (zoneSirenOverride) '1' else '0')
-        append(if (officialSirenOverride) '1' else '0')
-        append(if (officialRed) '1' else '0')
-        append(if (officialYellow) '1' else '0')
+        append(bit(useCustomZones))
+        append(bit(slowRedArmed))
+        append(bit(slowYellowArmed))
+        append(bit(fastRedArmed))
+        append(bit(fastYellowArmed))
+        append(bit(zoneSirenOverride))
+        append(bit(officialSirenOverride))
+        append(bit(officialRed))
+        append(bit(officialYellow))
     }
 
     companion object {
         private const val BITS = 9
+
+        /** '1' on, '0' off, 'i' inherit-the-day-value. */
+        private fun bit(v: Boolean?): Char = when (v) {
+            true -> '1'
+            false -> '0'
+            null -> 'i'
+        }
+
+        private fun read(ch: Char): Boolean? = when (ch) {
+            '1' -> true
+            '0' -> false
+            else -> null
+        }
 
         /** The exact settings "Just let me sleep!" writes. */
         val MUTED = NightSleepPreset(
@@ -163,17 +190,17 @@ data class NightSleepPreset(
         )
 
         fun decode(raw: String?): NightSleepPreset? {
-            if (raw == null || raw.length != BITS || raw.any { it != '0' && it != '1' }) return null
+            if (raw == null || raw.length != BITS || raw.any { it != '0' && it != '1' && it != 'i' }) return null
             return NightSleepPreset(
                 useCustomZones = raw[0] == '1',
                 slowRedArmed = raw[1] == '1',
                 slowYellowArmed = raw[2] == '1',
                 fastRedArmed = raw[3] == '1',
                 fastYellowArmed = raw[4] == '1',
-                zoneSirenOverride = raw[5] == '1',
-                officialSirenOverride = raw[6] == '1',
-                officialRed = raw[7] == '1',
-                officialYellow = raw[8] == '1'
+                zoneSirenOverride = read(raw[5]),
+                officialSirenOverride = read(raw[6]),
+                officialRed = read(raw[7]),
+                officialYellow = read(raw[8])
             )
         }
     }

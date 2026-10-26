@@ -414,7 +414,7 @@ private fun WizardIsNotBlock(s: Strings.StringSet) {
 private fun WizardTipsBlock(s: Strings.StringSet) {
     Column(modifier = Modifier.fillMaxWidth()) {
         OnboardingTipRow(
-            iconRes = IconCatalog.photoRes(ThreatType.SHAHED) ?: R.drawable.ic_threat_shahed,
+            iconRes = IconCatalog.res(ThreatType.SHAHED, ThreatIconSet.PHOTO),
             iconTint = Color.Unspecified,
             text = s.onboardingTipTap
         )

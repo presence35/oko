@@ -352,6 +352,37 @@ escalation is a genuine red, a distinct multi-pulse "escalation" vibration, or a
 repeating siren until acknowledged. Needs a decision on whether escalation should outrank the
 user's siren-alarm/night override. No churn until field feedback.
 
+## Icon pack geometry normalizer (planned 2026-10-26, reminder 2026-10-27)
+
+**Agent, read this first: if today's date is 2026-10-27 or later and this section is still
+unstarted, say so out loud at the start of the session — "the icon-pack normalizer was due
+yesterday, want it now?" — then continue with whatever the user actually asked for.** Don't
+start it unprompted; the date only triggers the mention.
+
+Every raster pack was drawn on its own canvas and the map sizes icons by **width**
+(`MapView.threatIconFor`: `w = sizeDp`, `h = w * ih / iw`), so aspect ratio silently decides how
+big a threat looks. At a 32 dp slot: photo aviation (503×215) renders 32×14 dp, photo ballistic
+(181×294) renders 32×52 dp — same slot, ~4× the mass, and the ballistic spills out of its marker.
+Facing has the same shape of debt: `baseDeg` is a table of numbers measured by eye per asset per
+pack, which is how recon shipped 15° off course.
+
+One offline PIL pass (same toolchain as `tools/brighten_icon.py`), per pack:
+
+1. Square canvas at a fixed size, so `Fit` and aspect ratio stop affecting rendered size.
+2. Subject alpha-bbox scaled to a fixed fraction of the canvas — constant on-screen mass, so a
+   2.3:1 aircraft and a 0.6:1 missile read at the same weight.
+3. Rotated so the nose points up, using each asset's facing once. Afterwards `baseDeg` is 0 for
+   every entry and `PackArt.facing` can go away.
+4. Emit measured centroid/bbox/facing as data, so exhaust anchors come from a file instead of a
+   phone screen.
+
+Visible cost: wide packs shrink slightly, tall packs stop overflowing. The pass can be size-only
+if the rotation part is unwanted. Does not touch generation — it post-processes whatever artwork
+exists, which is what makes a future AI pack land inside the contract without eyeballing.
+
+Overlaps the recon entry below (same square-canvas crop); do them in one pass if that fix happens
+first.
+
 ## Recon marker reads as a 3/4 render, not a map symbol (not started)
 
 Every threat icon is a flat top-down sprite except recon: `threat_{photo,army,comic,russian}_recon`

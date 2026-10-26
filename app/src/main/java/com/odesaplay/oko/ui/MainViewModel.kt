@@ -120,12 +120,12 @@ data class UiState(
     val nightSlowYellowArmed: Boolean = UserPreferences.DEFAULT.nightSlowYellowArmed,
     val nightFastRedArmed: Boolean = UserPreferences.DEFAULT.nightFastRedArmed,
     val nightFastYellowArmed: Boolean = UserPreferences.DEFAULT.nightFastYellowArmed,
-    val nightZoneSirenOverride: Boolean = UserPreferences.DEFAULT.nightZoneSirenOverride,
-    val nightOfficialSirenOverride: Boolean = UserPreferences.DEFAULT.nightOfficialSirenOverride,
+    val nightZoneSirenOverride: Boolean? = null,
+    val nightOfficialSirenOverride: Boolean? = null,
     val officialRedAlertsEnabled: Boolean = true,
     val officialYellowAlertsEnabled: Boolean = true,
      val officialAlertCityScope: Boolean = false,
-     val nightOfficialAlertCityScope: Boolean = false,
+     val nightOfficialAlertCityScope: Boolean? = null,
      val sirenOverride: Boolean = false,
     val criticalOfflineOverride: Boolean = true,
     val criticalOfflineBypassSilent: Boolean = false,
@@ -171,6 +171,7 @@ data class UiState(
     val serviceResurrected: Boolean = false,
     val threatCardSize: ThreatCardSize = ThreatCardSize.LARGE,
     val iconSet: ThreatIconSet = ThreatIconSet.DEFAULT,
+    val iconGrade: ThreatIconGrade = ThreatIconGrade.DEFAULT,
     val overlapMode: OverlapMode = OverlapMode.DEFAULT,
     val showMapScale: Boolean = true,
     val showMediumCities: Boolean = true,
@@ -266,11 +267,11 @@ data class SettingsState(
     val nightSlowYellowArmed: Boolean get() = prefs.nightSlowYellowArmed
     val nightFastRedArmed: Boolean get() = prefs.nightFastRedArmed
     val nightFastYellowArmed: Boolean get() = prefs.nightFastYellowArmed
-    val nightZoneSirenOverride: Boolean get() = prefs.nightZoneSirenOverride
-    val nightOfficialSirenOverride: Boolean get() = prefs.nightOfficialSirenOverride
-    val nightOfficialAlertCityScope: Boolean get() = prefs.nightOfficialAlertCityScope
-    val nightOfficialRedEnabled: Boolean get() = prefs.nightOfficialRedEnabled
-    val nightOfficialYellowEnabled: Boolean get() = prefs.nightOfficialYellowEnabled
+    val nightZoneSirenOverride: Boolean? get() = prefs.nightZoneSirenOverride
+    val nightOfficialSirenOverride: Boolean? get() = prefs.nightOfficialSirenOverride
+    val nightOfficialAlertCityScope: Boolean? get() = prefs.nightOfficialAlertCityScope
+    val nightOfficialRedEnabled: Boolean? get() = prefs.nightOfficialRedEnabled
+    val nightOfficialYellowEnabled: Boolean? get() = prefs.nightOfficialYellowEnabled
     /** "Just let me sleep!" is on when the night settings are the fully-muted combination. */
     val nightSleepActive: Boolean get() = prefs.nightSleepActive
     val followMe: Boolean get() = prefs.followMe
@@ -284,6 +285,7 @@ data class SettingsState(
     val disclaimerReadCount: Int get() = prefs.disclaimerReadCount
     val threatCardSize: ThreatCardSize get() = prefs.threatCardSize
     val iconSet: ThreatIconSet get() = if (prefs.moraleMasterEnabled) prefs.threatIconSet else ThreatIconSet.DEFAULT
+    val iconGrade: ThreatIconGrade get() = if (prefs.moraleMasterEnabled) prefs.iconGrade else ThreatIconGrade.DEFAULT
     val overlapMode: OverlapMode get() = prefs.overlapMode
     val showMapScale: Boolean get() = prefs.showMapScale
     val showMediumCities: Boolean get() = prefs.showMediumCities
@@ -620,8 +622,8 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val slowYellowArmed: Boolean,
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
-        val zoneSirenOverride: Boolean,
-        val officialSirenOverride: Boolean
+        val zoneSirenOverride: Boolean?,
+        val officialSirenOverride: Boolean?
     )
 
     private data class NightPrefs(
@@ -642,7 +644,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val officialRedAlertsEnabled: Boolean,
         val officialYellowAlertsEnabled: Boolean,
         val officialAlertCityScope: Boolean,
-        val nightOfficialAlertCityScope: Boolean,
+        val nightOfficialAlertCityScope: Boolean?,
         val nightSleepActive: Boolean,
         val sirenOverride: Boolean,
         val followMe: Boolean,
@@ -654,6 +656,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val serviceResurrected: Boolean,
         val cardSize: ThreatCardSize,
         val iconSet: ThreatIconSet,
+        val iconGrade: ThreatIconGrade,
         val overlapMode: OverlapMode,
         val showMapScale: Boolean,
         val showMediumCities: Boolean,
@@ -757,6 +760,7 @@ val sheltersEnabled: Boolean,
             serviceResurrected = serviceResurrected,
             cardSize = threatCardSize,
             iconSet = threatIconSet,
+            iconGrade = threatIconGrades[iconSet] ?: ThreatIconGrade.DEFAULT,
             overlapMode = overlapMode,
             showMapScale = showMapScale,
             showMediumCities = showMediumCities,
@@ -897,7 +901,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             nowMono = nowMono,
             reveal = live.reveal,
             flourish = live.flourish,
-            officialAlertCityScope = effectiveCityScope(
+            officialAlertCityScope = effectiveNightPolicy(
                 prefs.officialAlertCityScope, prefs.nightOfficialAlertCityScope, nightActive
             ),
             showBorders = prefs.showBorders,
@@ -988,6 +992,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             // rather than leaving a flourish pack on screen that nothing animates. Read through
             // the shared gate, not the pref, so there is one answer to "is morale on".
             iconSet = if (moraleGate.isOn) prefs.iconSet else ThreatIconSet.PHOTO,
+            iconGrade = if (moraleGate.isOn) prefs.iconGrade else ThreatIconGrade.DEFAULT,
             overlapMode = prefs.overlapMode,
             showMapScale = prefs.showMapScale,
             showMediumCities = prefs.showMediumCities,
@@ -1589,23 +1594,23 @@ fun setAlertsArmed(armed: Boolean) {
         }
     }
 
-    fun setNightZoneSirenOverride(override: Boolean) {
+    fun setNightZoneSirenOverride(override: Boolean?) {
         viewModelScope.launch { prefs.setNightZoneSirenOverride(override) }
     }
 
-    fun setNightOfficialSirenOverride(override: Boolean) {
+    fun setNightOfficialSirenOverride(override: Boolean?) {
         viewModelScope.launch { prefs.setNightOfficialSirenOverride(override) }
     }
 
-    fun setNightOfficialAlertCityScope(enabled: Boolean) {
+    fun setNightOfficialAlertCityScope(enabled: Boolean?) {
         viewModelScope.launch { prefs.setNightOfficialAlertCityScope(enabled) }
     }
 
-    fun setNightOfficialRedEnabled(enabled: Boolean) {
+    fun setNightOfficialRedEnabled(enabled: Boolean?) {
         viewModelScope.launch { prefs.setNightOfficialRedEnabled(enabled) }
     }
 
-    fun setNightOfficialYellowEnabled(enabled: Boolean) {
+    fun setNightOfficialYellowEnabled(enabled: Boolean?) {
         viewModelScope.launch { prefs.setNightOfficialYellowEnabled(enabled) }
     }
 
@@ -1748,6 +1753,10 @@ fun setAlertsArmed(armed: Boolean) {
 
     fun setThreatIconSet(set: ThreatIconSet) {
         viewModelScope.launch { prefs.setThreatIconSet(set) }
+    }
+
+    fun setThreatIconGrade(set: ThreatIconSet, grade: ThreatIconGrade) {
+        viewModelScope.launch { prefs.setThreatIconGrade(set, grade) }
     }
 
     fun setLanguage(lang: AppLanguage) {

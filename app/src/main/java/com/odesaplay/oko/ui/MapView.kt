@@ -115,11 +115,12 @@ private fun threatIconFor(
     context: Context,
     type: ThreatType,
     iconSet: ThreatIconSet,
+    grade: ThreatIconGrade = ThreatIconGrade.NONE,
     revealed: Boolean = false,
     areaOnly: Boolean = false,
     sizeDp: Int = 32
 ): Drawable {
-    val key = "${type.name}|${iconSet.name}|$revealed|$areaOnly|$sizeDp"
+    val key = "${type.name}|${iconSet.name}|${grade.name}|$revealed|$areaOnly|$sizeDp"
     val cached = threatIconCache.get(key)
     var bmp: Bitmap
     if (cached != null) {
@@ -135,7 +136,7 @@ private fun threatIconFor(
         bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         src.setBounds(0, 0, w, h)
         src.draw(Canvas(bmp))
-        val graded = IconCatalog.recipeMatrix(iconSet)?.let { grade ->
+        val graded = IconCatalog.gradeMatrix(grade)?.let { grade ->
             Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { out ->
                 Canvas(out).drawBitmap(bmp, 0f, 0f, Paint().apply {
                     isAntiAlias = true
@@ -466,18 +467,19 @@ fun NeptunMapView(
     // The controller outlives recompositions, so it must read the pack through state: closing over
     // the parameter froze the first pack of the session into every death animation.
     val fxIconSet by rememberUpdatedState(iconSet)
+    val iconGradeState by rememberUpdatedState(LocalIconGrade.current)
     val deathFx = remember {
         DeathFxController(
             context = context,
             bridge = { bridgeState.value },
-            iconFor = { type -> threatIconFor(context, type, fxIconSet) },
+            iconFor = { type -> threatIconFor(context, type, fxIconSet, grade = iconGradeState) },
             showDetail = { rec, grp -> String.format(strings.flourishLogDetailFormat, rec, grp) },
             scope = mapScope
         )
     }
     // Markers resolve their icon at draw time, but an idle map never draws by itself — without this
     // a pack change waits for the next pan or threat, leaving the last frame in the old pack.
-    LaunchedEffect(uiState.iconSet) {
+    LaunchedEffect(uiState.iconSet, iconGradeState) {
         bridgeState.value?.invalidateOverlay()
     }
 
@@ -814,7 +816,7 @@ LaunchedEffect(selectedId) {
             isMapInFocus = { mapIsUserFocus(pausedState, mapVisibleState, showNearbySheltersState, lifecycle.currentState) },
             hiddenTypes = { hiddenTypesState },
             resolveOutcome = { id -> threatOutcomes[id] },
-            resolveIcon = { type -> threatIconFor(context, type, iconSetState) },
+            resolveIcon = { type -> threatIconFor(context, type, iconSetState, grade = iconGradeState) },
             resolveRotation = { r ->
                 val outcome = threatOutcomes[r.id]
                 val base = IconCatalog.baseDeg(r.type, iconSetState)
@@ -857,7 +859,7 @@ LaunchedEffect(selectedId) {
                 delay(700)
                 if (!mapIsUserFocus(pausedState, mapVisibleState, showNearbySheltersState, lifecycle.currentState)) return@launch
                 val target = LatLng(welcomeShow.lat, welcomeShow.lon)
-                val icon = threatIconFor(context, ThreatType.SHAHED, iconSetState)
+                val icon = threatIconFor(context, ThreatType.SHAHED, iconSetState, grade = iconGradeState)
                 val base = IconCatalog.baseDeg(ThreatType.SHAHED, iconSetState)
                 if (deathFx.strike(
                     id = "welcome-demo",
@@ -1132,7 +1134,7 @@ LaunchedEffect(selectedId) {
                         val revealed = ring != null && t.id == ring.id && nowMs < ring.activeUntilMs
                         val sizeDp = if (threatIconZoomState) threatIconSizeDp(currentZoom) else 32
                         val iconDrawable = threatIconFor(
-                            context, t.type.toThreatType(), iconSetState,
+                            context, t.type.toThreatType(), iconSetState, grade = iconGradeState,
                             revealed = revealed, areaOnly = t.areaOnly, sizeDp = sizeDp
                         )
                         val bmp = (iconDrawable as? BitmapDrawable)?.bitmap ?: continue
@@ -1165,7 +1167,7 @@ LaunchedEffect(selectedId) {
                             val pt = bridge.project(pin.lat, pin.lon)
                             if (pt != null) {
                                 val icon = threatIconFor(
-                                    context, pin.type, iconSetState, sizeDp = 28
+                                    context, pin.type, iconSetState, grade = iconGradeState, sizeDp = 28
                                 ) as? BitmapDrawable
                                 val bmp = icon?.bitmap
                                 if (bmp != null) {
@@ -1319,7 +1321,7 @@ LaunchedEffect(selectedId) {
                         val strikeLon = outcome?.lon ?: geoPt.longitude
                         val threatType = targetThreat.type.toThreatType()
                         val icon = threatIconFor(
-                            context, threatType, iconSetState,
+                            context, threatType, iconSetState, grade = iconGradeState,
                             sizeDp = if (threatIconZoomState) threatIconSizeDp(bridge.zoom) else 32
                         )
                         val base = IconCatalog.baseDeg(threatType, iconSetState)

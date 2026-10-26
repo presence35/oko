@@ -1020,8 +1020,10 @@ val mappedThreats = registry.allThreats.map { list ->
                     ZoneArmed(p.slowRedArmed, p.slowYellowArmed, p.fastRedArmed, p.fastYellowArmed),
                     nightZones, p.nightUseCustomZones, nightActive
                 )
-                val zoneSirenOverride = if (nightActive) p.nightZoneSirenOverride else p.sirenOverride
-                val officialSirenOverride = if (nightActive) p.nightOfficialSirenOverride else p.sirenOverride
+                val zoneSirenOverride =
+                    effectiveNightPolicy(p.sirenOverride, p.nightZoneSirenOverride, nightActive)
+                val officialSirenOverride =
+                    effectiveNightPolicy(p.sirenOverride, p.nightOfficialSirenOverride, nightActive)
 
                 val enabled = p.alertEnabledTypes
                 val hiddenTypeStrings = (ThreatType.values().toSet() - p.mapVisibleTypes)
@@ -1059,7 +1061,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 // gate) from the same matcher the UI/widget consume (mirror rule). Red and
                 // yellow share this path — official is official; only the notif toggles
                 // and tint/copy differ downstream.
-                val cityScopeActive = effectiveCityScope(
+                val cityScopeActive = effectiveNightPolicy(
                     p.officialAlertCityScope, p.nightOfficialAlertCityScope, nightActive
                 )
                 val official = alerts.officialStateFor(focusToken, focusCityUa, cityScopeActive)
@@ -1123,8 +1125,8 @@ val mappedThreats = registry.allThreats.map { list ->
                     slowYellowArmed = armed.slowYellow,
                     fastRedArmed = armed.fastRed,
                     fastYellowArmed = armed.fastYellow,
-                    officialRedAlertsEnabled = effectiveOfficialEnabled(p.officialRedAlertsEnabled, p.nightOfficialRedEnabled, nightActive),
-                    officialYellowAlertsEnabled = effectiveOfficialEnabled(p.officialYellowAlertsEnabled, p.nightOfficialYellowEnabled, nightActive),
+                    officialRedAlertsEnabled = effectiveNightPolicy(p.officialRedAlertsEnabled, p.nightOfficialRedEnabled, nightActive),
+                    officialYellowAlertsEnabled = effectiveNightPolicy(p.officialYellowAlertsEnabled, p.nightOfficialYellowEnabled, nightActive),
                     zoneSirenOverride = zoneSirenOverride,
                     officialSirenOverride = officialSirenOverride,
                     fallingDebrisDelaySec = p.fallingDebrisDelaySec,

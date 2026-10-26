@@ -1,5 +1,11 @@
 # Oko — Release Workflow
 
+## Date triggers
+
+If today is **2026-10-27 or later**, mention the due item from `ROADMAP.md` (currently: the
+icon-pack geometry normalizer, section "Icon pack geometry normalizer") in one line at the start
+of the session, then carry on with the actual request. Mention only — don't start it unprompted.
+
 ## Trigger phrase: "release it"
 
 Only when the user says **"release it"**, perform a full release:

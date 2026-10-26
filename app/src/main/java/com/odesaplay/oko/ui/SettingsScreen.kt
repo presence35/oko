@@ -117,11 +117,11 @@ fun SettingsScreen(
     onNightSlowYellowArmedChange: (Boolean) -> Unit,
     onNightFastRedArmedChange: (Boolean) -> Unit,
     onNightFastYellowArmedChange: (Boolean) -> Unit,
-    onNightZoneSirenOverrideChange: (Boolean) -> Unit,
-    onNightOfficialSirenOverrideChange: (Boolean) -> Unit,
-    onNightOfficialAlertCityScopeChange: (Boolean) -> Unit,
-    onNightOfficialRedChange: (Boolean) -> Unit,
-    onNightOfficialYellowChange: (Boolean) -> Unit,
+    onNightZoneSirenOverrideChange: (Boolean?) -> Unit,
+    onNightOfficialSirenOverrideChange: (Boolean?) -> Unit,
+    onNightOfficialAlertCityScopeChange: (Boolean?) -> Unit,
+    onNightOfficialRedChange: (Boolean?) -> Unit,
+    onNightOfficialYellowChange: (Boolean?) -> Unit,
     onNightSleepToggle: (Boolean) -> Unit,
     onFollowMeChange: (Boolean) -> Unit,
     onPinnedCityChange: (City?) -> Unit,
@@ -132,6 +132,7 @@ fun SettingsScreen(
     onDisclaimerShown: () -> Unit,
     onThreatCardSizeChange: (ThreatCardSize) -> Unit,
     onIconSetChange: (ThreatIconSet) -> Unit,
+    onIconGradeChange: (ThreatIconSet, ThreatIconGrade) -> Unit,
     onLanguageChange: (AppLanguage) -> Unit,
     onOverlapModeChange: (OverlapMode) -> Unit,
     onShowMapScaleChange: (Boolean) -> Unit,
@@ -214,6 +215,7 @@ fun SettingsScreen(
     val pinnedCity = state.pinnedCity
     val threatCardSize = state.threatCardSize
     val iconSet = state.iconSet
+    val iconGrade = state.iconGrade
     val showMapScale = state.showMapScale
     val showMediumCities = state.showMediumCities
     val showSmallCities = state.showSmallCities
@@ -425,7 +427,9 @@ fun SettingsScreen(
                 nightEnabled,
                 nightStartMin,
                 nightEndMin,
-                nightZoneSirenOverride || nightOfficialSirenOverride,
+                // What the night actually does: an unset override follows the day value.
+                nightOverrideOr(nightZoneSirenOverride, sirenOverride) ||
+                    nightOverrideOr(nightOfficialSirenOverride, sirenOverride),
                 nightUseCustomZones,
                 state.nightSleepActive
             )
@@ -435,7 +439,7 @@ fun SettingsScreen(
                 s.sheltersSubtitle(sheltersEnabled)
             }
             SettingsSection.THREATS -> s.threatsSubtitle(hiddenTypes.size, silencedTypes.size)
-            SettingsSection.SYSTEM -> s.systemSubtitle(threatCardSize, iconSet)
+            SettingsSection.SYSTEM -> s.systemSubtitle(threatCardSize, iconSet, iconGrade)
             // The master is a kill-switch: while it is off every sub-toggle below is inert, so the summary
             // must not claim explosions or the counter are live. Fold it in rather than reading the
             // raw sub-prefs, which survive the flip and re-arm on flip-back.
@@ -1029,6 +1033,8 @@ fun SettingsScreen(
                         officialSirenOverride = nightOfficialSirenOverride,
                         daySirenOverride = sirenOverride,
                         dayOfficialAlertCityScope = officialAlertCityScope,
+                        dayOfficialRedEnabled = officialRedAlertsEnabled,
+                        dayOfficialYellowEnabled = officialYellowAlertsEnabled,
                         daySlowRedKm = slowRedKm,
                         daySlowYellowKm = slowYellowKm,
                         dayFastRedMin = fastRedMin,
@@ -1120,6 +1126,14 @@ fun SettingsScreen(
                             onChange = onIconSetChange,
                             packs = if (moraleMasterEnabled) ThreatIconSet.values().toList() else listOf(ThreatIconSet.DEFAULT)
                         )
+                        if (moraleMasterEnabled) {
+                            Spacer(Modifier.height(10.dp))
+                            IconGradeSelector(
+                                lang = lang,
+                                selected = iconGrade,
+                                onChange = { onIconGradeChange(iconSet, it) }
+                            )
+                        }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     val typeCatalog by AppSources.registry.typeCatalog.collectAsState()

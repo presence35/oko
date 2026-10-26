@@ -29,9 +29,18 @@ fun systemLanguage(): AppLanguage = when (java.util.Locale.getDefault().language
 enum class ThreatCardSize { SMALL, LARGE }
 
 enum class ThreatIconSet {
-    PHOTO, ARMY, COMIC, RUSSIAN, SENSOR;
+    PHOTO, ARMY, COMIC, RUSSIAN;
     companion object {
         val DEFAULT = PHOTO
+    }
+}
+
+/** Colour grade applied over the active pack. Orthogonal to [ThreatIconSet]: any pack can
+ *  wear any grade, so a new look costs a matrix instead of seven new assets. */
+enum class ThreatIconGrade {
+    NONE, CYAN, IR, VIOLET, STENCIL;
+    companion object {
+        val DEFAULT = NONE
     }
 }
 
@@ -87,6 +96,8 @@ data class UserPreferences(
     val criticalOfflineBypassSilent: Boolean = false,
     val threatCardSize: ThreatCardSize = ThreatCardSize.LARGE,
     val threatIconSet: ThreatIconSet = ThreatIconSet.DEFAULT,
+    /** Grade per pack, so switching pack restores the look that pack was last given. */
+    val threatIconGrades: Map<ThreatIconSet, ThreatIconGrade> = emptyMap(),
     val overlapMode: OverlapMode = OverlapMode.DEFAULT,
     val showMapScale: Boolean = true,
     val showMediumCities: Boolean = true,
@@ -117,11 +128,15 @@ data class UserPreferences(
     val nightSlowYellowArmed: Boolean = true,
     val nightFastRedArmed: Boolean = true,
     val nightFastYellowArmed: Boolean = false,
-    val nightZoneSirenOverride: Boolean = false,
-    val nightOfficialSirenOverride: Boolean = false,
-    val nightOfficialAlertCityScope: Boolean = false,
-    val nightOfficialRedEnabled: Boolean = true,
-    val nightOfficialYellowEnabled: Boolean = true,
+    /** Night *policy* overrides: `null` = the user never set one, so the day value carries over for
+     *  the whole night window ([effectiveNightPolicy]). Only a real choice is stored, which is why
+     *  these five are nullable while the night zone thresholds are not — those are gated by the
+     *  explicit [nightUseCustomZones] master, so they already are an opt-in. */
+    val nightZoneSirenOverride: Boolean? = null,
+    val nightOfficialSirenOverride: Boolean? = null,
+    val nightOfficialAlertCityScope: Boolean? = null,
+    val nightOfficialRedEnabled: Boolean? = null,
+    val nightOfficialYellowEnabled: Boolean? = null,
     val nightSleepRestore: String? = null,
     val flybyAnimationEnabled: Boolean = true,
     val threatIconZoom: Boolean = true,
@@ -147,10 +162,15 @@ data class UserPreferences(
     val alertEnabledTypes: Set<ThreatType> = ThreatType.values().toSet()
 ) {
     val iconSet: ThreatIconSet get() = threatIconSet
+    val iconGrade: ThreatIconGrade get() = iconGradeFor(threatIconSet)
+
+    fun iconGradeFor(set: ThreatIconSet): ThreatIconGrade =
+        threatIconGrades[set] ?: ThreatIconGrade.DEFAULT
     val sheltersWithKids: Boolean get() = sheltersWithKidsEnabled
     val cardSize: ThreatCardSize get() = threatCardSize
 
-    /** The night settings the "Just let me sleep!" button owns. */
+    /** The night settings the "Just let me sleep!" button owns. Inheritance is part of the state,
+     *  so an unset override stays unset through the snapshot and the restore. */
     val nightSleepPreset: NightSleepPreset
         get() = NightSleepPreset(
             useCustomZones = nightUseCustomZones,

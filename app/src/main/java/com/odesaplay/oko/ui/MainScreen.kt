@@ -516,6 +516,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onDisclaimerShown = remember { { viewModel.onDisclaimerShown() } },
                 onThreatCardSizeChange = remember { { viewModel.setThreatCardSize(it) } },
                 onIconSetChange = remember { { viewModel.setThreatIconSet(it) } },
+                onIconGradeChange = remember { { set, grade -> viewModel.setThreatIconGrade(set, grade) } },
                 onLanguageChange = remember { { viewModel.setLanguage(it) } },
                 onOverlapModeChange = remember { { viewModel.setOverlapMode(it) } },
                 onShowMapScaleChange = remember { { viewModel.setShowMapScale(it) } },
