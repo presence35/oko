@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- The wizard keeps the Back button's slot on page 1, so Next no longer widens and the button row stops jumping between the first two pages 10-26_22:37:30
 - The shot-down tally reads "1 Drone resolved", not "1 Drones resolved", and one rule now declines every counted noun in all three languages (5 дронів, 2 КАБа), with the type labels tested per count band 10-26_22:29:41
 - Recon map markers no longer sit 15° off their course: the drone sprite's nose is at 232°, not 247° 10-26_21:02:21
 - Closing a settings explainer keeps you on the page you were on instead of jumping to Alerts (Reliability's "Always sound" was the one that did it); the night-mode switch on the list still opens its page 10-26_19:22:00

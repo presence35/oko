@@ -240,6 +240,10 @@ internal fun FirstLaunchWizard(
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
+                } else {
+                    // The first page has no Back, but its slot stays: otherwise Next widens and
+                    // the whole button row jumps between page 1 and page 2.
+                    Spacer(Modifier.size(48.dp))
                 }
                 val nextEnabled = step.isNextEnabled(locationMode, pinnedCity != null)
                 val nextInteraction = remember { MutableInteractionSource() }
