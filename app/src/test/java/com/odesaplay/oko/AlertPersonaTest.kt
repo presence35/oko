@@ -2,6 +2,7 @@ package com.odesaplay.oko
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -154,5 +155,25 @@ class AlertPersonaTest {
             assertEquals("$language repeats a persona line", descs.size, descs.distinct().size)
             assertTrue("$language has no restore label", s.alertPersonaRestore.isNotBlank())
         }
+    }
+
+    /**
+     * The tile's "selected" mark is derived, not remembered: a persona is lit only while the live
+     * switches equal what it writes. These pin the two halves of that contract — a persona always
+     * recognises its own state, and a single hand edit stops it from doing so.
+     */
+    @Test
+    fun `every persona is recognised by the state it writes`() {
+        for (persona in all) {
+            assertEquals(persona.name, persona, matchingAlertPersona(persona.patch()))
+        }
+    }
+
+    @Test
+    fun `a hand edit leaves no persona selected`() {
+        val snapshot = AlertPersona.PARENT.patch()
+        assertNull(matchingAlertPersona(snapshot.copy(officialYellow = !snapshot.officialYellow)))
+        assertNull(matchingAlertPersona(snapshot.copy(alertTypes = snapshot.alertTypes - ThreatType.SHAHED)))
+        assertNull(matchingAlertPersona(snapshot.copy(night = snapshot.night.copy(fastRedArmed = false))))
     }
 }

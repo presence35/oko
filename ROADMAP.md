@@ -235,6 +235,12 @@ Implementation: new pref key (`tutorialShownCount`/`tutorialShownAt`) in `UserPr
 single rich-text dialog. Steer users to Settings → Feature Guide at the end. Strings in
 `Strings.kt` (UA + EN).
 
+**First page is trust, not features.** Before any feature tip, say what the app is not: "Око is
+not a radar system; it's a strong signal, but not a guarantee." Someone who has not calibrated how
+much to believe the map is not ready for "amber badge = observation". The same page belongs in
+Settings → Feature Guide, because the popup alone fires on ~10th open / day 3 — days after the user
+started acting on alerts. The Play listing and README hero carry the line too.
+
 ## Threat clustering at low zoom (TL;DR)
 
 When multiple threats overlap at low zoom levels, show a single count badge instead of 10

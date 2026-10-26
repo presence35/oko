@@ -97,6 +97,10 @@ fun SettingsScreen(
     onSleepNoticeChange: (Boolean) -> Unit,
     onApplyIntensity: (AppIntensity) -> Unit,
     onApplyAlertPersona: (AlertPersona) -> Unit,
+    /** The preset whose switches exactly match what is live right now, or null. Derived, never
+     *  remembered: any hand edit stops matching and the tile unlights by itself. */
+    appliedIntensity: AppIntensity?,
+    appliedAlertPersona: AlertPersona?,
     canRestoreAlertMine: Boolean,
     onRestoreAlertMine: () -> Unit,
     canRestoreIntensity: Boolean,
@@ -250,10 +254,6 @@ fun SettingsScreen(
     val searchNormalized = searchQuery.searchNorm()
     val searchWords = searchNormalized.split(" ").filter { it.isNotBlank() }
     var showBootRestartOffConfirm by remember { mutableStateOf(false) }
-    // Which quadrant the subtext is describing. Starts null — nothing has been applied from here.
-    var presetShown by remember { mutableStateOf<AppIntensity?>(null) }
-    // Same contract for the Alerts page: lit means "tapped from here", never "currently active".
-    var alertPersonaShown by remember { mutableStateOf<AlertPersona?>(null) }
     val searching = searchNormalized.isNotEmpty()
     val searchDb = remember(pinnedCity) { buildSearchDb(pinnedCity) }
     val matchedSections = remember(searchNormalized, searchDb) {
@@ -387,11 +387,15 @@ fun SettingsScreen(
             SettingsSection.NIGHT -> s.nightModeLabel
             SettingsSection.SHELTERS -> s.shelterSectionTitle
             SettingsSection.THREATS -> s.threatsLabel
-            // A speaker stranded in a language they cannot read scans the root list for Latin
-            // letters; the row leads with the English word "Language" so the way back is findable
-            // before the current-language title the eye has to parse.
-            SettingsSection.SYSTEM -> if (lang == AppLanguage.EN) s.systemSectionTitle
-                else "${Strings.get(AppLanguage.EN).languageLabel} · ${s.systemSectionTitle}"
+            // A reader stranded in a language they cannot parse scans the list for a script they
+            // know, so the escape word is always in the OTHER language: an English UI says "Мова",
+            // everything else says "Language" (never Russian, whatever the UI is set to). The
+            // section's own name still follows the UI language.
+            SettingsSection.SYSTEM -> {
+                val escape = if (lang == AppLanguage.EN) Strings.get(AppLanguage.UA).languageLabel
+                else Strings.get(AppLanguage.EN).languageLabel
+                "$escape · ${s.systemSectionTitle}"
+            }
             SettingsSection.FLOURISH -> s.moraleSectionTitle
             SettingsSection.MORE -> s.moreSectionTitle
             SettingsSection.RELIABILITY -> s.reliabilitySectionTitle
@@ -703,13 +707,8 @@ fun SettingsScreen(
                         Spacer(Modifier.height(12.dp))
                         IntensityPicker(
                             s = s,
-                            selected = presetShown,
-                            onPick = { intensity ->
-                                // Applied on tap, the picker left as it is: the subtext then explains
-                                // what was just written, and another tap tries something else.
-                                onApplyIntensity(intensity)
-                                presetShown = intensity
-                            }
+                            selected = appliedIntensity,
+                            onPick = { intensity -> onApplyIntensity(intensity) }
                         )
                         Spacer(Modifier.height(10.dp))
                         Text(
@@ -720,10 +719,7 @@ fun SettingsScreen(
                         PresetRestoreRow(
                             label = s.alertPersonaRestore,
                             canRestore = canRestoreIntensity,
-                            onRestore = {
-                                onRestoreIntensity()
-                                presetShown = null
-                            }
+                            onRestore = { onRestoreIntensity() }
                         )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -748,6 +744,14 @@ fun SettingsScreen(
                         checked = bootRestartEnabled,
                         onChange = onBootRestartChange,
                         onRequestDisable = { showBootRestartOffConfirm = true }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // The presets above write this switch, so the page that offers them has to show
+                    // it — a robustness pref hidden on another page is one the presets silently set.
+                    PeriodicGpsRow(
+                        s = s,
+                        checked = periodicGps,
+                        onChange = onPeriodicGpsChange
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     BatteryExemptionBlock(
@@ -791,11 +795,10 @@ fun SettingsScreen(
                         Column {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             Column(modifier = Modifier.padding(start = 24.dp)) {
-                                AlertToggleRow(
-                                    title = s.periodicGpsTitle,
-                                    description = s.periodicGpsDesc,
+                                PeriodicGpsRow(
+                                    s = s,
                                     checked = periodicGps,
-                                    onCheckedChange = onPeriodicGpsChange
+                                    onChange = onPeriodicGpsChange
                                 )
                             }
                         }
@@ -812,16 +815,10 @@ fun SettingsScreen(
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         AlertPersonaPicker(
                             s = s,
-                            selected = alertPersonaShown,
+                            selected = appliedAlertPersona,
                             canRestore = canRestoreAlertMine,
-                            onPick = { persona ->
-                                onApplyAlertPersona(persona)
-                                alertPersonaShown = persona
-                            },
-                            onRestore = {
-                                onRestoreAlertMine()
-                                alertPersonaShown = null
-                            }
+                            onPick = { persona -> onApplyAlertPersona(persona) },
+                            onRestore = { onRestoreAlertMine() }
                         )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

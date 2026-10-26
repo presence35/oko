@@ -486,12 +486,37 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     val latestVersionState: StateFlow<String?> get() = latestVersionFlow
 
     /** "Mine" snapshots, captured lazily on the first preset tap of the session. */
-    private var alertMine: AlertPersonaPatch? = null
-    private var intensityMine: IntensityPatch? = null
-    private val canRestoreAlertMineFlow = MutableStateFlow(false)
-    private val canRestoreIntensityFlow = MutableStateFlow(false)
-    val canRestoreAlertMine: StateFlow<Boolean> get() = canRestoreAlertMineFlow
-    val canRestoreIntensity: StateFlow<Boolean> get() = canRestoreIntensityFlow
+    private val alertMine = MutableStateFlow<AlertPersonaPatch?>(null)
+    private val intensityMine = MutableStateFlow<IntensityPatch?>(null)
+
+    /**
+     * Which setup the switches currently describe. Not a remembered tap: a preset is "selected"
+     * only while the live settings equal what it writes, so any hand edit — on this page or any
+     * other — unlights it, and the tile can never claim a state the app is not in. Null means the
+     * user's own mix.
+     */
+    val appliedIntensity: StateFlow<AppIntensity?> = prefs.preferences
+        .map { p -> matchingIntensity(p.intensitySnapshot()) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val appliedAlertPersona: StateFlow<AlertPersona?> = prefs.preferences
+        .map { p -> matchingAlertPersona(p.alertPersonaSnapshot()) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * "Mine" is available exactly while the live setup differs from the snapshot taken before the
+     * first preset tap — so it mutes itself after a restore and re-arms on the next edit, which is
+     * the whole point of an undo.
+     */
+    val canRestoreIntensity: StateFlow<Boolean> =
+        combine(intensityMine, prefs.preferences) { mine, p ->
+            mine != null && mine != p.intensitySnapshot()
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val canRestoreAlertMine: StateFlow<Boolean> =
+        combine(alertMine, prefs.preferences) { mine, p ->
+            mine != null && mine != p.alertPersonaSnapshot()
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // The plugin registry must exist before any property below reads it — property
     // initializers run before the init{} block, so init it here (idempotent; the later
@@ -808,7 +833,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         registry.degraded,
         registry.coveredByFallback,
         RaidMuteState.state,
-        notificationStateFlow
+        notificationStateFlow,
+        LocationTracker.accessBlocked
     ) { values ->
         val live = values[1] as LiveSnapshot
         val rawPrefs = values[2] as UserPreferences
@@ -817,6 +843,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val shelterLoad = values[4] as ShelterLoad
         val flyby = values[5] as AviationFlybyShow?
         val raidMute = values[9] as RaidMute
+        val locationAccessBlocked = values[11] as Boolean
         val notificationsDisabledBySystem = !(values[10] as NotificationState).enabled
         val bootRestartEnabled = rawPrefs.bootRestartEnabled
         val sleepNoticeEnabled = rawPrefs.sleepNoticeEnabled
@@ -880,7 +907,11 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         // problems.first(), and only ids that have never been surfaced raise the guidance toast.
         val problems = deriveProblems(
             notificationsDisabled = notificationsDisabledBySystem,
-            gpsUnreliable = built.gpsUnreliable,
+            // `gpsUnreliable` is the stale-fix judgement; an unusable location (no permission, or
+            // every provider off) is the same user-facing fact and must not wait for the fix to age.
+            // Only when a live position is what the app is running on, though: a pinned city needs
+            // no GPS, and warning about a permission that city mode never uses is pure noise.
+            gpsUnreliable = built.gpsUnreliable || (locationAccessBlocked && prefs.followMe),
             anyZoneArmed = activeArmed.slowRed || activeArmed.fastRed ||
                 activeArmed.slowYellow || activeArmed.fastYellow,
             officialRedAlertsEnabled = prefs.officialRedAlertsEnabled,
@@ -1854,9 +1885,8 @@ fun setAlertsArmed(armed: Boolean) {
      */
     fun applyIntensity(intensity: AppIntensity) {
         viewModelScope.launch {
-            if (intensityMine == null) {
-                intensityMine = prefs.intensitySnapshot()
-                canRestoreIntensityFlow.value = true
+            if (intensityMine.value == null) {
+                intensityMine.value = prefs.intensitySnapshot()
             }
             prefs.applyIntensity(intensity.patch())
         }
@@ -1864,7 +1894,7 @@ fun setAlertsArmed(armed: Boolean) {
 
     /** "Mine" on the Reliability page: write back the setup captured before the first preset tap. */
     fun restoreIntensity() {
-        val mine = intensityMine ?: return
+        val mine = intensityMine.value ?: return
         viewModelScope.launch { prefs.applyIntensity(mine) }
     }
 
@@ -1875,9 +1905,8 @@ fun setAlertsArmed(armed: Boolean) {
      */
     fun applyAlertPersona(persona: AlertPersona) {
         viewModelScope.launch {
-            if (alertMine == null) {
-                alertMine = prefs.alertPersonaSnapshot()
-                canRestoreAlertMineFlow.value = true
+            if (alertMine.value == null) {
+                alertMine.value = prefs.alertPersonaSnapshot()
             }
             prefs.applyAlertPersona(persona.patch())
             AlertNotificationManager(getApplication()).createChannels()
@@ -1886,7 +1915,7 @@ fun setAlertsArmed(armed: Boolean) {
 
     /** "Mine" on the Alerts page: write back the setup captured before the first persona tap. */
     fun restoreAlertPersona() {
-        val mine = alertMine ?: return
+        val mine = alertMine.value ?: return
         viewModelScope.launch {
             prefs.applyAlertPersona(mine)
             AlertNotificationManager(getApplication()).createChannels()

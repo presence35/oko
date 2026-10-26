@@ -220,3 +220,21 @@ fun AppIntensity.patch(): IntensityPatch = when (this) {
         sheltersEnabled = false
     )
 }
+
+/**
+ * True when the live settings are exactly what this setup writes, so the tile can be drawn as
+ * "this is what the app is doing right now" without remembering a tap.
+ *
+ * Night is ignored: the Reliability snapshot never claims the night window (another page owns it),
+ * and comparing it would make every preset read as "off" the moment the user has a bedtime.
+ */
+fun AppIntensity.matches(snapshot: IntensityPatch): Boolean =
+    patch().copy(night = null) == snapshot
+
+/**
+ * The setup the switches currently describe, or null when they are a hand-made mix. Derived from
+ * state on every read, which is what makes a preset tile unlight itself the instant any switch it
+ * owns is touched — here, on another page, or by a restore.
+ */
+fun matchingIntensity(snapshot: IntensityPatch): AppIntensity? =
+    AppIntensity.entries.firstOrNull { it.matches(snapshot) }

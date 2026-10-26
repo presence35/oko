@@ -233,6 +233,25 @@ internal fun AlertToggleRow(
     }
 }
 
+/**
+ * "Check position on long trips" — one pref, two doors: the Location page (where the GPS lives)
+ * and Reliability (which owns the setup presets, and every preset writes this very switch). Kept
+ * here so the two copies can never drift apart in wording or behaviour.
+ */
+@Composable
+internal fun PeriodicGpsRow(
+    s: Strings.StringSet,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit
+) {
+    AlertToggleRow(
+        title = s.periodicGpsTitle,
+        description = s.periodicGpsDesc,
+        checked = checked,
+        onCheckedChange = onChange
+    )
+}
+
 /** Red / Yellow official-alert sub-channels on one line, each with its own switch. */
 @Composable
 internal fun OfficialPairToggleRow(
@@ -492,11 +511,15 @@ internal fun SettingsRootRow(
                     )
                 }
             }
-            // The switch owns its own tap handling, so it replaces the drill-in chevron: a master
-            // toggle here is a direct control, not a way into the section.
-            if (trailing != null) {
-                trailing()
-            } else {
+            // A master switch and "open this section" are two separate offers: the switch is a
+            // direct control, the chevron still says the row leads somewhere. Dropping the chevron
+            // whenever a switch was present made those rows look like plain toggles, so they were
+            // never opened — the chevron now always follows the control.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                trailing?.invoke()
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = null,

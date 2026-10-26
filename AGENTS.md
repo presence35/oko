@@ -34,10 +34,8 @@ evaluation contract. Read `ARCHITECTURE.md` for module map and data-flow context
 
 ### Engine conventions
 
-- **No mirror rule.** UI and service call `ThreatEngine.evaluate()` — one call site,
-  no duplicated logic. Official-alert facts (`officialAlertActiveFor` gate, `redCities`,
-  reason) are also engine-owned (`engine/OblastAlert.kt` + `ThreatEngine`); consumers only
-  orchestrate. See `BEHAVIORS.md` for the contract.
+- **No mirror rule.** UI and service call `ThreatEngine.evaluate()`; consumers only orchestrate.
+  Canonical: `ARCHITECTURE.md` → Key invariants → "Single evaluation logic".
 - **Source-agnostic.** Engine works with `NormalizedThreat`, `ThreatProps` and `OblastAlert`
   (the alert currency). Never touches NEPTUN JSON or source-specific formats.
 - **Plugin-provided type properties.** `ThreatProps` come from the active plugin.

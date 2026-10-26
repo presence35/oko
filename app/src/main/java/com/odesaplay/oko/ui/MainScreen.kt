@@ -6,6 +6,7 @@ import com.odesaplay.oko.beta.LocalFeedbackVisible
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.LatLng
 import kotlin.math.roundToInt
+import android.location.LocationManager
 import com.odesaplay.oko.engine.ThreatZone
 import com.odesaplay.oko.DigestWindow
 import com.odesaplay.oko.ZonePolicy
@@ -482,6 +483,8 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                 onSleepNoticeChange = remember { { viewModel.setSleepNoticeEnabled(it) } },
                 onApplyIntensity = remember { { intensity: AppIntensity -> viewModel.applyIntensity(intensity) } },
                 onApplyAlertPersona = remember { { persona: AlertPersona -> viewModel.applyAlertPersona(persona) } },
+                appliedIntensity = viewModel.appliedIntensity.collectAsState().value,
+                appliedAlertPersona = viewModel.appliedAlertPersona.collectAsState().value,
                 canRestoreAlertMine = viewModel.canRestoreAlertMine.collectAsState().value,
                 onRestoreAlertMine = remember { { viewModel.restoreAlertPersona() } },
                 canRestoreIntensity = viewModel.canRestoreIntensity.collectAsState().value,
@@ -903,12 +906,21 @@ private fun MapScreen(
         }
     }
 
-    /** The GPS problem's fix: ask for precision, refresh if already held, else fall back to Settings. */
+    /** The GPS problem's fix: location off at the OS level, then precision, then a refresh, then Settings. */
     val requestLocationFix: () -> Unit = {
         val fineGranted = ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
+        val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE)
+            as LocationManager
+        // Permission granted but every provider disabled is still "no position", and only the
+        // system toggle can fix it — asking for precision again would just spin at nothing.
+        val servicesOn = lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+            lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
         when {
+            !servicesOn -> runCatching {
+                context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+            }
             fineGranted -> {
                 showToast(s.updatingPreciseGpsToast, cardVisible = false)
                 LocationTracker.forceRefresh()
@@ -1269,7 +1281,11 @@ private fun MapScreen(
                         Row(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(end = 12.dp, top = 8.dp)
+                                // Lines up under the header's warning glyph, which sits 8 (header
+                                // padding) + 48 (settings button) + 4 (glyph padding) from the
+                                // edge: the pill explains that glyph, so it must look attached to
+                                // it instead of floating alone in the corner.
+                                .padding(end = 60.dp, top = 8.dp)
                                 .clip(RoundedCornerShape(50))
                                 .background(Color.Black.copy(alpha = 0.62f))
                                 .border(1.dp, pillAccent.copy(alpha = 0.55f), RoundedCornerShape(50))

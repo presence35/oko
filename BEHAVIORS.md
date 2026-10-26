@@ -94,6 +94,7 @@ data class ThreatProps(
     val ghostCapMs: Long,          // when to remove entirely
     val nominalSpeedMps: Double?,  // fallback speed (null = no dead-reckon without real velocity)
     val maxPlausibleSpeedMps: Double, // corrupt-value ceiling (required; plugin-declared)
+    val baseSeverity: Double,      // intrinsic danger weight 0–10 (plugin-provided)
     val horizonSec: Double,        // dead-reckon time cap
     val maxGhostMeters: Double,    // dead-reckon distance cap
 )
@@ -142,7 +143,7 @@ RULES (violations broke the build's layering before — do not reintroduce):
 ## Behaviors (Pure Functions)
 
 All functions take explicit inputs. No hidden state. No side effects. Deterministic
-given the same inputs.
+given the same inputs. Signatures here are behavioral; KDoc is authoritative.
 
 ### `evaluate(...)` — Main Evaluation Pass
 
@@ -172,7 +173,7 @@ Official-alert facts (engine-owned, computed before/within the same pass):
   16. officialReason/reasonThreatId = the nearest candidate, else the region name, else null (no focus/token)
 ```
 
-### `zoneTier(props, distKm, speedKmh, params)` — Zone Classification
+### `zoneTier` — Zone Classification
 
 ```
 Input: ThreatProps, distance, speed, zone params
@@ -186,7 +187,7 @@ Rules:
   4. !props.isFast → tier by distance (slowRedKm/slowYellowKm)
 ```
 
-### `predictPosition(threat, speedMps, now)` — Dead-Reckoning
+### `predictPosition(threat, speedMps, props, now)` — Dead-Reckoning
 
 ```
 Input: NormalizedThreat, speed, timestamp
@@ -203,7 +204,7 @@ along bearingDeg ?: heading at speed.
 Capped by ThreatProps.horizonSec and ThreatProps.maxGhostMeters.
 ```
 
-### `motionHeading(threat)` — Unified Heading (icon facing)
+### `motionHeading` — Unified Heading (icon facing)
 
 ```
 Priority chain:
@@ -216,7 +217,7 @@ Used for icon facing (courseDeg) and the map's measured fallback — the dead-re
 predictPosition uses only the server-reported course (steps 1-2).
 ```
 
-### `canDrift(threat, props, now)` — Dead-Reckon Gate
+### `canDrift` — Dead-Reckon Gate
 
 ```
 The single shared gate for whether a track may drift between server fixes:
@@ -225,7 +226,7 @@ Used by the map glide loop, marker placement, and predictPosition itself, so sta
 freeze at their reported fix and tracks NEPTUN gives no course never move.
 ```
 
-### `isInbound(t, focus, params, props, now)` — Approach Predicate (consumer policy)
+### `isInbound` — Approach Predicate (consumer policy)
 
 ```
 Source data only, no timers. True when the track is an approximate (`positionQuality ==
@@ -235,7 +236,7 @@ enough — fast types reach 1500 km and would otherwise stage from anywhere in t
 Advisory/area-only/stale tracks never qualify. Lives in `domain/ThreatBehavior.kt`.
 ```
 
-### `stageInbound(eval, threats, focus, params, propsFor, now, silencedTypes)` — Ring Staging
+### `stageInbound` — Ring Staging
 
 ```
 Pure re-tag of one engine result, applied by BOTH consumers (MainViewModel, AlertService) so
@@ -263,21 +264,21 @@ marker outside the ring is the truth and not a bug.
 The widget does not stage yet (see ROADMAP.md).
 ```
 
-### `distanceHaversine(lat1, lon1, lat2, lon2)` — Accurate Distance
+### `distanceHaversine` — Accurate Distance
 
 ```
 Haversine formula. Replaces equirectangular approximation.
 Used for all distance calculations in the engine.
 ```
 
-### `etaMinutes(distKm, speedKmh)` — Time to Focus
+### `etaMinutes` — Time to Focus
 
 ```
 Return: distKm / speedKmh * 60.0
 Null when speedKmh is null or <= 0.
 ```
 
-### `scoreThreat(threat, props, distKm, etaMin, params, now)` — Per-Threat Score (0–10)
+### `scoreThreat` — Per-Threat Score (0–10)
 
 ```
 Multiplicative combination:
@@ -295,14 +296,14 @@ staleFactor: decays 1.0→0.4 as fix ages
 etaFactor: 1.0 for <1min, down to 0.7 for >15min
 ```
 
-### `aggregateScores(scores)` — Overall Threat Level (0–10)
+### `aggregateScores` — Overall Threat Level (0–10)
 
 ```
 Diminishing returns: top 3 scores × weights [1.0, 0.5, 0.25]
 Clamped to 0–10.
 ```
 
-### `officialAlertActiveFor(alerts, token, cityUa, scope)` — Siren Gate
+### `officialAlertActiveFor` — Siren Gate
 
 ```
 Engine gate (engine/OblastAlert.kt). Returns true when any alert covers the focus point.
@@ -324,7 +325,7 @@ active and `nightOfficialAlertCityScope` is true, city-level scoping applies at 
 regardless of the day setting.
 ```
 
-### `deriveOfficialAlertReason(alert, threats, focus, params, lang, now)` — Human-Readable Reason
+### `deriveOfficialAlertReason` — Human-Readable Reason
 
 ```
 ThreatEngine method. Finds the nearest active threat in the alert's oblast that falls
@@ -341,12 +342,12 @@ Returns (formatted reason string, threat ID).
 ### Staleness Lifecycle
 
 ```
-isStale(threat, now):
-  status == "stale" OR (type != AVIATION && updatedAtMillis > staleAfterMs)
+isStale(threat, props, now):
+  status == "stale" OR (!props.alwaysInnerWithinReach && updatedAtMillis > props.staleAfterMs)
 
 isGhost(threat, now, props):
-  AVIATION: updatedAtMillis > props.ghostCapMs (default 2h)
-  Others: updatedAtMillis > props.staleAfterMs + props.ghostCapMs (default 5min + 15min)
+  alwaysInnerWithinReach: updatedAtMillis > props.ghostCapMs
+  Others: updatedAtMillis > props.staleAfterMs + props.ghostCapMs
 
 Stale threats: shown dimmed on map, excluded from zones/alerts/scores.
 Ghost threats: removed from map entirely.
@@ -381,8 +382,8 @@ Thread-safe. Owned by engine. Not a global singleton.
 
 ## Non-Negotiable Constraints
 
-1. **Single evaluation logic.** UI and service consume identical outputs from one engine.
-   No duplicated zone/tier/prediction logic.
+1. **Single evaluation logic.** UI and service consume identical outputs from one engine;
+   see `ARCHITECTURE.md` → Key invariants → "Single evaluation logic".
 2. **Pure & deterministic.** Explicit inputs, no hidden state, no async delays in core
    functions. Given the same inputs, always produces the same outputs.
 3. **Source-agnostic.** Engine works with `NormalizedThreat` and `ThreatProps`. Never
@@ -491,13 +492,7 @@ No log feeds back into engine evaluation. All logging is write-only.
 ## Plugin contract
 
 The `Source` interface, `SourceRegistry` health authority and theme plugin contract are
-documented in `ARCHITECTURE.md` (module map + "Official alert sources" invariant). This doc is
-the behavioral contract only: engine + consumers. The interface has grown beyond the original
+documented in `ARCHITECTURE.md` (Source SPI module map + "Single evaluation logic" invariant).
+This doc is the behavioral contract only: engine + consumers. The interface has grown beyond the original
 sketch (`id`, `sourceType`, `operationalMode`, `enabled`/`setEnabled`, `testConnection`, and the
 registry's takeover merge) — see the code for the current shape.
-
-## Status
-
-The engine/plugin/UI refactor (original "Sessions 1–7" plan) is complete and squashed onto
-`main`. This document is the living behavioral contract — update it alongside any engine
-behavior change.

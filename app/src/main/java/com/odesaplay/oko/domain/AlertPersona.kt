@@ -343,3 +343,11 @@ fun AlertPersona.patch(): AlertPersonaPatch = when (this) {
         )
     )
 }
+
+/**
+ * The persona the live settings currently describe, or null when they are a hand-made mix.
+ * Derived the same way as [matchingIntensity], so a persona tile stops looking selected the moment
+ * any switch it owns is changed — a lookup, never a remembered tap.
+ */
+fun matchingAlertPersona(snapshot: AlertPersonaPatch): AlertPersona? =
+    AlertPersona.entries.firstOrNull { it.patch() == snapshot }

@@ -2,6 +2,8 @@ See what's coming — and how close it is.
 
 Око is a civilian air-threat map for Ukraine. Official alerts tell you a whole oblast is under attack. Око shows you the actual picture: where the threats are, which way they're heading, and how close they'll get — and it tells you, based on YOUR own zones.
 
+Око is not a radar system; it's a strong signal, but not a guarantee.
+
 YOUR OWN WARNING ZONES
 Set a red and a yellow ring around wherever you are. Get a red-zone siren, a quieter yellow nudge, or nothing at all outside them. You choose the distance, not the app.
 

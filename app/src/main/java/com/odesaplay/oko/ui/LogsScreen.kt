@@ -442,7 +442,10 @@ private fun LogsTabPage(
     // SOURCES draws its own cards; DEBUG renders the payload instead of a log window.
     val isSelfDrawn = pageFilter == LogsFilter.SOURCES || pageFilter == LogsFilter.DEBUG
     val rows: List<LogRow> = if (isSelfDrawn) emptyList() else
-        buildRows(window, connEntries, gpsEntries, now, isDecisions, newestFirst, scopeMode, focusToken, outcomeFilter, searchQuery, lang)
+        // The actions lens is a trail of your own taps, not a view of a place — an oblast filter
+        // here would silently hide actions that happened elsewhere while the toggle sat hidden.
+        buildRows(window, connEntries, gpsEntries, now, isDecisions, newestFirst,
+            if (isActions) LogScope.ALL else scopeMode, focusToken, outcomeFilter, searchQuery, lang)
     // Story mode is the default read: cluster the same filtered events into raids. "My oblast"
     // is the write-time aboutMe flag — in my oblast, or something I would have heard — never a
     // guess from the threat's own place.
@@ -502,7 +505,8 @@ private fun LogsTabPage(
             item(key = "controls") {
                 LogControlsRow(
                     mode = mode,
-                    scopeMode = scopeMode,
+                    scopeMode = if (isActions) LogScope.ALL else scopeMode,
+                    showScope = !isActions,
                     groupMode = groupMode,
                     newestFirst = newestFirst,
                     searchQuery = searchQuery,
@@ -845,6 +849,7 @@ private fun oblastTitle(id: String?, lang: AppLanguage, s: Strings.StringSet): S
 private fun LogControlsRow(
     mode: LogsMode,
     scopeMode: LogScope,
+    showScope: Boolean,
     groupMode: LogGroupMode,
     newestFirst: Boolean,
     searchQuery: String,
@@ -871,11 +876,14 @@ private fun LogControlsRow(
             selected = mode,
             onSelect = onModeChange
         )
-        SegmentToggle(
-            options = listOf(LogScope.MINE to s.logsScopeMine, LogScope.ALL to s.logsScopeAll),
-            selected = scopeMode,
-            onSelect = onScopeChange
-        )
+        // Actions are not scoped to a place, so the MINE/ALL pair has nothing to choose between.
+        if (showScope) {
+            SegmentToggle(
+                options = listOf(LogScope.MINE to s.logsScopeMine, LogScope.ALL to s.logsScopeAll),
+                selected = scopeMode,
+                onSelect = onScopeChange
+            )
+        }
         Spacer(Modifier.weight(1f))
         var open by remember { mutableStateOf(false) }
         IconButton(

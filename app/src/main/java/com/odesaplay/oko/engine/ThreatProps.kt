@@ -38,6 +38,7 @@ val DEFAULT_THREAT_PROPS = ThreatProps(
     nominalSpeedMps = null,
     horizonSec = 300.0,
     maxGhostMeters = 18_000.0,
+    // Typo-guard for types no source declares, not a physical bound (~3600 km/h).
     maxPlausibleSpeedMps = 1_000.0,
     baseSeverity = 4.0
 )

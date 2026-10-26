@@ -449,15 +449,24 @@ fun NeptunMapView(
     val mapScope = rememberCoroutineScope()
     val camera = remember { MapCameraCoordinator() }
 
+    // The controller outlives recompositions, so it must read the pack through state: closing over
+    // the parameter froze the first pack of the session into every death animation.
+    val fxIconSet by rememberUpdatedState(iconSet)
     val deathFx = remember {
         DeathFxController(
             context = context,
             bridge = { bridgeState.value },
-            iconFor = { type -> threatIconFor(context, type, iconSet) },
+            iconFor = { type -> threatIconFor(context, type, fxIconSet) },
             showDetail = { rec, grp -> String.format(strings.flourishLogDetailFormat, rec, grp) },
             scope = mapScope
         )
     }
+    // Markers resolve their icon at draw time, but an idle map never draws by itself — without this
+    // a pack change waits for the next pan or threat, leaving the last frame in the old pack.
+    LaunchedEffect(uiState.iconSet) {
+        bridgeState.value?.invalidateOverlay()
+    }
+
     val lastFitUkraineTick = remember { mutableStateOf(fitUkraineTick) }
     val lastZoomTick = remember { mutableStateOf(-1) }
     val lastShelterSelectTick = remember { mutableStateOf(-1) }

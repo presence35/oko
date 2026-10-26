@@ -197,4 +197,39 @@ class AppIntensityTest {
             }
         }
     }
+
+    /**
+     * The Reliability tile's selected mark is derived from the live switches, never from the last
+     * tap. A setup must therefore recognise the state it writes — and lose that match on any single
+     * hand edit, from this page or any other.
+     */
+    @Test
+    fun `every setup is recognised by the state it writes`() {
+        for (intensity in all) {
+            val snapshot = intensity.patch().copy(night = null)
+            assertEquals(intensity.name, intensity, matchingIntensity(snapshot))
+        }
+    }
+
+    @Test
+    fun `one hand edit leaves no setup selected`() {
+        val snapshot = AppIntensity.BALANCED.patch().copy(night = null)
+        assertNull(matchingIntensity(snapshot.copy(bootRestartEnabled = !snapshot.bootRestartEnabled)))
+        assertNull(matchingIntensity(snapshot.copy(alertTypes = snapshot.alertTypes - ThreatType.SHAHED)))
+        assertNull(matchingIntensity(snapshot.copy(periodicGps = !snapshot.periodicGps)))
+    }
+
+    /**
+     * Always-ready claims a night window the snapshot never reports, and that must not stop it from
+     * reading as selected — otherwise the loudest tile would go dark the moment its own night bells
+     * were applied.
+     */
+    @Test
+    fun `a claimed night window does not hide the setup`() {
+        assertNotNull(AppIntensity.ALWAYS_READY.patch().night)
+        assertEquals(
+            AppIntensity.ALWAYS_READY,
+            matchingIntensity(AppIntensity.ALWAYS_READY.patch().copy(night = null))
+        )
+    }
 }

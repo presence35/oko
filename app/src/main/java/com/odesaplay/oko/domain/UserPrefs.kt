@@ -346,42 +346,7 @@ class UserPrefs(private val context: Context) {
      * The alerting state exactly as it stands now, shaped like the patch a persona writes. This is
      * what "Mine" restores, captured once just before the first preset tap on the page.
      */
-    suspend fun alertPersonaSnapshot(): AlertPersonaPatch {
-        val p = preferences.first()
-        return AlertPersonaPatch(
-            officialRed = p.officialRedAlertsEnabled,
-            officialYellow = p.officialYellowAlertsEnabled,
-            officialCityScope = p.officialAlertCityScope,
-            sirenOverride = p.sirenOverride,
-            criticalOfflineOverride = p.criticalOfflineOverride,
-            criticalOfflineBypassSilent = p.criticalOfflineBypassSilent,
-            bootRestartEnabled = p.bootRestartEnabled,
-            notifyPolicyEnabled = p.notifyPolicyEnabled,
-            zonePolicy = p.zonePolicy,
-            digestWindow = p.digestWindow,
-            digestPerType = p.digestPerType,
-            digestMax = p.digestMax,
-            autoDismissAllClear = p.autoDismissAllClear,
-            fallingDebrisDelaySec = p.fallingDebrisDelaySec,
-            fastRedMin = p.fastRedMin,
-            fastYellowMin = p.fastYellowMin,
-            slowRedArmed = p.slowRedArmed,
-            slowYellowArmed = p.slowYellowArmed,
-            fastRedArmed = p.fastRedArmed,
-            fastYellowArmed = p.fastYellowArmed,
-            alertTypes = p.alertEnabledTypes,
-            night = IntensityNight(
-                zoneSirenOverride = p.nightZoneSirenOverride,
-                officialSirenOverride = p.nightOfficialSirenOverride,
-                officialRed = p.nightOfficialRedEnabled,
-                officialYellow = p.nightOfficialYellowEnabled,
-                slowRedArmed = p.nightSlowRedArmed,
-                slowYellowArmed = p.nightSlowYellowArmed,
-                fastRedArmed = p.nightFastRedArmed,
-                fastYellowArmed = p.nightFastYellowArmed
-            )
-        )
-    }
+    suspend fun alertPersonaSnapshot(): AlertPersonaPatch = preferences.first().alertPersonaSnapshot()
 
     /**
      * The intensity-owned state as it stands now — the "Mine" snapshot for Settings → Reliability.
@@ -389,33 +354,7 @@ class UserPrefs(private val context: Context) {
      * Night is deliberately null: the window is another page's state, and claiming it here would
      * drop a "Just let me sleep!" snapshot the user never asked this undo to touch.
      */
-    suspend fun intensitySnapshot(): IntensityPatch {
-        val p = preferences.first()
-        return IntensityPatch(
-            sirenOverride = p.sirenOverride,
-            criticalOfflineOverride = p.criticalOfflineOverride,
-            criticalOfflineBypassSilent = p.criticalOfflineBypassSilent,
-            bootRestartEnabled = p.bootRestartEnabled,
-            periodicGps = p.periodicGps,
-            batteryAskEnabled = !p.batteryOnboardShown,
-            notifyPolicyEnabled = p.notifyPolicyEnabled,
-            zonePolicy = p.zonePolicy,
-            digestWindow = p.digestWindow,
-            digestPerType = p.digestPerType,
-            digestMax = p.digestMax,
-            fastRedMin = p.fastRedMin,
-            fastYellowMin = p.fastYellowMin,
-            slowRedArmed = p.slowRedArmed,
-            slowYellowArmed = p.slowYellowArmed,
-            fastRedArmed = p.fastRedArmed,
-            fastYellowArmed = p.fastYellowArmed,
-            alertTypes = p.alertEnabledTypes,
-            followBullet = p.followBullet,
-            highQualityExplosions = p.highQualityExplosions,
-            deathAnimationStyle = p.deathAnimationStyle,
-            sheltersEnabled = p.sheltersEnabled
-        )
-    }
+    suspend fun intensitySnapshot(): IntensityPatch = preferences.first().intensitySnapshot()
 
     suspend fun setSlowRedKm(km: Int) {
         store.edit { prefs ->
@@ -934,3 +873,70 @@ class UserPrefs(private val context: Context) {
         store.edit { it.clear() }
     }
 }
+
+/*
+ * The two "what do the switches say right now" readers, as pure functions on the value:
+ * the ViewModel already holds a [UserPreferences] in its combine, and deriving the selected setup
+ * from it must not suspend. The UserPrefs members are the one-shot conveniences on top.
+ */
+
+/** Intensity-owned state, shaped like the patch a setup writes. Night stays null (see [IntensityPatch]). */
+fun UserPreferences.intensitySnapshot(): IntensityPatch = IntensityPatch(
+    sirenOverride = sirenOverride,
+    criticalOfflineOverride = criticalOfflineOverride,
+    criticalOfflineBypassSilent = criticalOfflineBypassSilent,
+    bootRestartEnabled = bootRestartEnabled,
+    periodicGps = periodicGps,
+    batteryAskEnabled = !batteryOnboardShown,
+    notifyPolicyEnabled = notifyPolicyEnabled,
+    zonePolicy = zonePolicy,
+    digestWindow = digestWindow,
+    digestPerType = digestPerType,
+    digestMax = digestMax,
+    fastRedMin = fastRedMin,
+    fastYellowMin = fastYellowMin,
+    slowRedArmed = slowRedArmed,
+    slowYellowArmed = slowYellowArmed,
+    fastRedArmed = fastRedArmed,
+    fastYellowArmed = fastYellowArmed,
+    alertTypes = alertEnabledTypes,
+    followBullet = followBullet,
+    highQualityExplosions = highQualityExplosions,
+    deathAnimationStyle = deathAnimationStyle,
+    sheltersEnabled = sheltersEnabled
+)
+
+/** Alerting state, shaped like the patch a persona writes, night window included. */
+fun UserPreferences.alertPersonaSnapshot(): AlertPersonaPatch = AlertPersonaPatch(
+    officialRed = officialRedAlertsEnabled,
+    officialYellow = officialYellowAlertsEnabled,
+    officialCityScope = officialAlertCityScope,
+    sirenOverride = sirenOverride,
+    criticalOfflineOverride = criticalOfflineOverride,
+    criticalOfflineBypassSilent = criticalOfflineBypassSilent,
+    bootRestartEnabled = bootRestartEnabled,
+    notifyPolicyEnabled = notifyPolicyEnabled,
+    zonePolicy = zonePolicy,
+    digestWindow = digestWindow,
+    digestPerType = digestPerType,
+    digestMax = digestMax,
+    autoDismissAllClear = autoDismissAllClear,
+    fallingDebrisDelaySec = fallingDebrisDelaySec,
+    fastRedMin = fastRedMin,
+    fastYellowMin = fastYellowMin,
+    slowRedArmed = slowRedArmed,
+    slowYellowArmed = slowYellowArmed,
+    fastRedArmed = fastRedArmed,
+    fastYellowArmed = fastYellowArmed,
+    alertTypes = alertEnabledTypes,
+    night = IntensityNight(
+        zoneSirenOverride = nightZoneSirenOverride,
+        officialSirenOverride = nightOfficialSirenOverride,
+        officialRed = nightOfficialRedEnabled,
+        officialYellow = nightOfficialYellowEnabled,
+        slowRedArmed = nightSlowRedArmed,
+        slowYellowArmed = nightSlowYellowArmed,
+        fastRedArmed = nightFastRedArmed,
+        fastYellowArmed = nightFastYellowArmed
+    )
+)

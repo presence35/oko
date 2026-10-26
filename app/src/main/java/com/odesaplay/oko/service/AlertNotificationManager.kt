@@ -287,9 +287,17 @@ const val NOTIF_MONITORING_PAUSED = 9
      *  so a LOW monitor row shared that collapsed section with the resolved tally and the trident's
      *  alert-level colour cost a tap. DEFAULT + no sound/vibration still makes no noise — silence
      *  comes from the sound attr, section placement from the level. */
+    /**
+     * Every Oko channel, built in one place so a policy like "no launcher dot" can never apply to
+     * some of them and not others. The dot is noise here: the app already says what happened in
+     * the shade and on the map, and a permanent badge on a weather-alert app reads as unread news.
+     */
+    private fun okoChannel(id: String, name: String, importance: Int) =
+        NotificationChannel(id, name, importance).apply { setShowBadge(false) }
+
     private fun defineMonitorChannel(nm: NotificationManager, s: Strings.StringSet) {
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_MONITOR, s.notifChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
+            okoChannel(CHANNEL_MONITOR, s.notifChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = s.notifChannelDesc
                 enableVibration(false)
                 setSound(null, null)
@@ -300,7 +308,7 @@ const val NOTIF_MONITORING_PAUSED = 9
     private suspend fun defineChannels(nm: NotificationManager, s: Strings.StringSet) {
         defineMonitorChannel(nm, s)
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ALERTS_INNER, s.alertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
+            okoChannel(CHANNEL_ALERTS_INNER, s.alertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.alertChannelDesc
                 enableVibration(true)
                 vibrationPattern = VIBRATION_LIGHT
@@ -308,7 +316,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             }
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ALERTS_OUTER, s.outerAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
+            okoChannel(CHANNEL_ALERTS_OUTER, s.outerAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.outerAlertChannelDesc
                 enableVibration(true)
                 vibrationPattern = VIBRATION_LIGHT
@@ -319,7 +327,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             // DEFAULT, not HIGH: the all-clear sounds (as CHANNEL_ALARM_EPISODE already does with
             // the same sample) but must never pop over the screen — a heads-up "all clear" is an
             // interruption, not information.
-            NotificationChannel(CHANNEL_ALL_CLEAR, s.allClearChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
+            okoChannel(CHANNEL_ALL_CLEAR, s.allClearChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = s.allClearChannelDesc
                 enableVibration(true)
                 vibrationPattern = VIBRATION_LIGHT
@@ -327,7 +335,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             }
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ALERTS_INNER_ALARM, s.alarmAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
+            okoChannel(CHANNEL_ALERTS_INNER_ALARM, s.alarmAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.alarmAlertChannelDesc
                 enableVibration(true)
                 vibrationPattern = VIBRATION_STRONG
@@ -335,7 +343,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             }
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ALERTS_OUTER_ALARM, s.outerAlarmAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
+            okoChannel(CHANNEL_ALERTS_OUTER_ALARM, s.outerAlarmAlertChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.outerAlarmAlertChannelDesc
                 enableVibration(true)
                 vibrationPattern = VIBRATION_STRONG
@@ -343,7 +351,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             }
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_OFFLINE, s.offlineChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
+            okoChannel(CHANNEL_OFFLINE, s.offlineChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.offlineChannelDesc
                 enableVibration(true)
                 vibrationPattern = VIBRATION_LIGHT
@@ -354,7 +362,7 @@ const val NOTIF_MONITORING_PAUSED = 9
         val bypassSilent = UserPrefs(context).preferences.first().criticalOfflineBypassSilent
         val criticalAttrs = if (bypassSilent) alarmAttributes() else notificationAttributes()
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_OFFLINE_CRITICAL, s.offlineCriticalChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
+            okoChannel(CHANNEL_OFFLINE_CRITICAL, s.offlineCriticalChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = s.offlineCriticalChannelDesc
                 enableVibration(true)
                 vibrationPattern = VIBRATION_STRONG
@@ -362,12 +370,12 @@ const val NOTIF_MONITORING_PAUSED = 9
             }
         )
         nm.createNotificationChannel(
-            NotificationChannel(NeutralizedTally.CHANNEL_NEUTRALIZED, s.neutralizedNotifChannelName, NotificationManager.IMPORTANCE_LOW).apply {
+            okoChannel(NeutralizedTally.CHANNEL_NEUTRALIZED, s.neutralizedNotifChannelName, NotificationManager.IMPORTANCE_LOW).apply {
                 description = s.neutralizedChannelDesc
             }
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ALARM_EPISODE, s.alarmEpisodeChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
+            okoChannel(CHANNEL_ALARM_EPISODE, s.alarmEpisodeChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = s.alarmEpisodeChannelDesc
                 enableVibration(true)
                 vibrationPattern = VIBRATION_LIGHT
@@ -375,7 +383,7 @@ const val NOTIF_MONITORING_PAUSED = 9
             }
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_UPDATE, s.notifUpdateChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
+            okoChannel(CHANNEL_UPDATE, s.notifUpdateChannelName, NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = s.notifUpdateChannelDesc
                 setSound(null, null)
             }

@@ -10,7 +10,7 @@
 
 <p align="center">
   <b>The siren tells you the oblast is under attack.<br>Oko tells you if it's coming to you.</b><br><br>
-  <sub>Start from a ready-made setup. Change any zone, type or sound.<br>Then stop checking Telegram and live your life.</sub>
+  <sub>Open-source intelligence, not radar: a strong signal, but not a guarantee.<br>Start from a ready-made setup. Change any zone, type or sound.<br>Then stop checking Telegram and live your life.</sub>
 </p>
 
 <p align="center">
@@ -132,7 +132,7 @@ GNU General Public License v3.0 only — see [`LICENSE`](LICENSE).
 
 <p align="center">
   <b>Сирена каже, що під загрозою область.<br>Око каже, чи вона йде до вас.</b><br><br>
-  <sub>Почніть із готового налаштування. Змініть будь-яку зону, тип чи звук.<br>А потім перестаньте перевіряти Telegram — живіть своїм життям.</sub>
+  <sub>Розвідка з відкритих джерел, а не радар: сильний сигнал, але не гарантія.<br>Почніть із готового налаштування. Змініть будь-яку зону, тип чи звук.<br>А потім перестаньте перевіряти Telegram — живіть своїм життям.</sub>
 </p>
 
 <p align="center">

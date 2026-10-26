@@ -424,6 +424,14 @@ class AlertService : Service() {
 
     private var lastSweepAtMs = 0L
 
+    /**
+     * Wall clock of the last full evaluation. The awake tick is a `delay()`, which deep sleep
+     * stretches by minutes while the feed keeps waking us and evaluating normally — so a late tick
+     * is NOT evidence that nothing was watched. This timestamp is: a sleep window is only claimed
+     * when no evaluation ran inside it.
+     */
+    @Volatile private var lastEvaluationAtMs = 0L
+
     /** The registry degraded-since stamp the critical offline notif already fired for
      *  (null = not fired this episode). Keyed off the episode, not a boolean, so transient
      *  Connecting states can neither refire nor resurrect a swiped-away notification. */
@@ -938,6 +946,11 @@ class AlertService : Service() {
                     }
                     val tick = System.currentTimeMillis()
                     val gap = tick - previous
+                    // Did any evaluation run inside this gap? The awake tick is a delay(), which
+                    // deep sleep stretches by minutes while feed events keep waking us and
+                    // deciding normally. A late tick alone therefore proves nothing about whether
+                    // we were watching — a sleep window is only owed when the gap is truly blind.
+                    val blind = lastEvaluationAtMs <= previous
                     previous = tick
                     // The loop slept through a doze (or the process was frozen) and the wall clock
                     // ran on without us. Everything downstream — zones, staleness, episodes — is
@@ -949,7 +962,7 @@ class AlertService : Service() {
                     // "post-Doze wakes decide nothing" — they do decide, which is why a stall shows up
                     // as a gap BETWEEN two decisions rather than as two consecutive gaps.
                     if (gap > SLEEP_GAP_REBASE_MS) {
-                        resumeAfterSleep(tick, gap)
+                        resumeAfterSleep(tick, gap, record = blind)
                     }
                     nowFlow.value = tick
                 }
@@ -991,6 +1004,9 @@ val mappedThreats = registry.allThreats.map { list ->
                 // Observation time, never the tick clock: see [observationNow]. Every duration,
                 // staleness and TTL below measures against when this evaluation runs.
                 val now = observationNow(tickNow, System.currentTimeMillis())
+                // The sleep detector's heartbeat: this block is the only thing that ever observes
+                // the feed, so its clock — not the tick timer — is what "we were watching" means.
+                lastEvaluationAtMs = now
                 val nightActive = isNightActive(NightConfig(p.nightEnabled, p.nightStartMin, p.nightEndMin), now)
                 val dayParams = ZoneParams(
                     p.slowRedKm, p.slowYellowKm, p.fastRedMin, p.fastYellowMin,
@@ -2137,6 +2153,9 @@ val mappedThreats = registry.allThreats.map { list ->
      * function of `now`, and the feed it would reason about is minutes-to-hours old the moment we
      * come back, so the tick that wakes us must decide nothing. Dropped are the deltas that would
      * otherwise be measured across a gap nobody observed:
+     *
+     * `record` is the caller's heartbeat verdict: false when something was evaluated inside the gap,
+     * in which case only the deltas are reset and no sleep window is claimed.
      *  - [lastZoneTiers] — the spatial hysteresis band would compare against a world that no
      *    longer exists, so the first threat after a sleep could be denied its escalation.
      *  - [lastSweepAtMs] — forced to sweep immediately, so the audit trail shows fresh facts
@@ -2144,10 +2163,13 @@ val mappedThreats = registry.allThreats.map { list ->
      *  - [emptySince] — a single post-gap tick must not age a zone episode straight into an
      *    all-clear nobody was ever warned about.
      */
-    private fun resumeAfterSleep(now: Long, gapMs: Long) {
+    private fun resumeAfterSleep(now: Long, gapMs: Long, record: Boolean) {
     lastZoneTiers = emptyMap()
     lastSweepAtMs = 0L
     emptySince = null
+    // Re-baselining is always safe, claiming a sleep is not: a gap that contained evaluations was
+    // watched, whatever the timer did, so it must not raise the "Oko was asleep" notice.
+    if (!record) return
     val window = SleepWindow(startedAtMillis = now - gapMs, wokeAtMillis = now)
     DebugLog.recordPaused(window, now)
     pendingSleep.value = PendingSleep(window = window)

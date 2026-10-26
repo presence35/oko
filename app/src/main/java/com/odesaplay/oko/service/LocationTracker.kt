@@ -185,9 +185,8 @@ object LocationTracker {
     /** Own network subscription: distance-gated while the screen is on, dropped when off. */
     private fun applyScreenState(lm: LocationManager, looper: Looper) {
         val ctx = appContext ?: return
-        // A provider toggle has no public broadcast, so the screen is the cheap honest trigger:
-        // reaching for Settings means the screen just woke. Without this, a GPS-off/on window
-        // that opens and closes between two 15-min checks is never observed at all.
+        // The provider broadcast is the precise trigger; this is the belt to that braces — it also
+        // runs on every screen-on, so a toggle missed by a killed receiver still resolves here.
         refreshAccess(ctx)
         val on = isScreenOn(ctx)
         if (on && networkListener == null) {
@@ -215,6 +214,10 @@ object LocationTracker {
         val f = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
+            // Provider toggles and the location master switch do broadcast; listening for them is
+            // what makes "location is off" visible immediately instead of at the next 15-min check.
+            addAction(LocationManager.PROVIDERS_CHANGED_ACTION)
+            addAction(LocationManager.MODE_CHANGED_ACTION)
         }
         screenReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
@@ -226,6 +229,12 @@ object LocationTracker {
                             runCatching { lm.removeUpdates(it) }
                             networkListener = null
                         }
+                    }
+                    LocationManager.PROVIDERS_CHANGED_ACTION,
+                    LocationManager.MODE_CHANGED_ACTION -> {
+                        refreshAccess(app)
+                        // Turning location back on should not wait for the next verify tick.
+                        if (!_accessBlocked.value && !isFresh()) requestNetworkFix(app)
                     }
                 }
             }
