@@ -318,9 +318,7 @@ class AlarmEpisodeTally(
         val breakdown = row.typeCounts.entries
             .sortedWith(compareByDescending<Map.Entry<ThreatType, Int>> { it.value }.thenBy { it.key.ordinal })
             .joinToString(" · ") { (type, count) ->
-                val info = ThreatTypeCatalog.INFO[type]
-                val label = info?.label(lang) ?: type.name
-                "$label $count"
+                "$count ${typeCountLabel(type, lang, count)}"
             }
         val title = alarmEpisodeTitle(s, row.city, row.totalMin, row.alarmCount)
         val builder = AlertNotificationManager(context).buildNotification(NOTIF_ALARM_EPISODE, AlertNotificationManager.CHANNEL_ALARM_EPISODE)

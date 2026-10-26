@@ -914,7 +914,8 @@ object Strings {
     data class WordForms(
         val sources: List<String>,
         val resolvedThreats: List<String>,
-    val resolvedTypeThreats: List<String>,
+        /** "Resolved: 1 Drone" — the count and its type label, which does its own declining. */
+        val resolvedTypeFormat: String,
         val resolvingThreats: List<String>,
         val preciseGps: List<String>,
         /** "3 threats confirmed" — the sleep notice's count, plural forms per language. */
@@ -1237,9 +1238,9 @@ object Strings {
         fun sheltersSubtitle(enabled: Boolean): String =
             subtitles.sheltersPrefix + (if (enabled) subtitles.onWord else subtitles.offWord)
 
-        fun threatsSubtitle(hiddenCount: Int, silencedCount: Int, totalCount: Int = 8): String =
+        fun threatsSubtitle(hiddenCount: Int, silencedCount: Int): String =
             if (hiddenCount == 0 && silencedCount == 0) {
-                String.format(subtitles.threatsAllActiveFormat, totalCount)
+                subtitles.threatsAllActiveFormat
             } else if (hiddenCount > 0 && silencedCount > 0) {
                 String.format(subtitles.threatsHiddenSilencedFormat, hiddenCount, silencedCount)
             } else if (hiddenCount > 0) {
@@ -1821,20 +1822,6 @@ val iconSetTitle: String get() = misc.iconSetTitle
 
 }
 
-private fun pluralIndex(count: Int, lang: AppLanguage): Int = when (lang) {
-    AppLanguage.EN -> if (count == 1) 0 else 1
-    // UA and RU share the same 3-form Slavic plural rule.
-    AppLanguage.UA, AppLanguage.RU -> {
-        val n10 = count % 10
-        val n100 = count % 100
-        when {
-            n10 == 1 && n100 != 11 -> 0
-            n10 in 2..4 && n100 !in 12..14 -> 1
-            else -> 2
-        }
-    }
-}
-
 fun sourcesWord(count: Int, lang: AppLanguage): String {
     val forms = Strings.get(lang).wordForms.sources
     return forms[pluralIndex(count, lang).coerceAtMost(forms.lastIndex)]
@@ -1921,12 +1908,11 @@ fun sleepNoticeBody(s: Strings.StringSet, ledger: SleepLedger): String = buildLi
     add(s.sleepNoticeAllowClause)
 }.joinToString(" ")
 
-/** "15 Drones resolved" — the resolved count carrying the type's own plural label, so a
- *  single-type tally needs no breakdown line under the title. */
-fun resolvedTypeThreatsPhrase(count: Int, pluralLabel: String, lang: AppLanguage): String {
+/** "Resolved: 1 Drone" — the count carries the type's own declined label, so a single-type
+ *  tally needs no breakdown line under the title. */
+fun resolvedTypeThreatsPhrase(count: Int, type: ThreatType, lang: AppLanguage): String {
     val s = Strings.get(lang)
-    val form = s.wordForms.resolvedTypeThreats[pluralIndex(count, lang).coerceAtMost(s.wordForms.resolvedTypeThreats.lastIndex)]
-    return String.format(form, count, pluralLabel)
+    return String.format(s.wordForms.resolvedTypeFormat, count, typeCountLabel(type, lang, count))
 }
 
 fun resolvingThreatsPhrase(count: Int, lang: AppLanguage): String {

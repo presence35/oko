@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- The shot-down tally reads "1 Drone resolved", not "1 Drones resolved", and one rule now declines every counted noun in all three languages (5 дронів, 2 КАБа), with the type labels tested per count band 10-26_22:29:41
 - Recon map markers no longer sit 15° off their course: the drone sprite's nose is at 232°, not 247° 10-26_21:02:21
 - Closing a settings explainer keeps you on the page you were on instead of jumping to Alerts (Reliability's "Always sound" was the one that did it); the night-mode switch on the list still opens its page 10-26_19:22:00
 - The two official red/yellow toggles no longer ask for an explainer that was never written, and the explainer list now fails loudly if a language's copy and the diagram list ever disagree 10-26_19:22:00

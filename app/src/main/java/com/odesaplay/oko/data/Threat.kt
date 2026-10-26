@@ -462,40 +462,46 @@ val COURSE_TYPE_NAMES: Set<String> = mutableSetOf<String>().apply {
 val COURSE_FRAME_NAMES: Set<String> = setOf("загроза", "threat")
 
 /**
- * Plural forms of every catalog label, for counting contexts ("15 Drones resolved"). EN has one
- * form; UA/RU carry the two Slavic plural spellings (2–4 and 5+), indexed like
- * `wordForms.resolvedThreats`. A type missing here falls back to its singular label, so a new
- * type degrades to a slightly clumsy title instead of breaking the build (`EXHAUSTIVE_LABEL_TYPES`).
+ * Count forms for every catalog label — nominative, so they can follow a numeral or a colon.
+ * The singular is NOT duplicated here: [typeCountLabel] reads it from [ThreatTypeCatalog], and
+ * these entries hold only what each language actually changes. EN has one plural; UA and RU have
+ * few (2–4) and many (5+).
+ *
+ * `ThreatCountLabelTest` asserts every [ThreatType] has an entry, so adding a type without its
+ * forms fails a test rather than shipping "5 Drone".
  */
-private val PLURAL_LABEL: Map<ThreatType, List<String>> = mapOf(
-    ThreatType.SHAHED to listOf("Drones", "Дрони", "Дрони", "Дроны", "Дронів"),
-    ThreatType.FPV_LOITERING to listOf("FPV drones", "FPV-дрони", "FPV-дрони", "FPV-дроны", "FPV-дронов"),
-    ThreatType.CRUISE_MISSILE to listOf("Cruise missiles", "Крилаті ракети", "Крилаті ракети", "Крылатые ракеты", "Крылатых ракет"),
-    ThreatType.BALLISTIC to listOf("Ballistics", "Балістика", "Балістики", "Баллистика", "Баллистики"),
-    ThreatType.KAB to listOf("KABs", "КАБи", "КАБи", "КАБы", "КАБов"),
-    ThreatType.AVIATION to listOf("MiG-31K", "МіГ-31К", "МіГ-31К", "МиГ-31К", "МиГ-31К"),
-    ThreatType.RECON to listOf("Reconnaissance", "Розвідка", "Розвідки", "Разведка", "Разведки"),
-    ThreatType.UNKNOWN to listOf("Unknowns", "Невідомі", "Невідомих", "Неизвестные", "Неизвестных")
-)
-
-/** Plural label for a threat type: EN has one form; UA and RU each carry two (2–4 and 5+), laid
- *  out in [PLURAL_LABEL] as EN, UA both, RU both. Falls back to the singular catalog label for any
- *  type not yet in [PLURAL_LABEL]. */
-fun typePluralLabel(type: ThreatType, lang: AppLanguage, count: Int): String {
-    val forms = PLURAL_LABEL[type] ?: return ThreatTypeCatalog.INFO[type]?.label(lang) ?: type.name
-    return when (lang) {
-        AppLanguage.EN -> forms[0]
-        // 2–4 take form 1, everything else form 2; 12–14 are the exception that reads as 5+.
-        AppLanguage.UA -> forms[1 + if (slavicPluralIndex(count) == 1) 1 else 0]
-        AppLanguage.RU -> forms[3 + if (slavicPluralIndex(count) == 1) 1 else 0]
+internal data class TypePlurals(
+    val en: String,
+    val uaFew: String,
+    val uaMany: String,
+    val ruFew: String,
+    val ruMany: String,
+) {
+    fun form(lang: AppLanguage, index: Int): String = when (lang) {
+        AppLanguage.EN -> en
+        AppLanguage.UA -> if (index == 0) uaFew else uaMany
+        AppLanguage.RU -> if (index == 0) ruFew else ruMany
     }
 }
 
-/** 0 for the 2–4 band (12–14 excluded), 1 for the 5+ / 1 band. */
-private fun slavicPluralIndex(count: Int): Int {
-    val n10 = count % 10
-    val n100 = count % 100
-    return if (n10 in 2..4 && n100 !in 12..14) 1 else 0
+internal val TYPE_PLURALS: Map<ThreatType, TypePlurals> = mapOf(
+    ThreatType.SHAHED to TypePlurals("Drones", "Дрони", "Дронів", "Дрона", "Дронов"),
+    ThreatType.FPV_LOITERING to TypePlurals("FPV drones", "FPV-дрони", "FPV-дронів", "FPV-дрона", "FPV-дронов"),
+    ThreatType.CRUISE_MISSILE to TypePlurals("Cruise missiles", "Крилаті ракети", "Крилатих ракет", "Крылатые ракеты", "Крылатых ракет"),
+    ThreatType.BALLISTIC to TypePlurals("Ballistics", "Балістики", "Балістик", "Баллистики", "Баллистик"),
+    ThreatType.KAB to TypePlurals("KABs", "КАБи", "КАБів", "КАБа", "КАБов"),
+    ThreatType.AVIATION to TypePlurals("MiG-31K", "МіГ-31К", "МіГ-31К", "МиГ-31К", "МиГ-31К"),
+    ThreatType.RECON to TypePlurals("Reconnaissance", "Розвідки", "Розвідок", "Разведки", "Разведок"),
+    ThreatType.UNKNOWN to TypePlurals("Unknowns", "Невідомі", "Невідомих", "Неизвестные", "Неизвестных")
+)
+
+/** The label to use after a count: the catalog singular for 1/21/31…, the declined plural
+ *  otherwise, so "1 Drone" can never render as "1 Drones". */
+fun typeCountLabel(type: ThreatType, lang: AppLanguage, count: Int): String {
+    val info = ThreatTypeCatalog.INFO[type] ?: return type.name
+    val plurals = TYPE_PLURALS[type] ?: return info.label(lang)
+    val index = pluralIndex(count, lang)
+    return if (index == 0) info.label(lang) else plurals.form(lang, index - 1)
 }
 
 /**

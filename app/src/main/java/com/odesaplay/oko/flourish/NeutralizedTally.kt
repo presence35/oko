@@ -142,14 +142,12 @@ class NeutralizedTally(
             val single = snapshot.typeCounts.entries.singleOrNull()
             val title = when (single) {
                 null -> resolvedThreatsPhrase(snapshot.count, lang)
-                else -> resolvedTypeThreatsPhrase(single.value, typePluralLabel(single.key, lang, single.value), lang)
+                else -> resolvedTypeThreatsPhrase(single.value, single.key, lang)
             }
             val breakdown = snapshot.typeCounts.entries
                 .sortedWith(compareByDescending<Map.Entry<ThreatType, Int>> { it.value }.thenBy { it.key.ordinal })
                 .joinToString(" · ") { (type, count) ->
-                    val info = ThreatTypeCatalog.INFO[type]
-                    val label = info?.label(lang) ?: type.name
-                    "$label $count"
+                    "$count ${typeCountLabel(type, lang, count)}"
                 }
             val builder = AlertNotificationManager(context).buildNotification(
                 NOTIF_NEUTRALIZED, CHANNEL_NEUTRALIZED
