@@ -347,8 +347,16 @@ fun SettingsScreen(
         val exp = activeExplainer
         if (exp != null) {
             onExplainerChange(null)
-            onRouteChange(SettingsRoute.Detail(sectionOfExplainer(exp.id)))
-            flashBlock(exp.id)
+            // Stay on the page whose row raised this dialog: the same row can live on more than
+            // one page (Always sound is on both Alerts and Reliability), so the section that owns
+            // the copy is not necessarily the section the user is looking at. Only a row on the
+            // root list — night mode's switch — needs the jump into its page, and only then is
+            // there nothing on screen to pulse.
+            if (route !is SettingsRoute.Detail) {
+                onRouteChange(SettingsRoute.Detail(sectionOfExplainer(exp.id)))
+            } else {
+                flashBlock(exp.id)
+            }
         }
         pendingCardSize?.let { onThreatCardSizeChange(it); pendingCardSize = null }
     }
@@ -892,10 +900,10 @@ fun SettingsScreen(
                             OfficialPairToggleRow(
                                 redTitle = s.officialRedAlertsTitle,
                                 redChecked = officialRedAlertsEnabled,
-                                onRedChange = { v -> showExplainer("officialRedAlerts"); onOfficialRedAlertsChange(v) },
+                                onRedChange = { v -> onOfficialRedAlertsChange(v) },
                                 yellowTitle = s.officialYellowAlertsTitle,
                                 yellowChecked = officialYellowAlertsEnabled,
-                                onYellowChange = { v -> showExplainer("officialYellowAlerts"); onOfficialYellowAlertsChange(v) }
+                                onYellowChange = { v -> onOfficialYellowAlertsChange(v) }
                             )
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             AlertToggleRow(
@@ -1295,30 +1303,29 @@ fun SettingsScreen(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AlertToggleRow(title = s.threatIconZoomTitle, description = s.threatIconZoomDesc, checked = threatIconZoom, onCheckedChange = onThreatIconZoomChange, icon = rememberVectorPainter(Icons.Default.ZoomIn), iconTint = MaterialTheme.colorScheme.onSurfaceVariant, flash = flashId == "iconZoom")
             }
-            // Master switch lives on the root row; with it off the page says so instead of showing
-            // nothing but the persona-pack note.
+            // Master switch lives on the root row; with it off the page still shows what it
+            // controls, disabled, instead of an empty page that reads as broken.
             SettingsSection.FLOURISH -> SectionDetailBody(stateSummary = sectionSummary(section)) {
-                    AnimatedVisibility(visible = moraleMasterEnabled) {
-                        MoraleToggles(
-                            s = s,
-                            persona = moralePersona,
-                            onPersonaChange = onMoralePersonaChange,
-                            calmMessagesEnabled = calmMessagesEnabled,
-                            flybyAnimationEnabled = flybyAnimationEnabled,
-                            deathAnimationEnabled = deathAnimationEnabled,
-                            followBullet = followBullet,
-                            neutralizedTallyEnabled = neutralizedTallyEnabled,
-                            neutralizedTallyAllUkraine = neutralizedTallyAllUkraine,
-                            alarmEpisodeTallyEnabled = alarmEpisodeTallyEnabled,
-                            onCalmMessagesChange = onCalmMessagesChange,
-                            onFlybyAnimationChange = onFlybyAnimationChange,
-                            onDeathAnimationChange = onDeathAnimationChange,
-                            onFollowBulletChange = onFollowBulletChange,
-                            onNeutralizedTallyChange = onNeutralizedTallyChange,
-                            onNeutralizedTallyAllUkraineChange = onNeutralizedTallyAllUkraineChange,
-                            onAlarmEpisodeTallyChange = onAlarmEpisodeTallyChange
-                        )
-                    }
+                MoraleToggles(
+                    s = s,
+                    persona = moralePersona,
+                    onPersonaChange = onMoralePersonaChange,
+                    calmMessagesEnabled = calmMessagesEnabled,
+                    flybyAnimationEnabled = flybyAnimationEnabled,
+                    deathAnimationEnabled = deathAnimationEnabled,
+                    followBullet = followBullet,
+                    neutralizedTallyEnabled = neutralizedTallyEnabled,
+                    neutralizedTallyAllUkraine = neutralizedTallyAllUkraine,
+                    alarmEpisodeTallyEnabled = alarmEpisodeTallyEnabled,
+                    onCalmMessagesChange = onCalmMessagesChange,
+                    onFlybyAnimationChange = onFlybyAnimationChange,
+                    onDeathAnimationChange = onDeathAnimationChange,
+                    onFollowBulletChange = onFollowBulletChange,
+                    onNeutralizedTallyChange = onNeutralizedTallyChange,
+                    onNeutralizedTallyAllUkraineChange = onNeutralizedTallyAllUkraineChange,
+                    onAlarmEpisodeTallyChange = onAlarmEpisodeTallyChange,
+                    enabled = moraleMasterEnabled
+                )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Text(
                         remember(lang, moralePersona) {

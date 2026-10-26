@@ -1041,12 +1041,14 @@ val mappedThreats = registry.allThreats.map { list ->
                 // Location health, derived from what LocationTracker can actually vouch for: a
                 // read accessBlocked, a received-time fed by the verify loop, and a position. A
                 // stale fix is NOT an access failure — see GpsIssue for why that distinction is
-                // the whole point.
+                // the whole point. A missing permission during onboarding is not an access
+                // failure either: nothing was asked yet, so "blocked" would be a claim the app
+                // has no right to make (and the first GPS log row of a fresh install).
                 val gpsIssue = resolveGpsIssue(
                     followMe = p.followMe,
                     hasPosition = focus.location != null,
                     ageMs = LocationTracker.lastReceivedAtMs.value?.let { now - it },
-                    accessBlocked = LocationTracker.accessBlocked.value
+                    accessBlocked = LocationTracker.accessBlocked.value && p.wizardCompleted
                 )
                 val gpsUnverifiedMin = LocationTracker.lastReceivedAtMs.value
                     ?.let { ((now - it) / 60_000L).toInt().coerceAtLeast(0) } ?: 0

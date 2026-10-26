@@ -25,20 +25,28 @@ data class Explainer(
 )
 
 /** Catalog of one-time explainers, keyed by the setting id, in display order. */
-fun explainers(s: Strings.StringSet): List<Explainer> = listOf(
-        Explainer("threatToggles", s.explainers.items[0].first, s.explainers.items[0].second,
-            s.explainers.items[0].third, GuideDiagram.THREAT_TOGGLES),
-        Explainer("officialAlerts", s.explainers.items[1].first, s.explainers.items[1].second,
-            s.explainers.items[1].third, GuideDiagram.NOTIF),
-        Explainer("sirenOverride", s.explainers.items[2].first, s.explainers.items[2].second,
-            s.explainers.items[2].third, GuideDiagram.TOGGLES),
-        Explainer("followMe", s.explainers.items[3].first, s.explainers.items[3].second,
-            s.explainers.items[3].third, GuideDiagram.FOLLOW),
-        Explainer("cardSize", s.explainers.items[4].first, s.explainers.items[4].second,
-            s.explainers.items[4].third, GuideDiagram.CARD_SIZE),
-        Explainer("nightMode", s.explainers.items[5].first, s.explainers.items[5].second,
-            s.explainers.items[5].third, GuideDiagram.NIGHT)
-    )
+fun explainers(s: Strings.StringSet): List<Explainer> {
+    val items = s.explainers.items
+    // Positional by necessity (the copy is a flat list of triples), so the pairing lives here and
+    // fails loudly instead of silently putting the night copy under the threat-toggles diagram —
+    // or crashing on items[5] — when one language gains or loses an entry.
+    require(items.size >= EXPLAINER_LAYOUT.size) {
+        "explainers: expected ${EXPLAINER_LAYOUT.size} entries, got ${items.size}"
+    }
+    return EXPLAINER_LAYOUT.mapIndexed { i, (id, diagram) ->
+        Explainer(id, items[i].first, items[i].second, items[i].third, diagram)
+    }
+}
+
+/** The fixed id/diagram order [explainers] reads the copy in. */
+private val EXPLAINER_LAYOUT: List<Pair<String, GuideDiagram>> = listOf(
+    "threatToggles" to GuideDiagram.THREAT_TOGGLES,
+    "officialAlerts" to GuideDiagram.NOTIF,
+    "sirenOverride" to GuideDiagram.TOGGLES,
+    "followMe" to GuideDiagram.FOLLOW,
+    "cardSize" to GuideDiagram.CARD_SIZE,
+    "nightMode" to GuideDiagram.NIGHT
+)
 
 /** Popup that explains what a just-toggled advanced setting does. */
 @Composable

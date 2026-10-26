@@ -816,12 +816,17 @@ class UserPrefs(private val context: Context) {
      * "Just let me sleep!" — mute every night alert, remembering exactly what the night
      * settings were so the next tap puts them back. One atomic edit: the snapshot and the
      * muted values either both land or neither does.
+     *
+     * Turning it on also turns the night window on: the preset only mutes NIGHT alerts, so with
+     * the window off the row would flip, say "Sleep well" and change nothing the user can see.
+     * Off does not touch the window — the undo must not silently disable a mode the user set up.
      */
     suspend fun setNightSleep(enabled: Boolean) {
         store.edit { p ->
             if (enabled) {
                 p[nightSleepRestoreKey] = nightSleepPresetOf(p).encode()
                 applyNightSleep(p, NightSleepPreset.MUTED)
+                p[nightEnabledKey] = true
             } else {
                 applyNightSleep(p, NightSleepPreset.decode(p[nightSleepRestoreKey]) ?: NORMAL_NIGHT)
                 p.remove(nightSleepRestoreKey)

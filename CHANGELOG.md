@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- Closing a settings explainer keeps you on the page you were on instead of jumping to Alerts (Reliability's "Always sound" was the one that did it); the night-mode switch on the list still opens its page 10-26_19:22:00
+- The two official red/yellow toggles no longer ask for an explainer that was never written, and the explainer list now fails loudly if a language's copy and the diagram list ever disagree 10-26_19:22:00
+- The wizard's closing page says "Beta build" (UA/RU too), and its bug-report line draws the connection state as the same bordered pill as the map 10-26_18:58:00
+- A fresh install no longer logs "Location access blocked" before the app has even asked for location 10-26_18:58:00
+- "Just let me sleep!" now turns the night window on as well, so the switch does something visible when night mode was off 10-26_18:58:00
+- With morale off, its page shows the switches disabled instead of nearly empty 10-26_18:58:00
 - Film's smoke skirt is baked from the same billows as the live styles, so even the cheapest tier no longer ends on circles 10-25_23:21:36
 - Explosion smoke is billows now, not circles: each puff is baked from domain-warped noise so its outline breaks up and dissolves instead of ending on a rim, and the bank swirls as the blast ages 10-25_22:56:43
 - Settings → Alerts opens with seven ready-made setups (grandma, parent, frontline, teen, abroad, at work, on the road): one tap sets this page, the "i" explains each, and a "Mine" cell puts your own setup back — also on Reliability 10-25_23:12:41

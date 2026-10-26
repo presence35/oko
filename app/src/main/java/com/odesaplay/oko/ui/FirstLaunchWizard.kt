@@ -641,31 +641,69 @@ private fun WizardBullet(s: Strings.StringSet, text: String, accent: Color) {
     WizardBulletRow(claimThenDetail(s, text), accent, gearInlineContent(s))
 }
 
-/** The bug-report bullet. Its instruction ends with the source's own state word drawn inside the
- *  sentence — the header pill is word-only now, so the reader looks for that word rather than a
- *  description of it. */
+/** The bug-report bullet. Its instruction ends by showing the source's own state as the pill the
+ *  reader should look for — the app's one pill look, so the word is an object to match, not a
+ *  description of one. Drawn on its own line rather than inline: a capsule has a border and a
+ *  fill, and neither survives being a span inside a paragraph. */
 @Composable
 private fun WizardBugBullet(s: Strings.StringSet, markColor: Color, markLabel: String) {
     val head = s.wizardAlphaBugs.substringBefore(" — ")
     val lead = s.wizardAlphaBugs.substringAfter(" — ", "")
-    WizardBulletRow(
-        text = buildAnnotatedString {
-            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
-                append(head)
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+        Icon(
+            imageVector = Icons.Filled.Check,
+            contentDescription = null,
+            tint = _ukraineYellow,
+            modifier = Modifier.padding(top = 1.dp).size(16.dp)
+        )
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
+                        append(head)
+                    }
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
+                        append(" — ")
+                        append(lead)
+                    }
+                },
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                StatePill(label = markLabel, color = markColor)
+                Text(
+                    s.wizardAlphaBugsTail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                append(" — ")
-                append(lead)
-                append(' ')
-                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = markColor)) {
-                    append(markLabel)
-                }
-                append(' ')
-                append(s.wizardAlphaBugsTail)
-            }
-        },
-        accent = _ukraineYellow
-    )
+        }
+    }
+}
+
+/** The connection state, as the same capsule the map and header pills use: tinted fill, 1dp tint. */
+@Composable
+private fun StatePill(label: String, color: Color) {
+    val shape = RoundedCornerShape(50)
+    Box(
+        modifier = Modifier
+            .clip(shape)
+            .background(color.copy(alpha = 0.10f))
+            .border(1.dp, color.copy(alpha = 0.55f), shape)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = color
+        )
+    }
 }
 
 /** One bullet layout for every bullet — check, gap, body — so the beta card's rows stay in step. */

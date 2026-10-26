@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -274,6 +275,7 @@ internal fun SelectorChip(
     modifier: Modifier = Modifier,
     caption: String? = null,
     intensity: Int = 0,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     val accent = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -285,7 +287,9 @@ internal fun SelectorChip(
             if (selected) 2.dp else 1.dp,
             if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
         ),
-        modifier = modifier.hapticClickable(onClick = onClick)
+        modifier = modifier
+            .then(if (enabled) Modifier.hapticClickable(onClick = onClick) else Modifier)
+            .then(if (enabled) Modifier else Modifier.alpha(0.5f))
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp).fillMaxWidth(),
@@ -346,6 +350,9 @@ internal fun MoraleToggles(
     onNeutralizedTallyChange: (Boolean) -> Unit,
     onNeutralizedTallyAllUkraineChange: (Boolean) -> Unit,
     onAlarmEpisodeTallyChange: (Boolean) -> Unit,
+    // Visible-but-inert while the Morale master is off, so the page shows what it controls
+    // instead of reading as empty — the switches keep saying what they are set to.
+    enabled: Boolean = true,
 ) {
     val lang = s.language
     // Pure derivation: no timers, no state — midnight rollover lands on next recomposition.
@@ -376,6 +383,7 @@ internal fun MoraleToggles(
                             label = v.label(lang),
                             selected = v == persona,
                             modifier = Modifier.weight(1f),
+                            enabled = enabled,
                             onClick = { onPersonaChange(v) }
                         )
                     }
@@ -390,7 +398,8 @@ internal fun MoraleToggles(
             checked = calmMessagesEnabled,
             onCheckedChange = onCalmMessagesChange,
             icon = painterResource(R.drawable.ic_peace),
-            iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+            enabled = enabled
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         AlertToggleRow(
@@ -399,7 +408,8 @@ internal fun MoraleToggles(
             checked = flybyAnimationEnabled,
             onCheckedChange = onFlybyAnimationChange,
             icon = painterResource(R.drawable.ic_mig),
-            iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+            enabled = enabled
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         AlertToggleRow(
@@ -408,7 +418,8 @@ internal fun MoraleToggles(
             checked = deathAnimationEnabled,
             onCheckedChange = onDeathAnimationChange,
             icon = painterResource(R.drawable.ic_explosion),
-            iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+            enabled = enabled
         )
         AnimatedVisibility(visible = deathAnimationEnabled) {
             Column(modifier = Modifier.padding(start = 40.dp)) {
@@ -418,7 +429,8 @@ internal fun MoraleToggles(
                     checked = followBullet,
                     onCheckedChange = onFollowBulletChange,
                     icon = painterResource(R.drawable.bullet),
-                    iconTint = null
+                    iconTint = null,
+                    enabled = enabled
                 )
             }
         }
@@ -432,7 +444,8 @@ internal fun MoraleToggles(
             iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
             iconBadge = "1",
             iconBadgeSize = 14.sp,
-            iconBadgeSuperscriptSuffix = "2"
+            iconBadgeSuperscriptSuffix = "2",
+            enabled = enabled
         )
         if (neutralizedTallyEnabled) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -442,7 +455,8 @@ internal fun MoraleToggles(
                     description = pack.allUkraineDesc,
                     checked = neutralizedTallyAllUkraine,
                     onCheckedChange = onNeutralizedTallyAllUkraineChange,
-                    emoji = "🇺🇦"
+                    emoji = "🇺🇦",
+                    enabled = enabled
                 )
             }
         }
@@ -456,7 +470,8 @@ internal fun MoraleToggles(
             iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
             iconBadge = "1",
             iconBadgeSize = 14.sp,
-            iconBadgeSuperscriptSuffix = "2"
+            iconBadgeSuperscriptSuffix = "2",
+            enabled = enabled
         )
     }
 }
