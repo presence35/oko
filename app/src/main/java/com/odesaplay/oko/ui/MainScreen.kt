@@ -506,6 +506,7 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                  onNightOfficialAlertCityScopeChange = remember { { viewModel.setNightOfficialAlertCityScope(it) } },
                  onNightOfficialRedChange = remember { { viewModel.setNightOfficialRedEnabled(it) } },
                  onNightOfficialYellowChange = remember { { viewModel.setNightOfficialYellowEnabled(it) } },
+                 onNightOwnAlertPolicyChange = remember { { viewModel.setNightOwnAlertPolicy(it) } },
                  onNightSleepToggle = remember { { viewModel.setNightSleep(it) } },
                  onFollowMeChange = remember { { viewModel.setFollowMe(it) } },
                 onPinnedCityChange = remember { { viewModel.setPinnedCity(it) } },

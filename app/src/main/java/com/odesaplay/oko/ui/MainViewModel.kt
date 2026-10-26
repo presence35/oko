@@ -112,6 +112,7 @@ data class UiState(
     val nightStartMin: Int = UserPreferences.DEFAULT.nightStartMin,
     val nightEndMin: Int = UserPreferences.DEFAULT.nightEndMin,
     val nightUseCustomZones: Boolean = UserPreferences.DEFAULT.nightUseCustomZones,
+    val nightOwnAlertPolicy: Boolean = UserPreferences.DEFAULT.nightOwnAlertPolicy,
     val nightSlowRedKm: Int = UserPreferences.DEFAULT.nightSlowRedKm,
     val nightSlowYellowKm: Int = UserPreferences.DEFAULT.nightSlowYellowKm,
     val nightFastRedMin: Int = UserPreferences.DEFAULT.nightFastRedMin,
@@ -120,12 +121,12 @@ data class UiState(
     val nightSlowYellowArmed: Boolean = UserPreferences.DEFAULT.nightSlowYellowArmed,
     val nightFastRedArmed: Boolean = UserPreferences.DEFAULT.nightFastRedArmed,
     val nightFastYellowArmed: Boolean = UserPreferences.DEFAULT.nightFastYellowArmed,
-    val nightZoneSirenOverride: Boolean? = null,
-    val nightOfficialSirenOverride: Boolean? = null,
+    val nightZoneSirenOverride: Boolean = UserPreferences.DEFAULT.nightZoneSirenOverride,
+    val nightOfficialSirenOverride: Boolean = UserPreferences.DEFAULT.nightOfficialSirenOverride,
     val officialRedAlertsEnabled: Boolean = true,
     val officialYellowAlertsEnabled: Boolean = true,
      val officialAlertCityScope: Boolean = false,
-     val nightOfficialAlertCityScope: Boolean? = null,
+     val nightOfficialAlertCityScope: Boolean = UserPreferences.DEFAULT.nightOfficialAlertCityScope,
      val sirenOverride: Boolean = false,
     val criticalOfflineOverride: Boolean = true,
     val criticalOfflineBypassSilent: Boolean = false,
@@ -259,6 +260,7 @@ data class SettingsState(
     val nightStartMin: Int get() = prefs.nightStartMin
     val nightEndMin: Int get() = prefs.nightEndMin
     val nightUseCustomZones: Boolean get() = prefs.nightUseCustomZones
+    val nightOwnAlertPolicy: Boolean get() = prefs.nightOwnAlertPolicy
     val nightSlowRedKm: Int get() = prefs.nightSlowRedKm
     val nightSlowYellowKm: Int get() = prefs.nightSlowYellowKm
     val nightFastRedMin: Int get() = prefs.nightFastRedMin
@@ -267,11 +269,11 @@ data class SettingsState(
     val nightSlowYellowArmed: Boolean get() = prefs.nightSlowYellowArmed
     val nightFastRedArmed: Boolean get() = prefs.nightFastRedArmed
     val nightFastYellowArmed: Boolean get() = prefs.nightFastYellowArmed
-    val nightZoneSirenOverride: Boolean? get() = prefs.nightZoneSirenOverride
-    val nightOfficialSirenOverride: Boolean? get() = prefs.nightOfficialSirenOverride
-    val nightOfficialAlertCityScope: Boolean? get() = prefs.nightOfficialAlertCityScope
-    val nightOfficialRedEnabled: Boolean? get() = prefs.nightOfficialRedEnabled
-    val nightOfficialYellowEnabled: Boolean? get() = prefs.nightOfficialYellowEnabled
+    val nightZoneSirenOverride: Boolean get() = prefs.nightZoneSirenOverride
+    val nightOfficialSirenOverride: Boolean get() = prefs.nightOfficialSirenOverride
+    val nightOfficialAlertCityScope: Boolean get() = prefs.nightOfficialAlertCityScope
+    val nightOfficialRedEnabled: Boolean get() = prefs.nightOfficialRedEnabled
+    val nightOfficialYellowEnabled: Boolean get() = prefs.nightOfficialYellowEnabled
     /** "Just let me sleep!" is on when the night settings are the fully-muted combination. */
     val nightSleepActive: Boolean get() = prefs.nightSleepActive
     val followMe: Boolean get() = prefs.followMe
@@ -609,7 +611,8 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val enabled: Boolean,
         val startMin: Int,
         val endMin: Int,
-        val useCustomZones: Boolean
+        val useCustomZones: Boolean,
+        val ownAlertPolicy: Boolean
     )
 
     /** Night-mode zone prefs (raw). */
@@ -622,8 +625,8 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val slowYellowArmed: Boolean,
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
-        val zoneSirenOverride: Boolean?,
-        val officialSirenOverride: Boolean?
+        val zoneSirenOverride: Boolean,
+        val officialSirenOverride: Boolean
     )
 
     private data class NightPrefs(
@@ -644,7 +647,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val officialRedAlertsEnabled: Boolean,
         val officialYellowAlertsEnabled: Boolean,
         val officialAlertCityScope: Boolean,
-        val nightOfficialAlertCityScope: Boolean?,
+        val nightOfficialAlertCityScope: Boolean,
         val nightSleepActive: Boolean,
         val sirenOverride: Boolean,
         val followMe: Boolean,
@@ -790,7 +793,8 @@ val sheltersEnabled: Boolean,
                     enabled = nightEnabled,
                     startMin = nightStartMin,
                     endMin = nightEndMin,
-                    useCustomZones = nightUseCustomZones
+                    useCustomZones = nightUseCustomZones,
+                    ownAlertPolicy = nightOwnAlertPolicy
                 ),
                 zones = NightZonesPrefs(
                     slowRedKm = nightSlowRedKm,
@@ -902,7 +906,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             reveal = live.reveal,
             flourish = live.flourish,
             officialAlertCityScope = effectiveNightPolicy(
-                prefs.officialAlertCityScope, prefs.nightOfficialAlertCityScope, nightActive
+                prefs.officialAlertCityScope, prefs.nightOfficialAlertCityScope,
+                prefs.night.window.ownAlertPolicy, nightActive
             ),
             showBorders = prefs.showBorders,
             showRegionBorders = prefs.showRegionBorders
@@ -973,6 +978,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             nightStartMin = prefs.night.window.startMin,
             nightEndMin = prefs.night.window.endMin,
             nightUseCustomZones = prefs.night.window.useCustomZones,
+            nightOwnAlertPolicy = prefs.night.window.ownAlertPolicy,
             nightSlowRedKm = prefs.night.zones.slowRedKm,
             nightSlowYellowKm = prefs.night.zones.slowYellowKm,
             nightFastRedMin = prefs.night.zones.fastRedMin,
@@ -1594,23 +1600,27 @@ fun setAlertsArmed(armed: Boolean) {
         }
     }
 
-    fun setNightZoneSirenOverride(override: Boolean?) {
+    fun setNightOwnAlertPolicy(own: Boolean) {
+        viewModelScope.launch { prefs.setNightOwnAlertPolicy(own) }
+    }
+
+    fun setNightZoneSirenOverride(override: Boolean) {
         viewModelScope.launch { prefs.setNightZoneSirenOverride(override) }
     }
 
-    fun setNightOfficialSirenOverride(override: Boolean?) {
+    fun setNightOfficialSirenOverride(override: Boolean) {
         viewModelScope.launch { prefs.setNightOfficialSirenOverride(override) }
     }
 
-    fun setNightOfficialAlertCityScope(enabled: Boolean?) {
+    fun setNightOfficialAlertCityScope(enabled: Boolean) {
         viewModelScope.launch { prefs.setNightOfficialAlertCityScope(enabled) }
     }
 
-    fun setNightOfficialRedEnabled(enabled: Boolean?) {
+    fun setNightOfficialRedEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setNightOfficialRedEnabled(enabled) }
     }
 
-    fun setNightOfficialYellowEnabled(enabled: Boolean?) {
+    fun setNightOfficialYellowEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setNightOfficialYellowEnabled(enabled) }
     }
 

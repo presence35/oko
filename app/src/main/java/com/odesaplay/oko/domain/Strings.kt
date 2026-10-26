@@ -152,6 +152,9 @@ object Strings {
         val nightOfficialSirenOverrideTitle: String,
         val nightCustomZonesTitle: String,
         val nightCustomZonesDesc: String,
+        /** Master for the night's own alert policy; off = the day values apply all night. */
+        val nightOwnAlertPolicyTitle: String,
+        val nightOwnAlertPolicyDesc: String,
         val nightMuteExitNote: String,
         val nightSleepButton: String,
         val allAlertsOffLabel: String,
@@ -1090,6 +1093,8 @@ object Strings {
         val nightOfficialSirenOverrideTitle: String get() = settings.nightOfficialSirenOverrideTitle
         val nightCustomZonesTitle: String get() = settings.nightCustomZonesTitle
         val nightCustomZonesDesc: String get() = settings.nightCustomZonesDesc
+        val nightOwnAlertPolicyTitle: String get() = settings.nightOwnAlertPolicyTitle
+        val nightOwnAlertPolicyDesc: String get() = settings.nightOwnAlertPolicyDesc
         val nightMuteExitNote: String get() = settings.nightMuteExitNote
         val nightSleepButton: String get() = settings.nightSleepButton
         val allAlertsOffLabel: String get() = settings.allAlertsOffLabel

@@ -102,7 +102,7 @@ class UserPrefsTest {
         val before = prefs.preferences.first().nightOfficialRedEnabled
 
         prefs.setNightSleep(true)
-        assertEquals(false, prefs.preferences.first().nightOfficialRedEnabled)
+        assertFalse(prefs.preferences.first().nightOfficialRedEnabled)
 
         prefs.setNightSleep(false)
         assertEquals(before, prefs.preferences.first().nightOfficialRedEnabled)
@@ -115,7 +115,7 @@ class UserPrefsTest {
         prefs.setNightOfficialRedEnabled(true) // a direct edit ends the preset
 
         prefs.setNightSleep(false)
-        assertEquals(true, prefs.preferences.first().nightOfficialRedEnabled)
+        assertTrue(prefs.preferences.first().nightOfficialRedEnabled)
     }
 
     /**
@@ -219,8 +219,8 @@ class UserPrefsTest {
 
         val p = prefs.preferences.first()
         assertNull("the restore must not outlive the choice that replaced it", p.nightSleepRestore)
-        assertEquals(true, p.nightOfficialRedEnabled)
-        assertEquals(true, p.nightZoneSirenOverride)
+        assertTrue(p.nightOfficialRedEnabled)
+        assertTrue(p.nightZoneSirenOverride)
         assertTrue(p.nightSlowYellowArmed)
         assertFalse("every night bell on means the window is no longer a mute", p.nightSleepActive)
     }

@@ -79,6 +79,7 @@ class UserPrefs(private val context: Context) {
     private val nightStartMinKey = intPreferencesKey("night_start_min")
     private val nightEndMinKey = intPreferencesKey("night_end_min")
     private val nightUseCustomZonesKey = booleanPreferencesKey("night_use_custom_zones")
+    private val nightOwnAlertPolicyKey = booleanPreferencesKey("night_own_alert_policy")
     private val nightSlowRedKmKey = intPreferencesKey("night_slow_red_km")
     private val nightSlowYellowKmKey = intPreferencesKey("night_slow_yellow_km")
     private val nightFastRedMinKey = intPreferencesKey("night_fast_red_min")
@@ -215,6 +216,7 @@ class UserPrefs(private val context: Context) {
             nightStartMin = this[nightStartMinKey] ?: d.nightStartMin,
             nightEndMin = this[nightEndMinKey] ?: d.nightEndMin,
             nightUseCustomZones = this[nightUseCustomZonesKey] ?: d.nightUseCustomZones,
+            nightOwnAlertPolicy = this[nightOwnAlertPolicyKey] ?: d.nightOwnAlertPolicy,
             nightSlowRedKm = this[nightSlowRedKmKey] ?: d.nightSlowRedKm,
             nightSlowYellowKm = this[nightSlowYellowKmKey] ?: d.nightSlowYellowKm,
             nightFastRedMin = this[nightFastRedMinKey] ?: d.nightFastRedMin,
@@ -223,12 +225,13 @@ class UserPrefs(private val context: Context) {
             nightSlowYellowArmed = this[nightSlowYellowArmedKey] ?: d.nightSlowYellowArmed,
             nightFastRedArmed = this[nightFastRedArmedKey] ?: d.nightFastRedArmed,
             nightFastYellowArmed = this[nightFastYellowArmedKey] ?: d.nightFastYellowArmed,
-            // Read raw: an absent key IS the fact "no night override, follow the day value".
-            nightZoneSirenOverride = this[nightZoneSirenOverrideKey],
-            nightOfficialSirenOverride = this[nightOfficialSirenOverrideKey],
-            nightOfficialAlertCityScope = this[nightOfficialAlertCityScopeKey],
-            nightOfficialRedEnabled = this[nightOfficialRedEnabledKey],
-            nightOfficialYellowEnabled = this[nightOfficialYellowEnabledKey],
+            // Policy keys are only consulted while the night's own policy switch is on; these are
+            // the values it uses then, and the day values are what apply otherwise.
+            nightZoneSirenOverride = this[nightZoneSirenOverrideKey] ?: d.nightZoneSirenOverride,
+            nightOfficialSirenOverride = this[nightOfficialSirenOverrideKey] ?: d.nightOfficialSirenOverride,
+            nightOfficialAlertCityScope = this[nightOfficialAlertCityScopeKey] ?: d.nightOfficialAlertCityScope,
+            nightOfficialRedEnabled = this[nightOfficialRedEnabledKey] ?: d.nightOfficialRedEnabled,
+            nightOfficialYellowEnabled = this[nightOfficialYellowEnabledKey] ?: d.nightOfficialYellowEnabled,
             nightSleepRestore = this[nightSleepRestoreKey] ?: d.nightSleepRestore,
             flybyAnimationEnabled = this[flybyAnimationEnabledKey] ?: d.flybyAnimationEnabled,
             threatIconZoom = this[threatIconZoomKey] ?: d.threatIconZoom,
@@ -800,36 +803,30 @@ class UserPrefs(private val context: Context) {
     }
     suspend fun setNightFastYellowZoneArmed(armed: Boolean) = setNightFastYellowArmed(armed)
 
-    suspend fun setNightZoneSirenOverride(override: Boolean?) {
-        editNightPolicy(nightZoneSirenOverrideKey, override)
+    suspend fun setNightOwnAlertPolicy(own: Boolean) {
+        // Not a preset key: it decides whether the preset's night policy bits apply at all, and
+        // editing it must not throw away a restore the user may still want.
+        store.edit { it[nightOwnAlertPolicyKey] = own }
     }
 
-    suspend fun setNightOfficialSirenOverride(override: Boolean?) {
-        editNightPolicy(nightOfficialSirenOverrideKey, override)
+    suspend fun setNightZoneSirenOverride(override: Boolean) {
+        editNightBell { it[nightZoneSirenOverrideKey] = override }
     }
 
-    suspend fun setNightOfficialAlertCityScope(enabled: Boolean?) {
-        editNightPolicy(nightOfficialAlertCityScopeKey, enabled)
+    suspend fun setNightOfficialSirenOverride(override: Boolean) {
+        editNightBell { it[nightOfficialSirenOverrideKey] = override }
     }
 
-    suspend fun setNightOfficialRedEnabled(enabled: Boolean?) {
-        editNightPolicy(nightOfficialRedEnabledKey, enabled)
+    suspend fun setNightOfficialAlertCityScope(enabled: Boolean) {
+        store.edit { it[nightOfficialAlertCityScopeKey] = enabled }
     }
 
-    suspend fun setNightOfficialYellowEnabled(enabled: Boolean?) {
-        editNightPolicy(nightOfficialYellowEnabledKey, enabled)
+    suspend fun setNightOfficialRedEnabled(enabled: Boolean) {
+        editNightBell { it[nightOfficialRedEnabledKey] = enabled }
     }
 
-    /**
-     * Write (or clear) one night *policy* override. `null` means "no opinion for the night", which
-     * is stored as an absent key so the day value wins for the whole window — the state a switch
-     * cannot express as `false`. Clearing it also drops the sleep snapshot, like every other night
-     * edit, since the night settings are no longer the ones the preset captured.
-     */
-    private suspend fun editNightPolicy(key: Preferences.Key<Boolean>, value: Boolean?) {
-        editNightBell { p ->
-            if (value == null) p.remove(key) else p[key] = value
-        }
+    suspend fun setNightOfficialYellowEnabled(enabled: Boolean) {
+        editNightBell { it[nightOfficialYellowEnabledKey] = enabled }
     }
 
     /**
@@ -868,8 +865,7 @@ class UserPrefs(private val context: Context) {
         }
     }
 
-    /** The night settings currently stored, as the preset the sleep button snapshots. Inheritance is
-     *  preserved as inheritance — restoring must not pin a key the user never set. */
+    /** The night settings currently stored, as the preset the sleep button snapshots. */
     private fun nightSleepPresetOf(p: Preferences): NightSleepPreset {
         val d = UserPreferences.DEFAULT
         return NightSleepPreset(
@@ -878,27 +874,26 @@ class UserPrefs(private val context: Context) {
             slowYellowArmed = p[nightSlowYellowArmedKey] ?: d.nightSlowYellowArmed,
             fastRedArmed = p[nightFastRedArmedKey] ?: d.nightFastRedArmed,
             fastYellowArmed = p[nightFastYellowArmedKey] ?: d.nightFastYellowArmed,
-            zoneSirenOverride = p[nightZoneSirenOverrideKey],
-            officialSirenOverride = p[nightOfficialSirenOverrideKey],
-            officialRed = p[nightOfficialRedEnabledKey],
-            officialYellow = p[nightOfficialYellowEnabledKey]
+            zoneSirenOverride = p[nightZoneSirenOverrideKey] ?: d.nightZoneSirenOverride,
+            officialSirenOverride = p[nightOfficialSirenOverrideKey] ?: d.nightOfficialSirenOverride,
+            officialRed = p[nightOfficialRedEnabledKey] ?: d.nightOfficialRedEnabled,
+            officialYellow = p[nightOfficialYellowEnabledKey] ?: d.nightOfficialYellowEnabled,
+            ownAlertPolicy = p[nightOwnAlertPolicyKey] ?: d.nightOwnAlertPolicy
         )
     }
 
-    /** Write all nine night-sleep keys at once; `null` clears the override back to inheriting. */
+    /** Write all ten night-sleep keys at once. */
     private fun applyNightSleep(p: MutablePreferences, preset: NightSleepPreset) {
         p[nightUseCustomZonesKey] = preset.useCustomZones
         p[nightSlowRedArmedKey] = preset.slowRedArmed
         p[nightSlowYellowArmedKey] = preset.slowYellowArmed
         p[nightFastRedArmedKey] = preset.fastRedArmed
         p[nightFastYellowArmedKey] = preset.fastYellowArmed
-        fun put(key: Preferences.Key<Boolean>, v: Boolean?) {
-            if (v == null) p.remove(key) else p[key] = v
-        }
-        put(nightZoneSirenOverrideKey, preset.zoneSirenOverride)
-        put(nightOfficialSirenOverrideKey, preset.officialSirenOverride)
-        put(nightOfficialRedEnabledKey, preset.officialRed)
-        put(nightOfficialYellowEnabledKey, preset.officialYellow)
+        p[nightZoneSirenOverrideKey] = preset.zoneSirenOverride
+        p[nightOfficialSirenOverrideKey] = preset.officialSirenOverride
+        p[nightOfficialRedEnabledKey] = preset.officialRed
+        p[nightOfficialYellowEnabledKey] = preset.officialYellow
+        p[nightOwnAlertPolicyKey] = preset.ownAlertPolicy
     }
 
     private companion object {
@@ -908,7 +903,8 @@ class UserPrefs(private val context: Context) {
             slowRedArmed = true, slowYellowArmed = true,
             fastRedArmed = true, fastYellowArmed = false,
             zoneSirenOverride = false, officialSirenOverride = false,
-            officialRed = true, officialYellow = true
+            officialRed = true, officialYellow = true,
+            ownAlertPolicy = false
         )
     }
 
@@ -973,13 +969,10 @@ fun UserPreferences.alertPersonaSnapshot(): AlertPersonaPatch = AlertPersonaPatc
     fastYellowArmed = fastYellowArmed,
     alertTypes = alertEnabledTypes,
     night = IntensityNight(
-        // A preset is one concrete intent, so an inherited night key states the day value it
-        // resolves to rather than leaving the patch half-stated (the documented invariant on
-        // IntensityPatch: no nullable fields).
-        zoneSirenOverride = nightOverrideOr(nightZoneSirenOverride, sirenOverride),
-        officialSirenOverride = nightOverrideOr(nightOfficialSirenOverride, sirenOverride),
-        officialRed = nightOverrideOr(nightOfficialRedEnabled, officialRedAlertsEnabled),
-        officialYellow = nightOverrideOr(nightOfficialYellowEnabled, officialYellowAlertsEnabled),
+        zoneSirenOverride = nightZoneSirenOverride,
+        officialSirenOverride = nightOfficialSirenOverride,
+        officialRed = nightOfficialRedEnabled,
+        officialYellow = nightOfficialYellowEnabled,
         slowRedArmed = nightSlowRedArmed,
         slowYellowArmed = nightSlowYellowArmed,
         fastRedArmed = nightFastRedArmed,

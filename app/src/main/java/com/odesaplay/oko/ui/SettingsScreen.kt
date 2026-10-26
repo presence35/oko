@@ -117,11 +117,12 @@ fun SettingsScreen(
     onNightSlowYellowArmedChange: (Boolean) -> Unit,
     onNightFastRedArmedChange: (Boolean) -> Unit,
     onNightFastYellowArmedChange: (Boolean) -> Unit,
-    onNightZoneSirenOverrideChange: (Boolean?) -> Unit,
-    onNightOfficialSirenOverrideChange: (Boolean?) -> Unit,
-    onNightOfficialAlertCityScopeChange: (Boolean?) -> Unit,
-    onNightOfficialRedChange: (Boolean?) -> Unit,
-    onNightOfficialYellowChange: (Boolean?) -> Unit,
+    onNightZoneSirenOverrideChange: (Boolean) -> Unit,
+    onNightOfficialSirenOverrideChange: (Boolean) -> Unit,
+    onNightOfficialAlertCityScopeChange: (Boolean) -> Unit,
+    onNightOfficialRedChange: (Boolean) -> Unit,
+    onNightOfficialYellowChange: (Boolean) -> Unit,
+    onNightOwnAlertPolicyChange: (Boolean) -> Unit,
     onNightSleepToggle: (Boolean) -> Unit,
     onFollowMeChange: (Boolean) -> Unit,
     onPinnedCityChange: (City?) -> Unit,
@@ -427,9 +428,9 @@ fun SettingsScreen(
                 nightEnabled,
                 nightStartMin,
                 nightEndMin,
-                // What the night actually does: an unset override follows the day value.
-                nightOverrideOr(nightZoneSirenOverride, sirenOverride) ||
-                    nightOverrideOr(nightOfficialSirenOverride, sirenOverride),
+                // What the night actually does: without its own alert policy the day values apply.
+                state.nightOwnAlertPolicy &&
+                    (nightZoneSirenOverride || nightOfficialSirenOverride),
                 nightUseCustomZones,
                 state.nightSleepActive
             )
@@ -1031,10 +1032,8 @@ fun SettingsScreen(
                         fastYellowArmed = nightFastYellowArmed,
                         zoneSirenOverride = nightZoneSirenOverride,
                         officialSirenOverride = nightOfficialSirenOverride,
-                        daySirenOverride = sirenOverride,
-                        dayOfficialAlertCityScope = officialAlertCityScope,
-                        dayOfficialRedEnabled = officialRedAlertsEnabled,
-                        dayOfficialYellowEnabled = officialYellowAlertsEnabled,
+                        ownAlertPolicy = state.nightOwnAlertPolicy,
+                        onOwnAlertPolicyChange = onNightOwnAlertPolicyChange,
                         daySlowRedKm = slowRedKm,
                         daySlowYellowKm = slowYellowKm,
                         dayFastRedMin = fastRedMin,

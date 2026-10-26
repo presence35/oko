@@ -105,10 +105,7 @@ internal fun AlertToggleRow(
     noteIconTint: Color? = null,
     noteIconSize: TextUnit = 14.sp,
     flash: Boolean = false,
-    enabled: Boolean = true,
-    /** Replaces the switch. For a key whose state is not two-valued (the night policy keys: follow
-     *  day / on / off) the caller owns the control; the row itself still toggles [checked]. */
-    trailing: @Composable (() -> Unit)? = null
+    enabled: Boolean = true
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -228,15 +225,11 @@ internal fun AlertToggleRow(
                 }
             }
         }
-        if (trailing != null) {
-            trailing()
-        } else {
-            Switch(
-                checked = checked,
-                onCheckedChange = null,
-                modifier = Modifier.scale(if (isPressed) 0.92f else 1f)
-            )
-        }
+        Switch(
+            checked = checked,
+            onCheckedChange = null,
+            modifier = Modifier.scale(if (isPressed) 0.92f else 1f)
+        )
     }
 }
 

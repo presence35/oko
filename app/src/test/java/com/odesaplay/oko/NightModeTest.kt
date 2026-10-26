@@ -85,49 +85,36 @@ class NightModeTest {
     }
 
     @Test
-    fun `official enable follows the night window`() {
-        // Outside the window the day value wins; inside it the night override wins.
-        assertTrue(effectiveNightPolicy(day = true, night = false, nightActive = false))
-        assertFalse(effectiveNightPolicy(day = true, night = false, nightActive = true))
-        assertFalse(effectiveNightPolicy(day = false, night = true, nightActive = false))
-        assertTrue(effectiveNightPolicy(day = false, night = true, nightActive = true))
+    fun `a night policy key only deviates when the night owns its policy`() {
+        // Off-own-policy: the day value carries the whole night, no matter what the night values say.
+        assertTrue(effectiveNightPolicy(day = true, night = false, ownNightPolicy = false, nightActive = true))
+        assertFalse(effectiveNightPolicy(day = false, night = true, ownNightPolicy = false, nightActive = true))
+        // Own policy: the night values win inside the window...
+        assertFalse(effectiveNightPolicy(day = true, night = false, ownNightPolicy = true, nightActive = true))
+        assertTrue(effectiveNightPolicy(day = false, night = true, ownNightPolicy = true, nightActive = true))
+        // ...and the day values still win outside it.
+        assertTrue(effectiveNightPolicy(day = true, night = false, ownNightPolicy = true, nightActive = false))
+        assertFalse(effectiveNightPolicy(day = false, night = true, ownNightPolicy = true, nightActive = false))
     }
 
     @Test
-    fun `an unset night policy follows the day value inside the window`() {
-        // The reported bug: "city level" on, night active, no night override -> the day choice must
-        // survive the window. Before this, every night policy key carried its own hardcoded default
-        // and city scope defaulted to false, so the whole oblast rang at night.
-        assertTrue(effectiveNightPolicy(day = true, night = null, nightActive = true))
-        assertFalse(effectiveNightPolicy(day = false, night = null, nightActive = true))
-        assertTrue(effectiveNightPolicy(day = true, night = null, nightActive = false))
-        assertFalse(effectiveNightPolicy(day = false, night = null, nightActive = false))
+    fun `city level survives the night window when the night owns no policy`() {
+        // The reported bug, as a regression: "city level" on, window active, night's own policy off
+        // (the default) -> the day choice must still be what rings. Before this, every night policy
+        // key was consulted unconditionally with its own hardcoded default, so the scope defaulted
+        // to false at 23:00 and every raion yellow in the oblast reached the banner.
+        assertTrue(effectiveNightPolicy(day = true, night = false, ownNightPolicy = false, nightActive = true))
     }
 
     @Test
-    fun `an explicit night override wins over the day value`() {
-        // Both directions, so neither `day || night` nor `night ?: day` gets the pin wrong.
-        assertFalse(effectiveNightPolicy(day = true, night = false, nightActive = true))
-        assertTrue(effectiveNightPolicy(day = false, night = true, nightActive = true))
-    }
-
-    @Test
-    fun `night override resolves to the day value when unset`() {
-        // What a preset or the sleep snapshot states for an inherited key.
-        assertTrue(nightOverrideOr(null, true))
-        assertFalse(nightOverrideOr(null, false))
-        assertTrue(nightOverrideOr(true, false))
-        assertFalse(nightOverrideOr(false, true))
-    }
-
-    @Test
-    fun `night sleep preset round-trips all nine flags`() {
+    fun `night sleep preset round-trips all ten flags`() {
         val preset = NightSleepPreset(
             useCustomZones = true,
             slowRedArmed = false, slowYellowArmed = true,
             fastRedArmed = false, fastYellowArmed = true,
             zoneSirenOverride = true, officialSirenOverride = false,
-            officialRed = false, officialYellow = true
+            officialRed = false, officialYellow = true,
+            ownAlertPolicy = true
         )
         assertEquals(preset, NightSleepPreset.decode(preset.encode()))
     }
@@ -137,7 +124,10 @@ class NightModeTest {
         assertNull(NightSleepPreset.decode(null))
         assertNull(NightSleepPreset.decode(""))
         assertNull(NightSleepPreset.decode("101"))
-        assertNull(NightSleepPreset.decode("101010102"))
+        assertNull(NightSleepPreset.decode("1010101021"))
+        // The mute only counts when the night owns its own policy: without that bit the four
+        // policy values below are inert, so a nine-bit row from an older build decodes as noise.
+        assertNull(NightSleepPreset.decode("101010101"))
     }
 
     @Test

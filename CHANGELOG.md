@@ -1,7 +1,7 @@
 # Changelog
 
 ## [Unreleased]
-- Night mode no longer overrides your day alert choices with hardcoded defaults: the night's official red/yellow, both "always sound" switches and the alert scope now follow the day setting unless you pick Day/On/Off for the night explicitly, so city-level alerts stay city-level after 23:00 10-27_0:10:46
+- Night mode no longer overwrites your day alert choices: a new "Own night alert rules" switch (off by default) keeps official red/yellow, both "always sound" switches and city level on the day values all night, so city-level alerts stay city-level after 23:00 10-27_0:10:46
 - Any icon pack can wear any of four new colour grades (cyan, IR, violet, stencil) from a row of colour dots under the pack picker, and each pack remembers its own grade 10-26_23:04:00
 - The wizard keeps the Back button's slot on page 1, so Next no longer widens and the button row stops jumping between the first two pages 10-26_22:37:30
 - The shot-down tally reads "1 Drone resolved", not "1 Drones resolved", and one rule now declines every counted noun in all three languages (5 дронів, 2 КАБа), with the type labels tested per count band 10-26_22:29:41

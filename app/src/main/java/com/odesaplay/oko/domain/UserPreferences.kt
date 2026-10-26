@@ -128,15 +128,16 @@ data class UserPreferences(
     val nightSlowYellowArmed: Boolean = true,
     val nightFastRedArmed: Boolean = true,
     val nightFastYellowArmed: Boolean = false,
-    /** Night *policy* overrides: `null` = the user never set one, so the day value carries over for
-     *  the whole night window ([effectiveNightPolicy]). Only a real choice is stored, which is why
-     *  these five are nullable while the night zone thresholds are not — those are gated by the
-     *  explicit [nightUseCustomZones] master, so they already are an opt-in. */
-    val nightZoneSirenOverride: Boolean? = null,
-    val nightOfficialSirenOverride: Boolean? = null,
-    val nightOfficialAlertCityScope: Boolean? = null,
-    val nightOfficialRedEnabled: Boolean? = null,
-    val nightOfficialYellowEnabled: Boolean? = null,
+    /** Night *policy* overrides (official red/yellow, both siren overrides, city scope). They only
+     *  apply when [nightOwnAlertPolicy] is on; with it off the night has no opinion and the day
+     *  values carry over ([effectiveNightPolicy]) — so a window can never quietly replace a choice
+     *  the user made in the day. */
+    val nightOwnAlertPolicy: Boolean = false,
+    val nightZoneSirenOverride: Boolean = false,
+    val nightOfficialSirenOverride: Boolean = false,
+    val nightOfficialAlertCityScope: Boolean = false,
+    val nightOfficialRedEnabled: Boolean = true,
+    val nightOfficialYellowEnabled: Boolean = true,
     val nightSleepRestore: String? = null,
     val flybyAnimationEnabled: Boolean = true,
     val threatIconZoom: Boolean = true,
@@ -169,8 +170,7 @@ data class UserPreferences(
     val sheltersWithKids: Boolean get() = sheltersWithKidsEnabled
     val cardSize: ThreatCardSize get() = threatCardSize
 
-    /** The night settings the "Just let me sleep!" button owns. Inheritance is part of the state,
-     *  so an unset override stays unset through the snapshot and the restore. */
+    /** The night settings the "Just let me sleep!" button owns. */
     val nightSleepPreset: NightSleepPreset
         get() = NightSleepPreset(
             useCustomZones = nightUseCustomZones,
@@ -181,7 +181,8 @@ data class UserPreferences(
             zoneSirenOverride = nightZoneSirenOverride,
             officialSirenOverride = nightOfficialSirenOverride,
             officialRed = nightOfficialRedEnabled,
-            officialYellow = nightOfficialYellowEnabled
+            officialYellow = nightOfficialYellowEnabled,
+            ownAlertPolicy = nightOwnAlertPolicy
         )
 
     /**
