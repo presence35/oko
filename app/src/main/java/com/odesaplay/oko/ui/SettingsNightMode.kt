@@ -21,9 +21,8 @@ internal fun timeText(min: Int): String =
     String.format(java.util.Locale.US, "%02d:%02d", min / 60, min % 60)
 
 /**
- * One night *policy* key. The switches only exist while the night owns its alert policy — with
- * that master off the whole block is hidden and the day values apply, so there is no "is this on
- * at night?" question to answer per row.
+ * One night *policy* key. The switch shows what the night will actually do — a key the user never
+ * touched mirrors the day value — and touching it stores the night's own answer.
  */
 @Composable
 private fun NightPolicyRow(
@@ -99,15 +98,12 @@ internal fun NightModeCard(
     slowYellowArmed: Boolean,
     fastRedArmed: Boolean,
     fastYellowArmed: Boolean,
-    zoneSirenOverride: Boolean,
-    officialSirenOverride: Boolean,
+    /** The five policy rows, already resolved by the ViewModel — what the night will do. */
+    nightPolicy: NightPolicy,
     daySlowRedKm: Int,
     daySlowYellowKm: Int,
     dayFastRedMin: Int,
     dayFastYellowMin: Int,
-    /** The master: with it off the night has no alert policy of its own and the day values apply. */
-    ownAlertPolicy: Boolean,
-    onOwnAlertPolicyChange: (Boolean) -> Unit,
     onStartChange: (Int) -> Unit,
     onEndChange: (Int) -> Unit,
     onUseCustomZonesChange: (Boolean) -> Unit,
@@ -121,9 +117,6 @@ internal fun NightModeCard(
     onFastYellowArmedChange: (Boolean) -> Unit,
     onZoneSirenOverrideChange: (Boolean) -> Unit,
     onOfficialSirenOverrideChange: (Boolean) -> Unit,
-    nightOfficialAlertCityScope: Boolean,
-    nightOfficialRedEnabled: Boolean,
-    nightOfficialYellowEnabled: Boolean,
     onNightOfficialAlertCityScopeChange: (Boolean) -> Unit,
     onNightOfficialRedChange: (Boolean) -> Unit,
     onNightOfficialYellowChange: (Boolean) -> Unit,
@@ -203,51 +196,40 @@ internal fun NightModeCard(
             }
             if (!sleepActive) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Column {
-                    AlertToggleRow(
-                        title = s.nightOwnAlertPolicyTitle,
-                        description = s.nightOwnAlertPolicyDesc,
-                        checked = ownAlertPolicy,
-                        onCheckedChange = onOwnAlertPolicyChange,
-                        icon = painterResource(R.drawable.ic_notifications),
+                Column(modifier = Modifier.padding(horizontal = 14.dp)) {
+                    SectionCaption(s.officialAlertsTitle)
+                    // Each row shows what the night will do: an untouched key mirrors the day value
+                    // (resolved once by the ViewModel), and touching it stores the night's answer.
+                    OfficialPairToggleRow(
+                        redTitle = s.officialRedAlertsTitle,
+                        redChecked = nightPolicy.officialRed,
+                        onRedChange = onNightOfficialRedChange,
+                        yellowTitle = s.officialYellowAlertsTitle,
+                        yellowChecked = nightPolicy.officialYellow,
+                        onYellowChange = onNightOfficialYellowChange
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    NightPolicyRow(
+                        title = s.nightOfficialSirenOverrideTitle,
+                        checked = nightPolicy.officialSirenOverride,
+                        onChange = onOfficialSirenOverrideChange,
+                        icon = painterResource(R.drawable.ic_trident)
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    NightPolicyRow(
+                        title = s.nightZoneSirenOverrideTitle,
+                        checked = nightPolicy.zoneSirenOverride,
+                        onChange = onZoneSirenOverrideChange,
+                        icon = painterResource(R.drawable.ic_volume_up),
                         iconTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (ownAlertPolicy) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        Column(modifier = Modifier.padding(horizontal = 14.dp)) {
-                            SectionCaption(s.officialAlertsTitle)
-                            OfficialPairToggleRow(
-                                redTitle = s.officialRedAlertsTitle,
-                                redChecked = nightOfficialRedEnabled,
-                                onRedChange = onNightOfficialRedChange,
-                                yellowTitle = s.officialYellowAlertsTitle,
-                                yellowChecked = nightOfficialYellowEnabled,
-                                onYellowChange = onNightOfficialYellowChange
-                            )
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            NightPolicyRow(
-                                title = s.nightOfficialSirenOverrideTitle,
-                                checked = officialSirenOverride,
-                                onChange = onOfficialSirenOverrideChange,
-                                icon = painterResource(R.drawable.ic_trident)
-                            )
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            NightPolicyRow(
-                                title = s.nightZoneSirenOverrideTitle,
-                                checked = zoneSirenOverride,
-                                onChange = onZoneSirenOverrideChange,
-                                icon = painterResource(R.drawable.ic_volume_up),
-                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            NightPolicyRow(
-                                title = s.officialAlertScopeTitle,
-                                checked = nightOfficialAlertCityScope,
-                                onChange = onNightOfficialAlertCityScopeChange,
-                                icon = painterResource(R.drawable.ic_city_medium),
-                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    NightPolicyRow(
+                        title = s.officialAlertScopeTitle,
+                        checked = nightPolicy.cityScope,
+                        onChange = onNightOfficialAlertCityScopeChange,
+                        icon = painterResource(R.drawable.ic_city_medium),
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 AlertToggleRow(

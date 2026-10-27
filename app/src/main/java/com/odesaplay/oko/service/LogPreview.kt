@@ -100,9 +100,15 @@ object LogPreview {
     private fun location(bundle: JSONObject): PreviewSection {
         val logs = bundle.optJSONObject("logs")
         val decisions = logs?.optJSONArray("decisions")
+        val loc = bundle.optJSONObject("location")
         return PreviewSection(
             PreviewSectionId.LOCATION,
             listOf(
+                row("location", loc, "hasPosition"),
+                row("location", loc, "fresh"),
+                row("location", loc, "lastFixAgeSec"),
+                row("location", loc, "accuracyM"),
+                row("location", loc, "accessBlocked"),
                 row("prefs", bundle.optJSONObject("prefs"), "pinned_city", sensitive = true),
                 // The city of every alert that reached this phone — the only real location signal
                 // the payload carries, since GpsLog stores accuracy and drift rather than a fix.

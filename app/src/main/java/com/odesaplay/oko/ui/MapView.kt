@@ -174,7 +174,13 @@ private fun threatIconFor(
  * [dotScaleForZoom] so it never grows large enough to overtake the alert zone rings at
  * low zoom (the dot stays a pin, not a billboard).
  */
-private fun gpsDotBitmap(context: Context, hasFix: Boolean): Bitmap {
+/**
+ * The zone dot. Three states, and no words anywhere on the map: a verified fix is a filled dot,
+ * a fix we are still holding after it went old is the same dot left hollow (it marks a memory, not
+ * a measurement), and no fix at all is a plain grey dot. Freshness is a thing the map shows, not a
+ * sentence it has to say.
+ */
+private fun gpsDotBitmap(context: Context, hasFix: Boolean, stale: Boolean): Bitmap {
     val density = context.resources.displayMetrics.density
     val coreR = 6f * density
     val whiteRingHalf = 1.2f * density          // 2.4dp ring visual, centered on the core edge
@@ -184,9 +190,12 @@ private fun gpsDotBitmap(context: Context, hasFix: Boolean): Bitmap {
     val canvas = Canvas(bmp)
     val cx = size / 2f
     val cy = size / 2f
-    val coreColor = if (hasFix) AppPalette.GpsBlue.toInt() else AppPalette.TextSecondary.toInt()
-    val ringColor = if (hasFix) Color.WHITE else AppPalette.TextSecondary.toInt()
-    canvas.drawCircle(cx, cy, coreR, Paint().apply { isAntiAlias = true; color = coreColor })
+    val fresh = hasFix && !stale
+    val coreColor = if (fresh) AppPalette.GpsBlue.toInt() else AppPalette.TextSecondary.toInt()
+    val ringColor = if (fresh) Color.WHITE else AppPalette.TextSecondary.toInt()
+    if (!stale) {
+        canvas.drawCircle(cx, cy, coreR, Paint().apply { isAntiAlias = true; color = coreColor })
+    }
     canvas.drawCircle(cx, cy, coreR + whiteRingHalf, Paint().apply {
         isAntiAlias = true
         style = Paint.Style.STROKE
@@ -442,6 +451,7 @@ fun NeptunMapView(
     showNearbyShelters: Boolean = false,
     shelterIndex: ShelterIndex? = null,
     selectedShelter: NearestShelter? = null,
+    lastShelterId: String? = null,
     onShelterTapped: (NearestShelter) -> Unit = {},
     onExitShelterMode: () -> Unit = {},
     onDeathActiveChange: (Boolean) -> Unit = {},
@@ -808,6 +818,24 @@ LaunchedEffect(selectedId) {
         }
     }
 
+    // Turning the layer on opens a shelter's card once, so the markers prove what they are for
+    // instead of needing a tip. It reopens the one you opened last — the same shelter you were
+    // checking yesterday is the one you care about today — and falls back to the nearest only
+    // when that one is no longer in range. Dismissing it, panning or zooming never re-opens it:
+    // only a fresh activation does, which is why the flag resets with the layer, not the snapshot.
+    var shelterAutoOpened by remember { mutableStateOf(false) }
+    LaunchedEffect(showNearbyShelters) {
+        if (!showNearbyShelters) shelterAutoOpened = false
+    }
+    LaunchedEffect(showNearbyShelters, shelterSnapshot.value, lastShelterId) {
+        val near = shelterSnapshot.value
+        if (!showNearbyShelters || shelterAutoOpened || near.isEmpty()) return@LaunchedEffect
+        shelterAutoOpened = true
+        if (selectedShelterState == null) {
+            onShelterTapped(near.firstOrNull { it.shelter.id == lastShelterId } ?: near.first())
+        }
+    }
+
     LaunchedEffect(deathFx) {
         deathFx.bindAutoStrike(
             outerScope = this,
@@ -1106,7 +1134,11 @@ LaunchedEffect(selectedId) {
                     if (dotPos != null) {
                         val pt = bridge.project(dotPos.lat, dotPos.lon)
                         if (pt != null) {
-                            val bmp = gpsDotBitmap(context, liveUiState.gpsFixAvailable)
+                            val bmp = gpsDotBitmap(
+                                context,
+                                hasFix = liveUiState.gpsFixAvailable,
+                                stale = liveUiState.gpsFixStale
+                            )
                             val scale = dotScaleForZoom(currentZoom)
                             val pw = bmp.width / 2f
                             val ph = bmp.height / 2f

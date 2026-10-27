@@ -31,7 +31,7 @@ enum class ProblemFix {
 /** Stable identity so the guidance toast can fire once per problem and never repeat. */
 enum class ProblemId {
     NotificationsDisabled,
-    GpsUnreliable,
+    LocationBlocked,
     AllChannelsOff,
     AllTypesSilenced,
     SourceOffline
@@ -52,7 +52,7 @@ data class Problem(
  */
 fun deriveProblems(
     notificationsDisabled: Boolean,
-    gpsUnreliable: Boolean,
+    locationBlocked: Boolean,
     anyZoneArmed: Boolean,
     officialRedAlertsEnabled: Boolean,
     officialYellowAlertsEnabled: Boolean,
@@ -63,8 +63,11 @@ fun deriveProblems(
     if (notificationsDisabled) {
         add(Problem(ProblemId.NotificationsDisabled, ProblemSeverity.Critical, ProblemFix.NotificationSettings))
     }
-    if (gpsUnreliable) {
-        add(Problem(ProblemId.GpsUnreliable, ProblemSeverity.Critical, ProblemFix.LocationPermission))
+    // Only facts with a fix live here. A merely old fix is not one: nothing the user can tap
+    // makes a phone indoors hear satellites, so age is shown by the map's own dot and the GPS
+    // log rows instead of impersonating a permission problem.
+    if (locationBlocked) {
+        add(Problem(ProblemId.LocationBlocked, ProblemSeverity.Critical, ProblemFix.LocationPermission))
     }
     if (!anyZoneArmed && !(officialRedAlertsEnabled || officialYellowAlertsEnabled)) {
         add(Problem(ProblemId.AllChannelsOff, ProblemSeverity.Warn, ProblemFix.ZonesPanel))

@@ -102,10 +102,42 @@ class UserPrefsTest {
         val before = prefs.preferences.first().nightOfficialRedEnabled
 
         prefs.setNightSleep(true)
-        assertFalse(prefs.preferences.first().nightOfficialRedEnabled)
+        assertEquals(false, prefs.preferences.first().nightOfficialRedEnabled)
 
         prefs.setNightSleep(false)
         assertEquals(before, prefs.preferences.first().nightOfficialRedEnabled)
+    }
+
+    @Test
+    fun `a night choice equal to the day value is stored as no choice at all`() = runTest {
+        prefs.clearAll()
+        prefs.setOfficialAlertCityScope(true)
+
+        // Matching the day value is the way back to following the day: the key is cleared.
+        prefs.setNightOfficialAlertCityScope(true)
+        assertNull(prefs.preferences.first().nightOfficialAlertCityScope)
+
+        // A real deviation is stored.
+        prefs.setNightOfficialAlertCityScope(false)
+        assertEquals(false, prefs.preferences.first().nightOfficialAlertCityScope)
+
+        // ...and it stays the night's own answer when the day value later moves, because equality
+        // is only consulted when writing, never re-derived later.
+        prefs.setOfficialAlertCityScope(false)
+        assertEquals(false, prefs.preferences.first().nightOfficialAlertCityScope)
+    }
+
+    @Test
+    fun `the night policy resolver reports the day value until the night differs`() = runTest {
+        prefs.clearAll()
+        prefs.setOfficialAlertCityScope(true)
+        assertTrue(prefs.preferences.first().nightPolicy().cityScope)
+
+        prefs.setNightOfficialAlertCityScope(false)
+        assertFalse(prefs.preferences.first().nightPolicy().cityScope)
+
+        prefs.setNightOfficialAlertCityScope(true)
+        assertTrue(prefs.preferences.first().nightPolicy().cityScope)
     }
 
     @Test
@@ -115,7 +147,7 @@ class UserPrefsTest {
         prefs.setNightOfficialRedEnabled(true) // a direct edit ends the preset
 
         prefs.setNightSleep(false)
-        assertTrue(prefs.preferences.first().nightOfficialRedEnabled)
+        assertEquals(true, prefs.preferences.first().nightOfficialRedEnabled)
     }
 
     /**
@@ -219,8 +251,8 @@ class UserPrefsTest {
 
         val p = prefs.preferences.first()
         assertNull("the restore must not outlive the choice that replaced it", p.nightSleepRestore)
-        assertTrue(p.nightOfficialRedEnabled)
-        assertTrue(p.nightZoneSirenOverride)
+        assertEquals(true, p.nightOfficialRedEnabled)
+        assertEquals(true, p.nightZoneSirenOverride)
         assertTrue(p.nightSlowYellowArmed)
         assertFalse("every night bell on means the window is no longer a mute", p.nightSleepActive)
     }

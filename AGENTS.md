@@ -79,6 +79,22 @@ Only after a meaningful code change, verify before declaring the task done:
 
 Fix any failures before finishing.
 
+## Beta logs
+
+Testers' bundles are **not** in the repo and **not** on the phone — the app uploads them to the
+log drop box. Path: `other_apps/oko_logs/` on the FTP host in `app/upload.properties`
+(`ftpHost`/`user`/`password`; `remoteDir` is `other_apps/oko`, so the log dir is its sibling, not
+inside it). Server side is `server/upload.php` (`LOG_DIR`, `MAX_BYTES`, `BURST_SEC`/`PER_MINUTE`);
+`adb devices` will usually show nothing, so never wait for a device.
+
+- One file per device+build: `<brand>_<model>_<versionCode>_<yyyymmdd-hhmmss>.json`, mode 0600,
+  each upload overwriting its slot. The newest mtime *is* the current report.
+- Fetch with PowerShell `FtpWebRequest` (`ListDirectoryDetails` / `DownloadFile`) reading the creds
+  out of `app/upload.properties`. Never echo the password, never copy it into a file or the chat.
+- Every bundle is `schema`-versioned and carries its own `feedback` block, so a bug report and the
+  phone it came from are the same file — there is no separate feedback channel to correlate.
+- Parse the JSON and summarise. Don't paste the bundle.
+
 ### Never paste full logs or data blobs
 
 - Summarize build output, errors, and stack traces rather than dumping them into the chat.

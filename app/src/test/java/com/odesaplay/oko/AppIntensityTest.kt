@@ -171,10 +171,7 @@ class AppIntensityTest {
                     zoneSirenOverride = night.zoneSirenOverride,
                     officialSirenOverride = night.officialSirenOverride,
                     officialRed = night.officialRed,
-                    officialYellow = night.officialYellow,
-                    // The intensity patch writes night policy values; the night only applies them
-                    // with its own policy on, which these presets leave off.
-                    ownAlertPolicy = false
+                    officialYellow = night.officialYellow
                 ).isMuted)
             } else {
                 assertNull(intensity.name, night)

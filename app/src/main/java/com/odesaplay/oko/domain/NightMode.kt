@@ -95,25 +95,48 @@ fun isWithinNight(nowMin: Int, startMin: Int, endMin: Int): Boolean =
 
 /**
  * The active value of a *night policy* key (official red/yellow enable, siren overrides, city
- * scope) for this tick.
+ * scope) for this tick. The night value is an **override**, not a second setting: `null` means the
+ * user never set one, so the day value carries over for the whole window.
  *
- * The night value only applies when the user turned [ownNightPolicy] on. Without that switch the
- * night has no opinion at all and the day value carries over, which is the point: every one of
- * these keys used to be consulted unconditionally with its own hardcoded default, so an active
- * window silently replaced a day choice the user had made — with "city level" on, a raion yellow
- * anywhere in the oblast still rang the banner at night, because the night default for that key
- * was `false` = whole oblast. A quiet mode may narrow what reaches the user, never widen it behind
- * their back, and four other keys carried the same trap.
+ * That `null` case is the fix for the reported bug. Every one of these keys used to be a plain
+ * boolean with its own hardcoded default, so an active window silently replaced a day choice the
+ * user had made — with "city level" on, a raion yellow anywhere in the oblast still rang the
+ * banner at night, because the night default for that key was `false` = whole oblast. A quiet mode
+ * may narrow what reaches the user, never widen it behind their back, and four other keys carried
+ * the same trap.
  *
  * One function, not five copies: the copies each carried their own default, which is exactly how
  * they drifted apart.
  */
-fun effectiveNightPolicy(
-    day: Boolean,
-    night: Boolean,
-    ownNightPolicy: Boolean,
-    nightActive: Boolean
-): Boolean = if (nightActive && ownNightPolicy) night else day
+fun effectiveNightPolicy(day: Boolean, night: Boolean?, nightActive: Boolean): Boolean =
+    if (nightActive) night ?: day else day
+
+/** A night override resolved for writing: an unset override means "same as day", so snapshots and
+ *  presets state the [day] value they would inherit rather than inventing a third answer. */
+fun nightOverrideOr(night: Boolean?, day: Boolean): Boolean = night ?: day
+
+/**
+ * The five night policy rows as the night page shows them: what the night will actually do,
+ * resolved. Built once by the ViewModel ([UserPreferences.nightPolicy]) so the card renders instead
+ * of re-running the resolution at every row (mirror rule).
+ */
+@Immutable
+data class NightPolicy(
+    val officialRed: Boolean,
+    val officialYellow: Boolean,
+    val officialSirenOverride: Boolean,
+    val zoneSirenOverride: Boolean,
+    val cityScope: Boolean
+)
+
+/** The night's effective alert policy: each key's night value if it has one, else the day value. */
+fun UserPreferences.nightPolicy(): NightPolicy = NightPolicy(
+    officialRed = nightOverrideOr(nightOfficialRedEnabled, officialRedAlertsEnabled),
+    officialYellow = nightOverrideOr(nightOfficialYellowEnabled, officialYellowAlertsEnabled),
+    officialSirenOverride = nightOverrideOr(nightOfficialSirenOverride, sirenOverride),
+    zoneSirenOverride = nightOverrideOr(nightZoneSirenOverride, sirenOverride),
+    cityScope = nightOverrideOr(nightOfficialAlertCityScope, officialAlertCityScope)
+)
 
 /** The night-mode zone values as one value object, so the service and the widget cannot read a
  *  different subset of the night prefs (the widget used to read none of them). */
@@ -136,39 +159,49 @@ data class NightSleepPreset(
     val slowYellowArmed: Boolean,
     val fastRedArmed: Boolean,
     val fastYellowArmed: Boolean,
-    val zoneSirenOverride: Boolean,
-    val officialSirenOverride: Boolean,
-    val officialRed: Boolean,
-    val officialYellow: Boolean,
-    /** The night's policy master. Part of the preset because the four policy bits above mean
-     *  nothing while it is off — a restore that left it off would put back a mute that does not
-     *  mute. */
-    val ownAlertPolicy: Boolean
+    /** The four policy keys are tri-state: `null` = the night had no opinion and was following the
+     *  day value, which the restore must put back rather than pin. */
+    val zoneSirenOverride: Boolean?,
+    val officialSirenOverride: Boolean?,
+    val officialRed: Boolean?,
+    val officialYellow: Boolean?
 ) {
-    /** Every alert is off. */
+    /** Every alert is off — an inherited key is not a choice to be off. */
     val isSilent: Boolean
         get() = !slowRedArmed && !slowYellowArmed && !fastRedArmed && !fastYellowArmed &&
-            !zoneSirenOverride && !officialSirenOverride && !officialRed && !officialYellow
+            zoneSirenOverride == false && officialSirenOverride == false &&
+            officialRed == false && officialYellow == false
 
-    /** The button's ON state: the night owns its policy (so the mute bits apply at all), custom
-     *  zones on (so the night bells apply) and every alert off. */
-    val isMuted: Boolean get() = ownAlertPolicy && useCustomZones && isSilent
+    /** The button's ON state: custom zones on (so the night bells actually apply) and every alert off. */
+    val isMuted: Boolean get() = useCustomZones && isSilent
 
     fun encode(): String = buildString(BITS) {
-        append(if (useCustomZones) '1' else '0')
-        append(if (slowRedArmed) '1' else '0')
-        append(if (slowYellowArmed) '1' else '0')
-        append(if (fastRedArmed) '1' else '0')
-        append(if (fastYellowArmed) '1' else '0')
-        append(if (zoneSirenOverride) '1' else '0')
-        append(if (officialSirenOverride) '1' else '0')
-        append(if (officialRed) '1' else '0')
-        append(if (officialYellow) '1' else '0')
-        append(if (ownAlertPolicy) '1' else '0')
+        append(bit(useCustomZones))
+        append(bit(slowRedArmed))
+        append(bit(slowYellowArmed))
+        append(bit(fastRedArmed))
+        append(bit(fastYellowArmed))
+        append(bit(zoneSirenOverride))
+        append(bit(officialSirenOverride))
+        append(bit(officialRed))
+        append(bit(officialYellow))
     }
 
     companion object {
-        private const val BITS = 10
+        private const val BITS = 9
+
+        /** '1' on, '0' off, 'i' inherit the day value. */
+        private fun bit(v: Boolean?): Char = when (v) {
+            true -> '1'
+            false -> '0'
+            null -> 'i'
+        }
+
+        private fun read(ch: Char): Boolean? = when (ch) {
+            '1' -> true
+            '0' -> false
+            else -> null
+        }
 
         /** The exact settings "Just let me sleep!" writes. */
         val MUTED = NightSleepPreset(
@@ -176,23 +209,21 @@ data class NightSleepPreset(
             slowRedArmed = false, slowYellowArmed = false,
             fastRedArmed = false, fastYellowArmed = false,
             zoneSirenOverride = false, officialSirenOverride = false,
-            officialRed = false, officialYellow = false,
-            ownAlertPolicy = true
+            officialRed = false, officialYellow = false
         )
 
         fun decode(raw: String?): NightSleepPreset? {
-            if (raw == null || raw.length != BITS || raw.any { it != '0' && it != '1' }) return null
+            if (raw == null || raw.length != BITS || raw.any { it != '0' && it != '1' && it != 'i' }) return null
             return NightSleepPreset(
                 useCustomZones = raw[0] == '1',
                 slowRedArmed = raw[1] == '1',
                 slowYellowArmed = raw[2] == '1',
                 fastRedArmed = raw[3] == '1',
                 fastYellowArmed = raw[4] == '1',
-                zoneSirenOverride = raw[5] == '1',
-                officialSirenOverride = raw[6] == '1',
-                officialRed = raw[7] == '1',
-                officialYellow = raw[8] == '1',
-                ownAlertPolicy = raw[9] == '1'
+                zoneSirenOverride = read(raw[5]),
+                officialSirenOverride = read(raw[6]),
+                officialRed = read(raw[7]),
+                officialYellow = read(raw[8])
             )
         }
     }

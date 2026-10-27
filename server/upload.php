@@ -27,10 +27,11 @@
 const LOG_DIR = __DIR__ . '/../oko_logs';   // outside the web root on purpose
 const MAX_BYTES = 8 * 1024 * 1024;
 
-// Per-IP budget. A tester tapping a few times an hour never notices these; a script filling the
-// directory hits 429 and stops. Generous enough not to break a frustrated double-tap.
-const BURST_SEC = 30;
-const PER_HOUR = 20;
+// Per-IP budget. A tester filing several reports back to back is the normal case, not abuse, so
+// the burst is nearly nonexistent: one upload every 3s, ten a minute, then a hard stop. The cap
+// exists only to keep a script from filling the directory.
+const BURST_SEC = 3;
+const PER_MINUTE = 10;
 
 // Delete bundles older than this. 0 disables pruning (manual retention).
 const KEEP_DAYS = 90;
@@ -52,12 +53,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 
 /**
  * Per-IP sliding window, kept in the system temp dir (writable on shared hosting, and not
- * reachable over HTTP). Returns the number of writes still allowed in the burst window.
+ * reachable over HTTP). Two gates: a minimum gap between uploads and a per-minute cap.
  * Keyed on REMOTE_ADDR: X-Forwarded-For is attacker-controlled, so trusting it would let a
  * single client reset its own counter by sending a random header.
  */
 function rate_ok(string $file, int $now): bool {
-    $window = $now - 3600;
+    $window = $now - 60;
     $stamps = [];
     if (is_readable($file)) {
         $raw = @file_get_contents($file);
@@ -70,7 +71,7 @@ function rate_ok(string $file, int $now): bool {
             }
         }
     }
-    if (count($stamps) >= PER_HOUR) return false;
+    if (count($stamps) >= PER_MINUTE) return false;
     if ($stamps !== [] && ($now - max($stamps)) < BURST_SEC) return false;
 
     $stamps[] = $now;

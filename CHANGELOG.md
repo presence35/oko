@@ -1,7 +1,14 @@
 # Changelog
 
 ## [Unreleased]
-- Night mode no longer overwrites your day alert choices: a new "Own night alert rules" switch (off by default) keeps official red/yellow, both "always sound" switches and city level on the day values all night, so city-level alerts stay city-level after 23:00 10-27_0:10:46
+- The ongoing notification no longer talks about an unverified position: an old fix is now the map dot left hollow, with the GPS log holding the history, because indoors it was announced by the hour with nothing to tap 10-27_14:40:00
+- The header's warning glyph is reserved for a blocked location (no permission, providers off) instead of also firing for a merely old fix, whose only suggested fix was a permission you already granted 10-27_14:40:00
+- Each threat card in Settings › Threats is one row — name, speed, Fast/Slow tag and both toggles — instead of a wrapped second line of speed pills 10-27_14:40:00
+- Turning shelters on opens a shelter's card by itself, so tapping one needs no tip; only the long-press tip remains, with "long-press" as a styled capsule 10-27_14:40:00
+- Turning shelters on reopens the shelter you opened last instead of always the nearest one, falling back to nearest when it is out of range 10-27_15:12:00
+- Log bundles now carry a location block (fix ages, accuracy, access state), so a "position not verified" report can finally be answered 10-27_14:40:00
+- Log uploads allow one every 3 s and ten a minute, replacing the 30 s burst and 20-per-hour cap that rejected a tester filing reports back to back 10-27_14:40:00
+- Night mode no longer replaces your day alert choices with its own hardcoded defaults: official red/yellow, both "always sound" switches and city level follow the day setting until you change them on the night page, and setting one back to the day value returns it to following the day 10-27_0:10:46
 - Any icon pack can wear any of four new colour grades (cyan, IR, violet, stencil) from a row of colour dots under the pack picker, and each pack remembers its own grade 10-26_23:04:00
 - The wizard keeps the Back button's slot on page 1, so Next no longer widens and the button row stops jumping between the first two pages 10-26_22:37:30
 - The shot-down tally reads "1 Drone resolved", not "1 Drones resolved", and one rule now declines every counted noun in all three languages (5 дронів, 2 КАБа), with the type labels tested per count band 10-26_22:29:41

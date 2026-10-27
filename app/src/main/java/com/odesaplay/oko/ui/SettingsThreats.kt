@@ -6,7 +6,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
@@ -44,12 +43,12 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** A single threat type as a bordered card that stands apart from its neighbours and from the
- *  page body — a thin divider was not enough separation. Order: title + the two toggles, then
- *  the speed + Fast/Slow pills on their own wrapping line, short description, the 2.5x pack
- *  art, then the full facts and the italic joke (the page scrolls, so nothing is truncated).
- *  The pills sit below the title deliberately: at large system font sizes a single crowded
- *  row crushed the name to a letter or two ("K..."), while a wrapping pill line stays whole. */
-@OptIn(ExperimentalLayoutApi::class)
+ *  page body — a thin divider was not enough separation. Order: title + speed + Fast/Slow tag +
+ *  the two toggles on one row, short description, the 2.5x pack art, then the full facts and the
+ *  italic joke (the page scrolls, so nothing is truncated).
+ *  One row rather than a wrapped second line of pills: those pills read as a second heading
+ *  competing with the name. The name is the only child allowed to shrink, so a large system font
+ *  ellipsizes it and the tag and toggles keep their full size. */
 @Composable
 internal fun ThreatTypeRow(
     type: ThreatType,
@@ -84,17 +83,37 @@ internal fun ThreatTypeRow(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 12.dp)
         ) {
-            // Title row: name plus the two toggles hard right. The pills live on their
-            // own wrapping line below so a large system font squeezes nothing: the name
-            // keeps the full width and the toggles never leave the far edge.
+            // Title row: name, its typical speed, the Fast/Slow tag, then the two toggles hard
+            // right. One row, because a wrapped second line of pills read as a second, competing
+            // heading — the speed is the name's metadata, not a list of its own. The name is the
+            // only thing allowed to shrink, so a large system font ellipsizes it and clips nothing.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    label,
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        label,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    typicalSpeed?.let {
+                        Text(
+                            "~$it ${s.speedUnit}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            modifier = Modifier.padding(start = 6.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(6.dp))
+                Pill(
+                    if (fast) s.fastGroupLabel else s.slowGroupLabel,
+                    if (fast) ZoneRedColor else ZoneYellowColor
                 )
                 Spacer(Modifier.width(4.dp))
                 IconToggle(
@@ -112,22 +131,7 @@ internal fun ThreatTypeRow(
                     onClick = { onThreatAlertToggle(type, !onAlerts) }
                 )
             }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp)
-            ) {
-                typicalSpeed?.let {
-                    Pill("~$it ${s.speedUnit}", MaterialTheme.colorScheme.primary)
-                }
-                Pill(
-                    if (fast) s.fastGroupLabel else s.slowGroupLabel,
-                    if (fast) ZoneRedColor else ZoneYellowColor
-                )
-            }
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 description,
                 style = MaterialTheme.typography.bodySmall,
@@ -351,8 +355,8 @@ private fun UnknownCatPoster(s: Strings.StringSet) {
     }
 }
 
-/** A compact tinted capsule, e.g. the speed badge or the per-row Fast/Slow tag. Kept to one line:
- *  at large system text sizes a wrapping capsule collapsed to a single vertical column of letters. */
+/** A compact tinted capsule for the per-row Fast/Slow tag. Kept to one line: at large system text
+ *  sizes a wrapping capsule collapsed to a single vertical column of letters. */
 @Composable
 private fun Pill(text: String, tint: Color) {
     Surface(shape = RoundedCornerShape(50), color = tint.copy(alpha = 0.16f)) {

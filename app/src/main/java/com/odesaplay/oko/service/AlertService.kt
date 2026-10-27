@@ -538,7 +538,6 @@ class AlertService : Service() {
         val criticalOfflineBypassSilent: Boolean,
         val focusLocation: LatLng?,
         val gpsIssue: GpsIssue = GpsIssue.NONE,
-        val gpsUnverifiedMin: Int = 0,
         val nightActive: Boolean,
         val enabled: Set<ThreatType>,
         val hiddenTypes: Set<String>,
@@ -1020,12 +1019,10 @@ val mappedThreats = registry.allThreats.map { list ->
                     ZoneArmed(p.slowRedArmed, p.slowYellowArmed, p.fastRedArmed, p.fastYellowArmed),
                     nightZones, p.nightUseCustomZones, nightActive
                 )
-                val zoneSirenOverride = effectiveNightPolicy(
-                    p.sirenOverride, p.nightZoneSirenOverride, p.nightOwnAlertPolicy, nightActive
-                )
-                val officialSirenOverride = effectiveNightPolicy(
-                    p.sirenOverride, p.nightOfficialSirenOverride, p.nightOwnAlertPolicy, nightActive
-                )
+                val zoneSirenOverride =
+                    effectiveNightPolicy(p.sirenOverride, p.nightZoneSirenOverride, nightActive)
+                val officialSirenOverride =
+                    effectiveNightPolicy(p.sirenOverride, p.nightOfficialSirenOverride, nightActive)
 
                 val enabled = p.alertEnabledTypes
                 val hiddenTypeStrings = (ThreatType.values().toSet() - p.mapVisibleTypes)
@@ -1054,8 +1051,6 @@ val mappedThreats = registry.allThreats.map { list ->
                     ageMs = LocationTracker.lastReceivedAtMs.value?.let { now - it },
                     accessBlocked = LocationTracker.accessBlocked.value && p.wizardCompleted
                 )
-                val gpsUnverifiedMin = LocationTracker.lastReceivedAtMs.value
-                    ?.let { ((now - it) / 60_000L).toInt().coerceAtLeast(0) } ?: 0
                 val focusToken = focus.attribution.token
                 currentToken = focusToken
 
@@ -1064,8 +1059,7 @@ val mappedThreats = registry.allThreats.map { list ->
                 // yellow share this path — official is official; only the notif toggles
                 // and tint/copy differ downstream.
                 val cityScopeActive = effectiveNightPolicy(
-                    p.officialAlertCityScope, p.nightOfficialAlertCityScope,
-                    p.nightOwnAlertPolicy, nightActive
+                    p.officialAlertCityScope, p.nightOfficialAlertCityScope, nightActive
                 )
                 val official = alerts.officialStateFor(focusToken, focusCityUa, cityScopeActive)
                 val officialRaw = alerts.officialStateFor(focusToken, null, false)
@@ -1129,12 +1123,10 @@ val mappedThreats = registry.allThreats.map { list ->
                     fastRedArmed = armed.fastRed,
                     fastYellowArmed = armed.fastYellow,
                     officialRedAlertsEnabled = effectiveNightPolicy(
-                        p.officialRedAlertsEnabled, p.nightOfficialRedEnabled,
-                        p.nightOwnAlertPolicy, nightActive
+                        p.officialRedAlertsEnabled, p.nightOfficialRedEnabled, nightActive
                     ),
                     officialYellowAlertsEnabled = effectiveNightPolicy(
-                        p.officialYellowAlertsEnabled, p.nightOfficialYellowEnabled,
-                        p.nightOwnAlertPolicy, nightActive
+                        p.officialYellowAlertsEnabled, p.nightOfficialYellowEnabled, nightActive
                     ),
                     zoneSirenOverride = zoneSirenOverride,
                     officialSirenOverride = officialSirenOverride,
@@ -1149,7 +1141,6 @@ val mappedThreats = registry.allThreats.map { list ->
                     criticalOfflineBypassSilent = p.criticalOfflineBypassSilent,
                     focusLocation = focusLoc,
                     gpsIssue = gpsIssue,
-                    gpsUnverifiedMin = gpsUnverifiedMin,
                     nightActive = nightActive,
                     enabled = enabled,
                     hiddenTypes = hiddenTypeStrings,
@@ -1268,12 +1259,10 @@ val mappedThreats = registry.allThreats.map { list ->
 
         val monitorText = when {
             isOfflineNow -> offlineLiveBody(s, offlineMinutes)
-            // A stale position is NOT a GPS-access problem, and saying so was the bug: the phone
-            // may simply be still. Only a denied permission or a disabled provider earns that
-            // wording; anything else says what we can actually vouch for.
+            // Only a fact the user can act on earns the shade. A stale position is not one: nothing
+            // to tap, and standing still indoors produces it by the hour, so announcing it read as
+            // a broken app. The map's own dot and the GPS log rows carry freshness instead.
             state.gpsIssue == GpsIssue.ACCESS_BLOCKED -> s.gpsUnavailableFollowMe
-            state.gpsIssue == GpsIssue.NOT_VERIFIED ->
-                String.format(s.gpsNotVerifiedFormat, state.gpsUnverifiedMin)
             isDegradedNow -> s.connDegradedBody
             else -> ""
         }

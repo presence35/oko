@@ -85,6 +85,7 @@ data class UiState(
     val mapThreats: List<NormalizedThreat> = emptyList(),   // all active threats across Europe
     val userLocation: LatLng? = null,
     val gpsFixAvailable: Boolean = false,         // a GPS/cell fix has arrived at least once
+    val gpsFixStale: Boolean = false,             // ...and the one we are running on is now old
     val gpsUnreliable: Boolean = false,           // followMe on, position unusable (none/stale/outside UA)
     val problems: List<Problem> = emptyList(),    // ordered degradations — first is the header's target
     val problemAlert: ProblemAlert? = null,       // just-appeared problems, for the one-shot guidance toast
@@ -112,7 +113,6 @@ data class UiState(
     val nightStartMin: Int = UserPreferences.DEFAULT.nightStartMin,
     val nightEndMin: Int = UserPreferences.DEFAULT.nightEndMin,
     val nightUseCustomZones: Boolean = UserPreferences.DEFAULT.nightUseCustomZones,
-    val nightOwnAlertPolicy: Boolean = UserPreferences.DEFAULT.nightOwnAlertPolicy,
     val nightSlowRedKm: Int = UserPreferences.DEFAULT.nightSlowRedKm,
     val nightSlowYellowKm: Int = UserPreferences.DEFAULT.nightSlowYellowKm,
     val nightFastRedMin: Int = UserPreferences.DEFAULT.nightFastRedMin,
@@ -121,12 +121,12 @@ data class UiState(
     val nightSlowYellowArmed: Boolean = UserPreferences.DEFAULT.nightSlowYellowArmed,
     val nightFastRedArmed: Boolean = UserPreferences.DEFAULT.nightFastRedArmed,
     val nightFastYellowArmed: Boolean = UserPreferences.DEFAULT.nightFastYellowArmed,
-    val nightZoneSirenOverride: Boolean = UserPreferences.DEFAULT.nightZoneSirenOverride,
-    val nightOfficialSirenOverride: Boolean = UserPreferences.DEFAULT.nightOfficialSirenOverride,
+    val nightZoneSirenOverride: Boolean? = null,
+    val nightOfficialSirenOverride: Boolean? = null,
     val officialRedAlertsEnabled: Boolean = true,
     val officialYellowAlertsEnabled: Boolean = true,
      val officialAlertCityScope: Boolean = false,
-     val nightOfficialAlertCityScope: Boolean = UserPreferences.DEFAULT.nightOfficialAlertCityScope,
+     val nightOfficialAlertCityScope: Boolean? = null,
      val sirenOverride: Boolean = false,
     val criticalOfflineOverride: Boolean = true,
     val criticalOfflineBypassSilent: Boolean = false,
@@ -249,6 +249,8 @@ data class SettingsState(
     val officialYellowAlertsEnabled: Boolean get() = prefs.officialYellowAlertsEnabled
     val officialAlertsEnabled: Boolean get() = officialRedAlertsEnabled || officialYellowAlertsEnabled
     val officialAlertCityScope: Boolean get() = prefs.officialAlertCityScope
+    /** The five night policy rows, resolved — the night card renders this instead of re-deriving. */
+    val nightPolicy: NightPolicy get() = prefs.nightPolicy()
     val sirenOverride: Boolean get() = prefs.sirenOverride
     val fallingDebrisDelaySec: Int get() = prefs.fallingDebrisDelaySec
     val autoDismissAllClear: Boolean get() = prefs.autoDismissAllClear
@@ -260,7 +262,6 @@ data class SettingsState(
     val nightStartMin: Int get() = prefs.nightStartMin
     val nightEndMin: Int get() = prefs.nightEndMin
     val nightUseCustomZones: Boolean get() = prefs.nightUseCustomZones
-    val nightOwnAlertPolicy: Boolean get() = prefs.nightOwnAlertPolicy
     val nightSlowRedKm: Int get() = prefs.nightSlowRedKm
     val nightSlowYellowKm: Int get() = prefs.nightSlowYellowKm
     val nightFastRedMin: Int get() = prefs.nightFastRedMin
@@ -269,11 +270,11 @@ data class SettingsState(
     val nightSlowYellowArmed: Boolean get() = prefs.nightSlowYellowArmed
     val nightFastRedArmed: Boolean get() = prefs.nightFastRedArmed
     val nightFastYellowArmed: Boolean get() = prefs.nightFastYellowArmed
-    val nightZoneSirenOverride: Boolean get() = prefs.nightZoneSirenOverride
-    val nightOfficialSirenOverride: Boolean get() = prefs.nightOfficialSirenOverride
-    val nightOfficialAlertCityScope: Boolean get() = prefs.nightOfficialAlertCityScope
-    val nightOfficialRedEnabled: Boolean get() = prefs.nightOfficialRedEnabled
-    val nightOfficialYellowEnabled: Boolean get() = prefs.nightOfficialYellowEnabled
+    val nightZoneSirenOverride: Boolean? get() = prefs.nightZoneSirenOverride
+    val nightOfficialSirenOverride: Boolean? get() = prefs.nightOfficialSirenOverride
+    val nightOfficialAlertCityScope: Boolean? get() = prefs.nightOfficialAlertCityScope
+    val nightOfficialRedEnabled: Boolean? get() = prefs.nightOfficialRedEnabled
+    val nightOfficialYellowEnabled: Boolean? get() = prefs.nightOfficialYellowEnabled
     /** "Just let me sleep!" is on when the night settings are the fully-muted combination. */
     val nightSleepActive: Boolean get() = prefs.nightSleepActive
     val followMe: Boolean get() = prefs.followMe
@@ -611,8 +612,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val enabled: Boolean,
         val startMin: Int,
         val endMin: Int,
-        val useCustomZones: Boolean,
-        val ownAlertPolicy: Boolean
+        val useCustomZones: Boolean
     )
 
     /** Night-mode zone prefs (raw). */
@@ -625,8 +625,8 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val slowYellowArmed: Boolean,
         val fastRedArmed: Boolean,
         val fastYellowArmed: Boolean,
-        val zoneSirenOverride: Boolean,
-        val officialSirenOverride: Boolean
+        val zoneSirenOverride: Boolean?,
+        val officialSirenOverride: Boolean?
     )
 
     private data class NightPrefs(
@@ -647,7 +647,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
         val officialRedAlertsEnabled: Boolean,
         val officialYellowAlertsEnabled: Boolean,
         val officialAlertCityScope: Boolean,
-        val nightOfficialAlertCityScope: Boolean,
+        val nightOfficialAlertCityScope: Boolean?,
         val nightSleepActive: Boolean,
         val sirenOverride: Boolean,
         val followMe: Boolean,
@@ -793,8 +793,7 @@ val sheltersEnabled: Boolean,
                     enabled = nightEnabled,
                     startMin = nightStartMin,
                     endMin = nightEndMin,
-                    useCustomZones = nightUseCustomZones,
-                    ownAlertPolicy = nightOwnAlertPolicy
+                    useCustomZones = nightUseCustomZones
                 ),
                 zones = NightZonesPrefs(
                     slowRedKm = nightSlowRedKm,
@@ -906,8 +905,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             reveal = live.reveal,
             flourish = live.flourish,
             officialAlertCityScope = effectiveNightPolicy(
-                prefs.officialAlertCityScope, prefs.nightOfficialAlertCityScope,
-                prefs.night.window.ownAlertPolicy, nightActive
+                prefs.officialAlertCityScope, prefs.nightOfficialAlertCityScope, nightActive
             ),
             showBorders = prefs.showBorders,
             showRegionBorders = prefs.showRegionBorders
@@ -916,11 +914,12 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         // problems.first(), and only ids that have never been surfaced raise the guidance toast.
         val problems = deriveProblems(
             notificationsDisabled = notificationsDisabledBySystem,
-            // `gpsUnreliable` is the stale-fix judgement; an unusable location (no permission, or
-            // every provider off) is the same user-facing fact and must not wait for the fix to age.
-            // Only when a live position is what the app is running on, though: a pinned city needs
-            // no GPS, and warning about a permission that city mode never uses is pure noise.
-            gpsUnreliable = built.gpsUnreliable || (locationAccessBlocked && prefs.followMe),
+            // Only a fact with a fix belongs here: no permission, or every provider off. A fix
+            // that merely aged is left to the map's own dot and the GPS log — a still phone is
+            // not a broken one, and "tap to grant a permission you already granted" was a dead end.
+            // Follow-me only: a pinned city needs no GPS, so warning about a permission that mode
+            // never uses is pure noise.
+            locationBlocked = locationAccessBlocked && prefs.followMe,
             anyZoneArmed = activeArmed.slowRed || activeArmed.fastRed ||
                 activeArmed.slowYellow || activeArmed.fastYellow,
             officialRedAlertsEnabled = prefs.officialRedAlertsEnabled,
@@ -978,7 +977,6 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
             nightStartMin = prefs.night.window.startMin,
             nightEndMin = prefs.night.window.endMin,
             nightUseCustomZones = prefs.night.window.useCustomZones,
-            nightOwnAlertPolicy = prefs.night.window.ownAlertPolicy,
             nightSlowRedKm = prefs.night.zones.slowRedKm,
             nightSlowYellowKm = prefs.night.zones.slowYellowKm,
             nightFastRedMin = prefs.night.zones.fastRedMin,
@@ -1311,6 +1309,7 @@ showBorders = prefs.showBorders,
             mapThreats = mapThreats,
             userLocation = userLocation,
             gpsFixAvailable = gpsFixAvailable && gpsFresh,
+            gpsFixStale = gpsFixAvailable && !gpsFresh,
             slowRedKm = slowRedKm,
             slowYellowKm = slowYellowKm,
             fastRedMin = fastRedMin,
@@ -1598,10 +1597,6 @@ fun setAlertsArmed(armed: Boolean) {
             if (armed) { AlertService.start(app) }
             prefs.setNightFastYellowArmed(armed)
         }
-    }
-
-    fun setNightOwnAlertPolicy(own: Boolean) {
-        viewModelScope.launch { prefs.setNightOwnAlertPolicy(own) }
     }
 
     fun setNightZoneSirenOverride(override: Boolean) {

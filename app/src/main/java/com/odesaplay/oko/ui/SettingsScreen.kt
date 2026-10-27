@@ -122,7 +122,6 @@ fun SettingsScreen(
     onNightOfficialAlertCityScopeChange: (Boolean) -> Unit,
     onNightOfficialRedChange: (Boolean) -> Unit,
     onNightOfficialYellowChange: (Boolean) -> Unit,
-    onNightOwnAlertPolicyChange: (Boolean) -> Unit,
     onNightSleepToggle: (Boolean) -> Unit,
     onFollowMeChange: (Boolean) -> Unit,
     onPinnedCityChange: (City?) -> Unit,
@@ -207,9 +206,7 @@ fun SettingsScreen(
     val nightFastYellowArmed = state.nightFastYellowArmed
     val nightZoneSirenOverride = state.nightZoneSirenOverride
     val nightOfficialSirenOverride = state.nightOfficialSirenOverride
-    val nightOfficialAlertCityScope = state.nightOfficialAlertCityScope
-    val nightOfficialRedEnabled = state.nightOfficialRedEnabled
-    val nightOfficialYellowEnabled = state.nightOfficialYellowEnabled
+    val nightPolicy = state.nightPolicy
     val disclaimerCollapsed = state.disclaimerCollapsed
     val disclaimerReadCount = state.disclaimerReadCount
     val followMe = state.followMe
@@ -428,9 +425,9 @@ fun SettingsScreen(
                 nightEnabled,
                 nightStartMin,
                 nightEndMin,
-                // What the night actually does: without its own alert policy the day values apply.
-                state.nightOwnAlertPolicy &&
-                    (nightZoneSirenOverride || nightOfficialSirenOverride),
+                // What the night actually does: an unset override follows the day value.
+                nightOverrideOr(nightZoneSirenOverride, sirenOverride) ||
+                    nightOverrideOr(nightOfficialSirenOverride, sirenOverride),
                 nightUseCustomZones,
                 state.nightSleepActive
             )
@@ -1030,10 +1027,7 @@ fun SettingsScreen(
                         slowYellowArmed = nightSlowYellowArmed,
                         fastRedArmed = nightFastRedArmed,
                         fastYellowArmed = nightFastYellowArmed,
-                        zoneSirenOverride = nightZoneSirenOverride,
-                        officialSirenOverride = nightOfficialSirenOverride,
-                        ownAlertPolicy = state.nightOwnAlertPolicy,
-                        onOwnAlertPolicyChange = onNightOwnAlertPolicyChange,
+                        nightPolicy = nightPolicy,
                         daySlowRedKm = slowRedKm,
                         daySlowYellowKm = slowYellowKm,
                         dayFastRedMin = fastRedMin,
@@ -1051,9 +1045,6 @@ fun SettingsScreen(
                         onFastYellowArmedChange = onNightFastYellowArmedChange,
                         onZoneSirenOverrideChange = onNightZoneSirenOverrideChange,
                         onOfficialSirenOverrideChange = onNightOfficialSirenOverrideChange,
-                        nightOfficialAlertCityScope = nightOfficialAlertCityScope,
-                        nightOfficialRedEnabled = nightOfficialRedEnabled,
-                        nightOfficialYellowEnabled = nightOfficialYellowEnabled,
                         onNightOfficialAlertCityScopeChange = onNightOfficialAlertCityScopeChange,
                         onNightOfficialRedChange = onNightOfficialRedChange,
                         onNightOfficialYellowChange = onNightOfficialYellowChange,

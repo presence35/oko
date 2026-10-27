@@ -222,6 +222,7 @@ fun MainScreen(
     val prefs = remember { UserPrefs(context.applicationContext) }
     var settingsHintRemaining by remember { mutableStateOf(0) }
     var shelterTipStage by remember { mutableStateOf(0) }
+    var lastShelterId by remember { mutableStateOf<String?>(null) }
     var guideFeatureId by remember { mutableStateOf<String?>(null) }
     var guideFromSettings by remember { mutableStateOf(false) }
     var sheltersFromSettings by remember { mutableStateOf(false) }
@@ -255,6 +256,7 @@ fun MainScreen(
         val p = prefs.preferences.first()
         settingsHintRemaining = p.settingsHintRemaining
         shelterTipStage = p.shelterTipStage
+        lastShelterId = p.lastShelterId
     }
 
     // Beta feedback: the sheet is a root-level overlay rather than MapScreen's, so Settings and
@@ -429,6 +431,11 @@ fun MainScreen(
             shelterZoomTick = shelterZoomTick,
             onShelterZoomTick = { shelterZoomTick++ },
             shelterTipStage = shelterTipStage,
+            lastShelterId = lastShelterId,
+            onShelterOpened = {
+                lastShelterId = it
+                scope.launch { prefs.setLastShelterId(it) }
+            },
             settingsHintRemaining = settingsHintRemaining,
             onHeaderHeightChange = { headerHeightPx = it },
             onReactivateMonitoring = { viewModel.reactivateMonitoring() },
@@ -506,7 +513,6 @@ onOfficialAlertsChange = remember { { viewModel.setOfficialAlertsEnabled(it) } }
                  onNightOfficialAlertCityScopeChange = remember { { viewModel.setNightOfficialAlertCityScope(it) } },
                  onNightOfficialRedChange = remember { { viewModel.setNightOfficialRedEnabled(it) } },
                  onNightOfficialYellowChange = remember { { viewModel.setNightOfficialYellowEnabled(it) } },
-                 onNightOwnAlertPolicyChange = remember { { viewModel.setNightOwnAlertPolicy(it) } },
                  onNightSleepToggle = remember { { viewModel.setNightSleep(it) } },
                  onFollowMeChange = remember { { viewModel.setFollowMe(it) } },
                 onPinnedCityChange = remember { { viewModel.setPinnedCity(it) } },
@@ -852,6 +858,8 @@ private fun MapScreen(
     shelterZoomTick: Int,
     onShelterZoomTick: () -> Unit,
     shelterTipStage: Int,
+    lastShelterId: String? = null,
+    onShelterOpened: (String) -> Unit = {},
     onShelterTipAdvance: () -> Unit,
     settingsHintRemaining: Int = 0,
     onHeaderHeightChange: (Int) -> Unit = {},
@@ -941,13 +949,19 @@ private fun MapScreen(
 
     val onToggleShelters: () -> Unit = {
         if (shelterTipStage < 6) {
+            // The tap needs no explaining now: turning the layer on opens the nearest shelter's
+            // card by itself, so the affordance is learned by using it. What cannot be guessed is
+            // the long press, so only that one keeps a tip.
             val tipText = when (shelterTipStage) {
-                0, 1 -> s.shelterTapTip
                 4, 5 -> s.shelterLongPressTip
                 else -> null
             }
             if (tipText != null) {
-                showToast(tipText, cardVisible = false)
+                showToast(
+                    tipText,
+                    cardVisible = false,
+                    label = s.shelterLongPressLabel
+                )
             }
             onShelterTipAdvance()
         }
@@ -1243,10 +1257,12 @@ private fun MapScreen(
                         showNearbyShelters = showNearbyShelters,
                         shelterIndex = uiState.shelterIndex,
                         selectedShelter = selectedShelter,
+                        lastShelterId = lastShelterId,
                         onShelterTapped = {
                             onDismissPopup()
                             selectedShelter = it
                             shelterSelectTick++
+                            onShelterOpened(it.shelter.id)
                         },
                         onExitShelterMode = {
                             onShowNearbySheltersChange(false)
@@ -1351,7 +1367,7 @@ private fun MapScreen(
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = s.problemGpsUnreliable,
+                                text = s.problemLocationBlocked,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White.copy(alpha = 0.9f)
                             )
@@ -2281,7 +2297,7 @@ private fun silentNoticeOnClick(
 /** Human-readable, localized name of a problem — the map notice line and the guidance toast. */
 private fun problemLabel(id: ProblemId, s: Strings.StringSet): String = when (id) {
     ProblemId.NotificationsDisabled -> s.problemNotificationsBlocked
-    ProblemId.GpsUnreliable -> s.problemGpsUnreliable
+    ProblemId.LocationBlocked -> s.problemLocationBlocked
     ProblemId.AllChannelsOff -> s.problemAllChannelsOff
     ProblemId.AllTypesSilenced -> s.problemAllTypesSilenced
     ProblemId.SourceOffline -> s.problemSourceOffline
@@ -2294,7 +2310,7 @@ private fun problemLabel(id: ProblemId, s: Strings.StringSet): String = when (id
  */
 private fun problemTag(id: ProblemId, s: Strings.StringSet): String = when (id) {
     ProblemId.NotificationsDisabled -> s.problemTagNotifications
-    ProblemId.GpsUnreliable -> s.sourceGps
+    ProblemId.LocationBlocked -> s.sourceGps
     ProblemId.AllChannelsOff, ProblemId.AllTypesSilenced -> s.problemTagAlerts
     ProblemId.SourceOffline -> s.sourceNetwork
 }

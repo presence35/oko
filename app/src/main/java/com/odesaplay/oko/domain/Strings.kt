@@ -152,9 +152,6 @@ object Strings {
         val nightOfficialSirenOverrideTitle: String,
         val nightCustomZonesTitle: String,
         val nightCustomZonesDesc: String,
-        /** Master for the night's own alert policy; off = the day values apply all night. */
-        val nightOwnAlertPolicyTitle: String,
-        val nightOwnAlertPolicyDesc: String,
         val nightMuteExitNote: String,
         val nightSleepButton: String,
         val allAlertsOffLabel: String,
@@ -257,7 +254,6 @@ object Strings {
         val connTransportWifi: String,
         val connTransportCellular: String,
         val connTransportOther: String,
-        val gpsNotVerifiedFormat: String,
         val gpsLogUnverified: String,
         val gpsLogVerified: String,
         val gpsLogBlocked: String,
@@ -628,14 +624,14 @@ object Strings {
         val updatingPreciseGpsToast: String,
         val gpsUnavailableFollowMe: String,
         val problemNotificationsBlocked: String,
-        val problemGpsUnreliable: String,
+        val problemLocationBlocked: String,
         val problemAllChannelsOff: String,
         val problemAllTypesSilenced: String,
         val problemSourceOffline: String,
         val problemFixHint: String,
         val problemFixA11y: String,
+        val shelterLongPressLabel: String,
         val shelterLongPressTip: String,
-        val shelterTapTip: String,
         val shelterTypeBasic: String,
         val shelterTypeMobile: String,
         val shelterTypeBunker: String,
@@ -1093,8 +1089,6 @@ object Strings {
         val nightOfficialSirenOverrideTitle: String get() = settings.nightOfficialSirenOverrideTitle
         val nightCustomZonesTitle: String get() = settings.nightCustomZonesTitle
         val nightCustomZonesDesc: String get() = settings.nightCustomZonesDesc
-        val nightOwnAlertPolicyTitle: String get() = settings.nightOwnAlertPolicyTitle
-        val nightOwnAlertPolicyDesc: String get() = settings.nightOwnAlertPolicyDesc
         val nightMuteExitNote: String get() = settings.nightMuteExitNote
         val nightSleepButton: String get() = settings.nightSleepButton
         val allAlertsOffLabel: String get() = settings.allAlertsOffLabel
@@ -1316,7 +1310,6 @@ object Strings {
         val connTransportWifi: String get() = status.connTransportWifi
         val connTransportCellular: String get() = status.connTransportCellular
         val connTransportOther: String get() = status.connTransportOther
-        val gpsNotVerifiedFormat: String get() = status.gpsNotVerifiedFormat
         val gpsLogUnverified: String get() = status.gpsLogUnverified
         val gpsLogVerified: String get() = status.gpsLogVerified
         val gpsLogBlocked: String get() = status.gpsLogBlocked
@@ -1713,7 +1706,7 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val gpsFixFresh: String get() = misc.gpsFixFresh
         val gpsUnavailableFollowMe: String get() = misc.gpsUnavailableFollowMe
         val problemNotificationsBlocked: String get() = misc.problemNotificationsBlocked
-        val problemGpsUnreliable: String get() = misc.problemGpsUnreliable
+        val problemLocationBlocked: String get() = misc.problemLocationBlocked
         val problemAllChannelsOff: String get() = misc.problemAllChannelsOff
         val problemAllTypesSilenced: String get() = misc.problemAllTypesSilenced
         val problemSourceOffline: String get() = misc.problemSourceOffline
@@ -1723,8 +1716,8 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val networkLocationOnly: String get() = misc.networkLocationOnly
         val gpsFixStale: String get() = misc.gpsFixStale
         val updatingPreciseGpsToast: String get() = misc.updatingPreciseGpsToast
+        val shelterLongPressLabel: String get() = misc.shelterLongPressLabel
         val shelterLongPressTip: String get() = misc.shelterLongPressTip
-        val shelterTapTip: String get() = misc.shelterTapTip
         val shelterTypeBasic: String get() = misc.shelterTypeBasic
         val shelterTypeMobile: String get() = misc.shelterTypeMobile
         val shelterTypeBunker: String get() = misc.shelterTypeBunker

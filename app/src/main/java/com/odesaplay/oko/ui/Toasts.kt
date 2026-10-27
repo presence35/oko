@@ -9,9 +9,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -43,15 +47,15 @@ import kotlinx.coroutines.flow.collectLatest
  * placed once at the screen root. The pill uses a dark themed surface (not the theme's
  * inverseSurface, which reads as plain white in a dark theme).
  */
-private data class ToastRequest(val text: String, val cardVisible: Boolean)
+private data class ToastRequest(val text: String, val cardVisible: Boolean, val label: String?)
 
 private val toastBus = MutableSharedFlow<ToastRequest>(
     extraBufferCapacity = 1,
     onBufferOverflow = BufferOverflow.DROP_OLDEST
 )
 
-fun showToast(text: CharSequence, cardVisible: Boolean = false) {
-    toastBus.tryEmit(ToastRequest(text.toString(), cardVisible))
+fun showToast(text: CharSequence, cardVisible: Boolean = false, label: String? = null) {
+    toastBus.tryEmit(ToastRequest(text.toString(), cardVisible, label))
 }
 
 @Composable
@@ -89,13 +93,36 @@ fun ToastHost(topInset: Dp = 0.dp) {
                         .border(1.dp, Color(AppPalette.ToastBorder), RoundedCornerShape(12.dp))
                         .background(Color(AppPalette.Toast))
                 ) {
-                    Text(
-                        req.text,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
+                    // A styled lead word (the toast's one verb) renders as a capsule so the
+                    // instruction is skimmable instead of buried in the sentence.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
-                    )
+                    ) {
+                        req.label?.let { label ->
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                            ) {
+                                Text(
+                                    label,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(
+                            req.text,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = if (req.label == null) TextAlign.Center else TextAlign.Start,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
                 }
             }
         }

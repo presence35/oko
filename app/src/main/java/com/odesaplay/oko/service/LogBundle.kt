@@ -39,12 +39,12 @@ import java.util.TimeZone
 object LogBundle {
 
     /**
-     * Bumped to 2 when `app.lastUpdateTime` and the `exits`/`exitSummary` blocks were added. The
-     * payload only ever grows, so an old reader still parses a new bundle — the number exists so a
-     * reader can tell "field absent because the build predates it" from "field absent because the
-     * OS would not say".
+     * Bumped to 2 when `app.lastUpdateTime` and the `exits`/`exitSummary` blocks were added, to 5
+     * with the `location` block. The payload only ever grows, so an old reader still parses a new
+     * bundle — the number exists so a reader can tell "field absent because the build predates it"
+     * from "field absent because the OS would not say".
      */
-    private const val SCHEMA = 4
+    private const val SCHEMA = 5
 
     private val SECRET = Regex(
         "(?i)bearer\\s+\\S+" +
@@ -237,6 +237,23 @@ object LogBundle {
             p("vmRssKb", proc["VmRSS"]?.substringBefore(" ")?.toIntOrNull())
             p("vmHwmKb", proc["VmHWM"]?.substringBefore(" ")?.toIntOrNull())
             p("threads", proc["Threads"]?.toIntOrNull())
+        })
+
+        // Location health. The bundle could not previously answer a "position not verified"
+        // complaint at all: no age, no accuracy, no freshness verdict — and `logs.gps` only says
+        // WHEN an episode opened, never how old the fix was while it lasted. Ages are what
+        // separate "indoors all day" from "permission quietly revoked".
+        root.p("location", JSONObject().apply {
+            p("hasPosition", LocationTracker.location.value != null)
+            p("fresh", LocationTracker.isFresh(nowMs))
+            p("accessBlocked", LocationTracker.accessBlocked.value)
+            p("refreshing", LocationTracker.isRefreshing.value)
+            LocationTracker.lastFixAtMs.value?.let { p("lastFixAgeSec", (nowMs - it) / 1000) }
+            LocationTracker.lastReceivedAtMs.value?.let { p("lastReceivedAgeSec", (nowMs - it) / 1000) }
+            LocationTracker.lastPreciseFixAtMs.value?.let {
+                p("lastPreciseFixAgeSec", (nowMs - it) / 1000)
+            }
+            p("accuracyM", LocationTracker.lastAccuracyM.value?.toInt())
         })
 
         // The OS's own account of why the process died. `powerSummary.restartsObserved` only says

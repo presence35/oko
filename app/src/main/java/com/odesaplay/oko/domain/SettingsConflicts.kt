@@ -28,11 +28,10 @@ enum class SettingsConflict {
     DND_BLOCKS_LOUD
 }
 
-/** Did the user ask to be woken loudly? Any of the switches, day or night — the night ones only
- *  count while the night has its own alert policy, otherwise the day value is what rings. */
+/** Did the user ask to be woken loudly? Any of the switches, day or night; an unset night override
+ *  follows the day value, which the first term already covers. */
 val UserPreferences.wantsLoudAlerts: Boolean
-    get() = sirenOverride || (nightOwnAlertPolicy &&
-        (nightZoneSirenOverride || nightOfficialSirenOverride))
+    get() = sirenOverride || nightZoneSirenOverride == true || nightOfficialSirenOverride == true
 
 /**
  * Ordered by severity. When the OS blocks us outright the finer warnings are noise, so that case

@@ -9,7 +9,7 @@ class ProblemTest {
     /** Healthy defaults: everything armed, notifications on, a usable fix, nothing offline. */
     private fun derive(
         notificationsDisabled: Boolean = false,
-        gpsUnreliable: Boolean = false,
+        locationBlocked: Boolean = false,
         anyZoneArmed: Boolean = true,
         officialRedAlertsEnabled: Boolean = true,
         officialYellowAlertsEnabled: Boolean = true,
@@ -17,7 +17,7 @@ class ProblemTest {
         transportDown: Boolean = false
     ) = deriveProblems(
         notificationsDisabled,
-        gpsUnreliable,
+        locationBlocked,
         anyZoneArmed,
         officialRedAlertsEnabled,
         officialYellowAlertsEnabled,
@@ -39,18 +39,25 @@ class ProblemTest {
     }
 
     @Test
-    fun `an unusable position is critical and fix at the location permission`() {
-        val problem = derive(gpsUnreliable = true).single()
-        assertEquals(ProblemId.GpsUnreliable, problem.id)
+    fun `a blocked location is critical and fixes at the permission`() {
+        val problem = derive(locationBlocked = true).single()
+        assertEquals(ProblemId.LocationBlocked, problem.id)
         assertEquals(ProblemSeverity.Critical, problem.severity)
         assertEquals(ProblemFix.LocationPermission, problem.fix)
+    }
+
+    /** Age is not an input: a fix that only went old is shown by the map dot and the GPS log,
+     *  because there is no permission for the user to grant and nothing to tap. */
+    @Test
+    fun `an old fix is not a problem`() {
+        assertTrue(derive().isEmpty())
     }
 
     @Test
     fun `the two causes that stop warnings altogether outrank the narrower ones`() {
         val ids = derive(
             notificationsDisabled = true,
-            gpsUnreliable = true,
+            locationBlocked = true,
             anyZoneArmed = false,
             officialRedAlertsEnabled = false,
             officialYellowAlertsEnabled = false,
@@ -60,7 +67,7 @@ class ProblemTest {
         assertEquals(
             listOf(
                 ProblemId.NotificationsDisabled,
-                ProblemId.GpsUnreliable,
+                ProblemId.LocationBlocked,
                 ProblemId.AllChannelsOff,
                 ProblemId.AllTypesSilenced,
                 ProblemId.SourceOffline
@@ -101,7 +108,7 @@ class ProblemTest {
     fun `no two problems share an id, so the guidance toast can dedup on it`() {
         val ids = derive(
             notificationsDisabled = true,
-            gpsUnreliable = true,
+            locationBlocked = true,
             anyZoneArmed = false,
             officialRedAlertsEnabled = false,
             officialYellowAlertsEnabled = false,

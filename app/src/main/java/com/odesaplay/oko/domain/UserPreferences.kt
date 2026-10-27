@@ -128,16 +128,15 @@ data class UserPreferences(
     val nightSlowYellowArmed: Boolean = true,
     val nightFastRedArmed: Boolean = true,
     val nightFastYellowArmed: Boolean = false,
-    /** Night *policy* overrides (official red/yellow, both siren overrides, city scope). They only
-     *  apply when [nightOwnAlertPolicy] is on; with it off the night has no opinion and the day
-     *  values carry over ([effectiveNightPolicy]) — so a window can never quietly replace a choice
-     *  the user made in the day. */
-    val nightOwnAlertPolicy: Boolean = false,
-    val nightZoneSirenOverride: Boolean = false,
-    val nightOfficialSirenOverride: Boolean = false,
-    val nightOfficialAlertCityScope: Boolean = false,
-    val nightOfficialRedEnabled: Boolean = true,
-    val nightOfficialYellowEnabled: Boolean = true,
+    /** Night *policy* overrides (official red/yellow, both siren overrides, city scope). `null` =
+     *  never set, so the day value carries over for the whole window ([effectiveNightPolicy]); only
+     *  a real night choice is stored. The night zone thresholds stay non-null — they already sit
+     *  behind the explicit [nightUseCustomZones] master. */
+    val nightZoneSirenOverride: Boolean? = null,
+    val nightOfficialSirenOverride: Boolean? = null,
+    val nightOfficialAlertCityScope: Boolean? = null,
+    val nightOfficialRedEnabled: Boolean? = null,
+    val nightOfficialYellowEnabled: Boolean? = null,
     val nightSleepRestore: String? = null,
     val flybyAnimationEnabled: Boolean = true,
     val threatIconZoom: Boolean = true,
@@ -159,6 +158,7 @@ data class UserPreferences(
     val settingsHintRemaining: Int = 3,
     val threatToggleHintRemaining: Int = 3,
     val shelterTipStage: Int = 0,
+    val lastShelterId: String? = null,
     val mapVisibleTypes: Set<ThreatType> = ThreatType.values().toSet(),
     val alertEnabledTypes: Set<ThreatType> = ThreatType.values().toSet()
 ) {
@@ -170,7 +170,8 @@ data class UserPreferences(
     val sheltersWithKids: Boolean get() = sheltersWithKidsEnabled
     val cardSize: ThreatCardSize get() = threatCardSize
 
-    /** The night settings the "Just let me sleep!" button owns. */
+    /** The night settings the "Just let me sleep!" button owns. Inheritance is part of the state,
+     *  so an unset override stays unset through the snapshot and the restore. */
     val nightSleepPreset: NightSleepPreset
         get() = NightSleepPreset(
             useCustomZones = nightUseCustomZones,
@@ -181,8 +182,7 @@ data class UserPreferences(
             zoneSirenOverride = nightZoneSirenOverride,
             officialSirenOverride = nightOfficialSirenOverride,
             officialRed = nightOfficialRedEnabled,
-            officialYellow = nightOfficialYellowEnabled,
-            ownAlertPolicy = nightOwnAlertPolicy
+            officialYellow = nightOfficialYellowEnabled
         )
 
     /**
