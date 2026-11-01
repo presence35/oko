@@ -1,6 +1,18 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.6.836]
+- The header's blocked-monitor glyph no longer goes stale: it is driven by a live coverage flow refreshed on resume and while foreground, so switching battery usage between Optimized and Restricted updates it (and the standing notice) every time instead of sticking after a few rounds 11-01_19:32:50
+- The "monitoring is limited" notice now appears only when Android has actually restricted background use — the default Optimized state keeps the service, so it no longer alarms about it — and it re-checks itself every minute instead of waiting for a restart 11-01_19:26:49
+- The blocked-monitor glyph now lands on Settings › Reliability *and* scrolls straight to the battery card, instead of opening the settings list (the drill-down index was being set before `openSettings()`, which resets it) 11-01_19:34:14
+- Settings › Reliability shows the battery row as a red card when Oko is on Restricted battery usage — tinted surface, red border and red label with the explanation left at full contrast — amber when it is merely not exempt, and the green check only when the phone is actually covered 11-01_19:13:51
+- A silent standing notification appears when Android is restricting Oko in the background (no battery exemption, or background use restricted), naming the cause and opening the setting that fixes it; it disappears the moment the phone is covered again 11-01_18:43:23
+- An offline warning swallowed by "ignore 30 min" is now delivered once the ignore lapses, instead of vanishing with the mute 11-01_18:43:23
+- Monitoring no longer goes silently blind when the ongoing row detaches from the service: the row is never re-posted as a plain notification (which is what dropped the service out of the foreground and let Android stop it for idleness), and a minute-by-minute check re-promotes if it happens anyway 11-01_17:29:40
+- Settings › More shows the build and when it landed as one line — `v0.6.835 - 2026-11-01 16:46:40` instead of a bare version and a separate install date 11-01_16:46:43
+- Log bundles now say why monitoring ended (user, paused, or the OS), how late each wakeup actually fired, and how long ago the sampler last ran, so "no alerts for hours" carries its own answer 11-01_16:52:00
+- A paused (suspended) app no longer looks like an OS kill in the monitoring log, and a process that died after losing its service is no longer counted as having died in the foreground 11-01_16:52:00
 - The ongoing notification no longer talks about an unverified position: an old fix is now the map dot left hollow, with the GPS log holding the history, because indoors it was announced by the hour with nothing to tap 10-27_14:40:00
 - The header's warning glyph is reserved for a blocked location (no permission, providers off) instead of also firing for a merely old fix, whose only suggested fix was a permission you already granted 10-27_14:40:00
 - Each threat card in Settings › Threats is one row — name, speed, Fast/Slow tag and both toggles — instead of a wrapped second line of speed pills 10-27_14:40:00

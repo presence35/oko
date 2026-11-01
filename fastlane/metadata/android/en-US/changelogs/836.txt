@@ -1,0 +1,6 @@
+• An old GPS fix is now the hollow map dot, with its history in the GPS log; the header warning means only a blocked location
+• Threat cards in Settings > Threats are one row each
+• Night mode follows your day alert choices until you change them on the night page
+• Turning shelters on opens a shelter card, and it reopens the one you used last
+• Log uploads: one every 3 s, ten a minute
+• The wizard's button row no longer jumps on page 1
