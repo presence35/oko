@@ -237,6 +237,9 @@ fun MainScreen(
     // -1 = root list, else a SettingsSection ordinal for the open detail page. An int survives
     // process death on its own, so no extra Saver is needed for the sealed route.
     var settingsDetailIndex by rememberSaveable { mutableIntStateOf(-1) }
+    /** Bumped when a caller opens a settings page to show its last row; consumed by the page's
+     *  scroll state, so the target row is on screen instead of below the fold. */
+    var settingsScrollToEndKey by rememberSaveable { mutableIntStateOf(0) }
     // The zones sheet edits whatever the map is currently showing: night settings while the
     // night window is active and separate night zones are enabled, day settings otherwise.
     val editingNight = uiState.nightActive && uiState.nightUseCustomZones
@@ -391,6 +394,15 @@ fun MainScreen(
                 settingsDetailIndex = (if (uiState.nightActive) SettingsSection.NIGHT
                     else SettingsSection.THREATS).ordinal
             },
+            onOpenReliabilitySettings = {
+                // Order matters: openSettings() resets the drill-down, so the section index has to
+                // be set after it or the page opens on the root list.
+                openSettings()
+                settingsDetailIndex = SettingsSection.RELIABILITY.ordinal
+                // The battery card is the last row on that page, so land on it rather than making
+                // the user scroll to the thing the glyph just told them about.
+                settingsScrollToEndKey++
+            },
                         onThreatTapped = {
                             showZonesSheet = false
                             if (viewModel.selectedThreatId.value == it.id) viewModel.selectThreat(null)
@@ -471,6 +483,7 @@ fun MainScreen(
                         is SettingsRoute.Detail -> r.section.ordinal
                     }
                 },
+                detailScrollToEndKey = settingsScrollToEndKey,
                 activeExplainer = activeExplainer,
                 onExplainerChange = remember { { activeExplainer = it } },
                 versionName = BuildConfig.VERSION_NAME,
@@ -826,6 +839,7 @@ private fun MapScreen(
     mapVisible: Boolean,
     onOpenSettings: () -> Unit,
     onOpenThreatSettings: () -> Unit,
+    onOpenReliabilitySettings: () -> Unit,
     onThreatTapped: (NormalizedThreat) -> Unit,
     onThreatStripTap: (NormalizedThreat) -> Unit,
     onDismissPopup: () -> Unit,
@@ -1018,6 +1032,7 @@ private fun MapScreen(
             ProblemFix.NotificationSettings -> openNotificationSettings()
             ProblemFix.LocationPermission -> requestLocationFix()
             ProblemFix.ZonesPanel -> openZonesPanel()
+            ProblemFix.ReliabilityPanel -> onOpenReliabilitySettings()
             ProblemFix.OpenLogs -> onOpenLogs()
         }
     }
@@ -2297,6 +2312,7 @@ private fun silentNoticeOnClick(
 /** Human-readable, localized name of a problem — the map notice line and the guidance toast. */
 private fun problemLabel(id: ProblemId, s: Strings.StringSet): String = when (id) {
     ProblemId.NotificationsDisabled -> s.problemNotificationsBlocked
+    ProblemId.MonitoringUncovered -> s.problemMonitoringBlocked
     ProblemId.LocationBlocked -> s.problemLocationBlocked
     ProblemId.AllChannelsOff -> s.problemAllChannelsOff
     ProblemId.AllTypesSilenced -> s.problemAllTypesSilenced
@@ -2310,6 +2326,7 @@ private fun problemLabel(id: ProblemId, s: Strings.StringSet): String = when (id
  */
 private fun problemTag(id: ProblemId, s: Strings.StringSet): String = when (id) {
     ProblemId.NotificationsDisabled -> s.problemTagNotifications
+    ProblemId.MonitoringUncovered -> s.problemTagMonitoring
     ProblemId.LocationBlocked -> s.sourceGps
     ProblemId.AllChannelsOff, ProblemId.AllTypesSilenced -> s.problemTagAlerts
     ProblemId.SourceOffline -> s.sourceNetwork

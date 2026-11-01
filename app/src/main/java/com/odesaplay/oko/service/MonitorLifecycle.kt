@@ -8,6 +8,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** One transition of the monitoring service, as the durable record sees it. */
 data class MonitorEvent(val atMs: Long, val kind: Kind, val cause: String? = null) {
@@ -18,6 +22,19 @@ data class MonitorEvent(val atMs: Long, val kind: Kind, val cause: String? = nul
         STOP_BY_USER,
         /** The service was destroyed without a user stop - the OS took it. */
         STOP_OS,
+        /**
+         * The service ended itself because the package is suspended ("Paused" in app info).
+         * Ours to do, so it must not be filed as the OS reaping us: the difference between
+         * "deliberate pause" and "we were killed" is the whole point of this log.
+         */
+        STOP_SUSPENDED,
+        /**
+         * The monitor row was found detached from the service — the service was alive but no
+         * longer foreground, which is the state the OS stops for idleness minutes later. Recorded
+         * because it is invisible from every other angle: the process is healthy, the log keeps
+         * filling, and only the platform's `dumpsys` shows the demotion.
+         */
+        PROMOTION_LOST,
         /** A resurrection path asked the OS for a foreground start and was refused. */
         RESURRECT_BLOCKED
     }
@@ -45,6 +62,15 @@ object MonitorLifecycle {
 
     /** Writes are rare (a handful a day) and must not be tied to the service's lifetime. */
     private val writeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val writeLock = Mutex()
+
+    /**
+     * How long [recordBlocking] may hold the caller. `onDestroy` runs on the main thread and the
+     * platform may reap the process the moment it returns, so the write has to finish first --
+     * but it must never hang the teardown either.
+     */
+    private const val BLOCKING_WRITE_MS = 2_000L
 
     fun encode(events: List<MonitorEvent>): String = events.joinToString("\n") { event ->
         buildString {
@@ -80,8 +106,14 @@ object MonitorLifecycle {
         nowMs: Long = System.currentTimeMillis()
     ) {
         val state = ServiceState(context.applicationContext)
-        val updated = append(decode(state.monitorEvents().first()), MonitorEvent(nowMs, kind, cause), nowMs)
-        state.setMonitorEvents(encode(updated))
+        // Read-modify-write against one DataStore value: two rows appended at once would
+        // otherwise both read the same list and the later write would drop the earlier row.
+        // Writes are rare, so serializing them costs nothing.
+        writeLock.withLock {
+            val updated =
+                append(decode(state.monitorEvents().first()), MonitorEvent(nowMs, kind, cause), nowMs)
+            state.setMonitorEvents(encode(updated))
+        }
     }
 
     /**
@@ -91,5 +123,17 @@ object MonitorLifecycle {
     fun recordNow(context: Context, kind: MonitorEvent.Kind, cause: String? = null) {
         val appContext = context.applicationContext
         writeScope.launch { runCatching { record(appContext, kind, cause) } }
+    }
+
+    /**
+     * [record] for a caller that may not outlive the call. `onDestroy` can be the process's last
+     * act, and a fire-and-forget write is then lost -- which loses exactly the row that explains
+     * the death. Bounded, and never throws: a diagnostic write must not break a teardown.
+     */
+    fun recordBlocking(context: Context, kind: MonitorEvent.Kind, cause: String? = null) {
+        val appContext = context.applicationContext
+        runCatching {
+            runBlocking { withTimeoutOrNull(BLOCKING_WRITE_MS) { record(appContext, kind, cause) } }
+        }
     }
 }

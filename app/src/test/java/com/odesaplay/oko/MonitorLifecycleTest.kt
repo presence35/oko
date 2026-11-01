@@ -21,9 +21,24 @@ class MonitorLifecycleTest {
         assertEquals(events, MonitorLifecycle.decode(MonitorLifecycle.encode(events)))
     }
 
+    /**
+     * A paused package stops its own service, and that must stay distinguishable from the OS
+     * reaping us: the two read the same in an alert log and mean opposite things. Also guards the
+     * wire format — a kind added to the enum but not surviving encode/decode would silently
+     * vanish from every exported bundle.
+     */
     @Test
-    fun `a malformed line is dropped, not fatal`() {
-        val raw = "garbage\n${now}|START\n${now + 1}|NOT_A_KIND\n${now + 2}|STOP_OS"
+    fun `a suspended stop survives the wire format`() {
+        val events = listOf(
+            MonitorEvent(now, MonitorEvent.Kind.STOP_SUSPENDED),
+            MonitorEvent(now + 1, MonitorEvent.Kind.PROMOTION_LOST)
+        )
+
+        assertEquals(events, MonitorLifecycle.decode(MonitorLifecycle.encode(events)))
+    }
+
+    @Test
+    fun `a malformed line is dropped, not fatal`() {        val raw = "garbage\n${now}|START\n${now + 1}|NOT_A_KIND\n${now + 2}|STOP_OS"
 
         val decoded = MonitorLifecycle.decode(raw)
 

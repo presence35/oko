@@ -32,6 +32,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import com.odesaplay.oko.connection.Monotonic
 import com.odesaplay.oko.AlertNotificationManager
+import com.odesaplay.oko.BatteryOptimization
+import com.odesaplay.oko.domain.MonitorCoverage
 import com.odesaplay.oko.engine.ThreatEngine
 import com.odesaplay.oko.engine.NormalizedThreat
 import com.odesaplay.oko.engine.LatLng
@@ -559,6 +561,15 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
      *  status and the silent-bells pill. Equal re-reads are conflated by StateFlow, so the poll
      *  below costs no recomposition when nothing changed. */
     private val notificationStateFlow = MutableStateFlow(AlertNotificationManager.notificationState(app))
+    /** Will Android let the monitor keep running. A live source for the same reason as
+     *  [notificationStateFlow]: the user changes this in system Settings and comes back, and a
+     *  read sampled inside the event-driven combine kept the old answer indefinitely. */
+    private val coverageFlow = MutableStateFlow(
+        MonitorCoverage.of(
+            exemptFromBatteryOptimization = BatteryOptimization.isIgnoringBatteryOptimizations(app),
+            backgroundRestricted = BatteryOptimization.isBackgroundRestricted(app)
+        )
+    )
     /** Whether the current neutralization is user-initiated (long-press) so we show the
      *  "fake" text instead of the real "neutralizing" copy. Cleared on selection change. */
     private val fakeNeutralizeFlow = MutableStateFlow(false)
@@ -593,6 +604,10 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
             while (true) {
                 delay(NOTIF_PERMISSION_POLL_MS)
                 if (appForegroundFlow.value) refreshNotificationPermission()
+                // Coverage is polled whether or not the app is in the foreground: the notice it
+                // maintains is most useful exactly when the app is not being looked at, and two
+                // binder reads every three seconds cost nothing next to a stale alarm.
+                refreshCoverage()
             }
         }
     }
@@ -601,6 +616,21 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
      *  this never churns the uiState, and nothing here touches DataStore. */
     private fun refreshNotificationPermission() {
         notificationStateFlow.value = AlertNotificationManager.notificationState(app)
+    }
+
+    /** Re-read the two coverage facts. Same conflation guarantee as above: the glyph only rebuilds
+     *  when the answer actually changed. The notice is synced here too -- not only by the service,
+     *  which is stopped in exactly the state the notice describes. */
+    private fun refreshCoverage() {
+        val coverage = MonitorCoverage.of(
+            exemptFromBatteryOptimization = BatteryOptimization.isIgnoringBatteryOptimizations(app),
+            backgroundRestricted = BatteryOptimization.isBackgroundRestricted(app)
+        )
+        coverageFlow.value = coverage
+        viewModelScope.launch {
+            val language = prefs.preferences.first().language
+            MonitorCoverageNotice.sync(app, coverage, Strings.get(language))
+        }
     }
 
     override fun onCleared() {
@@ -841,7 +871,8 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         registry.coveredByFallback,
         RaidMuteState.state,
         notificationStateFlow,
-        LocationTracker.accessBlocked
+        LocationTracker.accessBlocked,
+        coverageFlow
     ) { values ->
         val live = values[1] as LiveSnapshot
         val rawPrefs = values[2] as UserPreferences
@@ -852,6 +883,14 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         val raidMute = values[9] as RaidMute
         val locationAccessBlocked = values[11] as Boolean
         val notificationsDisabledBySystem = !(values[10] as NotificationState).enabled
+        // The same rule the standing notice uses: only the state that actually stops background
+        // work earns the header glyph. "Optimized" keeps the foreground service, so warning about
+        // it would teach the user that the glyph is noise.
+        //
+        // Read from a refreshed flow rather than re-queried here: this combine is event-driven, so
+        // an inline read would keep whatever answer it got on the last unrelated rebuild -- which
+        // is exactly how the glyph went stale after a few visits to system Settings.
+        val monitoringBlocked = (values[12] as MonitorCoverage).stopsBackgroundWork
         val bootRestartEnabled = rawPrefs.bootRestartEnabled
         val sleepNoticeEnabled = rawPrefs.sleepNoticeEnabled
         // No 1s wall-clock flow: the model rebuild is event-driven, so stamp the build time
@@ -914,6 +953,7 @@ val uiState: StateFlow<UiState> = combine<Any?, UiState>(
         // problems.first(), and only ids that have never been surfaced raise the guidance toast.
         val problems = deriveProblems(
             notificationsDisabled = notificationsDisabledBySystem,
+            monitoringBlocked = monitoringBlocked,
             // Only a fact with a fix belongs here: no permission, or every provider off. A fix
             // that merely aged is left to the map's own dot and the GPS log — a still phone is
             // not a broken one, and "tap to grant a permission you already granted" was a dead end.
@@ -2019,8 +2059,12 @@ fun setAlertsArmed(armed: Boolean) {
      *  REST-source polling cadence (foreground → faster polling). */
     fun setAppForeground(foreground: Boolean) {
         appForegroundFlow.value = foreground
-        // The user may have just come back from the system notification page.
-        if (foreground) refreshNotificationPermission()
+        // The user may have just come back from the system notification page — or from App info,
+        // having changed the battery switch this glyph is about.
+        if (foreground) {
+            refreshNotificationPermission()
+            refreshCoverage()
+        }
         AppSources.setAppForeground(foreground)
     }
 

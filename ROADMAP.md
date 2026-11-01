@@ -343,6 +343,16 @@ hovering top-right feedback button — same sheet, different trigger. Needs a Se
 opt-out (shake off by default?) and a manual button fallback since shake is
 undiscoverable. Transport TBD: in-app sheet POST vs external link (Telegram/Form).
 
+## Alert priority tier (idea, not started)
+
+Today every alert answers the same gates: the night/sleep window, the "always sound" per-channel
+switches, and the 30-minute ignore. The proposal is a `Priority` tier on the alert itself —
+missiles and red cover, critical offline, and monitoring-blind — which those gates cannot silence,
+while everything else stays routine and behaves exactly as it does now. The open question is what
+"cannot silence" means for the sleep window: a red at 3 a.m. should ring, but a standing "not
+covered" notice must not. Vague until a field report asks for it; the current structure is
+deliberately untouched.
+
 ## Alert escalation intensity (not started)
 
 Today yellow→red for the same threat re-rings the siren (INNER channel, `air_raid_siren`) but

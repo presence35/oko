@@ -77,6 +77,7 @@ import com.odesaplay.oko.data.SystemEntry
 import com.odesaplay.oko.data.SystemEntryKind
 import com.odesaplay.oko.Strings
 import com.odesaplay.oko.UserPrefs
+import com.odesaplay.oko.domain.MonitorCoverage
 import com.odesaplay.oko.engine.distanceFlat
 import com.odesaplay.oko.AlarmEpisodeTally
 import com.odesaplay.oko.NeutralizedTally
@@ -148,6 +149,18 @@ class AlertService : Service() {
         private const val MONITOR_TICK_MS = 1_000L
         private const val MONITOR_TICK_IDLE_MS = 30_000L
         private const val SWEEP_THROTTLE_MS = 10_000L
+        /** How often the foreground promotion is re-verified once everything looks healthy. */
+        private const val PROMOTION_CHECK_MS = 60_000L
+
+        /** How often the standing coverage notice is re-evaluated inside the tick loop. */
+        private const val COVERAGE_CHECK_MS = 60_000L
+
+        /**
+         * How soon after a promotion to look again, escalating. The demotion this catches happens
+         * seconds after a successful start, so a 60 s first look would miss the whole episode and
+         * report nothing; a second look at a minute is enough once it holds.
+         */
+        private val PROMOTION_RETRY_MS = longArrayOf(1_000L, 2_000L, 6_000L, 20_000L)
         /** A tick later than this did not run — the loop slept (doze, freeze, or a stalled
          *  process) while the wall clock ran on. Anything larger is not a tick, it is a hole, and
          *  the tick that closes it must re-baseline instead of deciding with a stale clock.
@@ -290,6 +303,38 @@ class AlertService : Service() {
     private var foregroundPromoted = false
     /** The type the platform accepted, reused by every later update (see [promote]). */
     private var promotedType = 0
+
+    /** The monitor row last handed to the platform. Kept so a detached promotion can be
+     *  re-asserted with the text we already built instead of stale text or nothing at all. */
+    private var lastMonitorNotif: android.app.Notification? = null
+
+    /** In-memory gate for [ensurePromoted]: that check costs a binder call, the tick is 1 s. */
+    private var lastPromotionCheckMs = 0L
+
+    /** When the current promotion was accepted, for the "lost after Ns" cause. */
+    private var promotionStartedMs = 0L
+
+    /** Which [PROMOTION_RETRY_MS] step the next check uses while a demotion is unrepaired. */
+    private var promotionCheckIndex = 0
+
+    /** Set while a demotion has been recorded but not yet repaired, so one episode is one row. */
+    private var promotionLostRecorded = false
+
+    /** Why the last promotion attempt was refused, named by the platform. */
+    @Volatile private var lastForegroundError: String? = null
+
+    /** Last coverage verdict written to the shade, so the standing row is posted on change only. */
+    private var lastCoverage: MonitorCoverage? = null
+
+    /** In-memory gate for the tick-loop coverage re-check; the facts are a pair of binder calls. */
+    private var lastCoverageCheckMs = 0L
+
+    /**
+     * A milestone that arrived while the user had notifications ignored. Held so it can be told
+     * once the ignore expires -- the supervisor emits a milestone once per episode, so dropping it
+     * at the gate meant an ignored outage was never reported at all, even hours later.
+     */
+    private var deferredMilestone: ConnectionMilestone? = null
     private var lastShownId: String? = null
     /** Frequency policy: the service feeds it per-tick facts and executes verdicts. */
     private val notifyPlugin = NotifyPlugin()
@@ -609,8 +654,12 @@ class AlertService : Service() {
         screenReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
-                    Intent.ACTION_SCREEN_ON ->
+                    Intent.ACTION_SCREEN_ON -> {
                         screenFlow.value = ScreenState(on = true, sinceMillis = System.currentTimeMillis())
+                        // The screen coming on is the moment a person can read a warning, and the
+                        // only boundary at which the platform's answer could have changed.
+                        reconcileCoverage()
+                    }
                     Intent.ACTION_SCREEN_OFF ->
                         screenFlow.value = ScreenState(on = false, sinceMillis = System.currentTimeMillis())
                 }
@@ -752,19 +801,122 @@ class AlertService : Service() {
     private fun startForegroundCompat() {
         val s = Strings.get(AppLanguage.EN)
         val notif = notificationManager.buildMonitorNotification(s.notifOngoingTitle, "")
-        if (promote(notif)) return
+        if (promote(notif)) {
+            reconcileCoverage()
+            return
+        }
         // Even the base type was refused - surface the dead state like startResilient intends.
         MonitoringStatus.died(MonitoringStatus.Reason.START_REFUSED)
-        MonitorLifecycle.recordNow(this, MonitorEvent.Kind.STOP_OS, "start-refused")
+        // Which refusal was it? A background-restricted start can never be promoted without the
+        // user's tap, so the row says so instead of the bare "refused" every cause shared.
+        val restriction = runCatching {
+            getSystemService(android.app.ActivityManager::class.java)?.isBackgroundRestricted
+        }.getOrNull()
+        MonitorLifecycle.recordNow(
+            this,
+            MonitorEvent.Kind.STOP_OS,
+            buildString {
+                append("start-refused:").append(lastForegroundError ?: "unknown")
+                if (restriction == true) append(":bg-restricted")
+            }
+        )
         AlertNotificationManager(applicationContext).postRestartBlocked()
+        // The refusal is exactly the state the standing notice exists for, so it must be posted
+        // even though the promotion above failed — this is the only start path that never
+        // reached reconcileCoverage().
+        reconcileCoverage()
         stopSelf()
     }
 
     /** Post the monitor row. A refused update never becomes a plain post once promoted: that
      *  would detach the row from the service and get the service stopped for idleness. */
     private fun postMonitor(notif: android.app.Notification) {
+        lastMonitorNotif = notif
         if (promote(notif)) return
-        if (!foregroundPromoted) notificationManager.safeNotify(NOTIF_MONITOR, notif)
+        // Deliberately nothing else. A plain post on the id the service owns detaches it (the
+        // platform logs STOP_FOREGROUND) and the OS stops it for idleness minutes later, so a row
+        // frozen on its last text is the lesser failure: it costs a stale label, never the monitor.
+        // [ensurePromoted] retries the promotion on its own cadence.
+    }
+
+    /**
+     * The platform facts behind the standing coverage row, read at boundaries — service start and
+     * screen on — rather than per tick. They only change when the user visits Settings, and both
+     * queries are binder calls; the tick is a second wide.
+     *
+     * Posted on change only, so a phone that stays restricted writes one row and stops, and the
+     * row is cancelled the moment the user fixes it.
+     */
+    private fun reconcileCoverage() {
+        val next = MonitorCoverage.of(
+            exemptFromBatteryOptimization = runCatching {
+                getSystemService(android.os.PowerManager::class.java)
+                    ?.isIgnoringBatteryOptimizations(packageName)
+            }.getOrNull(),
+            backgroundRestricted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) runCatching {
+                getSystemService(android.app.ActivityManager::class.java)?.isBackgroundRestricted
+            }.getOrNull() else null
+        )
+        if (next == lastCoverage) return
+        lastCoverage = next
+        // The standing notice is for "nothing is running", not "recovery would be slow": an app on
+        // the default Optimized state keeps its foreground service, so a permanent alarm there
+        // would be a lie the user learns to ignore.
+        MonitorCoverageNotice.sync(
+            this,
+            next,
+            Strings.get(lastChannelLang ?: AppLanguage.EN)
+        )
+    }
+
+    /**
+     * "We are promoted" is a belief; this reads the platform's answer back.
+     *
+     * The row can be detached from outside us — by a plain post on the same id, or by the platform
+     * stripping the foreground type — leaving the service alive but not foreground, which is
+     * exactly the state the OS stops for idleness minutes later. Self-healing: re-promote, and
+     * record the loss, because nothing else in a bundle can show that this happened.
+     *
+     * Called from the tick loop behind a coarse in-memory gate: the query is a binder call, so it
+     * is not a per-tick cost.
+     */
+    private fun ensurePromoted(now: Long) {
+        if (!foregroundPromoted) return
+        if (now < lastPromotionCheckMs) return
+        if (notificationManager.isAttachedToService(NOTIF_MONITOR)) {
+            promotionCheckIndex = 0
+            lastPromotionCheckMs = now + PROMOTION_CHECK_MS
+            return
+        }
+        // Detached. Look again soon rather than a minute from now: the demotion tends to land
+        // seconds after a successful start, so the next look is the one that times it.
+        lastPromotionCheckMs = now +
+            (PROMOTION_RETRY_MS.getOrNull(promotionCheckIndex) ?: PROMOTION_CHECK_MS)
+        promotionCheckIndex++
+        // One row per PROCESS, and a backoff once the retries are exhausted. Re-promoting into a
+        // platform that demotes again immediately is a power drain and a log flood, not a repair:
+        // the observation is worth recording once, then it belongs in a bug report.
+        if (!promotionLostRecorded) {
+            promotionLostRecorded = true
+            val afterS = if (promotionStartedMs > 0) (now - promotionStartedMs) / 1000 else null
+            MonitorLifecycle.recordNow(
+                applicationContext,
+                MonitorEvent.Kind.PROMOTION_LOST,
+                afterS?.let { "after ${it}s" }
+            )
+        }
+        if (promotionCheckIndex > PROMOTION_RETRY_MS.size) {
+            lastPromotionCheckMs = now + PROMOTION_CHECK_MS * 10
+            return
+        }
+        val notif = lastMonitorNotif ?: return
+        foregroundPromoted = false
+        if (promote(notif)) return
+        // We cannot re-assert from here: a background start is refused by the platform. Silence is
+        // the one outcome that must never happen, so say it where the user can tap it.
+        MonitoringStatus.died(MonitoringStatus.Reason.START_REFUSED)
+        notificationManager.postRestartBlocked()
+        lastPromotionCheckMs = now + PROMOTION_CHECK_MS * 10
     }
 
     /**
@@ -818,12 +970,31 @@ class AlertService : Service() {
      *  the whole start on Android 12+ via [android.app.ForegroundServiceStartNotAllowedException]
      *  (an [IllegalStateException]); both mean "do not crash, degrade instead". */
     private fun startForegroundTyped(type: Int, notif: android.app.Notification): Boolean = try {
+        lastMonitorNotif = notif
         ServiceCompat.startForeground(this, NOTIF_MONITOR, notif, type)
+        lastForegroundError = null
+        if (!foregroundPromoted) {
+            // First look one second later: the demotion this watches for lands within seconds of
+            // an accepted promotion, so a minute-long first look would time nothing. Only a real
+            // (re)promotion re-arms the schedule -- a routine row update must not keep pushing the
+            // next look into the future.
+            promotionStartedMs = System.currentTimeMillis()
+            lastPromotionCheckMs = promotionStartedMs + 1_000L
+            promotionCheckIndex = 0
+        }
         foregroundPromoted = true
+        // The accepted type is the one fact about the foreground promotion the platform will not
+        // answer later (it is process-local here, and the bundle is written by another instance),
+        // so it is persisted where a later export can read it.
+        scope.launch { runCatching { ServiceState(applicationContext).setLastFgsType(type) } }
         true
-    } catch (_: SecurityException) {
+    } catch (e: SecurityException) {
+        // The class is the whole diagnosis: a refused *type* is fixable by falling back, a refused
+        // *start* is not fixable from here at all. Recorded so a bundle can say which one it was.
+        lastForegroundError = "SecurityException"
         false
-    } catch (_: IllegalStateException) {
+    } catch (e: IllegalStateException) {
+        lastForegroundError = "IllegalStateException"
         false
     }
 
@@ -944,6 +1115,15 @@ class AlertService : Service() {
                         return@launch
                     }
                     val tick = System.currentTimeMillis()
+                    // A service that believes it is foreground but is not gets stopped for idleness
+                    // minutes later, so the belief is re-checked against the platform here.
+                    ensurePromoted(tick)
+                    // Cheap in-memory gate: the coverage facts change only when the user visits
+                    // system Settings, but they must be picked up without a restart.
+                    if (tick - lastCoverageCheckMs >= COVERAGE_CHECK_MS) {
+                        lastCoverageCheckMs = tick
+                        reconcileCoverage()
+                    }
                     val gap = tick - previous
                     // Did any evaluation run inside this gap? The awake tick is a delay(), which
                     // deep sleep stretches by minutes while feed events keep waking us and
@@ -1296,8 +1476,10 @@ val mappedThreats = registry.allThreats.map { list ->
                 String.format(s.offlineCriticalFormat, criticalThresholdMin)
             )
         }
-        // Episode over (registry nulled the stamp on recovery — transient Connecting never
-        // does): clear the one-shot and any lingering milestone/critical notifications. Keyed
+        // An ignore that covered the milestone does not mean the outage was never reported: the
+        // first tick after it lapses names it, while the episode is still open.
+        flushDeferredMilestone()
+        // Episode over (registry nulled the stamp on recovery — transient Connecting never        // does): clear the one-shot and any lingering milestone/critical notifications. Keyed
         // on the episode having ENDED, never on the critical one-shot having fired: with
         // critical-offline off nothing would ever clear the milestone notification.
         if (offlineSince == null) {
@@ -1941,7 +2123,24 @@ val mappedThreats = registry.allThreats.map { list ->
     /** Maps supervisor milestone events to one-shot notifications. Stateless: the flow is
      *  already once-per-episode by supervisor guarantee, so there is nothing to reset. */
     private fun onConnectionMilestone(milestone: ConnectionMilestone) {
+        if (ignoreMuted()) {
+            // Ignoring is a real "not now", but the episode is emitted only once: hold it so the
+            // outage is still named when the ignore runs out, instead of vanishing with the mute.
+            deferredMilestone = milestone
+            return
+        }
+        deliverMilestone(milestone)
+    }
+
+    /** Re-delivers the milestone an active ignore swallowed, once the ignore has expired. */
+    private fun flushDeferredMilestone() {
+        val milestone = deferredMilestone ?: return
         if (ignoreMuted()) return
+        deferredMilestone = null
+        deliverMilestone(milestone)
+    }
+
+    private fun deliverMilestone(milestone: ConnectionMilestone) {
         val registry = AppSources.registry
         val nowMono = Monotonic.now()
         if (!registry.isOffline(nowMono)) return
@@ -2353,7 +2552,16 @@ private fun nextUpdateCheckMillis(from: Long): Long {
         val before = MonitoringStatus.state.value
         MonitoringStatus.died(MonitoringStatus.Reason.DESTROYED)
         if (before !is MonitoringStatus.State.StoppedByUser && before !is MonitoringStatus.State.Dead) {
-            MonitorLifecycle.recordNow(this, MonitorEvent.Kind.STOP_OS)
+            // Why it ended, read at the moment it ends instead of inferred later: a paused package
+            // stops this service on purpose, and filing that as "the OS took it" is how a
+            // deliberately paused monitor ends up in the log looking like a kill.
+            val kind = if (SuspendState.isSuspended(this)) {
+                MonitorEvent.Kind.STOP_SUSPENDED
+            } else {
+                MonitorEvent.Kind.STOP_OS
+            }
+            // Not recordNow(): this may be the last thing the process ever does.
+            MonitorLifecycle.recordBlocking(this, kind)
         }
         // The row is the service's own; a stop must not leave "Monitoring GPS" (or any other
         // copy of it) pretending the monitor is still there.

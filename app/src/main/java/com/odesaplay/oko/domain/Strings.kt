@@ -230,6 +230,7 @@ object Strings {
         val sourceGps: String,
         val sourceNetwork: String,
         val problemTagNotifications: String,
+        val problemTagMonitoring: String,
         val problemTagAlerts: String,
         val notifChannelName: String,
         val notifChannelDesc: String,
@@ -245,6 +246,9 @@ object Strings {
         val attributionText: String,
         val madeBy: String,
         val privacyPolicy: String,
+        /** Standing notice title when Android is restricting the monitor. */
+        val coverageTitle: String,
+        val coverageRestrictedBody: String,
         val connOnline: String,
         val connOffline: String,
         val connOff: String,
@@ -623,13 +627,6 @@ object Strings {
         val gpsFixStale: String,
         val updatingPreciseGpsToast: String,
         val gpsUnavailableFollowMe: String,
-        val problemNotificationsBlocked: String,
-        val problemLocationBlocked: String,
-        val problemAllChannelsOff: String,
-        val problemAllTypesSilenced: String,
-        val problemSourceOffline: String,
-        val problemFixHint: String,
-        val problemFixA11y: String,
         val shelterLongPressLabel: String,
         val shelterLongPressTip: String,
         val shelterTypeBasic: String,
@@ -641,6 +638,19 @@ object Strings {
         val apiSdkViewManifest: String,
         val apiUnknownType: String,
         val logsLegend: String
+    )
+
+    /** Header problem texts, kept out of [Misc]: a Kotlin data class over ~245 String fields
+     *  overflows the JVM's 255-slot method descriptor limit in its generated `copy$default`. */
+    data class Problems(
+        val problemNotificationsBlocked: String,
+        val problemMonitoringBlocked: String,
+        val problemLocationBlocked: String,
+        val problemAllChannelsOff: String,
+        val problemAllTypesSilenced: String,
+        val problemSourceOffline: String,
+        val problemFixHint: String,
+        val problemFixA11y: String
     )
 
     data class Widget(
@@ -936,6 +946,7 @@ object Strings {
         val updates: Updates,
         val threat: Threat,
         val misc: Misc,
+        val problems: Problems,
         val widget: Widget,
         val guide: Guide,
         val explainers: ExplainerStrings,
@@ -1281,6 +1292,7 @@ object Strings {
         val sourceGps: String get() = status.sourceGps
         val sourceNetwork: String get() = status.sourceNetwork
         val problemTagNotifications: String get() = status.problemTagNotifications
+        val problemTagMonitoring: String get() = status.problemTagMonitoring
         val problemTagAlerts: String get() = status.problemTagAlerts
         val notifChannelName: String get() = status.notifChannelName
         val notifChannelDesc: String get() = status.notifChannelDesc
@@ -1296,6 +1308,8 @@ object Strings {
         val attributionText: String get() = status.attributionText
         val madeBy: String get() = status.madeBy
         val privacyPolicy: String get() = status.privacyPolicy
+        val coverageTitle: String get() = status.coverageTitle
+        val coverageRestrictedBody: String get() = status.coverageRestrictedBody
         val connOnline: String get() = status.connOnline
         val connOff: String get() = status.connOff
         val connOffline: String get() = status.connOffline
@@ -1705,13 +1719,14 @@ val iconSetTitle: String get() = misc.iconSetTitle
         val gpsOpenSettings: String get() = misc.gpsOpenSettings
         val gpsFixFresh: String get() = misc.gpsFixFresh
         val gpsUnavailableFollowMe: String get() = misc.gpsUnavailableFollowMe
-        val problemNotificationsBlocked: String get() = misc.problemNotificationsBlocked
-        val problemLocationBlocked: String get() = misc.problemLocationBlocked
-        val problemAllChannelsOff: String get() = misc.problemAllChannelsOff
-        val problemAllTypesSilenced: String get() = misc.problemAllTypesSilenced
-        val problemSourceOffline: String get() = misc.problemSourceOffline
-        val problemFixHint: String get() = misc.problemFixHint
-        val problemFixA11y: String get() = misc.problemFixA11y
+        val problemNotificationsBlocked: String get() = problems.problemNotificationsBlocked
+        val problemMonitoringBlocked: String get() = problems.problemMonitoringBlocked
+        val problemLocationBlocked: String get() = problems.problemLocationBlocked
+        val problemAllChannelsOff: String get() = problems.problemAllChannelsOff
+        val problemAllTypesSilenced: String get() = problems.problemAllTypesSilenced
+        val problemSourceOffline: String get() = problems.problemSourceOffline
+        val problemFixHint: String get() = problems.problemFixHint
+        val problemFixA11y: String get() = problems.problemFixA11y
         val gpsStatusTitle: String get() = misc.gpsStatusTitle
         val networkLocationOnly: String get() = misc.networkLocationOnly
         val gpsFixStale: String get() = misc.gpsFixStale

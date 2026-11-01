@@ -9,7 +9,17 @@ enum class WakeKind { ALARM, WORKER, BOOT }
 
 data class WakeEvent(
     val atMillis: Long,
-    val kind: WakeKind
+    val kind: WakeKind,
+    /**
+     * When the caller asked to be woken, when the caller knows it. `atMillis - triggerAtMs` is the
+     * lateness the platform imposed -- the figure that turns "a notification said 18 min while the
+     * threshold was 15" into a measurement instead of a theory.
+     */
+    val triggerAtMs: Long? = null,
+    /** How the wakeup was scheduled: `exact` when the platform took `setExactAndAllowWhileIdle`,
+     *  `inexact` when it fell back. Recorded per fire so a window in `dumpsys alarm` never has to
+     *  be guessed at from the outside. */
+    val path: String? = null
 )
 
 /**
@@ -27,8 +37,13 @@ object WakeEventLog {
     private val _entries = MutableStateFlow<List<WakeEvent>>(emptyList())
     val entries: StateFlow<List<WakeEvent>> = _entries.asStateFlow()
 
-    fun record(kind: WakeKind, now: Long = System.currentTimeMillis()) {
-        _entries.value = append(_entries.value, WakeEvent(now, kind), MAX_ENTRIES)
+    fun record(
+        kind: WakeKind,
+        now: Long = System.currentTimeMillis(),
+        triggerAtMs: Long? = null,
+        path: String? = null
+    ) {
+        _entries.value = append(_entries.value, WakeEvent(now, kind, triggerAtMs, path), MAX_ENTRIES)
     }
 
     internal fun append(events: List<WakeEvent>, event: WakeEvent, max: Int): List<WakeEvent> =

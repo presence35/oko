@@ -6,6 +6,7 @@ import com.odesaplay.oko.WakeEvent
 import com.odesaplay.oko.WakeEventLog
 import com.odesaplay.oko.WakeKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneId
@@ -43,10 +44,34 @@ class LogBundleTest {
         activeZones = zones
     )
 
+    /**
+     * The present tense: a gap in `power` is history, so a bundle also has to say how long ago the
+     * sampler last ran. Without this, "am I being monitored right now" is a question only the
+     * phone in your hand can answer.
+     */
+    @Test
+    fun `power summary reports how long ago the sampler last ran`() {
+        val last = 10_000L
+        val stale = LogBundle.summarisePower(listOf(sample(1_000L), sample(last)), last + 3_600_000L)
+        assertEquals(3_600L, stale.getLong("sinceLastSampleSec"))
+        assertFalse(stale.getBoolean("samplingNow"))
+
+        val fresh = LogBundle.summarisePower(listOf(sample(1_000L), sample(last)), last + 25_000L)
+        assertEquals(25L, fresh.getLong("sinceLastSampleSec"))
+        assertTrue(fresh.getBoolean("samplingNow"))
+    }
+
+    /** No export clock means the question was not asked, not that the answer is "blind for 56 years". */
+    @Test
+    fun `power summary without an export clock omits the present-tense figures`() {
+        val summary = LogBundle.summarisePower(listOf(sample(1_000L), sample(2_000L)))
+        assertTrue(summary.isNull("sinceLastSampleSec"))
+        assertTrue(summary.isNull("samplingNow"))
+    }
+
     /** A new process generation inside a gap is a kill/restart; the gap bounds the blind window. */
     @Test
-    fun `power summary counts process generations and restarts`() {
-        val summary = LogBundle.summarisePower(
+    fun `power summary counts process generations and restarts`() {        val summary = LogBundle.summarisePower(
             listOf(
                 sample(0L, start = 100L),
                 sample(25_000L, start = 100L),
@@ -284,17 +309,32 @@ class LogBundleTest {
      * The field report was seven deaths "while the screen was on". Foreground is the app's
      * importance, not the screen's, so the two are tracked apart on purpose — a summary that
      * blurred them would hide the one case worth chasing.
+     *
+     * Importance counts DOWN as priority rises (foreground 100, foreground service 125, cached
+     * 400), so both counters are upper bounds. They were lower bounds until schema 6, which made
+     * every cached reap read as "while foreground" — the precise inverse of the truth, on the two
+     * kills that started this investigation.
      */
     @Test
     fun `exit summary separates deaths while foreground from backgrounded ones`() {
         val summary = LogBundle.summariseExits(
             listOf(
-                exit(1_000L, reason = 4, reasonName = "REASON_CRASH", importance = 130),
+                exit(1_000L, reason = 4, reasonName = "REASON_CRASH", importance = 100),
                 exit(2_000L, importance = 125),
-                exit(3_000L, importance = 40)
+                exit(3_000L, importance = 400)
             )
         )
-        assertEquals(2, summary.getInt("whileForeground"))
+        assertEquals(1, summary.getInt("whileForeground"))
+        assertEquals(2, summary.getInt("whileService"))
+    }
+
+    @Test
+    fun `a cached reap is never counted as foreground`() {
+        val summary = LogBundle.summariseExits(
+            listOf(exit(1_000L, importance = 400), exit(2_000L, importance = 325))
+        )
+        assertEquals(0, summary.getInt("whileForeground"))
+        assertEquals(0, summary.getInt("whileService"))
     }
 
     /**

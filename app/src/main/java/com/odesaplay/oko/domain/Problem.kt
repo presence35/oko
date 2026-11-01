@@ -24,6 +24,13 @@ enum class ProblemFix {
     LocationPermission,
     ZonesPanel,
 
+    /**
+     * The Reliability settings page. Deliberately in-app: the fix is a system switch, but the user
+     * has to read why the monitor is about to stop before being dropped into App info with no
+     * explanation -- that reads as a bug, not as help.
+     */
+    ReliabilityPanel,
+
     /** A source problem is diagnosed in the log, which is where the connection pill leads too. */
     OpenLogs
 }
@@ -31,6 +38,7 @@ enum class ProblemFix {
 /** Stable identity so the guidance toast can fire once per problem and never repeat. */
 enum class ProblemId {
     NotificationsDisabled,
+    MonitoringUncovered,
     LocationBlocked,
     AllChannelsOff,
     AllTypesSilenced,
@@ -52,6 +60,7 @@ data class Problem(
  */
 fun deriveProblems(
     notificationsDisabled: Boolean,
+    monitoringBlocked: Boolean,
     locationBlocked: Boolean,
     anyZoneArmed: Boolean,
     officialRedAlertsEnabled: Boolean,
@@ -62,6 +71,12 @@ fun deriveProblems(
     // The two causes that mean no warning reaches the user at all outrank the narrower ones.
     if (notificationsDisabled) {
         add(Problem(ProblemId.NotificationsDisabled, ProblemSeverity.Critical, ProblemFix.NotificationSettings))
+    }
+    // Android will stop the monitor when the screen locks, so nothing else listed here would ever
+    // be heard. Only the truly blocked state belongs: "Optimized" still keeps the foreground
+    // service, and warning about it would teach the user that this glyph is noise.
+    if (monitoringBlocked) {
+        add(Problem(ProblemId.MonitoringUncovered, ProblemSeverity.Critical, ProblemFix.ReliabilityPanel))
     }
     // Only facts with a fix live here. A merely old fix is not one: nothing the user can tap
     // makes a phone indoors hear satellites, so age is shown by the map's own dot and the GPS

@@ -14,9 +14,11 @@ class ProblemTest {
         officialRedAlertsEnabled: Boolean = true,
         officialYellowAlertsEnabled: Boolean = true,
         allTypesSilenced: Boolean = false,
-        transportDown: Boolean = false
+        transportDown: Boolean = false,
+        monitoringBlocked: Boolean = false
     ) = deriveProblems(
         notificationsDisabled,
+        monitoringBlocked,
         locationBlocked,
         anyZoneArmed,
         officialRedAlertsEnabled,
@@ -36,6 +38,18 @@ class ProblemTest {
         assertEquals(ProblemId.NotificationsDisabled, problem.id)
         assertEquals(ProblemSeverity.Critical, problem.severity)
         assertEquals(ProblemFix.NotificationSettings, problem.fix)
+    }
+
+    /**
+     * A blocked monitor outranks everything a user could still hear: if the service is going to be
+     * stopped, "all channels off" is noise about bells that will not ring anyway.
+     */
+    @Test
+    fun `a blocked monitor is critical, outranks narrower problems, and fixes at App info`() {
+        val problems = derive(monitoringBlocked = true, allTypesSilenced = true)
+        assertEquals(ProblemId.MonitoringUncovered, problems.first().id)
+        assertEquals(ProblemSeverity.Critical, problems.first().severity)
+        assertEquals(ProblemFix.ReliabilityPanel, problems.first().fix)
     }
 
     @Test

@@ -9,6 +9,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -65,6 +66,7 @@ import com.odesaplay.oko.ThreatType
 import com.odesaplay.oko.ZonePolicy
 import com.odesaplay.oko.beta.FeedbackIconButton
 import com.odesaplay.oko.theme.AppPalette
+import com.odesaplay.oko.domain.MonitorCoverage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +80,8 @@ fun SettingsScreen(
     sheltersLoadFailed: Boolean = false,
     route: SettingsRoute,
     onRouteChange: (SettingsRoute) -> Unit,
+    /** Incremented by a caller that opened a page to show its last row (the battery card). */
+    detailScrollToEndKey: Int = 0,
     activeExplainer: Explainer?,
     onExplainerChange: (Explainer?) -> Unit,
     versionName: String,
@@ -697,7 +701,10 @@ fun SettingsScreen(
             val section = (route as SettingsRoute.Detail).section
             Box(modifier = Modifier.weight(1f).padding(16.dp)) {
             when (section) {
-                SettingsSection.RELIABILITY -> SectionDetailBody(stateSummary = sectionSummary(section)) {
+                SettingsSection.RELIABILITY -> SectionDetailBody(
+                    stateSummary = sectionSummary(section),
+                    scrollToEndKey = detailScrollToEndKey
+                ) {
                     // The escape hatch for the alpha note's advice: one tap instead of hunting the
                     // four pages these switches live on. Always expanded — a collapsed row hid the
                     // very choice it existed to offer.
@@ -766,7 +773,6 @@ fun SettingsScreen(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     BatteryExemptionBlock(
                         s = s,
-                        granted = batteryOptimized,
                         oemInfo = batteryOemInfo,
                         flash = flashId == "battery",
                         onAllow = { BatteryOptimization.requestExemption(appContext) }
@@ -1343,7 +1349,6 @@ fun SettingsScreen(
             SettingsSection.MORE -> SectionDetailBody(stateSummary = sectionSummary(section)) {
                 BatteryExemptionBlock(
                     s = s,
-                    granted = batteryOptimized,
                     oemInfo = batteryOemInfo,
                     flash = flashId == "battery",
                     onAllow = { BatteryOptimization.requestExemption(appContext) }
@@ -1423,8 +1428,12 @@ fun SettingsScreen(
                             modifier = Modifier.size(20.dp)
                         )
                     }
+                    // The version line carries when THIS build landed: merged, because "which
+                    // build" and "how old is it" are one question for a beta report.
                     Text(
-                        "v$versionName",
+                        runCatching { installedStamp(appContext) }.getOrNull()
+                            ?.let { "v$versionName - $it" }
+                            ?: "v$versionName",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1495,9 +1504,23 @@ fun SettingsScreen(
 }
 
 /** The shelter (bulb) glyph, drawn inline: it has no drawable of its own. */
+/**
+ * When THIS build landed on the phone, as `yyyy-MM-dd HH:mm:ss`.
+ *
+ * `lastUpdateTime`, not `firstInstallTime`: merged with the version, the useful pair is "which
+ * build, and when did it arrive". `firstInstallTime` answers a different question (when the app
+ * first appeared at all) and would read as the wrong date on a phone that has been updated.
+ * Null when the package manager declines, and the caller then shows the bare version.
+ */
+private fun installedStamp(context: android.content.Context): String? = runCatching {
+    val installedAt = context.packageManager
+        .getPackageInfo(context.packageName, 0).lastUpdateTime
+    java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+        .format(java.util.Date(installedAt))
+}.getOrNull()
+
 @Composable
-private fun shelterPainter(): Painter = remember {
-    object : Painter() {
+private fun shelterPainter(): Painter = remember {    object : Painter() {
         override val intrinsicSize = Size(24f, 24f)
         override fun DrawScope.onDraw() {
             val cw = 16f; val ch = 18f
@@ -1616,17 +1639,58 @@ private fun SleepNoticeRow(
 @Composable
 private fun BatteryExemptionBlock(
     s: Strings.StringSet,
-    granted: Boolean,
     oemInfo: OemInfo,
     flash: Boolean,
     onAllow: () -> Unit
 ) {
     val context = LocalContext.current
-    // A Doze whitelist does not clear the *Restricted* app battery state - and only that state
-    // stops the monitor the moment the screen locks, so a granted checkmark would be a lie.
-    val restricted = BatteryOptimization.isBackgroundRestricted(context)
-    Column(modifier = Modifier.padding(16.dp).explainerFlash(flash)) {
-        if (granted && !restricted) {
+    // Read the two facts live instead of trusting a value captured when the screen opened: the
+    // user flips this in system Settings and comes straight back, and a stale read makes the app
+    // look like it ignored them. One cheap binder pair a second, and only while this row is on
+    // screen.
+    var coverageTick by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1_000)
+            coverageTick++
+        }
+    }
+    // The same rule the standing notification and the header glyph use, so the three cannot
+    // disagree about whether this phone is covered.
+    val coverage = remember(coverageTick) {
+        MonitorCoverage.of(
+            exemptFromBatteryOptimization = BatteryOptimization.isIgnoringBatteryOptimizations(context),
+            backgroundRestricted = BatteryOptimization.isBackgroundRestricted(context)
+        )
+    }
+    val restricted = coverage is MonitorCoverage.Restricted &&
+        coverage.cause == MonitorCoverage.Cause.BACKGROUND_RESTRICTED
+    Column(
+        modifier = Modifier
+            .padding(if (restricted) 8.dp else 16.dp)
+            .then(
+                // A red card, the same treatment settings conflicts get: the tint is what carries
+                // the alarm, so the copy itself can stay at full contrast instead of being dyed red
+                // and becoming harder to read than the problem it describes.
+                if (restricted) {
+                    Modifier
+                        .background(
+                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.error.copy(alpha = 0.5f),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .padding(14.dp)
+                } else {
+                    Modifier
+                }
+            )
+            .explainerFlash(flash)
+    ) {
+        if (coverage == MonitorCoverage.Covered) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     painter = painterResource(R.drawable.ic_check),
@@ -1640,15 +1704,36 @@ private fun BatteryExemptionBlock(
             Spacer(Modifier.height(6.dp))
             Text(s.batteryBody, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
-            Text(
-                when {
-                    restricted -> s.batteryRestrictedTitle
-                    oemInfo.isAggressive -> s.batteryOemTitle
-                    else -> s.batteryTitle
-                },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            // Both states are a reliability defect, but they are not the same size: Restricted
+            // means the monitor stops the moment the screen locks (red), while a missing exemption
+            // means recovery after a stop is throttled (amber). Red is reserved for the state that
+            // is already costing the user alerts.
+            val restrictedNow = coverage is MonitorCoverage.Restricted &&
+                coverage.cause == MonitorCoverage.Cause.BACKGROUND_RESTRICTED
+            val titleTint = if (restrictedNow) {
+                MaterialTheme.colorScheme.error
+            } else {
+                Color(AppPalette.WarningOrange)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = titleTint,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    when {
+                        restricted -> s.batteryRestrictedTitle
+                        oemInfo.isAggressive -> s.batteryOemTitle
+                        else -> s.batteryTitle
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = titleTint
+                )
+            }
             Spacer(Modifier.height(6.dp))
             Text(
                 when {
@@ -1657,7 +1742,9 @@ private fun BatteryExemptionBlock(
                     else -> s.batteryBody
                 },
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                // Full-contrast body: the card tint already says "this is a problem", so dimming
+                // the explanation only makes the fix harder to read.
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(Modifier.height(12.dp))
             Button(

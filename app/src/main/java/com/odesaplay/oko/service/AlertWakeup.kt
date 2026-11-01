@@ -31,10 +31,12 @@ import kotlinx.coroutines.runBlocking
  * (boot, package replace, cold launch, resurrection) can leave a device with no wakeup.
  *
  * Where the permission is refused (Android 12+ without `SCHEDULE_EXACT_ALARM` and off the
- * battery-optimization list), it degrades to the inexact `setAndAllowWhileIdle` — still Doze-fired,
- * just later — rather than leaving the device with nothing. Both test devices take the exact path
- * for free: the SM-A505FN is API 30, where the S+ gate does not exist, and the Pixel is on the
- * device's power-save exemption list, which always permits exact alarms.
+ * battery-optimization list), it degrades to the inexact `setAndAllowWhileIdle` -- still Doze-fired,
+ * just later -- rather than leaving the device with nothing. [schedule] records which path it took
+ * on every arm: the SM-A505FN is API 30, where the S+ gate does not exist, but a Pixel is NOT
+ * exempt just for being a Pixel -- `targetSdk` 36 means the permission is refused by default until
+ * the user grants it, and the field report that produced this note had a 17-26 min cadence on the
+ * inexact path with the alarm windowed at +11 min.
  */
 object AlertWakeup {
 
@@ -43,36 +45,57 @@ object AlertWakeup {
 
     internal const val INTERVAL_MS = 15 * 60_000L
 
+    /** Extra carrying the requested trigger, so the fire can be compared against the ask. */
+    internal const val EXTRA_TRIGGER_AT = "com.odesaplay.oko.extra.TRIGGER_AT"
+
+    /** Extra carrying the scheduling path (`exact` / `inexact`) the platform accepted. */
+    internal const val EXTRA_PATH = "com.odesaplay.oko.extra.PATH"
+
     fun schedule(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val triggerAt = System.currentTimeMillis() + INTERVAL_MS
-        val pendingIntent = pendingIntent(context)
         val exact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             alarmManager.canScheduleExactAlarms()
         } else {
             true
         }
+        val path = if (exact) PATH_EXACT else PATH_INEXACT
         try {
             if (exact) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent(context, triggerAt, path)
+                )
             } else {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent(context, triggerAt, path)
+                )
             }
         } catch (_: SecurityException) {
             // The grant can be revoked between the check and the call. Degrade instead of ending
             // the chain: an inexact allow-while-idle alarm still fires in Doze, just later.
             runCatching {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAt,
+                    pendingIntent(context, triggerAt, PATH_INEXACT)
+                )
             }
         }
     }
 
-    private fun pendingIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
-        context,
-        REQUEST_CODE,
-        Intent(context, AlertWakeupReceiver::class.java),
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
+    private const val PATH_EXACT = "exact"
+    private const val PATH_INEXACT = "inexact"
+
+    /** Extras do not affect PendingIntent identity, so [cancel] still matches a later arm. */
+    private fun pendingIntent(context: Context, triggerAt: Long, path: String): PendingIntent =
+        PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE,
+            Intent(context, AlertWakeupReceiver::class.java)
+                .putExtra(EXTRA_TRIGGER_AT, triggerAt)
+                .putExtra(EXTRA_PATH, path),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
     /**
      * Ends the chain. Called when the package is paused: a paused app has no monitoring left for a
@@ -81,7 +104,7 @@ object AlertWakeup {
      */
     fun cancel(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        alarmManager.cancel(pendingIntent(context))
+        alarmManager.cancel(pendingIntent(context, 0L, PATH_INEXACT))
     }
 }
 
@@ -94,7 +117,11 @@ object AlertWakeup {
  */
 class AlertWakeupReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        WakeEventLog.record(WakeKind.ALARM)
+        WakeEventLog.record(
+            WakeKind.ALARM,
+            triggerAtMs = intent.getLongExtra(AlertWakeup.EXTRA_TRIGGER_AT, 0L).takeIf { it > 0L },
+            path = intent.getStringExtra(AlertWakeup.EXTRA_PATH)
+        )
         val appContext = context.applicationContext
         if (MonitoringStatus.isServiceUp()) {
             // Alive: the thaw is the whole point, so only the chain needs attention.

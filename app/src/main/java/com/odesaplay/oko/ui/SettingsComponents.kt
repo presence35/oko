@@ -15,6 +15,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -539,14 +542,25 @@ internal fun SectionDetailBody(
     stateSummary: String?,
     cardColor: Color? = null,
     cardBorder: Color? = null,
+    /** Increment to scroll this body to its end once. Used when the caller opens the page to show
+     *  something that sits at the bottom (the battery card is the last row on Reliability). */
+    scrollToEndKey: Int = 0,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val scrollState = rememberScrollState()
+    LaunchedEffect(scrollToEndKey) {
+        if (scrollToEndKey == 0) return@LaunchedEffect
+        // The content has not been measured on the first composition, so maxValue is 0 until the
+        // first layout pass lands. Wait for a real value instead of scrolling to zero.
+        snapshotFlow { scrollState.maxValue }.first { it > 0 }
+        scrollState.animateScrollTo(scrollState.maxValue)
+    }
     Card(
         modifier = Modifier.fillMaxSize(),
         colors = if (cardColor != null) CardDefaults.cardColors(containerColor = cardColor) else CardDefaults.cardColors(),
         border = if (cardBorder != null) BorderStroke(1.dp, cardBorder) else null
     ) {
-        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(scrollState)) {
             if (!stateSummary.isNullOrBlank()) {
                 Text(
                     stateSummary,

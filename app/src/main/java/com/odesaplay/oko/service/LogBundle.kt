@@ -11,6 +11,7 @@ import android.os.Debug
 import android.os.Process
 import android.os.SystemClock
 import com.odesaplay.oko.service.MonitorLifecycle
+import com.odesaplay.oko.service.ServiceState
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
@@ -40,11 +41,12 @@ object LogBundle {
 
     /**
      * Bumped to 2 when `app.lastUpdateTime` and the `exits`/`exitSummary` blocks were added, to 5
-     * with the `location` block. The payload only ever grows, so an old reader still parses a new
-     * bundle — the number exists so a reader can tell "field absent because the build predates it"
-     * from "field absent because the OS would not say".
+     * with the `location` block, and to 6 with the stop reasons (`STOP_SUSPENDED`), the wakeup
+     * `path`/`latencySec`, and `powerSummary.sinceLastSampleSec`. The payload only ever grows, so
+     * an old reader still parses a new bundle — the number exists so a reader can tell "field
+     * absent because the build predates it" from "field absent because the OS would not say".
      */
-    private const val SCHEMA = 5
+    private const val SCHEMA = 6
 
     private val SECRET = Regex(
         "(?i)bearer\\s+\\S+" +
@@ -186,6 +188,12 @@ object LogBundle {
             // nothing in the bundle would say so.
             p("exactAlarmsAllowed", if (Build.VERSION.SDK_INT >= 31) runCatching {
                 context.getSystemService(android.app.AlarmManager::class.java)?.canScheduleExactAlarms()
+            }.getOrNull() else null)
+            // The type the platform accepted on promotion. "We asked for specialUse|location" and
+            // "we were granted it" are different facts, and only this one is durable.
+            p("fgsType", runCatching { ServiceState(context).lastFgsType().first() }.getOrNull())
+            p("backgroundRestricted", if (Build.VERSION.SDK_INT >= 28) runCatching {
+                context.getSystemService(android.app.ActivityManager::class.java)?.isBackgroundRestricted
             }.getOrNull() else null)
         })
 
@@ -353,6 +361,8 @@ object LogBundle {
                 JSONObject().apply {
                     p("atMillis", e.atMillis)
                     p("kind", e.kind.name)
+                    p("path", e.path)
+                    p("latencySec", e.triggerAtMs?.let { (e.atMillis - it) / 1000 })
                 }
             }.toJson())
             // Durable monitoring lifecycle: the only record that outlives the service, and so
@@ -398,7 +408,7 @@ object LogBundle {
                     p("screenBrightness", e.screenBrightness)
                 }
             }.toJson())
-            p("powerSummary", summarisePower(power))
+            p("powerSummary", summarisePower(power, nowMs))
         })
 
         return root
@@ -412,10 +422,23 @@ object LogBundle {
     private const val EXIT_HISTORY = 32
 
     /**
+     * How recently the sampler must have run for `samplingNow` to read true: three sample intervals
+     * at the documented 25 s cadence, so one skipped write is not reported as blindness.
+     */
+    private const val SAMPLING_FRESH_MS = 75_000L
+
+    /**
      * [android.app.ApplicationExitInfo.IMPORTANCE_FOREGROUND]. Named locally so the pure
      * [summariseExits] needs no SDK reference and stays unit-testable on a JVM.
      */
     private const val IMPORTANCE_FOREGROUND = 100
+
+    /**
+     * [android.app.ApplicationExitInfo.IMPORTANCE_FOREGROUND_SERVICE] (125). The distinction that
+     * matters for a monitor: a process reaped at 400 (cached) had already lost its service, so the
+     * service died earlier and something else is the cause.
+     */
+    private const val IMPORTANCE_SERVICE = 125
 
     /**
      * The OS's kill log, oldest-last as the platform returns it. Null on API < 30, which per this
@@ -512,7 +535,11 @@ object LogBundle {
             p("oldestTimestampMs", exits.minOfOrNull { it.timestampMs })
             p("newestTimestampMs", exits.maxOfOrNull { it.timestampMs })
             p("byReason", JSONObject().apply { byReason.forEach { (k, v) -> p(k, v) } })
-            p("whileForeground", exits.count { it.importance >= IMPORTANCE_FOREGROUND })
+            // Importance DECREASES as priority rises (foreground 100, cached 400), so this is an
+            // upper bound, not a lower one. It was inverted until schema 6: every cached reap
+            // counted as "while foreground", which is the opposite of what it claimed.
+            p("whileForeground", exits.count { it.importance in 1..IMPORTANCE_FOREGROUND })
+            p("whileService", exits.count { it.importance in 1..IMPORTANCE_SERVICE })
         }
     }
 
@@ -525,7 +552,7 @@ object LogBundle {
      * Pure so the restart arithmetic is unit-testable; that arithmetic is the whole point of the
      * function, and it would be untestable inline in `build`.
      */
-    internal fun summarisePower(power: List<BatterySample>): JSONObject {
+    internal fun summarisePower(power: List<BatterySample>, nowMs: Long = 0L): JSONObject {
         if (power.isEmpty()) return JSONObject().apply { p("samples", 0) }
         val first = power.first().atMillis
         val last = power.last().atMillis
@@ -613,6 +640,11 @@ object LogBundle {
             p("spanSec", (last - first) / 1000)
             p("expectedSamplesAt25s", (last - first) / 25_000)
             p("longestGapSec", longestGapMs / 1000)
+            // The present tense, which no other field gives: how long since the sampler last ran.
+            // A gap in `power` is history; this is "am I being watched right now", and it needs no
+            // knowledge of the tick rate to read. Null when the exporter cannot say.
+            p("sinceLastSampleSec", if (nowMs > last) (nowMs - last) / 1000 else null)
+            p("samplingNow", if (nowMs > last) (nowMs - last) <= SAMPLING_FRESH_MS else null)
             // null, not 0: no samples carrying the field is "cannot tell", not "never restarted".
             p("processGenerations", generations.size.takeIf { generations.isNotEmpty() })
             p("restartsObserved", restarts.takeIf { generations.isNotEmpty() })

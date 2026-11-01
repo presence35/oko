@@ -117,6 +117,13 @@ const val NOTIF_MONITORING_PAUSED = 9
          *  Doze windows updates a single shade row instead of stacking dozens. */
         const val NOTIF_SLEEP = 10
 
+        /**
+         * The standing "Android is restricting us, so monitoring is not guaranteed" row. Silent
+         * and ongoing on purpose: it reports a condition, not an event, so it must cost nothing to
+         * leave posted, and it is replaced in place rather than stacking.
+         */
+        const val NOTIF_COVERAGE = 11
+
         /** Bump to delete + recreate all managed channels (sound/importance/attrs are
          *  frozen by Android at creation — this is the only way a change takes effect). */
         const val CHANNEL_SCHEMA_VERSION = 6
@@ -137,6 +144,7 @@ const val NOTIF_MONITORING_PAUSED = 9
         /** See [Posting]: ids map to a posting role here, never to a bare group key. */
         fun postingFor(id: Int): Posting = when (id) {
             NOTIF_MONITOR, NOTIF_MONITORING_PAUSED, NOTIF_SLEEP -> Posting.Standalone
+            NOTIF_COVERAGE -> Posting.Standalone
             NOTIF_ALERT, NOTIF_ALLCLEAR -> Posting.Child(GROUP_ALERT)
             NOTIF_MILESTONE, NOTIF_OFFLINE_CRITICAL -> Posting.Child(GROUP_OFFLINE)
             NOTIF_UPDATE -> Posting.Child(GROUP_UPDATE)
@@ -548,8 +556,40 @@ const val NOTIF_MONITORING_PAUSED = 9
         safeNotify(NOTIF_OFFLINE_CRITICAL, notif.build())
     }
 
-    fun postUpdateNotification(title: String, text: String) {
-        val notif = buildNotification(NOTIF_UPDATE, CHANNEL_UPDATE)
+    /**
+     * The standing coverage row: Android is restricting background use, so monitoring stops when
+     * the screen does. Silent on purpose -- this is a condition, not an event. A sound here would
+     * be a siren for something the user fixes once, and it would teach them to dismiss the row.
+     * The tap opens the battery settings, which is the only place the fix lives.
+     */
+    fun postCoverageNotice(title: String, text: String) {
+        val notif = buildNotification(NOTIF_COVERAGE, CHANNEL_OFFLINE)
+            .setSmallIcon(R.drawable.ic_trident)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .setOngoing(true)
+            .setContentIntent(coveragePendingIntent())
+            .build()
+        safeNotify(NOTIF_COVERAGE, notif)
+    }
+
+    fun cancelCoverage() = cancelNotification(NOTIF_COVERAGE)
+
+    private fun coveragePendingIntent(): PendingIntent {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            .setData(Uri.fromParts("package", context.packageName, null))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return PendingIntent.getActivity(
+            context,
+            NOTIF_COVERAGE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    fun postUpdateNotification(title: String, text: String) {        val notif = buildNotification(NOTIF_UPDATE, CHANNEL_UPDATE)
             .setSmallIcon(R.drawable.ic_trident)
             .setContentTitle(title)
             .setContentText(text)
@@ -573,6 +613,23 @@ const val NOTIF_MONITORING_PAUSED = 9
         } catch (_: SecurityException) {
             // POST_NOTIFICATIONS denied — silently skip
         }
+    }
+
+    /**
+     * Is notification [id] still attached to the foreground service?
+     *
+     * The platform sets [Notification.FLAG_FOREGROUND_SERVICE] on the row a service owns and clears
+     * it when that row is replaced by a plain post — the same gesture that drops the service out of
+     * the foreground. Reading it back is the only way to know whether "we are promoted" is still
+     * true: the in-memory flag is a belief, this is the fact.
+     */
+    fun isAttachedToService(id: Int): Boolean = try {
+        NotificationManagerCompat.from(context).activeNotifications.any { row ->
+            row.id == id && row.notification.flags and Notification.FLAG_FOREGROUND_SERVICE != 0
+        }
+    } catch (_: SecurityException) {
+        // Cannot tell. Report attached, so a refused query can never drive a re-promotion loop.
+        true
     }
 
     /** Build a notification in the role [postingFor] assigns its id. The single entrance for

@@ -39,6 +39,7 @@ class ServiceState(private val context: Context) {
     private val lastSdkManifestHashKey = stringPreferencesKey("last_sdk_manifest_hash")
     private val systemLogKey = stringPreferencesKey("system_log")
     private val channelSchemaVersionKey = intPreferencesKey("channel_schema_version")
+    private val lastFgsTypeKey = intPreferencesKey("last_fgs_type")
     private val criticalChannelBypassAppliedKey = booleanPreferencesKey("critical_channel_bypass_applied")
 
     fun connLog(): Flow<String> =
@@ -175,6 +176,15 @@ class ServiceState(private val context: Context) {
 
     suspend fun setChannelSchemaVersion(version: Int) {
         store.edit { it[channelSchemaVersionKey] = version }
+    }
+
+    /** The foreground-service type the platform accepted, as a bitmask. Persisted because the
+     *  promoting instance is not necessarily the one that exports the bundle. */
+    fun lastFgsType(): Flow<Int> =
+        store.data.map { prefs -> prefs[lastFgsTypeKey] ?: 0 }
+
+    suspend fun setLastFgsType(type: Int) {
+        store.edit { it[lastFgsTypeKey] = type }
     }
 
     fun criticalChannelBypassApplied(): Flow<Boolean?> =
