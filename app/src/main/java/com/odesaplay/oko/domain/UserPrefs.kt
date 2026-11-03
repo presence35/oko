@@ -921,13 +921,15 @@ class UserPrefs(private val context: Context) {
     }
 
     private companion object {
-        /** Normal night, used when the silent state was reached without the button (no snapshot). */
+        /** Normal night, used when the silent state was reached without the button (no snapshot).
+         *  Channels are inherited (null), never switched on: someone who keeps official alerts off
+         *  must not find them enabled by a window they never configured. */
         val NORMAL_NIGHT = NightSleepPreset(
             useCustomZones = false,
             slowRedArmed = true, slowYellowArmed = true,
             fastRedArmed = true, fastYellowArmed = false,
             zoneSirenOverride = false, officialSirenOverride = false,
-            officialRed = true, officialYellow = true
+            officialRed = null, officialYellow = null
         )
     }
 

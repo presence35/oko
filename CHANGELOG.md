@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Official red/yellow alerts now start OFF: arming nothing means nothing sounds, and the wizard's watch-setup no longer notifies a fresh install through a channel it never switched on. The night preset inherits the choice instead of force-enabling them 11-01_23:06:55
 
 ## [0.6.836]
 - The header's blocked-monitor glyph no longer goes stale: it is driven by a live coverage flow refreshed on resume and while foreground, so switching battery usage between Optimized and Restricted updates it (and the standing notice) every time instead of sticking after a few rounds 11-01_19:32:50
